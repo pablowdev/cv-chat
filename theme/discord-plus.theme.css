@@ -147,8 +147,45 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 }
 .dm-category-header:hover { color: #dbdee1; }
 
-/* Secciones "Unirse a un canal" / "Crear canal": mas discretas */
-[data-haven-region="join-channel"], [data-haven-region="create-channel"] { border-bottom-color: transparent; }
+/* "Unirse a un canal" y "Crear canal": Discord no los tiene. Se ocultan solo a
+   la vista (los enlaces de invitacion siguen funcionando, y con el tema
+   original de Haven vuelven a aparecer). */
+[data-haven-region="join-channel"], [data-haven-region="create-channel"] { display: none !important; }
+
+/* ── Panel de usuario abajo, como Discord (solo en pantallas grandes) ── */
+@media (min-width: 769px) {
+  [data-haven-region="navigation-sidebar"] { position: relative; }
+  [data-haven-region="navigation-sidebar"] .sidebar-header { position: static; }
+  [data-haven-region="account"] {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    height: 3.25rem;
+    margin: 0;
+    padding: 0 0.5rem 0 0.75rem;
+    border: 0;
+    border-radius: 0;
+    background: #232428;
+    box-shadow: none;
+  }
+  [data-haven-region="account"] .current-user { color: #f2f3f5; font-weight: 600; font-size: 0.875rem; }
+  [data-haven-region="account"] .login-name { color: var(--text-muted); font-size: 0.75rem; }
+  [data-haven-region="account"] .icon-btn { color: #b5bac1; opacity: 0.85; }
+  [data-haven-region="account"] .icon-btn:hover { opacity: 1; background: #3f4147; }
+  /* La fila de botones (temas, actividades, miembros...) queda justo encima */
+  [data-haven-region="sidebar-footer"] { padding-bottom: 3.25rem; background: #2b2d31; border-top: 0; }
+  [data-haven-region="sidebar-actions"] { background: #2b2d31; border-top: 1px solid #1f2023; }
+}
+/* Botones de la fila inferior: iconos grises y discretos */
+[data-haven-region="sidebar-actions"] .sidebar-bottom-btn {
+  background: transparent;
+  border: 0;
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+[data-haven-region="sidebar-actions"] .sidebar-bottom-btn:hover { background: #35373c; filter: none; opacity: 1; }
 
 /* ── Mensajes ──────────────────────────────────────── */
 .message, .message-row, .message-compact { border-top: 0; border-bottom: 0; box-shadow: none; }
