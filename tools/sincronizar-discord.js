@@ -24,6 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('/app/node_modules/better-sqlite3');
+const adjuntos = require(path.join(__dirname, 'puente', 'adjuntos.js'));
 
 const DB_PATH = process.env.HAVEN_DB || '/data/haven.db';
 const ESTADO_PATH = path.join(__dirname, 'sincronizacion-estado.json');
@@ -111,10 +112,12 @@ function hiddenFromEveryone(ch, guildId) {
 // personas son siempre la vista previa de un enlace del texto, y Haven genera la
 // suya (ver buildContent en puente/puente.js). Solo en mensajes de bots y
 // webhooks el embed es parte del mensaje.
-function buildContent(msg) {
-  let content = msg.content || '';
+// attLines: Map id de adjunto -> linea de Haven (adjuntos.localizeAll). Sin ella,
+// los adjuntos quedan como enlace a Discord.
+function buildContent(msg, attLines) {
+  let content = adjuntos.gifInstead(msg) || msg.content || '';
   for (const a of msg.attachments || []) {
-    content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+    content += '\n' + ((attLines && attLines.get(a.id)) || adjuntos.fallback(a));
   }
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
@@ -188,11 +191,11 @@ q.setContent = db.prepare('UPDATE messages SET content = ? WHERE id = ?');
 
 // Guarda una pagina de mensajes de Discord. `threadRoot` es el mensaje de Haven
 // del que cuelgan (null para mensajes normales del canal).
-const insertPage = db.transaction((msgs, channelId, threadRoot) => {
+const insertPage = db.transaction((msgs, channelId, threadRoot, attByMsg) => {
   let n = 0;
   for (const msg of msgs) {
     if (msg.type !== 0 && msg.type !== 19) continue; // normales y respuestas, como el importador
-    const content = buildContent(msg);
+    const content = buildContent(msg, attByMsg && attByMsg.get(msg.id));
     if (!content) continue;
     const ref = msg.message_reference?.message_id;
     const replyTo = ref ? (q.byDiscordId.get(ref)?.id ?? null) : null;
@@ -229,7 +232,11 @@ async function pullMessages(discordChannelId, after, channelId, threadRoot, skip
     if (page.__error) return page.__error === 403 || page.__error === 404 ? null : total;
     if (!page.length) break;
     page.sort((a, b) => (big(a.id) < big(b.id) ? -1 : 1));
-    total += insertPage(skipId ? page.filter(m => m.id !== skipId) : page, channelId, threadRoot);
+    const msgs = skipId ? page.filter(m => m.id !== skipId) : page;
+    // Los adjuntos se descargan antes de la transaccion (que tiene que ser corta).
+    const attByMsg = new Map();
+    for (const m of msgs) if (m.attachments && m.attachments.length) attByMsg.set(m.id, await adjuntos.localizeAll(m));
+    total += insertPage(msgs, channelId, threadRoot, attByMsg);
     cursor = page[page.length - 1].id;
     if (page.length < 100) break;
   }
@@ -248,7 +255,7 @@ async function threadRoot(th, parentChannelId, parentIsForum) {
   }
   const starter = await api(`/channels/${th.id}/messages/${th.id}`);
   if (!starter.__error) {
-    const content = buildContent(starter) || th.name;
+    const content = buildContent(starter, await adjuntos.localizeAll(starter)) || th.name;
     const author = starter.author?.global_name || starter.author?.username || 'Unknown';
     const avatar = starter.author?.avatar ? `https://cdn.discordapp.com/avatars/${starter.author.id}/${starter.author.avatar}.png?size=64` : null;
     return q.insertMsg.run(parentChannelId, ghost.id, content, toSqlTs(starter.timestamp, th.id), author, avatar, null, th.id, null, th.name).lastInsertRowid;

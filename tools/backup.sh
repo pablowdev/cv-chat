@@ -6,6 +6,8 @@
 #  - Configuracion: docker-compose.yml, Caddyfile, .env, parches, herramientas,
 #    certificados de Caddy y archivos subidos a Haven.
 # Guarda las 3 ultimas en el servidor y 14 dias en Google Drive.
+# No incluye uploads/discord: los adjuntos copiados de Discord ocupan mucho y se
+# pueden volver a descargar (sincronizar-discord.js --rehacer).
 set -eu
 umask 077
 cd /opt/haven
@@ -21,7 +23,7 @@ zstd -q -T0 -10 --rm "$TMPDB" -o "$OUT/haven-db_$STAMP.db.zst"
 
 tar --zstd -cf "$OUT/haven-config_$STAMP.tar.zst" \
   --exclude='haven-data/haven.db*' --exclude='haven-data/backups' --exclude='haven-data/backup-en-curso.db*' \
-  --exclude='haven-data/media-cache' --exclude='haven-data/tmp-restore' \
+  --exclude='haven-data/media-cache' --exclude='haven-data/tmp-restore' --exclude='haven-data/uploads/discord' \
   docker-compose.yml Caddyfile .env patches tools haven-data caddy-data
 
 # Mantener solo las 3 copias locales mas recientes de cada tipo

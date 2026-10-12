@@ -28,6 +28,7 @@
 
 const WebSocket = require('/app/node_modules/ws');
 const vincular = require('./vincular.js');
+const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
 const estadisticas = require('./estadisticas.js');
 
@@ -160,10 +161,12 @@ function discordAvatar(user) {
 // "rich", como las de fixupx). Haven genera la suya, asi que copiar ese texto
 // solo duplica la vista previa (y trae marcas de formato como "15\.6K"). Solo
 // en mensajes de bots y webhooks el embed es parte del mensaje.
-function buildContent(msg) {
-  let content = msg.content || '';
+// attLines: Map id de adjunto -> linea de Haven (adjuntos.localizeAll). Sin ella,
+// los adjuntos quedan como enlace a Discord.
+function buildContent(msg, attLines) {
+  let content = adjuntos.gifInstead(msg) || msg.content || '';
   for (const a of msg.attachments || []) {
-    content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
+    content += '\n' + ((attLines && attLines.get(a.id)) || adjuntos.fallback(a));
   }
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
@@ -327,7 +330,7 @@ async function inboundCreate(msg) {
   if (msg.webhook_id && ourWebhookIds.has(msg.webhook_id)) return; // eco de lo que publicamos
   if (botUserId && msg.author && msg.author.id === botUserId) return;
   if (msg.type !== 0 && msg.type !== 19) return;
-  const content = buildContent(msg);
+  const content = buildContent(msg, await adjuntos.localizeAll(msg));
   if (!content) return;
   const S = stmts();
   if (S.byDiscordId.get(msg.id)) return; // ya estaba (p. ej. lo trajo la sincronizacion)
@@ -364,7 +367,7 @@ async function inboundUpdate(msg) {
   const S = stmts();
   const row = S.byDiscordId.get(msg.id);
   if (!row || db.prepare('SELECT 1 FROM puente_salientes WHERE haven_message_id = ?').get(row.id)) return;
-  const content = buildContent(msg);
+  const content = buildContent(msg, await adjuntos.localizeAll(msg));
   if (!content) return;
   db.prepare("UPDATE messages SET content = ?, edited_at = datetime('now') WHERE id = ?").run(content, row.id);
   const ch = S.channelById.get(row.channel_id);
@@ -471,6 +474,8 @@ function sanitizeOut(text) {
   return String(text || '')
     // Nada de menciones escritas a mano: solo el puente pone la de verificacion.
     .replace(/<(@[!&]?|#)(\d+)>/g, (_, k, id) => (k.startsWith('@') ? '@' : '#') + id)
+    // Archivos de Haven "[file:nombre](/uploads/x|tamaño)" -> "📎 [nombre](enlace)"
+    .replace(/^\[file:([^\]\n]+)\]\((\/uploads\/[^\s|)]+)\|[^)\n]*\)$/gm, (_, name, p) => `📎 [${name}](${publicUrl ? publicUrl + p : p})`)
     // Rutas de archivos subidos a Haven -> enlaces publicos
     .replace(/(^|[\s(])(\/uploads\/[^\s)]+)/g, (_, pre, p) => pre + (publicUrl ? publicUrl + p : p));
 }
