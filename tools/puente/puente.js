@@ -154,13 +154,20 @@ function discordAvatar(user) {
   return null;
 }
 
-// Igual que el importador oficial de Haven.
+// Como el importador oficial de Haven, salvo por los embeds. Una persona no
+// puede crear embeds: en sus mensajes, todos son la vista previa que Discord
+// genera de un enlace que ya esta en el texto (aunque Discord a veces las marque
+// "rich", como las de fixupx). Haven genera la suya, asi que copiar ese texto
+// solo duplica la vista previa (y trae marcas de formato como "15\.6K"). Solo
+// en mensajes de bots y webhooks el embed es parte del mensaje.
 function buildContent(msg) {
   let content = msg.content || '';
   for (const a of msg.attachments || []) {
     content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
   }
+  const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
+    if (!fromBot || (e.type && e.type !== 'rich')) continue;
     if (e.title) content += `\n🔗 **${e.title}**`;
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;

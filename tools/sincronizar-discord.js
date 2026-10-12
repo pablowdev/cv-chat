@@ -31,8 +31,13 @@ const BACKUP_DIR = '/data/backups';
 const API = 'https://discord.com/api/v10';
 const CONCURRENCY = 4;               // Discord limita por canal: 4 a la vez es seguro
 const ARCHIVED_EVERY_MS = 6 * 3600e3; // cada cuanto revisar hilos archivados
-const FULL = process.argv.includes('--completo');
+// --rehacer: vuelve a leer TODO el historial y corrige el texto de los mensajes
+// ya guardados que vinieron de Discord (por ejemplo, despues de cambiar
+// buildContent). No toca mensajes escritos en Haven. Implica --completo.
+const REBUILD = process.argv.includes('--rehacer');
+const FULL = REBUILD || process.argv.includes('--completo');
 const LAYOUT_ALL = process.argv.includes('--orden');
+let rebuilt = 0;
 
 const TEXT_TYPES = new Set([0, 5]);       // texto, anuncios
 const FORUM_TYPES = new Set([15, 16]);    // foro, media
@@ -102,13 +107,18 @@ function hiddenFromEveryone(ch, guildId) {
   return !!ow && (BigInt(ow.deny || '0') & VIEW_CHANNEL) !== 0n;
 }
 
-// Igual que el importador oficial de Haven.
+// Como el importador oficial de Haven, salvo por los embeds: en mensajes de
+// personas son siempre la vista previa de un enlace del texto, y Haven genera la
+// suya (ver buildContent en puente/puente.js). Solo en mensajes de bots y
+// webhooks el embed es parte del mensaje.
 function buildContent(msg) {
   let content = msg.content || '';
   for (const a of msg.attachments || []) {
     content += `\n📎 ${a.url ? '[' + a.filename + '](' + a.url + ')' : a.filename}`;
   }
+  const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
+    if (!fromBot || (e.type && e.type !== 'rich')) continue;
     if (e.title) content += `\n🔗 **${e.title}**`;
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
@@ -166,6 +176,16 @@ try {
     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`);
 } catch { /* sin puente */ }
 
+// Para --rehacer: el mensaje ya guardado con ese ID de Discord, salvo los que
+// salieron de Haven (puente_salientes), cuyo texto es el de Haven.
+try {
+  q.rowForRebuild = db.prepare(`SELECT m.id, m.content FROM messages m WHERE m.discord_message_id = ?
+    AND NOT EXISTS (SELECT 1 FROM puente_salientes s WHERE s.haven_message_id = m.id)`);
+} catch {
+  q.rowForRebuild = db.prepare('SELECT id, content FROM messages WHERE discord_message_id = ?');
+}
+q.setContent = db.prepare('UPDATE messages SET content = ? WHERE id = ?');
+
 // Guarda una pagina de mensajes de Discord. `threadRoot` es el mensaje de Haven
 // del que cuelgan (null para mensajes normales del canal).
 const insertPage = db.transaction((msgs, channelId, threadRoot) => {
@@ -182,7 +202,13 @@ const insertPage = db.transaction((msgs, channelId, threadRoot) => {
     const r = link
       ? q.insertLinked.run(channelId, link.haven_user_id, content, toSqlTs(msg.timestamp, msg.id), author, avatar, replyTo, msg.id, threadRoot)
       : q.insertMsg.run(channelId, ghost.id, content, toSqlTs(msg.timestamp, msg.id), author, avatar, replyTo, msg.id, threadRoot, null);
-    if (!r.changes) continue;
+    if (!r.changes) {
+      if (REBUILD && q.rowForRebuild) {
+        const row = q.rowForRebuild.get(msg.id);
+        if (row && row.content !== content) { q.setContent.run(content, row.id); rebuilt++; }
+      }
+      continue;
+    }
     n++;
     if (!msg.webhook_id && msg.author && q.author) q.author.run(r.lastInsertRowid, msg.author.id);
     if (msg.pinned) { try { q.pin.run(r.lastInsertRowid, channelId, admin.id); } catch { /* ya fijado */ } }
@@ -293,8 +319,8 @@ async function main() {
   const skipped = [];
   await runPool(textChannels, async ch => {
     const existing = q.channelByDiscord.get(ch.id);
-    const last = existing ? q.lastInChannel.get(existing.id)?.d : null;
-    if (existing && last && ch.last_message_id && !isNewer(ch.last_message_id, last)) return; // al dia
+    const last = REBUILD ? null : existing ? q.lastInChannel.get(existing.id)?.d : null;
+    if (!REBUILD && existing && last && ch.last_message_id && !isNewer(ch.last_message_id, last)) return; // al dia
     // No crear canales que el bot no puede leer: probar antes de crearlo.
     if (!existing) {
       const probe = await api(`/channels/${ch.id}/messages?limit=1`);
@@ -359,8 +385,8 @@ async function main() {
   await runPool(work, async ({ th, parent }) => {
     const parentIsForum = !!parent.is_forum || FORUM_TYPES.has(byId.get(th.parent_id)?.type);
     const existingRoot = q.byDiscordId.get(th.id) || q.byDiscordId.get(`thread-${th.id}`);
-    const last = existingRoot ? q.lastInThread.get(existingRoot.id)?.d : null;
-    if (existingRoot && th.last_message_id && last && !isNewer(th.last_message_id, last)) { threadsUpToDate++; return; } // al dia
+    const last = REBUILD ? null : existingRoot ? q.lastInThread.get(existingRoot.id)?.d : null;
+    if (!REBUILD && existingRoot && th.last_message_id && last && !isNewer(th.last_message_id, last)) { threadsUpToDate++; return; } // al dia
     const rootId = await threadRoot(th, parent.id, parentIsForum);
     const n = await pullMessages(th.id, last, parent.id, rootId, parentIsForum ? th.id : null);
     if (n) log(`  🧵 ${th.name} (#${parent.name}): ${n} mensajes`);
@@ -374,6 +400,7 @@ async function main() {
   const secs = Math.round((Date.now() - started) / 1000);
   if (saved || threadMsgs || firstRun || FULL) {
     log(`Listo en ${secs}s: ${saved} mensajes de canales y ${threadMsgs} de hilos (${work.length} hilos revisados, ${threadsUpToDate} ya al dia).`);
+    if (REBUILD) log(`Rehacer: ${rebuilt} mensajes corregidos con el texto de Discord.`);
   }
   const avisos = [];
   if (skipped.length) avisos.push(`El bot no puede leer estos canales (dale permiso en Discord si los quieres): ${[...skipped].sort().join(', ')}`);

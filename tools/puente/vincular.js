@@ -71,9 +71,27 @@ function hookHttp() {
       }
       if (url === '/app' || url.startsWith('/app?')) injectScript(req, res, '/puente/aviso.js');
       else if (url === '/' || url.startsWith('/?')) injectScript(req, res, '/puente/login.js');
+      else if (url.startsWith('/api/link-preview?')) req.url = twitterProxyToX(url);
     }
     return origEmit.call(this, event, req, res, ...rest);
   };
+}
+
+// Haven arma una tarjeta completa (autor, texto, video, estadisticas) para los
+// enlaces de x.com / twitter.com, pero no reconoce los dominios que se usan en
+// Discord para que los tuits se vean bien (fixupx, fxtwitter, vxtwitter, fixvx...).
+// Para esos usa un lector generico con un resultado pobre. Antes de que Haven
+// pida la vista previa, se traduce el enlace al de x.com equivalente.
+const TWITTER_PROXY = /^https?:\/\/(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx|twittpr)\.com\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
+function twitterProxyToX(reqUrl) {
+  try {
+    const u = new URL(reqUrl, 'http://x');
+    const target = u.searchParams.get('url') || '';
+    const m = target.match(TWITTER_PROXY);
+    if (!m) return reqUrl;
+    u.searchParams.set('url', `https://x.com/${m[1]}/status/${m[2]}`);
+    return u.pathname + u.search;
+  } catch { return reqUrl; }
 }
 
 // Agrega <script src> antes de </body> en una pagina HTML de Haven, tanto si se
