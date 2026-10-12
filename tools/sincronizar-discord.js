@@ -119,6 +119,8 @@ function buildContent(msg, attLines) {
   for (const a of msg.attachments || []) {
     content += '\n' + ((attLines && attLines.get(a.id)) || adjuntos.fallback(a));
   }
+  const fw = adjuntos.forwarded(msg, attLines); // mensaje reenviado
+  if (fw) content += '\n' + fw;
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
     if (!fromBot || (e.type && e.type !== 'rich')) continue;
@@ -197,7 +199,15 @@ const insertPage = db.transaction((msgs, channelId, threadRoot, attByMsg) => {
     if (msg.type !== 0 && msg.type !== 19) continue; // normales y respuestas, como el importador
     const content = buildContent(msg, attByMsg && attByMsg.get(msg.id));
     if (!content) continue;
-    const ref = msg.message_reference?.message_id;
+    // --rehacer solo corrige mensajes que ya estan: uno viejo agregado ahora se
+    // veria al final del canal (Haven ordena por orden de llegada a su base).
+    if (REBUILD) {
+      const row = q.rowForRebuild && q.rowForRebuild.get(msg.id);
+      if (row && row.content !== content) { q.setContent.run(content, row.id); rebuilt++; }
+      continue;
+    }
+    // message_reference de tipo 1 es un reenvio, no una respuesta.
+    const ref = msg.message_reference && msg.message_reference.type !== 1 ? msg.message_reference.message_id : null;
     const replyTo = ref ? (q.byDiscordId.get(ref)?.id ?? null) : null;
     const author = msg.author?.global_name || msg.author?.username || 'Unknown';
     const avatar = msg.author?.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64` : null;
@@ -235,7 +245,10 @@ async function pullMessages(discordChannelId, after, channelId, threadRoot, skip
     const msgs = skipId ? page.filter(m => m.id !== skipId) : page;
     // Los adjuntos se descargan antes de la transaccion (que tiene que ser corta).
     const attByMsg = new Map();
-    for (const m of msgs) if (m.attachments && m.attachments.length) attByMsg.set(m.id, await adjuntos.localizeAll(m));
+    for (const m of msgs) {
+      const hasFiles = (m.attachments && m.attachments.length) || (m.message_snapshots || []).some(s => s.message && s.message.attachments && s.message.attachments.length);
+      if (hasFiles) attByMsg.set(m.id, await adjuntos.localizeAll(m));
+    }
     total += insertPage(msgs, channelId, threadRoot, attByMsg);
     cursor = page[page.length - 1].id;
     if (page.length < 100) break;

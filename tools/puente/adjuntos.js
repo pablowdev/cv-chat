@@ -79,11 +79,51 @@ async function localize(a) {
   }
 }
 
-// Lineas de todos los adjuntos de un mensaje, en orden: Map id -> linea.
+// Lineas de todos los adjuntos de un mensaje (incluidos los del mensaje
+// reenviado, si lo es), en orden: Map id -> linea.
 async function localizeAll(msg) {
   const out = new Map();
   for (const a of msg.attachments || []) out.set(a.id, await localize(a));
+  for (const s of msg.message_snapshots || []) {
+    for (const a of (s.message && s.message.attachments) || []) out.set(a.id, await localize(a));
+  }
   return out;
+}
+
+// Mensaje reenviado (Discord manda el original aparte, en message_snapshots):
+//   ↪ *Reenviado*
+//   > texto original
+//   /uploads/discord/123.mp4   (sus adjuntos, cada uno en su linea)
+function forwarded(msg, attLines) {
+  const parts = [];
+  for (const s of msg.message_snapshots || []) {
+    const m = s.message || {};
+    const lines = ['↪ *Reenviado*'];
+    const text = String(m.content || '').trim();
+    if (text) for (const l of text.split('\n')) lines.push('> ' + l);
+    for (const a of m.attachments || []) lines.push((attLines && attLines.get(a.id)) || fallback(a));
+    if (lines.length > 1) parts.push(lines.join('\n'));
+  }
+  return parts.join('\n');
+}
+
+// Avatar de Discord -> archivo de Haven (/uploads/discord/avatar-<id>-<hash>.png).
+// Devuelve la ruta para users.avatar, o null.
+async function avatar(discordUserId, hash) {
+  if (!/^\d+$/.test(String(discordUserId || '')) || !/^(a_)?[0-9a-f]{32}$/i.test(String(hash || ''))) return null;
+  ensureDir();
+  const file = `avatar-${discordUserId}-${hash}.png`;
+  const dest = path.join(DIR, file);
+  try { if (fs.statSync(dest).size > 0) return `/uploads/discord/${file}`; } catch { /* hay que bajarlo */ }
+  try {
+    const res = await fetch(`https://cdn.discordapp.com/avatars/${discordUserId}/${hash}.png?size=256`, { signal: AbortSignal.timeout(30000) });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length || buf.length > 5 * 1024 * 1024) return null;
+    fs.writeFileSync(dest + '.part', buf);
+    fs.renameSync(dest + '.part', dest);
+    return `/uploads/discord/${file}`;
+  } catch { return null; }
 }
 
 // GIFs de Tenor / Giphy: cuando el mensaje es solo el enlace a la pagina del GIF,
@@ -102,4 +142,4 @@ function gifInstead(msg) {
   return null;
 }
 
-module.exports = { localize, localizeAll, gifInstead, fallback };
+module.exports = { localize, localizeAll, gifInstead, forwarded, avatar, fallback };

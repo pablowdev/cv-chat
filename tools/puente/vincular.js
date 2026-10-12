@@ -28,6 +28,7 @@ const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const adjuntos = require('./adjuntos.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -272,6 +273,14 @@ async function handle(req, res) {
     if (other && other.haven_user_id !== entry.userId) return back({ error: 'ocupada' });
 
     const moved = link(entry.userId, me);
+    // Sin avatar en Haven: usar el de Discord (no pisa uno elegido en Haven).
+    try {
+      const u = db.prepare('SELECT avatar FROM users WHERE id = ?').get(entry.userId);
+      if (u && !u.avatar && me.avatar) {
+        const av = await adjuntos.avatar(me.id, me.avatar);
+        if (av) db.prepare('UPDATE users SET avatar = ? WHERE id = ? AND avatar IS NULL').run(av, entry.userId);
+      }
+    } catch (err) { warn('avatar de Discord:', err.message); }
     try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
     log(`vinculado: Haven #${entry.userId} <-> Discord ${me.username} (${me.id}); ${moved} mensajes historicos pasados a su cuenta`);
     return back({ ok: '1', mensajes: String(moved) });

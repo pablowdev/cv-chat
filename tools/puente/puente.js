@@ -168,6 +168,8 @@ function buildContent(msg, attLines) {
   for (const a of msg.attachments || []) {
     content += '\n' + ((attLines && attLines.get(a.id)) || adjuntos.fallback(a));
   }
+  const fw = adjuntos.forwarded(msg, attLines); // mensaje reenviado
+  if (fw) content += '\n' + fw;
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
     if (!fromBot || (e.type && e.type !== 'rich')) continue;
@@ -337,7 +339,8 @@ async function inboundCreate(msg) {
 
   const target = await havenTarget(msg.channel_id);
   if (!target) return;
-  const ref = msg.message_reference && msg.message_reference.message_id;
+  // message_reference de tipo 1 es un reenvio, no una respuesta.
+  const ref = msg.message_reference && msg.message_reference.type !== 1 ? msg.message_reference.message_id : null;
   const replyTo = ref ? ((S.byDiscordId.get(ref) || {}).id || null) : null;
   const link = msg.author && !msg.webhook_id ? S.linkByDiscord.get(msg.author.id) : null;
   // Mismo nombre que usa el historial importado (no el apodo del servidor).

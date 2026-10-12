@@ -17,6 +17,10 @@ services:
       - ./patches/import.js:/app/src/routes/import.js:ro
       # Herramientas propias (script de hilos y privados, ejecutado por haven-hilos.timer)
       - ./tools:/tools
+      # Tema Discord+ (solo aspecto) y su fuente Inter, servidos desde /themes
+      - ./tema/discord-plus.theme.css:/app/themes/discord-plus.theme.css:ro
+      - ./tema/inter-latin-wght-normal.woff2:/app/themes/inter-latin-wght-normal.woff2:ro
+      - ./tema/inter-latin-ext-wght-normal.woff2:/app/themes/inter-latin-ext-wght-normal.woff2:ro
     env_file: .env
     environment:
       - PORT=3000

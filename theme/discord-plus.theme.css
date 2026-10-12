@@ -1,0 +1,255 @@
+/**
+ * @name        Discord+
+ * @description Colores, tipografia (Inter) y disposicion parecidos a Discord. Solo cambia el aspecto.
+ * @author      haven-discord-puente
+ * @version     1.0
+ * @icon        🎮
+ * @haven-theme-api 1
+ */
+
+/*
+  Tema de archivo: Haven lo carga sobre la base "haven", asi que los colores
+  van en :root. Todo usa rem para que el zoom de Haven lo escale. Solo hay
+  reglas de aspecto (colores, letras, espacios, bordes y el orden visual de
+  los botones): ningun elemento de Haven se quita ni cambia de funcion.
+
+  La barra de escribir "a lo Discord" usa la preferencia de Haven "barra
+  compacta" (Ajustes): con ella activa queda + a la izquierda, y GIF y emoji a
+  la derecha. Sin ella, la barra se ve como siempre, con estos colores.
+
+  Fuente: Inter (SIL Open Font License), alojada en este mismo servidor.
+*/
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/themes/inter-latin-wght-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/themes/inter-latin-ext-wght-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  /* ── Fondos, por capas como Discord ─────────────── */
+  /* Mismos tonos que el tema "Discord" que trae Haven; la barra de servidores
+     (#1e1f22) se pinta aparte porque --bg-tertiary se usa en muchos sitios. */
+  --bg-primary:    #313338;   /* chat */
+  --bg-secondary:  #2b2d31;   /* lista de canales, panel derecho */
+  --bg-tertiary:   #383a40;   /* campos, citas, botones */
+  --bg-hover:      #35373c;
+  --bg-active:     #404249;
+  --bg-input:      #383a40;
+  --bg-card:       #2b2d31;
+
+  --accent:        #5865f2;
+  --accent-hover:  #4752c4;
+  --accent-dim:    #4752c4;
+  --accent-glow:   rgba(88, 101, 242, 0.25);
+  --accent-text:   #fff;
+
+  --text-primary:  #dbdee1;
+  --text-secondary:#b5bac1;
+  --text-muted:    #949ba4;
+  --text-link:     #00a8fc;
+
+  --border:        #3f4147;
+  --border-light:  #4e5058;
+
+  --success:       #23a55a;
+  --danger:        #f23f43;
+  --warning:       #f0b232;
+  --led-on:        #23a55a;
+  --led-off:       #80848e;
+  --led-glow:      rgba(35, 165, 90, 0.35);
+
+  --font-main:     'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-heading:  'Inter', 'Segoe UI', system-ui, sans-serif;
+
+  --radius:        8px;
+  --radius-sm:     4px;
+  --theme-logo:    "⬡";
+  --msg-glow:      none;
+  --scanline:      none;
+}
+
+body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
+
+/* ── Capas de fondo ────────────────────────────────── */
+[data-haven-region="server-rail"] { background: #1e1f22; }
+[data-haven-region="navigation-sidebar"] { background: #2b2d31; }
+[data-haven-region="main"], [data-haven-region="message-area"] { background: #313338; }
+[data-haven-region="context-sidebar"] { background: #2b2d31; }
+
+/* ── Lista de canales ──────────────────────────────── */
+.channel-item {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  border-radius: 4px;
+  margin: 1px 0.5rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  min-height: 0;
+}
+.channel-item * { font-style: normal; }
+.channel-item .channel-name { color: inherit; font-weight: inherit; }
+.channel-item .channel-hash { color: #80848e; font-weight: 400; }
+.channel-item:hover { background: var(--bg-hover); color: #dbdee1; }
+.channel-item.active, .channel-item.active:hover { background: var(--bg-active); color: #fff; }
+.channel-item.unread, .channel-item.has-unread { color: #f2f3f5; font-weight: 600; }
+
+/* Haven pone en cursiva y semitransparentes los canales privados. Con el
+   puente en modo migracion todos los canales de Discord son privados en Haven,
+   asi que se ven normales, como en Discord. */
+.channel-item.private-channel .channel-name,
+.channel-item.private-channel .channel-hash { font-style: normal; opacity: 1; font-size: inherit; }
+
+/* Categorias de canales: texto chico en mayusculas, sin recuadro (los estilos
+   en linea del renderer de Haven obligan a usar !important) */
+.category-label, .category-label.cat-pill {
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 1rem 0.5rem 0.25rem 0.75rem !important;
+  opacity: 1 !important;
+  font-family: var(--font-main);
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  color: var(--text-muted) !important;
+}
+.category-label:hover, .category-label.cat-pill:hover { color: #dbdee1 !important; }
+.category-label.cat-pill.cat-collapsed { color: var(--text-muted) !important; }
+.category-label .cat-collapse-arrow { font-size: 0.625rem; margin-right: 0.25rem; }
+.category-tabs .category-label.cat-pill { padding: 0.25rem 0.5rem !important; }
+
+/* Categorias de mensajes directos */
+.dm-category-header {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  padding: 1rem 0.5rem 0.25rem 1rem;
+}
+.dm-category-header:hover { color: #dbdee1; }
+
+/* Secciones "Unirse a un canal" / "Crear canal": mas discretas */
+[data-haven-region="join-channel"], [data-haven-region="create-channel"] { border-bottom-color: transparent; }
+
+/* ── Mensajes ──────────────────────────────────────── */
+.message, .message-row, .message-compact { border-top: 0; border-bottom: 0; box-shadow: none; }
+.message:hover, .message-row:hover, .message-compact:hover { background: rgba(2, 2, 2, 0.06); }
+.message-author { font-weight: 500; font-size: 1rem; }
+.message-time { font-size: 0.75rem; color: var(--text-muted); }
+.message-content { color: #dbdee1; font-size: 1rem; line-height: 1.375rem; }
+
+/* "DISCORD" junto a cada nombre: discreta, como una etiqueta de bot */
+.discord-badge {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid #4e5058;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Rol en cada mensaje (ADMIN...): Discord lo muestra solo con el color del nombre */
+.message .msg-role-badge, .message .user-role-badge { display: none; }
+
+/* Respuestas: linea curva fina en vez de recuadro */
+.reply-banner {
+  position: relative;
+  background: none;
+  border-radius: 0;
+  padding: 0 0 0 1.75rem;
+  margin: 0 0 0.125rem 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.reply-banner::before {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  width: 1rem;
+  height: 0.75rem;
+  border-left: 2px solid #4e5058;
+  border-top: 2px solid #4e5058;
+  border-top-left-radius: 6px;
+}
+.reply-banner .reply-line { display: none; }
+.reply-banner:hover { color: #dbdee1; }
+
+/* ── Barra superior ────────────────────────────────── */
+[data-haven-region="channel-header"] { background: #313338; border-bottom: 1px solid #26282c; box-shadow: none; }
+/* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.
+   Siguen en los ajustes del canal (boton del engranaje). */
+#channel-code-display, #copy-code-btn { display: none !important; }
+/* Avisos de "Obtener la app de escritorio" / "Android Beta" en la barra superior.
+   Las apps se siguen pudiendo descargar desde Ajustes. */
+.desktop-app-banner, .android-beta-banner { display: none !important; }
+/* Nombre del canal en la barra superior */
+#channel-header-name { font-family: var(--font-heading); font-weight: 600; }
+
+/* ── Barra de escribir ─────────────────────────────── */
+[data-haven-region="composer"] { background: #313338; border-top: 0; }
+#message-input, .message-input-area textarea {
+  background: var(--bg-input);
+  border: 0;
+  border-radius: 8px;
+  color: #dbdee1;
+  font-family: var(--font-main);
+  font-size: 1rem;
+}
+
+/* Con "barra compacta": + a la izquierda, GIF y emoji a la derecha (como
+   Discord); el resto de los botones sigue en el menu del +. */
+[data-compact-composer] .btn-composer-plus {
+  border: 0;
+  border-radius: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: #4e5058;
+  color: #dbdee1;
+  font-size: 1.4rem;
+}
+[data-compact-composer] .btn-composer-plus:hover,
+[data-compact-composer] .btn-composer-plus[aria-expanded="true"] { background: #6d6f78; color: #fff; }
+[data-compact-composer] .input-actions-box:not(.open) {
+  display: flex;
+  position: static;
+  flex-direction: row;
+  align-items: center;
+  order: 50;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+[data-compact-composer] .input-actions-box:not(.open) > button:not(#emoji-btn):not(#gif-btn) { display: none; }
+[data-compact-composer] .input-actions-box:not(.open) > button::after { content: none; }
+[data-compact-composer] .input-actions-box:not(.open) > button {
+  width: auto;
+  padding: 0.35rem 0.45rem;
+  color: #b5bac1;
+}
+[data-compact-composer] .input-actions-box:not(.open) > button:hover { color: #dbdee1; }
+[data-compact-composer] #send-btn { order: 60; }
+
+/* ── Barras de desplazamiento finas ───────────────── */
+* { scrollbar-color: #1a1b1e transparent; scrollbar-width: thin; }
