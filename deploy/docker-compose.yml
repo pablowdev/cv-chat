@@ -1,0 +1,42 @@
+# Haven + Caddy (HTTPS automatico). Todo vive en /opt/haven:
+#   haven-data/   base de datos, .env de Haven, archivos subidos
+#   caddy-data/   certificados HTTPS
+# Para migrar: copiar /opt/haven entero a otro servidor y `docker compose up -d`.
+services:
+  haven:
+    # Version fijada (4.22.0): los parches de patches/ se revisaron para esta version. Revisarlos antes de actualizar.
+    image: ghcr.io/ancsemi/haven@sha256:bb1eab54fe970ddef1fd56a93036efe5e1f31c456c43b22435f4f74e77edc423
+    container_name: haven
+    volumes:
+      - ./haven-data:/data
+      # PARCHE: bug "t is not a function" al listar canales con hilos (Haven 4.21.0).
+      # Quitar esta linea cuando Haven lo corrija oficialmente.
+      - ./patches/app-discord-import.js:/app/public/js/modules/app-discord-import.js:ro
+      - ./patches/import-timeout.js:/patches/import-timeout.js:ro
+      # PARCHE velocidad: importa 4 canales a la vez. Quitar al actualizar Haven si el importador cambia.
+      - ./patches/import.js:/app/src/routes/import.js:ro
+      # Herramientas propias (script de hilos y privados, ejecutado por haven-hilos.timer)
+      - ./tools:/tools
+    env_file: .env
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - FORCE_HTTP=true
+      # PARCHE: ver patches/import-timeout.js
+      - NODE_OPTIONS=--require /patches/import-timeout.js --require /tools/puente/cargar.js
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+    depends_on:
+      - haven
+    restart: unless-stopped

@@ -1,0 +1,9 @@
+[Unit]
+Description=Haven: sincronizar mensajes de Discord (solo Discord -> Haven)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=infinity
+ExecStart=/bin/sh -c 'flock -n /run/haven-sync.lock docker exec -u node haven node /tools/sincronizar-discord.js >> /opt/haven/tools/sincronizacion.log 2>&1'

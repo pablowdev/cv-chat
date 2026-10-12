@@ -1,0 +1,9 @@
+[Unit]
+Description=Haven: copia de seguridad diaria a Google Drive
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=2h
+ExecStart=/bin/sh -c '/opt/haven/tools/backup.sh >> /opt/haven/tools/backup.log 2>&1'

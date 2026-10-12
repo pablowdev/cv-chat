@@ -1,0 +1,10 @@
+[Unit]
+Description=Sincroniza Discord con Haven cada 10 minutos
+
+[Timer]
+OnBootSec=4min
+OnUnitInactiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

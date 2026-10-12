@@ -1,0 +1,11 @@
+# Secretos y datos: nunca al repositorio
+.env
+*.env
+!deploy/env.example
+tools/rclone.conf
+tools/*.log
+tools/*estado*.json
+haven-data/
+caddy-data/
+caddy-config/
+backup-local/

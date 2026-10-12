@@ -1,0 +1,38 @@
+:root {
+  --bg: #f4f4f7; --card: #ffffff; --text: #1d1d24; --muted: #5d5d6b; --border: #e2e2ea;
+  --accent: #7c3aed; --discord: #5865f2; --danger: #d13d4a; --ok-bg: #e7f6ec; --ok-text: #1d6b3a; --err-bg: #fdeaea; --err-text: #9b1c26;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111117; --card: #1b1b23; --text: #ececf1; --muted: #a2a2b0; --border: #2c2c38;
+    --accent: #9b6bff; --discord: #6d78ff; --danger: #ef5b67; --ok-bg: #173523; --ok-text: #8fe0aa; --err-bg: #3a1a1e; --err-text: #ffaab1;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+  background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.card { width: 100%; max-width: 480px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px 24px; }
+h1 { font-size: 1.35rem; margin: 0 0 8px; }
+.lead { color: var(--muted); margin: 0 0 20px; }
+.estado { color: var(--muted); }
+.detalle { color: var(--muted); font-size: .92rem; padding-left: 1.1em; margin: 0 0 20px; }
+.detalle li { margin: 4px 0; }
+.btn { display: inline-block; border: 0; border-radius: 8px; padding: 11px 18px; font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: #fff; text-decoration: none; }
+.btn.discord { background: var(--discord); width: 100%; }
+.btn.secundario { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn.peligro { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.btn:disabled { opacity: .6; cursor: default; }
+.acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+.perfil { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.perfil img { width: 56px; height: 56px; border-radius: 50%; background: var(--border); }
+.perfil .nombre { font-weight: 700; font-size: 1.1rem; }
+.perfil .usuario { color: var(--muted); }
+.mensaje { margin: 18px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--ok-bg); color: var(--ok-text); }
+.mensaje.error { background: var(--err-bg); color: var(--err-text); }
+h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.nota { color: var(--muted); font-size: .9rem; margin: 14px 0 0; }
+.aviso { padding: 10px 12px; border-radius: 8px; background: var(--err-bg); color: var(--err-text); font-size: .92rem; margin: 0 0 16px; }
+form label { display: block; font-size: .92rem; color: var(--muted); margin: 0 0 12px; }
+form input { display: block; width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: inherit; }

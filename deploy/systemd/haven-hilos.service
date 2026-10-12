@@ -1,0 +1,8 @@
+[Unit]
+Description=Haven: convertir hilos importados de Discord y marcar canales privados
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'flock -n /run/haven-hilos.lock docker exec -u node haven node /tools/hilos-discord.js --aplicar --auto >> /opt/haven/tools/registro.log 2>&1'
