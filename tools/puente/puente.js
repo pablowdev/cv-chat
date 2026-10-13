@@ -12,7 +12,7 @@
 //
 //  Identidad: si la cuenta de Haven esta vinculada a una de Discord
 //    (tabla puente_vinculos), en Discord sale con su nombre y avatar de Discord
-//    y una linea "-# ✅ desde Haven · <@id>" con una mencion real (que no
+//    y una linea "-# ✅ desde Haven · <@id>" (texto: PUENTE_FIRMA) con una mencion real (que no
 //    notifica). Las menciones escritas a mano se convierten en texto, asi que
 //    esa linea no se puede falsificar. Las cuentas sin vincular salen como
 //    "Nombre (Haven, sin verificar)", o no salen (PUENTE_SIN_VINCULAR=bloquear).
@@ -601,7 +601,17 @@ function readUploads(media) {
 }
 
 const sqlMs = s => new Date(String(s || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z')).getTime();
-const footerFor = link => (link ? `\n-# ✅ desde Haven · <@${link.discord_user_id}>` : '');
+// Firma de los mensajes de cuentas vinculadas (PUENTE_FIRMA, por defecto "✅ desde Haven").
+// Puede llevar emojis del servidor como :nombre:, que se pasan al emoji de Discord.
+function signature() {
+  const raw = String(process.env.PUENTE_FIRMA || '').replace(/[\r\n<>@]/g, '').trim().slice(0, 80);
+  return adjuntos.emojisToDiscord(db, raw || '✅ desde Haven');
+}
+const footerFor = link => (link ? `\n-# ${signature()} · <@${link.discord_user_id}>` : '');
+// Nombre de la app en "Nombre (Haven, sin verificar)": PUENTE_TITULO si esta configurado
+const appName = () => String(process.env.PUENTE_TITULO || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 30) || 'Haven';
+// Linea de firma (la actual o una de antes): "-# ... · <@id>"
+const isFooterLine = l => /^-# .* · <@\d+>$/.test(l);
 
 function saveOut(havenId, discordId, target, attachments, ownId) {
   db.transaction(() => {
@@ -662,7 +672,7 @@ async function outboundCreate(havenMessageId) {
 
     const body = {
       content,
-      username: link ? webhookName(link.discord_global_name || link.discord_username) : webhookName(m.uname, ' (Haven, sin verificar)'),
+      username: link ? webhookName(link.discord_global_name || link.discord_username) : webhookName(m.uname, ` (${appName()}, sin verificar)`),
       avatar_url: link ? (link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : undefined) : (absolute(m.uavatar) || undefined),
       allowed_mentions: { parse: [] }, // nunca notifica a nadie (ni @everyone, ni @here)
     };
@@ -730,7 +740,7 @@ async function outboundDelete(havenMessageId) {
       if (cur && !cur.__error) {
         const body = mine.length
           ? { attachments: (cur.attachments || []).filter(a => !mine.includes(a.id)).map(a => ({ id: a.id })) }
-          : { content: ((cur.content || '').split('\n').filter(l => l.startsWith('-# ✅ desde Haven')).pop() || '') };
+          : { content: ((cur.content || '').split('\n').filter(isFooterLine).pop() || '') };
         r = await api('PATCH', msgUrl, { ...body, allowed_mentions: { parse: [] } });
       }
     } else {
