@@ -135,10 +135,27 @@
     banner.insertBefore(mini, author || banner.firstChild);
   }
 
+  // Reaccion con emoji comun ("👍 2" en un solo texto): el emoji va en su
+  // propio <span> para que el tema lo muestre grande y el numero chico, como
+  // en Discord. Los emojis del servidor ya son una imagen aparte.
+  function splitReaction(badge) {
+    const first = badge.firstChild;
+    if (!first || first.nodeType !== 3) return;
+    const m = /^(\s*)(\S+)(\s+\d+\s*)$/.exec(first.nodeValue);
+    if (!m || /^\d+$/.test(m[2])) return;
+    const span = document.createElement('span');
+    span.className = 'puente-reaction-emoji';
+    span.textContent = m[2];
+    first.nodeValue = m[3];
+    badge.insertBefore(span, first);
+  }
+
   function scan(root) {
     if (!root || !root.querySelectorAll) return;
     root.querySelectorAll('.reply-preview, .reply-bar-text').forEach(cleanReply);
     if (!themeOn()) return;
+    if (root.matches && root.matches('.reaction-badge')) splitReaction(root);
+    root.querySelectorAll('.reaction-badge').forEach(splitReaction);
     if (root.matches && root.matches('.reply-banner')) replyAvatar(root);
     root.querySelectorAll('.reply-banner').forEach(replyAvatar);
     if (root.matches && root.matches('video.file-video')) enhance(root);
@@ -151,6 +168,7 @@
         for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
         // La barra "Respondiendo a..." reusa el mismo elemento y solo cambia su texto.
         const t = m.target;
+        if (m.type === 'childList' && t.nodeType === 1 && t.matches && t.matches('.reaction-badge') && themeOn()) splitReaction(t);
         if (m.type === 'childList' && t.nodeType === 1 && t.matches && t.matches('.reply-preview, .reply-bar-text')) {
           if (t.textContent !== t.dataset.puenteShown) { delete t.dataset.puenteRaw; cleanReply(t); t.dataset.puenteShown = t.textContent; }
         }
