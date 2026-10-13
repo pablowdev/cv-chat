@@ -250,17 +250,26 @@
   })();
 })();
 
-// Celular: deslizar el dedo hacia la derecha en cualquier parte del chat abre
-// la lista de canales, y hacia la izquierda la de miembros, como en la app de
-// Discord (Haven solo lo hace si se empieza desde el borde de la pantalla).
+// Celular: los paneles de canales (izquierda) y de miembros (derecha) siguen
+// al dedo, como en la app de Discord. Se arrastra desde cualquier parte del
+// chat: hacia la derecha abre los canales, hacia la izquierda los miembros; con
+// un panel abierto, arrastrando al reves se cierra. Al soltar se abre o se
+// cierra segun cuanto se arrastro o lo rapido del movimiento. Haven solo
+// abria los paneles empezando desde el borde de la pantalla, y de golpe.
 // No se activa sobre algo que se desplaza de costado (codigo, tablas), videos,
 // el cuadro de escribir o los selectores de emojis y GIF.
 (function () {
   'use strict';
-  const MIN_DX = 60;
+  const LOCK_PX = 10;     // movimiento minimo para decidir si es de costado o vertical
+  const DECIDE_PX = 60;   // lo mismo que usa Haven al soltar
+  const FLICK = 0.45;     // px/ms: un movimiento rapido alcanza aunque sea corto
   const SKIP = 'input, textarea, select, [contenteditable="true"], video, audio, pre, table, ' +
-    '.modal-overlay, .gif-picker, .emoji-picker, .reaction-full-picker, .reaction-picker, [role="slider"]';
-  let start = null;
+    '.gif-picker, .emoji-picker, .reaction-full-picker, .reaction-picker, [role="slider"]';
+  let g = null; // gesto en curso
+
+  const $ = (id) => document.getElementById(id);
+  const left = () => document.querySelector('[data-haven-region="navigation-sidebar"]');
+  const right = () => document.querySelector('.right-sidebar');
 
   function scrollsSideways(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
@@ -273,35 +282,77 @@
   }
 
   document.addEventListener('touchstart', (e) => {
-    start = null;
+    g = null;
     if (e.touches.length !== 1 || window.innerWidth > 768) return;
-    const body = document.getElementById('app-body');
+    const body = $('app-body');
     const target = e.target instanceof Element ? e.target : null;
-    if (!body || !target || !target.closest('[data-haven-region="main"]')) return;
-    // Con un panel abierto, Haven ya se encarga de cerrarlo al deslizar
-    if (body.classList.contains('mobile-sidebar-open') || body.classList.contains('mobile-right-open')) return;
-    if (target.closest(SKIP) || scrollsSideways(target)) return;
-    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    if (!body || !target || target.closest('.modal-overlay')) return;
+    const t = e.touches[0];
+    const base = { x: t.clientX, y: t.clientY, t: Date.now(), locked: false, dx: 0 };
+    if (body.classList.contains('mobile-sidebar-open')) g = { ...base, mode: 'close', side: 'left' };
+    else if (body.classList.contains('mobile-right-open')) g = { ...base, mode: 'close', side: 'right' };
+    else if (target.closest('[data-haven-region="main"]') && !target.closest(SKIP) && !scrollsSideways(target)) g = { ...base, mode: 'open', side: null };
+    // Dentro de un panel abierto, solo se cierra arrastrando sobre algo que no se desplaza de costado
+    if (g && g.mode === 'close' && (target.closest(SKIP) || scrollsSideways(target))) g = null;
   }, { passive: true, capture: true });
 
-  document.addEventListener('touchend', (e) => {
-    if (!start) return;
-    const s = start;
-    start = null;
-    const dx = e.changedTouches[0].clientX - s.x;
-    const dy = e.changedTouches[0].clientY - s.y;
-    if (Math.abs(dx) < MIN_DX || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - s.t > 1000) return;
-    if (window.getSelection && String(window.getSelection())) return; // estaba seleccionando texto
-    const body = document.getElementById('app-body');
-    const overlay = document.getElementById('mobile-overlay');
-    if (!body || !overlay) return;
-    if (dx > 0) {
-      body.classList.add('mobile-sidebar-open');
-      body.classList.remove('mobile-right-open');
-    } else {
-      body.classList.add('mobile-right-open');
-      body.classList.remove('mobile-sidebar-open');
+  function place(dx) {
+    const el = g.el, w = g.w;
+    let x; // posicion del panel: 0 = abierto
+    if (g.side === 'left') x = g.mode === 'open' ? Math.min(0, -w + Math.max(0, dx)) : Math.min(0, Math.max(-w, dx));
+    else x = g.mode === 'open' ? Math.max(0, w + Math.min(0, dx)) : Math.max(0, Math.min(w, dx));
+    el.style.transform = 'translateX(' + x + 'px)';
+    g.overlay.style.opacity = String(Math.max(0, Math.min(1, 1 - Math.abs(x) / w)));
+  }
+
+  document.addEventListener('touchmove', (e) => {
+    if (!g || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - g.x, dy = t.clientY - g.y;
+    if (!g.locked) {
+      if (Math.abs(dx) < LOCK_PX && Math.abs(dy) < LOCK_PX) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.2) { g = null; return; } // es un desplazamiento vertical
+      if (g.mode === 'open') g.side = dx > 0 ? 'left' : 'right';
+      // Cerrar: solo hacia afuera (izquierda para el panel izquierdo)
+      if (g.mode === 'close' && ((g.side === 'left' && dx > 0) || (g.side === 'right' && dx < 0))) { g = null; return; }
+      g.el = g.side === 'left' ? left() : right();
+      g.overlay = $('mobile-overlay');
+      if (!g.el || !g.overlay) { g = null; return; }
+      g.w = g.el.getBoundingClientRect().width || window.innerWidth * 0.85;
+      g.locked = true;
+      g.x = t.clientX; // el panel arranca desde donde se decidio el gesto
+      g.el.style.transition = 'none';
+      g.overlay.classList.add('active');
     }
-    overlay.classList.add('active');
-  }, { passive: true });
+    if (e.cancelable) e.preventDefault(); // que el chat no se desplace mientras se arrastra
+    g.dx = t.clientX - g.x;
+    g.v = g.dx / Math.max(1, Date.now() - g.t);
+    place(g.dx);
+  }, { passive: false, capture: true });
+
+  function finish(e) {
+    if (!g) return;
+    const s = g;
+    g = null;
+    if (!s.locked) return;
+    // El gesto ya se resolvio aca: que Haven no lo procese tambien (si empezo
+    // cerca de un borde, abriria el panel del otro lado)
+    e.stopPropagation();
+    const body = $('app-body');
+    const dir = s.side === 'left' ? 1 : -1;             // sentido de "abrir"
+    const moved = s.dx * (s.mode === 'open' ? dir : -dir); // cuanto se avanzo hacia la meta
+    const fast = Math.abs(s.v || 0) > FLICK && moved > 0;
+    const done = e.type !== 'touchcancel' && (moved >= DECIDE_PX || fast);
+    const open = s.mode === 'open' ? done : !done;
+    // Se sacan los estilos del arrastre y la clase deja el panel en su lugar, con la animacion de Haven
+    s.el.style.transition = '';
+    s.el.style.transform = '';
+    s.overlay.style.opacity = '';
+    const cls = s.side === 'left' ? 'mobile-sidebar-open' : 'mobile-right-open';
+    body.classList.remove('mobile-sidebar-open', 'mobile-right-open');
+    if (open) { body.classList.add(cls); s.overlay.classList.add('active'); }
+    else s.overlay.classList.remove('active');
+  }
+  document.addEventListener('touchend', finish, { passive: true, capture: true });
+  document.addEventListener('touchcancel', finish, { passive: true, capture: true });
 })();
