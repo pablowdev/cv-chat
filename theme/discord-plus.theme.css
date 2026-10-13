@@ -2,7 +2,7 @@
  * @name        Discord+
  * @description Colores, tipografia (Inter) y disposicion parecidos a Discord. Solo cambia el aspecto.
  * @author      haven-discord-puente
- * @version     1.0
+ * @version     1.1
  * @icon        🎮
  * @haven-theme-api 1
  */
@@ -39,15 +39,14 @@
 
 :root {
   /* ── Fondos, por capas como Discord ─────────────── */
-  /* Mismos tonos que el tema "Discord" que trae Haven; la barra de servidores
-     (#1e1f22) se pinta aparte porque --bg-tertiary se usa en muchos sitios. */
-  --bg-primary:    #313338;   /* chat */
-  --bg-secondary:  #2b2d31;   /* lista de canales, panel derecho */
-  --bg-tertiary:   #383a40;   /* campos, citas, botones */
-  --bg-hover:      #35373c;
-  --bg-active:     #404249;
-  --bg-input:      #383a40;
-  --bg-card:       #2b2d31;
+  /* Colores medidos en Discord (tema oscuro actual, 2025-2026). */
+  --bg-primary:    #1a1a1e;   /* chat, barra superior, panel derecho */
+  --bg-secondary:  #121214;   /* barra de servidores y lista de canales */
+  --bg-tertiary:   #222327;   /* campos, citas, botones */
+  --bg-hover:      #232327;
+  --bg-active:     #2c2c30;
+  --bg-input:      #222327;
+  --bg-card:       #222327;   /* vistas previas, menus, ventanas */
 
   --accent:        #5865f2;
   --accent-hover:  #4752c4;
@@ -55,19 +54,19 @@
   --accent-glow:   rgba(88, 101, 242, 0.25);
   --accent-text:   #fff;
 
-  --text-primary:  #dbdee1;
+  --text-primary:  #efeff1;
   --text-secondary:#b5bac1;
-  --text-muted:    #949ba4;
+  --text-muted:    #81828a;
   --text-link:     #00a8fc;
 
-  --border:        #3f4147;
-  --border-light:  #4e5058;
+  --border:        #29292d;
+  --border-light:  #3a3a3f;
 
   --success:       #23a55a;
   --danger:        #f23f43;
   --warning:       #f0b232;
   --led-on:        #23a55a;
-  --led-off:       #80848e;
+  --led-off:       #81828a;
   --led-glow:      rgba(35, 165, 90, 0.35);
 
   --font-main:     'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -83,10 +82,10 @@
 body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 
 /* ── Capas de fondo ────────────────────────────────── */
-[data-haven-region="server-rail"] { background: #1e1f22; }
-[data-haven-region="navigation-sidebar"] { background: #2b2d31; }
-[data-haven-region="main"], [data-haven-region="message-area"] { background: #313338; }
-[data-haven-region="context-sidebar"] { background: #2b2d31; }
+[data-haven-region="server-rail"] { background: #121214; }
+[data-haven-region="navigation-sidebar"] { background: #121214; }
+[data-haven-region="main"], [data-haven-region="message-area"] { background: #1a1a1e; }
+[data-haven-region="context-sidebar"] { background: #1a1a1e; border-left: 1px solid #29292d; }
 
 /* ── Lista de canales ──────────────────────────────── */
 .channel-item {
@@ -102,10 +101,10 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 }
 .channel-item * { font-style: normal; }
 .channel-item .channel-name { color: inherit; font-weight: inherit; }
-.channel-item .channel-hash { color: #80848e; font-weight: 400; }
-.channel-item:hover { background: var(--bg-hover); color: #dbdee1; }
+.channel-item .channel-hash { color: #81828a; font-weight: 400; }
+.channel-item:hover { background: var(--bg-hover); color: #efeff1; }
 .channel-item.active, .channel-item.active:hover { background: var(--bg-active); color: #fff; }
-.channel-item.unread, .channel-item.has-unread { color: #f2f3f5; font-weight: 600; }
+.channel-item.unread, .channel-item.has-unread { color: #fbfbfb; font-weight: 600; }
 
 /* Haven pone en cursiva y semitransparentes los canales privados. Con el
    puente en modo migracion todos los canales de Discord son privados en Haven,
@@ -129,7 +128,7 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   letter-spacing: 0.02em !important;
   color: var(--text-muted) !important;
 }
-.category-label:hover, .category-label.cat-pill:hover { color: #dbdee1 !important; }
+.category-label:hover, .category-label.cat-pill:hover { color: #efeff1 !important; }
 .category-label.cat-pill.cat-collapsed { color: var(--text-muted) !important; }
 .category-label .cat-collapse-arrow { font-size: 0.625rem; margin-right: 0.25rem; }
 .category-tabs .category-label.cat-pill { padding: 0.25rem 0.5rem !important; }
@@ -145,7 +144,7 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   color: var(--text-muted);
   padding: 1rem 0.5rem 0.25rem 1rem;
 }
-.dm-category-header:hover { color: #dbdee1; }
+.dm-category-header:hover { color: #efeff1; }
 
 /* "Unirse a un canal" y "Crear canal": Discord no los tiene. Se ocultan solo a
    la vista (los enlaces de invitacion siguen funcionando, y con el tema
@@ -167,16 +166,16 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
     padding: 0 0.5rem 0 0.75rem;
     border: 0;
     border-radius: 0;
-    background: #232428;
+    background: #202024;
     box-shadow: none;
   }
-  [data-haven-region="account"] .current-user { color: #f2f3f5; font-weight: 600; font-size: 0.875rem; }
+  [data-haven-region="account"] .current-user { color: #fbfbfb; font-weight: 600; font-size: 0.875rem; }
   [data-haven-region="account"] .login-name { color: var(--text-muted); font-size: 0.75rem; }
   [data-haven-region="account"] .icon-btn { color: #b5bac1; opacity: 0.85; }
-  [data-haven-region="account"] .icon-btn:hover { opacity: 1; background: #3f4147; }
+  [data-haven-region="account"] .icon-btn:hover { opacity: 1; background: #29292d; }
   /* La fila de botones (temas, actividades, miembros...) queda justo encima */
-  [data-haven-region="sidebar-footer"] { padding-bottom: 3.25rem; background: #2b2d31; border-top: 0; }
-  [data-haven-region="sidebar-actions"] { background: #2b2d31; border-top: 1px solid #1f2023; }
+  [data-haven-region="sidebar-footer"] { padding-bottom: 3.25rem; background: #121214; border-top: 0; }
+  [data-haven-region="sidebar-actions"] { background: #121214; border-top: 1px solid #29292d; }
 }
 /* Botones de la fila inferior: iconos grises y discretos */
 [data-haven-region="sidebar-actions"] .sidebar-bottom-btn {
@@ -185,20 +184,20 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   filter: grayscale(1);
   opacity: 0.6;
 }
-[data-haven-region="sidebar-actions"] .sidebar-bottom-btn:hover { background: #35373c; filter: none; opacity: 1; }
+[data-haven-region="sidebar-actions"] .sidebar-bottom-btn:hover { background: #232327; filter: none; opacity: 1; }
 
 /* ── Mensajes ──────────────────────────────────────── */
 .message, .message-row, .message-compact { border-top: 0; border-bottom: 0; box-shadow: none; }
 .message:hover, .message-row:hover, .message-compact:hover { background: rgba(2, 2, 2, 0.06); }
 .message-author { font-weight: 500; font-size: 1rem; }
 .message-time { font-size: 0.75rem; color: var(--text-muted); }
-.message-content { color: #dbdee1; font-size: 1rem; line-height: 1.375rem; }
+.message-content { color: #efeff1; font-size: 1rem; line-height: 1.375rem; }
 
 /* "DISCORD" junto a cada nombre: discreta, como una etiqueta de bot */
 .discord-badge {
   background: transparent;
   color: var(--text-muted);
-  border: 1px solid #4e5058;
+  border: 1px solid #3a3a3f;
   font-weight: 600;
   opacity: 0.8;
 }
@@ -223,15 +222,15 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   top: 50%;
   width: 1rem;
   height: 0.75rem;
-  border-left: 2px solid #4e5058;
-  border-top: 2px solid #4e5058;
+  border-left: 2px solid #3a3a3f;
+  border-top: 2px solid #3a3a3f;
   border-top-left-radius: 6px;
 }
 .reply-banner .reply-line { display: none; }
-.reply-banner:hover { color: #dbdee1; }
+.reply-banner:hover { color: #efeff1; }
 
 /* ── Barra superior ────────────────────────────────── */
-[data-haven-region="channel-header"] { background: #313338; border-bottom: 1px solid #26282c; box-shadow: none; }
+[data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.
    Siguen en los ajustes del canal (boton del engranaje). */
 #channel-code-display, #copy-code-btn { display: none !important; }
@@ -242,12 +241,12 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 #channel-header-name { font-family: var(--font-heading); font-weight: 600; }
 
 /* ── Barra de escribir ─────────────────────────────── */
-[data-haven-region="composer"] { background: #313338; border-top: 0; }
+[data-haven-region="composer"] { background: #1a1a1e; border-top: 0; }
 #message-input, .message-input-area textarea {
   background: var(--bg-input);
   border: 0;
   border-radius: 8px;
-  color: #dbdee1;
+  color: #efeff1;
   font-family: var(--font-main);
   font-size: 1rem;
 }
@@ -259,8 +258,8 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   border-radius: 50%;
   width: 2.25rem;
   height: 2.25rem;
-  background: #4e5058;
-  color: #dbdee1;
+  background: #3a3a3f;
+  color: #efeff1;
   font-size: 1.4rem;
 }
 [data-compact-composer] .btn-composer-plus:hover,
@@ -285,7 +284,7 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   padding: 0.35rem 0.45rem;
   color: #b5bac1;
 }
-[data-compact-composer] .input-actions-box:not(.open) > button:hover { color: #dbdee1; }
+[data-compact-composer] .input-actions-box:not(.open) > button:hover { color: #efeff1; }
 [data-compact-composer] #send-btn { order: 60; }
 
 /* ── Imagenes y videos como Discord ────────────────── */
@@ -318,4 +317,4 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 .puente-play:hover { background: rgba(0, 0, 0, 0.8); }
 
 /* ── Barras de desplazamiento finas ───────────────── */
-* { scrollbar-color: #1a1b1e transparent; scrollbar-width: thin; }
+* { scrollbar-color: #29292d transparent; scrollbar-width: thin; }
