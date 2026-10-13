@@ -235,6 +235,12 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
     border-radius: 8px;
   }
   .file-attachment:has(> .file-video-wrap) { max-width: 100%; }
+  /* Tamanos de letra de la app de Discord para Android (medidos sobre capturas
+     del mismo telefono): el texto se ve mas chico que en Discord de PC */
+  html .message-content { font-size: 0.875rem; line-height: 1.1875rem; }
+  html .message-author { font-size: 0.9375rem; }
+  html .message-time { font-size: 0.6875rem; }
+  html .reply-banner, html .reply-preview, html .reply-author { font-size: 0.75rem; line-height: 1rem; }
   /* Barra "SERVER Connected" de abajo: la app de Discord no tiene */
   [data-haven-region="status-bar"] { display: none !important; }
   /* Boton ⋯ de cada mensaje: sin recuadro, gris y chico */
