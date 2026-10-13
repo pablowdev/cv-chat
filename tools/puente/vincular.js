@@ -8,6 +8,7 @@
 //  /puente/aviso.js            aviso "Vincula tu cuenta" que se inyecta en /app
 //  /puente/login.js            enlace "¿Olvidaste tu contraseña?" que se inyecta en el login
 //  /puente/api/recuperar/*     recuperar la contraseña iniciando sesion con Discord
+//  /manifest.webmanifest       app instalable con el nombre e icono del servidor (instalable.js)
 //
 // Recuperar con Discord: quien entra con la cuenta de Discord vinculada puede
 // poner una contraseña nueva a su cuenta de Haven. Igual que un codigo de
@@ -29,6 +30,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const adjuntos = require('./adjuntos.js');
+const instalable = require('./instalable.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -66,6 +68,9 @@ function hookHttp() {
   http.Server.prototype.emit = function (event, req, res, ...rest) {
     if (event === 'request' && req && typeof req.url === 'string') {
       const url = req.url;
+      if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-')) {
+        try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
+      }
       if (url.startsWith('/puente/')) {
         handle(req, res).catch(err => { warn('error en', url, err.message); send(res, 500, 'text/plain', 'Error interno'); });
         return true;
@@ -122,8 +127,9 @@ function injectScript(req, res, src) {
     let body = Buffer.concat(chunks);
     try {
       if (isHtml() && !res.headersSent) {
-        const html = body.toString('utf8');
-        if (html.includes('</body>') && !html.includes(src)) body = Buffer.from(html.replace('</body>', tag + '</body>'), 'utf8');
+        let html = body.toString('utf8');
+        if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
+        body = Buffer.from(instalable.pageHead(db, html), 'utf8');
         origSetHeader.call(this, 'Content-Length', body.length);
       }
     } catch { /* si algo falla, se sirve la pagina tal cual */ }

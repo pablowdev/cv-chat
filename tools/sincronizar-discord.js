@@ -31,12 +31,17 @@ const ESTADO_PATH = path.join(__dirname, 'sincronizacion-estado.json');
 const BACKUP_DIR = '/data/backups';
 const API = 'https://discord.com/api/v10';
 const CONCURRENCY = 4;               // Discord limita por canal: 4 a la vez es seguro
-const DOWNLOADS_AT_ONCE = 8;         // adjuntos descargados a la vez por canal
+const DOWNLOADS_AT_ONCE = 16;        // adjuntos descargados a la vez por canal
 const ARCHIVED_EVERY_MS = 6 * 3600e3; // cada cuanto revisar hilos archivados
 // --rehacer: vuelve a leer TODO el historial y corrige el texto de los mensajes
 // ya guardados que vinieron de Discord (por ejemplo, despues de cambiar
 // buildContent). No toca mensajes escritos en Haven. Implica --completo.
-const REBUILD = process.argv.includes('--rehacer');
+// --rehacer-pendientes: igual, pero en cada canal o hilo empieza por el primer
+// mensaje que todavia tiene un adjunto sin copiar ("📎 [nombre](enlace)") y
+// se saltea los que no tienen nada pendiente. Sirve para retomar un --rehacer
+// cortado sin volver a leer lo que ya se corrigio.
+const PENDING_ONLY = process.argv.includes('--rehacer-pendientes');
+const REBUILD = PENDING_ONLY || process.argv.includes('--rehacer');
 const FULL = REBUILD || process.argv.includes('--completo');
 const LAYOUT_ALL = process.argv.includes('--orden');
 let rebuilt = 0;
@@ -150,6 +155,14 @@ const q = {
   lastInThread: db.prepare(`SELECT discord_message_id AS d FROM messages
     WHERE thread_id = ? AND discord_message_id GLOB '[0-9]*'
     ORDER BY length(discord_message_id) DESC, discord_message_id DESC LIMIT 1`),
+  // Para --rehacer-pendientes: el mensaje mas viejo con un adjunto sin copiar
+  // ("📎 [nombre](enlace de Discord)"; no los enlaces a Discord pegados como texto).
+  firstPendingInChannel: db.prepare(`SELECT discord_message_id AS d FROM messages
+    WHERE channel_id = ? AND thread_id IS NULL AND discord_message_id GLOB '[0-9]*' AND content LIKE '%📎 [%](https://cdn.discordapp.com/attachments/%'
+    ORDER BY length(discord_message_id), discord_message_id LIMIT 1`),
+  firstPendingInThread: db.prepare(`SELECT discord_message_id AS d FROM messages
+    WHERE thread_id = ? AND discord_message_id GLOB '[0-9]*' AND content LIKE '%📎 [%](https://cdn.discordapp.com/attachments/%'
+    ORDER BY length(discord_message_id), discord_message_id LIMIT 1`),
 };
 
 const createdThisRun = [];
@@ -348,7 +361,12 @@ async function main() {
   const skipped = [];
   await runPool(textChannels, async ch => {
     const existing = q.channelByDiscord.get(ch.id);
-    const last = REBUILD ? null : existing ? q.lastInChannel.get(existing.id)?.d : null;
+    let last = REBUILD ? null : existing ? q.lastInChannel.get(existing.id)?.d : null;
+    if (PENDING_ONLY) {
+      const first = existing && q.firstPendingInChannel.get(existing.id);
+      if (!first) return; // nada pendiente en este canal
+      last = (big(first.d) - 1n).toString();
+    }
     if (!REBUILD && existing && last && ch.last_message_id && !isNewer(ch.last_message_id, last)) return; // al dia
     // No crear canales que el bot no puede leer: probar antes de crearlo.
     if (!existing) {
@@ -414,7 +432,12 @@ async function main() {
   await runPool(work, async ({ th, parent }) => {
     const parentIsForum = !!parent.is_forum || FORUM_TYPES.has(byId.get(th.parent_id)?.type);
     const existingRoot = q.byDiscordId.get(th.id) || q.byDiscordId.get(`thread-${th.id}`);
-    const last = REBUILD ? null : existingRoot ? q.lastInThread.get(existingRoot.id)?.d : null;
+    let last = REBUILD ? null : existingRoot ? q.lastInThread.get(existingRoot.id)?.d : null;
+    if (PENDING_ONLY) {
+      const first = existingRoot && q.firstPendingInThread.get(existingRoot.id);
+      if (!first) return; // nada pendiente en este hilo
+      last = (big(first.d) - 1n).toString();
+    }
     if (!REBUILD && existingRoot && th.last_message_id && last && !isNewer(th.last_message_id, last)) { threadsUpToDate++; return; } // al dia
     const rootId = await threadRoot(th, parent.id, parentIsForum);
     const n = await pullMessages(th.id, last, parent.id, rootId, parentIsForum ? th.id : null);

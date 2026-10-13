@@ -177,6 +177,69 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   [data-haven-region="sidebar-footer"] { padding-bottom: 3.25rem; background: #121214; border-top: 0; }
   [data-haven-region="sidebar-actions"] { background: #121214; border-top: 1px solid #29292d; }
 }
+/* ── Celular: el menu lateral como el de la app de Discord ── */
+@media (max-width: 768px) {
+  /* "Servidores" (lista de otros servidores Haven): Discord no la tiene en el menu */
+  .mobile-servers-section { display: none !important; }
+  [data-haven-region="navigation-sidebar"] { padding-bottom: 0 !important; }
+  [data-haven-region="navigation-sidebar"] .sidebar-header {
+    position: static;
+    padding: 0.875rem 3rem 0.875rem 1rem;
+    border-bottom: 1px solid #29292d;
+  }
+  [data-haven-region="navigation-sidebar"] .mobile-panel-close:not(.mobile-panel-close-right) {
+    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    background: #222327;
+  }
+  /* Tarjeta del usuario: abajo de todo, como en Discord */
+  [data-haven-region="account"] {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    min-height: 3.5rem;
+    margin: 0;
+    padding: 0 0.5rem calc(env(safe-area-inset-bottom, 0px)) 0.75rem;
+    border: 0;
+    border-top: 1px solid #29292d;
+    border-radius: 0;
+    background: #202024;
+    box-shadow: none;
+  }
+  [data-haven-region="account"] .current-user { color: #fbfbfb; font-weight: 600; font-size: 0.9375rem; }
+  [data-haven-region="account"] .login-name { color: var(--text-muted); font-size: 0.8125rem; }
+  [data-haven-region="account"] .icon-btn { color: #b5bac1; opacity: 0.85; min-width: 2.5rem; min-height: 2.5rem; }
+  [data-haven-region="sidebar-footer"] {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    background: #121214;
+    border-top: 0;
+  }
+  [data-haven-region="sidebar-actions"] {
+    background: #121214;
+    border-top: 1px solid #29292d;
+    justify-content: space-around;
+    padding: 0.25rem 0.5rem;
+  }
+  [data-haven-region="sidebar-actions"] > span[style*="flex"] { display: none; }
+  [data-haven-region="sidebar-actions"] .sidebar-bottom-btn:not([style*="display: none"]):not([style*="display:none"]) {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 2.75rem; min-height: 2.75rem; font-size: 1.25rem;
+  }
+  /* Canales: filas un poco mas altas para el dedo, como en la app de Discord */
+  .channel-item { min-height: 2.5rem; }
+  /* Imagenes y videos: el ancho del chat, sin pasarse de alto */
+  .message .chat-image, .message-compact .chat-image {
+    max-width: 100%;
+    max-height: 20rem;
+    border-radius: 8px;
+  }
+  .file-attachment:has(> .file-video-wrap) { max-width: 100%; }
+  /* Barra "SERVER Connected" de abajo: la app de Discord no tiene */
+  [data-haven-region="status-bar"] { display: none !important; }
+  /* Boton ⋯ de cada mensaje: sin recuadro, gris y chico */
+  .msg-dots-btn { background: transparent !important; border: 0 !important; box-shadow: none !important; color: #81828a; opacity: 0.7; }
+}
 /* Botones de la fila inferior: iconos grises y discretos */
 [data-haven-region="sidebar-actions"] .sidebar-bottom-btn {
   background: transparent;
