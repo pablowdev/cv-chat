@@ -85,15 +85,50 @@
     wrap.appendChild(btn);
   }
 
+  // Vista previa de una respuesta a un adjunto: en vez de la ruta del archivo
+  // ("/uploads/discord/123.jpg" o "[file:video.mp4](...)"), lo que muestra
+  // Discord. Solo cambia el texto que se ve; el mensaje original no se toca.
+  const IMG_LINE = /^(?:spoiler-img:)?(?:\/uploads\/\S+|https?:\/\/\S+)\.(?:jpe?g|png|gif|webp|svg)(?:\?\S*)?$|^https:\/\/(?:media\d*\.giphy\.com|(?:media\d*|c)\.tenor\.com)\/\S+$/i;
+  const FILE_LINE = /^\[file:([^\]\n]+)\]\(\/uploads\/[^\s|)]+\|[^)\n]*\)$/;
+  const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv|mkv|avi)$/i;
+  function cleanReply(el) {
+    const raw = el.dataset.puenteRaw || el.textContent;
+    if (!/\/uploads\/|\[file:|tenor\.com|giphy\.com|\.(jpe?g|png|gif|webp)\b/i.test(raw)) return;
+    el.dataset.puenteRaw = raw;
+    let media = null;
+    // Primero los archivos (su nombre puede tener espacios), luego palabra por palabra.
+    const noFiles = raw.replace(new RegExp(FILE_LINE.source.slice(1, -1), 'g'), (_, name) => {
+      media = media || (VIDEO_EXT.test(name) ? '🎬 Video' : '📎 ' + name);
+      return ' ';
+    });
+    const kept = noFiles.split(/\s+/).filter((w) => {
+      if (!w) return false;
+      if (IMG_LINE.test(w)) { media = media || '🖼 Clic para ver el adjunto'; return false; }
+      return true;
+    });
+    if (!media) return; // no habia adjuntos: dejar el texto como esta
+    const text = kept.length ? kept.join(' ') : media;
+    if (el.textContent !== text) el.textContent = text;
+  }
+
   function scan(root) {
-    if (!themeOn() || !root || !root.querySelectorAll) return;
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll('.reply-preview, .reply-bar-text').forEach(cleanReply);
+    if (!themeOn()) return;
     if (root.matches && root.matches('video.file-video')) enhance(root);
     root.querySelectorAll('video.file-video').forEach(enhance);
   }
 
   function startObserving() {
     new MutationObserver((muts) => {
-      for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+      for (const m of muts) {
+        for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+        // La barra "Respondiendo a..." reusa el mismo elemento y solo cambia su texto.
+        const t = m.target;
+        if (m.type === 'childList' && t.nodeType === 1 && t.matches && t.matches('.reply-preview, .reply-bar-text')) {
+          if (t.textContent !== t.dataset.puenteShown) { delete t.dataset.puenteRaw; cleanReply(t); t.dataset.puenteShown = t.textContent; }
+        }
+      }
     }).observe(document.body, { childList: true, subtree: true });
     scan(document);
     // El tema puede terminar de cargar despues que los primeros mensajes.
