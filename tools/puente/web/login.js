@@ -16,3 +16,26 @@
   box.append(text, link);
   document.body.appendChild(box);
 })();
+
+// Titulo de la pestana: Haven pone "Haven: <servidor>" (o "(3) Haven: <servidor>"
+// con mensajes sin leer). Se cambia por el titulo elegido (PUENTE_TITULO en .env),
+// manteniendo el contador. Si no hay titulo configurado, no se toca nada.
+(function () {
+  'use strict';
+  const TITLE = '__PUENTE_TITULO__';
+  if (!TITLE || TITLE.indexOf('__PUENTE') === 0) return;
+  const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'title');
+  if (!desc || !desc.set) return;
+  const fix = (v) => {
+    const m = /^(\(\d+\)\s*)?Haven(?::.*)?$/.exec(String(v));
+    return m ? (m[1] || '') + TITLE : v;
+  };
+  try {
+    Object.defineProperty(document, 'title', {
+      configurable: true,
+      get() { return desc.get.call(document); },
+      set(v) { desc.set.call(document, fix(v)); },
+    });
+  } catch { return; }
+  document.title = desc.get.call(document);
+})();

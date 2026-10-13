@@ -154,7 +154,14 @@ async function handle(req, res) {
   if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/vincular.css')) {
     const file = p === '/puente/vincular' ? 'vincular.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
-    return send(res, 200, type, fs.readFileSync(path.join(STATIC, file)));
+    let body = fs.readFileSync(path.join(STATIC, file));
+    // Titulo de la pestana (PUENTE_TITULO): se escribe en aviso.js y login.js al servirlos.
+    if (file.endsWith('.js')) {
+      // Solo letras, numeros, espacios y signos simples (va dentro de un string de JS).
+      const title = String(process.env.PUENTE_TITULO || '').replace(/[^\p{L}\p{N} ._!?¡¿-]/gu, '').slice(0, 60);
+      body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title);
+    }
+    return send(res, 200, type, body);
   }
 
   if (p === '/puente/api/estado' && req.method === 'GET') {
