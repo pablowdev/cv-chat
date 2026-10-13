@@ -503,6 +503,42 @@ html #emoji-picker.puente-emoji-sheet {
 .puente-emoji-sheet .emoji-item img, .puente-emoji-sheet .emoji-item .custom-emoji { width: 2.25rem; height: 2.25rem; object-fit: contain; }
 .puente-emoji-sheet .sticker-grid { grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); }
 
+/* Quien reacciono (mantener apretada una reaccion en pantallas tactiles),
+   como la ventana de la app de Discord (aviso.js). */
+#puente-who-backdrop { position: fixed; inset: 0; z-index: 100018; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.18s ease-out; }
+.puente-who-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100019;
+  width: 100%; max-width: 37.5rem; max-height: 75vh; margin: 0 auto;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  padding: 0.5rem 0 env(safe-area-inset-bottom, 0px);
+  background: #252429; border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease; animation: puente-sheet-up 0.22s ease-out;
+}
+.puente-who-tabs { flex-shrink: 0; display: flex; gap: 0.5rem; overflow-x: auto; scrollbar-width: none; padding: 0.25rem 1rem 0.75rem; border-bottom: 1px solid #2e2d32; }
+.puente-who-tab {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem;
+  height: 3rem; padding: 0 0.875rem; border: 0; border-radius: 0.625rem;
+  background: transparent; color: #b5bac1; font: inherit; font-size: 1.125rem; font-weight: 700; cursor: pointer;
+}
+.puente-who-tab.active { background: #36353b; color: #fbfbfb; }
+img.puente-who-emoji { width: 1.75rem; height: 1.75rem; object-fit: contain; }
+span.puente-who-emoji { font-size: 1.5rem; line-height: 1; }
+.puente-who-list { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0.25rem 1rem 1rem; }
+.puente-who-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 0 0.5rem; color: #fbfbfb; font-weight: 700; text-transform: uppercase; font-size: 0.875rem; }
+.puente-who-head .puente-who-emoji { display: none; }
+.puente-who-row { display: flex; align-items: center; gap: 1rem; min-height: 3.5rem; }
+.puente-who-avatar {
+  flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: #5865f2; color: #fff; font-weight: 700;
+}
+.puente-who-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.puente-who-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fbfbfb; font-size: 1.0625rem; font-weight: 600; }
+.puente-who-tag { flex-shrink: 0; padding: 0.0625rem 0.375rem; border: 1px solid #3a3a3f; border-radius: 0.25rem; color: #b5bac1; font-size: 0.6875rem; font-weight: 600; }
+.puente-who-remove { flex-shrink: 0; width: 2.75rem; height: 2.75rem; border: 0; border-radius: 50%; background: transparent; color: #dbdee1; font-size: 1.375rem; cursor: pointer; }
+.puente-who-remove:active { background: #36353b; }
+
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.

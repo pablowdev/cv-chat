@@ -782,3 +782,127 @@
     }).observe(p, { attributes: true, attributeFilter: ['style'], childList: true });
   })();
 })();
+
+// Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
+// como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
+// su cantidad) y la lista de personas, con avatar. Incluye a quienes
+// reaccionaron desde Discord. En la propia hay una ✕ para sacarla.
+// (Antes, mantener apretado abria el menu del mensaje.)
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  }
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  function close() {
+    document.getElementById('puente-who-sheet')?.remove();
+    document.getElementById('puente-who-backdrop')?.remove();
+  }
+
+  function emojiNode(app, emoji, cls) {
+    const m = /^:([a-zA-Z0-9_-]+):$/.exec(emoji || '');
+    const ce = m && Array.isArray(app.customEmojis) ? app.customEmojis.find(e => e.name === m[1]) : null;
+    if (ce) { const img = el('img', cls); img.src = ce.url; img.alt = emoji; return img; }
+    return el('span', cls, emoji);
+  }
+
+  function open(app, badge) {
+    close();
+    const msgEl = badge.closest('.message, .message-compact');
+    const msgId = msgEl && parseInt(msgEl.dataset.msgId, 10);
+    if (!msgId) return;
+    const back = el('div');
+    back.id = 'puente-who-backdrop';
+    back.addEventListener('click', close);
+    const sheet = el('div', 'puente-who-sheet');
+    sheet.id = 'puente-who-sheet';
+    sheet.appendChild(el('div', 'puente-sheet-handle'));
+    const tabs = el('div', 'puente-who-tabs');
+    const list = el('div', 'puente-who-list');
+    sheet.append(tabs, list);
+    document.body.append(back, sheet);
+
+    // Mientras llega la lista completa, lo que ya se sabe (los nombres de Haven)
+    const fromBadges = [...msgEl.querySelectorAll('.reaction-badge')].map(b => {
+      let users = [];
+      try { users = JSON.parse(b.dataset.users || '[]'); } catch { /* sin datos */ }
+      return { emoji: b.dataset.emoji, users: users.map(n => ({ name: n })) };
+    });
+    let data = fromBadges;
+    let current = badge.dataset.emoji;
+
+    function render() {
+      tabs.textContent = '';
+      for (const r of data) {
+        const t = el('button', 'puente-who-tab' + (r.emoji === current ? ' active' : ''));
+        t.type = 'button';
+        t.append(emojiNode(app, r.emoji, 'puente-who-emoji'), el('span', 'puente-who-count', String(r.users.length)));
+        t.addEventListener('click', () => { current = r.emoji; render(); });
+        tabs.appendChild(t);
+      }
+      list.textContent = '';
+      const r = data.find(x => x.emoji === current) || data[0];
+      if (!r) return;
+      const head = el('div', 'puente-who-head');
+      head.appendChild(emojiNode(app, r.emoji, 'puente-who-emoji'));
+      head.appendChild(el('span', '', r.emoji.startsWith(':') ? r.emoji : ''));
+      list.appendChild(head);
+      for (const u of r.users) {
+        const row = el('div', 'puente-who-row');
+        const av = el('div', 'puente-who-avatar');
+        if (u.avatar) { const img = el('img'); img.src = u.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+        else av.textContent = (u.name || '?').trim().charAt(0).toUpperCase();
+        row.append(av, el('span', 'puente-who-name', u.name || '?'));
+        if (u.discord) row.appendChild(el('span', 'puente-who-tag', 'DISCORD'));
+        if (u.propio) {
+          const x = el('button', 'puente-who-remove', '✕');
+          x.type = 'button';
+          x.setAttribute('aria-label', 'Sacar mi reacción');
+          x.addEventListener('click', () => { app.socket.emit('remove-reaction', { messageId: msgId, emoji: r.emoji }); close(); });
+          row.appendChild(x);
+        }
+        list.appendChild(row);
+      }
+    }
+    render();
+
+    const tk = token();
+    if (tk) {
+      fetch('/puente/api/reacciones?mensaje=' + msgId, { headers: { Authorization: 'Bearer ' + tk } })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d && Array.isArray(d.reacciones) && document.getElementById('puente-who-sheet') === sheet) { data = d.reacciones; render(); } })
+        .catch(() => {});
+    }
+
+    // Deslizar hacia abajo para cerrar
+    let y0 = null, dy = 0;
+    sheet.addEventListener('touchstart', (e) => { y0 = list.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; sheet.style.transition = 'none'; }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); sheet.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+    sheet.addEventListener('touchend', () => { sheet.style.transition = ''; if (dy > 90) close(); else sheet.style.transform = ''; y0 = null; }, { passive: true });
+  }
+
+  // Al soltar despues de mantener apretado, que no cuente como toque (pondria o sacaria la reaccion)
+  let ignoreClickUntil = 0;
+  document.addEventListener('click', (e) => {
+    if (Date.now() < ignoreClickUntil && e.target instanceof Element && e.target.closest('.reaction-badge')) {
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+
+  // Mantener apretado = el "contextmenu" del navegador: antes que el menu del mensaje
+  document.addEventListener('contextmenu', (e) => {
+    const badge = e.target instanceof Element && e.target.closest('.reaction-badge');
+    if (!badge || !window.app) return;
+    e.preventDefault();
+    e.stopPropagation();
+    ignoreClickUntil = Date.now() + 800;
+    if (navigator.vibrate) navigator.vibrate(15);
+    try { open(window.app, badge); } catch (err) { console.warn('[puente] quien reacciono:', err); }
+  }, true);
+})();
