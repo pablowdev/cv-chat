@@ -730,59 +730,140 @@
 
 // Pantallas tactiles: el selector de emojis y stickers del cuadro de escribir
 // (tambien al editar un mensaje) como en la app de Discord: una hoja que sube
-// desde abajo, a media pantalla, que se agranda arrastrando la manija hacia
-// arriba y se cierra arrastrandola hacia abajo o tocando afuera. Es el mismo
-// selector de Haven (emojis, stickers, buscador, tono de piel); solo cambia
-// donde y como se muestra. El teclado se esconde mientras esta abierto, como en
-// Discord, y el emoji se escribe donde estaba el cursor.
+// desde abajo a media pantalla, con "Usados frecuentemente" arriba de todo.
+// Deslizando la lista (o la manija) hacia arriba se agranda hasta casi toda la
+// pantalla; hacia abajo se achica y, muy abajo, se cierra. Tocar afuera tambien
+// la cierra. Es el mismo selector de Haven (emojis, stickers, buscador, tono de
+// piel); solo cambia donde y como se muestra. El teclado no aparece mientras
+// esta abierta, como en Discord, y el emoji se escribe donde estaba el cursor.
 (function () {
   'use strict';
   if (!matchMedia('(pointer: coarse)').matches) return;
   const MIN_VH = 30, MAX_VH = 92, DEFAULT_VH = 50;
   let height = DEFAULT_VH; // como en Discord, siempre abre a media pantalla
+  let frequent = null, frequentAt = 0;
 
   const picker = () => document.getElementById('emoji-picker');
   const isOpen = (p) => p && p.style.display === 'flex';
   const setHeight = (p, vh) => { p.style.setProperty('--puente-emojis-alto', vh + 'vh'); };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  function loadFrequent() {
+    if (frequent && Date.now() - frequentAt < 10 * 60 * 1000) return;
+    const tk = token();
+    if (!tk) return;
+    frequentAt = Date.now();
+    fetch('/puente/api/reacciones-frecuentes?n=27', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) frequent = d.emojis; }).catch(() => {});
+  }
 
   function closeBackdrop() { document.getElementById('puente-emoji-backdrop')?.remove(); }
+  function hideKeyboard(p) {
+    const a = document.activeElement;
+    if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && !(p.contains(a) && a.classList.contains('emoji-search-input') && a.value)) a.blur();
+  }
+
+  // Escribir un emoji donde estaba el cursor (como los botones de Haven), sin abrir el teclado
+  function insert(app, value) {
+    const input = app._activeEditTextarea || document.getElementById('message-input');
+    if (!input) return;
+    const start = input.selectionStart ?? input.value.length, end = input.selectionEnd ?? start;
+    input.value = input.value.substring(0, start) + value + input.value.substring(end);
+    input.selectionStart = input.selectionEnd = start + value.length;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function addFrequent(app, p) {
+    const grid = p.querySelector('.emoji-grid');
+    if (!grid || !frequent || !frequent.length || grid.querySelector('.puente-emoji-frequent')) return;
+    const sec = document.createElement('div');
+    sec.className = 'emoji-cat puente-emoji-frequent';
+    const head = document.createElement('div');
+    head.className = 'emoji-cat-header';
+    head.textContent = 'Usados frecuentemente';
+    const cg = document.createElement('div');
+    cg.className = 'emoji-cat-grid';
+    for (const f of frequent) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'emoji-item';
+      b.title = f.emoji;
+      const value = f.url ? f.emoji : (typeof app._toneEmoji === 'function' ? app._toneEmoji(f.emoji) : f.emoji);
+      if (f.url) { const img = document.createElement('img'); img.src = f.url; img.alt = f.emoji; img.className = 'custom-emoji'; b.appendChild(img); }
+      else b.textContent = value;
+      b.addEventListener('click', (e) => { e.stopPropagation(); insert(app, value); });
+      cg.appendChild(b);
+    }
+    sec.append(head, cg);
+    grid.insertBefore(sec, grid.firstChild);
+    grid.scrollTop = 0;
+    const tabs = p.querySelector('.emoji-tab-row');
+    if (tabs && !tabs.querySelector('.puente-emoji-tab-frequent')) {
+      const t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'emoji-tab puente-emoji-tab-frequent';
+      t.title = 'Usados frecuentemente';
+      t.textContent = '🕒';
+      t.addEventListener('click', (e) => { e.stopPropagation(); grid.scrollTo({ top: 0, behavior: 'smooth' }); });
+      tabs.insertBefore(t, tabs.firstChild);
+    }
+  }
+
+  // Arrastrar para cambiar el alto: con la manija siempre; con la lista, hacia
+  // arriba mientras no este a pantalla completa, y hacia abajo si esta arriba de todo.
+  function dragResize(app, p, el, fromList) {
+    let y0 = null, h0 = height, active = false;
+    el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; h0 = height; active = !fromList; if (!fromList) p.style.transition = 'none'; }, { passive: true });
+    el.addEventListener('touchmove', (e) => {
+      if (y0 === null) return;
+      const dy = y0 - e.touches[0].clientY; // > 0 hacia arriba
+      if (fromList && !active) {
+        const grid = el;
+        if ((dy > 6 && height < MAX_VH - 0.5) || (dy < -6 && grid.scrollTop <= 0)) { active = true; y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none'; }
+        else return;
+      }
+      const vh = h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100;
+      height = Math.max(10, Math.min(MAX_VH, vh));
+      setHeight(p, height);
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    el.addEventListener('touchend', () => {
+      p.style.transition = '';
+      const was = active;
+      y0 = null; active = false;
+      if (!was) return;
+      if (height < MIN_VH - 5) { height = DEFAULT_VH; close(app); return; }
+      height = Math.max(MIN_VH, height);
+      setHeight(p, height);
+    }, { passive: true });
+  }
 
   function decorate(app) {
     const p = picker();
     if (!isOpen(p)) { closeBackdrop(); return; }
+    // A la capa de arriba: dentro del cuadro de escribir quedaba debajo del fondo oscuro
+    if (p.parentElement !== document.body) {
+      p._havenOrigParent = p.parentElement;
+      document.body.appendChild(p);
+    }
     p.classList.add('puente-emoji-sheet');
     setHeight(p, height);
     if (!p.querySelector(':scope > .puente-sheet-handle')) {
       const h = document.createElement('div');
       h.className = 'puente-sheet-handle puente-emoji-handle';
       p.insertBefore(h, p.firstChild);
-      // Arrastrar la manija: cambia el alto; muy abajo, cierra
-      let y0 = null, h0 = height;
-      h.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none'; }, { passive: true });
-      h.addEventListener('touchmove', (e) => {
-        if (y0 === null) return;
-        const vh = h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100;
-        height = Math.max(10, Math.min(MAX_VH, vh));
-        setHeight(p, height);
-        if (e.cancelable) e.preventDefault();
-      }, { passive: false });
-      h.addEventListener('touchend', () => {
-        p.style.transition = '';
-        y0 = null;
-        if (height < MIN_VH - 5) { height = h0 < MIN_VH ? DEFAULT_VH : h0; close(app); return; }
-        height = Math.max(MIN_VH, height);
-        setHeight(p, height);
-      }, { passive: true });
+      dragResize(app, p, h, false);
+      const grid = p.querySelector('.emoji-grid, .sticker-grid');
+      if (grid) dragResize(app, p, grid, true);
     }
+    addFrequent(app, p);
     if (!document.getElementById('puente-emoji-backdrop')) {
       const back = document.createElement('div');
       back.id = 'puente-emoji-backdrop';
       back.addEventListener('click', () => setTimeout(() => close(app), 0));
       document.body.appendChild(back);
     }
-    // Esconder el teclado (el cursor del cuadro de escribir se mantiene)
-    const a = document.activeElement;
-    if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && !p.contains(a)) a.blur();
+    hideKeyboard(p);
   }
 
   function close(app) {
@@ -796,12 +877,20 @@
     const app = window.app;
     const p = picker();
     if (!app || typeof app._toggleEmojiPicker !== 'function' || !p) { if (++tries < 120) setTimeout(wait, 500); return; }
+    loadFrequent();
     const orig = app._toggleEmojiPicker;
     app._toggleEmojiPicker = function (...args) {
+      loadFrequent();
       const r = orig.apply(this, args);
       try { decorate(this); } catch (err) { console.warn('[puente] selector de emojis:', err); }
       return r;
     };
+    // Despues de tocar un emoji, Haven vuelve a enfocar el cuadro de escribir (y
+    // aparece el teclado): mientras la hoja esta abierta, se vuelve a esconder.
+    p.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element) || !e.target.closest('.emoji-item')) return;
+      setTimeout(() => { if (isOpen(p) && p.classList.contains('puente-emoji-sheet')) hideKeyboard(p); }, 0);
+    });
     // Haven lo cierra solo (tocar afuera, enviar, cambiar de canal): sacar el fondo oscuro
     new MutationObserver(() => {
       const el = picker();
