@@ -699,3 +699,86 @@
     };
   })();
 })();
+
+// Pantallas tactiles: el selector de emojis y stickers del cuadro de escribir
+// (tambien al editar un mensaje) como en la app de Discord: una hoja que sube
+// desde abajo, a media pantalla, que se agranda arrastrando la manija hacia
+// arriba y se cierra arrastrandola hacia abajo o tocando afuera. Es el mismo
+// selector de Haven (emojis, stickers, buscador, tono de piel); solo cambia
+// donde y como se muestra. El teclado se esconde mientras esta abierto, como en
+// Discord, y el emoji se escribe donde estaba el cursor.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const MIN_VH = 30, MAX_VH = 92, DEFAULT_VH = 50;
+  let height = DEFAULT_VH; // como en Discord, siempre abre a media pantalla
+
+  const picker = () => document.getElementById('emoji-picker');
+  const isOpen = (p) => p && p.style.display === 'flex';
+  const setHeight = (p, vh) => { p.style.setProperty('--puente-emojis-alto', vh + 'vh'); };
+
+  function closeBackdrop() { document.getElementById('puente-emoji-backdrop')?.remove(); }
+
+  function decorate(app) {
+    const p = picker();
+    if (!isOpen(p)) { closeBackdrop(); return; }
+    p.classList.add('puente-emoji-sheet');
+    setHeight(p, height);
+    if (!p.querySelector(':scope > .puente-sheet-handle')) {
+      const h = document.createElement('div');
+      h.className = 'puente-sheet-handle puente-emoji-handle';
+      p.insertBefore(h, p.firstChild);
+      // Arrastrar la manija: cambia el alto; muy abajo, cierra
+      let y0 = null, h0 = height;
+      h.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none'; }, { passive: true });
+      h.addEventListener('touchmove', (e) => {
+        if (y0 === null) return;
+        const vh = h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100;
+        height = Math.max(10, Math.min(MAX_VH, vh));
+        setHeight(p, height);
+        if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+      h.addEventListener('touchend', () => {
+        p.style.transition = '';
+        y0 = null;
+        if (height < MIN_VH - 5) { height = h0 < MIN_VH ? DEFAULT_VH : h0; close(app); return; }
+        height = Math.max(MIN_VH, height);
+        setHeight(p, height);
+      }, { passive: true });
+    }
+    if (!document.getElementById('puente-emoji-backdrop')) {
+      const back = document.createElement('div');
+      back.id = 'puente-emoji-backdrop';
+      back.addEventListener('click', () => setTimeout(() => close(app), 0));
+      document.body.appendChild(back);
+    }
+    // Esconder el teclado (el cursor del cuadro de escribir se mantiene)
+    const a = document.activeElement;
+    if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && !p.contains(a)) a.blur();
+  }
+
+  function close(app) {
+    const p = picker();
+    if (isOpen(p) && typeof app._toggleEmojiPicker === 'function') app._toggleEmojiPicker();
+    closeBackdrop();
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const p = picker();
+    if (!app || typeof app._toggleEmojiPicker !== 'function' || !p) { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._toggleEmojiPicker;
+    app._toggleEmojiPicker = function (...args) {
+      const r = orig.apply(this, args);
+      try { decorate(this); } catch (err) { console.warn('[puente] selector de emojis:', err); }
+      return r;
+    };
+    // Haven lo cierra solo (tocar afuera, enviar, cambiar de canal): sacar el fondo oscuro
+    new MutationObserver(() => {
+      const el = picker();
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; }
+      else if (!el.querySelector(':scope > .puente-sheet-handle')) { try { decorate(app); } catch { /* se reintenta en el proximo cambio */ } }
+    }).observe(p, { attributes: true, attributeFilter: ['style'], childList: true });
+  })();
+})();
