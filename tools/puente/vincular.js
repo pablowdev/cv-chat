@@ -157,7 +157,7 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/vincular.css')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css')) {
     const file = p === '/puente/vincular' ? 'vincular.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));

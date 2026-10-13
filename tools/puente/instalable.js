@@ -101,6 +101,15 @@ function manifest(db, base) {
 function pageHead(db, html) {
   if (!title()) return html;
   html = html.replace(/<meta name="theme-color" content="[^"]*">/, `<meta name="theme-color" content="${BG_HEX}">`);
+  // En /app: los carteles de Haven que recomiendan su app de Android y la de
+  // PC se reemplazan por el propio (web/instalar.js). Sin el id, la cola de
+  // bienvenida de Haven no los encuentra y los saltea; los botones de la barra
+  // superior que los abren tampoco hacen nada.
+  if (html.includes('id="android-beta-modal"')) {
+    html = html.replace('id="android-beta-modal"', 'id="android-beta-modal-apagado"')
+      .replace('id="desktop-promo-modal"', 'id="desktop-promo-modal-apagado"')
+      .replace('</head>', '<script src="/puente/instalar.js"></script></head>');
+  }
   if (iconFile(db)) {
     html = html.replace(/<link rel="icon"[^>]*>/, '<link rel="icon" type="image/png" href="/puente/icono-192.png">' +
       '<link rel="apple-touch-icon" href="/puente/icono-maskable-512.png">');
