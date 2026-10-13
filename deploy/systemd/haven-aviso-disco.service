@@ -1,0 +1,8 @@
+[Unit]
+Description=Haven: avisar en el canal de admins si queda poco espacio en disco
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/haven/tools/aviso-disco.sh

@@ -1,0 +1,9 @@
+[Unit]
+Description=Revisar el espacio en disco una vez al dia
+
+[Timer]
+OnCalendar=*-*-* 15:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
