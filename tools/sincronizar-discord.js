@@ -129,7 +129,7 @@ function buildContent(msg, attLines) {
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
   }
-  return content.trim();
+  return adjuntos.emojisToHaven(db, content.trim());
 }
 
 // ── Haven ────────────────────────────────────────────────────────────────
@@ -227,7 +227,8 @@ const insertPage = db.transaction((msgs, channelId, threadRoot, attByMsg) => {
     if (!msg.webhook_id && msg.author && q.author) q.author.run(r.lastInsertRowid, msg.author.id);
     if (msg.pinned) { try { q.pin.run(r.lastInsertRowid, channelId, admin.id); } catch { /* ya fijado */ } }
     for (const re of msg.reactions || []) {
-      try { q.reaction.run(r.lastInsertRowid, ghost.id, re.emoji?.name || '❓'); } catch { /* cosmetico */ }
+      const key = adjuntos.reactionKey(db, re.emoji);
+      if (key) { try { q.reaction.run(r.lastInsertRowid, ghost.id, key); } catch { /* cosmetico */ } }
     }
   }
   return n;

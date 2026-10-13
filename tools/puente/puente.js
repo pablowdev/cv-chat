@@ -31,13 +31,14 @@ const vincular = require('./vincular.js');
 const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
 const estadisticas = require('./estadisticas.js');
+const reacciones = require('./reacciones.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
 // para los accesos (roles, expulsiones, baneos). Si Discord rechaza los
 // miembros (falta "Server Members Intent"), el puente sigue sin ellos.
 const MEMBERS_INTENT = 1 << 1;
-let intents = (1 << 0) | MEMBERS_INTENT | (1 << 2) | (1 << 9) | (1 << 15);
+let intents = (1 << 0) | MEMBERS_INTENT | (1 << 2) | (1 << 9) | (1 << 10) | (1 << 15); // + GUILD_MESSAGE_REACTIONS
 const WEBHOOK_NAME = 'Haven (puente)';
 const THREAD_TYPES = new Set([10, 11, 12]);
 
@@ -102,6 +103,7 @@ function start(deps) {
     onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); },
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); } });
   estadisticas.setup({ db, io, log, warn });
+  reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   require('./medicion.js').setup({ io, db });
   hookHavenEmits();
   connectGateway();
@@ -177,7 +179,7 @@ function buildContent(msg, attLines) {
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
   }
-  return content.trim();
+  return adjuntos.emojisToHaven(db, content.trim());
 }
 
 const q = () => ({
@@ -291,6 +293,9 @@ function onDispatch(t, d) {
       case 'MESSAGE_CREATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundCreate(d)); break;
       case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundUpdate(d)); break;
       case 'MESSAGE_DELETE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundDelete(d.id)); break;
+      case 'MESSAGE_REACTION_ADD': case 'MESSAGE_REACTION_REMOVE': case 'MESSAGE_REACTION_REMOVE_ALL': case 'MESSAGE_REACTION_REMOVE_EMOJI':
+        if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => reacciones.onDiscordReaction(t, d));
+        break;
       case 'MESSAGE_DELETE_BULK': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => { for (const id of d.ids) await inboundDelete(id); }); break;
     }
     if (d && (t === 'GUILD_CREATE' ? d.id === guildId : d.guild_id === guildId)) accesos.onDispatch(t, d);
@@ -454,6 +459,8 @@ function onHavenEmit(event, p) {
     setImmediate(() => outboundCreate(m.id));
   } else if (event === 'message-edited') {
     if (p.messageId) setImmediate(() => outboundEdit(p.messageId));
+  } else if (event === 'reactions-updated') {
+    if (p.messageId) setImmediate(() => enqueue('react:' + p.messageId, () => reacciones.onHavenReactions(p, m => discordTarget(m))));
   } else if (event === 'message-deleted') {
     if (p.messageId) setImmediate(() => outboundDelete(p.messageId));
   }
@@ -474,7 +481,7 @@ async function ensureWebhook(discordChannelId) {
 
 // Texto de Haven -> texto seguro para Discord.
 function sanitizeOut(text) {
-  return String(text || '')
+  return adjuntos.emojisToDiscord(db, String(text || ''))
     // Nada de menciones escritas a mano: solo el puente pone la de verificacion.
     .replace(/<(@[!&]?|#)(\d+)>/g, (_, k, id) => (k.startsWith('@') ? '@' : '#') + id)
     // Archivos de Haven "[file:nombre](/uploads/x|tamaño)" -> "📎 [nombre](enlace)"

@@ -142,4 +142,48 @@ function gifInstead(msg) {
   return null;
 }
 
-module.exports = { localize, localizeAll, gifInstead, forwarded, avatar, fallback };
+// ── Emojis personalizados (tabla puente_emojis, la llena tools/emojis-discord.js) ──
+let emojiCache = null, emojiCacheAt = 0;
+function emojiMaps(db) {
+  if (!emojiCache || Date.now() - emojiCacheAt > 60000) {
+    let rows = [];
+    try { rows = db.prepare('SELECT discord_id, discord_name, name, animated FROM puente_emojis').all(); } catch { /* sin tabla todavia */ }
+    emojiCache = { byId: new Map(rows.map(r => [r.discord_id, r])), byName: new Map(rows.map(r => [r.name, r])) };
+    emojiCacheAt = Date.now();
+  }
+  return emojiCache;
+}
+const havenEmojiName = n => String(n).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30) || 'emoji';
+// Discord -> Haven: <:nombre:id> y <a:nombre:id> -> :nombre: (como los dibuja Haven)
+function emojisToHaven(db, text) {
+  if (!text || text.indexOf('<') < 0) return text;
+  const { byId } = emojiMaps(db);
+  return text.replace(/<a?:([A-Za-z0-9_~]{1,32}):(\d{5,25})>/g, (full, n, id) => `:${(byId.get(id) || {}).name || havenEmojiName(n)}:`);
+}
+// Haven -> Discord: :nombre: -> <:nombre:id> si el emoji vino de Discord
+function emojisToDiscord(db, text) {
+  if (!text || text.indexOf(':') < 0) return text;
+  const { byName } = emojiMaps(db);
+  return text.replace(/:([a-z0-9_-]{1,30}):/g, (full, n) => {
+    const e = byName.get(n);
+    return e ? `<${e.animated ? 'a' : ''}:${e.discord_name}:${e.discord_id}>` : full;
+  });
+}
+// Clave de reaccion en Haven para un emoji de Discord ({id, name}): unicode tal cual,
+// personalizado como :nombre: (solo si se copio a Haven; si no, null).
+function reactionKey(db, emoji) {
+  if (!emoji) return null;
+  if (!emoji.id) return emoji.name || null;
+  const e = emojiMaps(db).byId.get(String(emoji.id));
+  return e ? `:${e.name}:` : null;
+}
+// Clave de Haven -> emoji para la API de Discord ("😂" o "nombre:id"), o null.
+function discordReactionParam(db, key) {
+  const m = /^:([a-z0-9_-]{1,30}):$/.exec(key || '');
+  if (!m) return key || null;
+  const e = emojiMaps(db).byName.get(m[1]);
+  return e ? `${e.discord_name}:${e.discord_id}` : null;
+}
+
+module.exports = { localize, localizeAll, gifInstead, forwarded, avatar, fallback,
+  emojisToHaven, emojisToDiscord, reactionKey, discordReactionParam };
