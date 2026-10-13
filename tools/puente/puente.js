@@ -104,6 +104,7 @@ function start(deps) {
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); } });
   estadisticas.setup({ db, io, log, warn });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
+  require('./tema-fijo.js').setup({ db, io, log });
   require('./medicion.js').setup({ io, db });
   hookHavenEmits();
   connectGateway();

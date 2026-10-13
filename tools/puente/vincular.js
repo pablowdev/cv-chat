@@ -8,6 +8,7 @@
 //  /puente/aviso.js            aviso "Vincula tu cuenta" que se inyecta en /app
 //  /puente/login.js            enlace "¿Olvidaste tu contraseña?" que se inyecta en el login
 //  /puente/api/recuperar/*     recuperar la contraseña iniciando sesion con Discord
+//  /puente/tema-fijo.js        el tema del servidor para todos (tema-fijo.js)
 //  /manifest.webmanifest       app instalable con el nombre e icono del servidor (instalable.js)
 //
 // Recuperar con Discord: quien entra con la cuenta de Discord vinculada puede
@@ -31,6 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const adjuntos = require('./adjuntos.js');
 const instalable = require('./instalable.js');
+const temaFijo = require('./tema-fijo.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -129,7 +131,7 @@ function injectScript(req, res, src) {
       if (isHtml() && !res.headersSent) {
         let html = body.toString('utf8');
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
-        body = Buffer.from(instalable.pageHead(db, html), 'utf8');
+        body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         origSetHeader.call(this, 'Content-Length', body.length);
       }
     } catch { /* si algo falla, se sirve la pagina tal cual */ }
@@ -168,6 +170,10 @@ async function handle(req, res) {
       body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title);
     }
     return send(res, 200, type, body);
+  }
+
+  if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
+    return send(res, 200, 'application/javascript', temaFijo.script(db));
   }
 
   if (p === '/puente/api/estado' && req.method === 'GET') {

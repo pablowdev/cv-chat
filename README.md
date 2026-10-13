@@ -26,6 +26,8 @@ Un tema de archivo de Haven con colores, tipografía y disposición parecidos a 
 
 La app de Android de Haven (Google Play) es nativa y no usa temas. Para tener el tema en el celular, la página se instala como app desde Chrome ("Instalar app"); con `PUENTE_TITULO` configurado, esa app lleva el nombre elegido, el icono del servidor y los colores del tema (`tools/puente/instalable.js`). En ese caso, los carteles de bienvenida de Haven que recomiendan su app de Android y la de PC se reemplazan por uno propio para instalar esta app, en la PC y en el celular (`tools/puente/web/instalar.js`).
 
+Con `PUENTE_TEMA_FIJO=1`, todos ven siempre el tema por defecto del servidor y no se puede elegir otro: se ocultan el botón de temas, la barra de temas del inicio de sesión y la lista de temas en Configuración (`tools/puente/tema-fijo.js`). El admin lo sigue cambiando para todos desde **Settings → Server Branding**.
+
 Instalación: copiar `theme/discord-plus.theme.css` a `/opt/haven/tema/` y descargar allí la fuente Inter (OFL) de [Fontsource](https://fontsource.org/fonts/inter): `inter-latin-wght-normal.woff2` e `inter-latin-ext-wght-normal.woff2`. Están montados en `deploy/docker-compose.yml`. Después, en Haven: publicar el tema y elegirlo; y en **Settings → Server Branding**, compartirlo, junto con la barra compacta, como valor por defecto para los miembros.
 
 ## Parches a Haven (`patches/`)
