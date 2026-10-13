@@ -52,3 +52,54 @@
     if (++tries < 120) setTimeout(loop, 5000);
   })();
 })();
+
+// Videos como en Discord (solo con el tema Discord+): sin barra de controles
+// hasta darle play, con un boton de play en el centro. El <video> sigue siendo
+// el de Haven (su miniatura y su cambio a enlace de descarga si no se puede
+// reproducir siguen funcionando); solo se ocultan los controles al principio.
+(function () {
+  'use strict';
+  const themeOn = () => !!document.querySelector('link[href*="discord-plus.theme.css"]');
+
+  function enhance(video) {
+    if (video.dataset.puentePlay) return;
+    const wrap = video.closest('.file-video-wrap');
+    if (!wrap) return;
+    video.dataset.puentePlay = '1';
+    video.controls = false;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'puente-play';
+    btn.setAttribute('aria-label', 'Reproducir');
+    btn.textContent = '▶';
+    const start = () => {
+      btn.remove();
+      video.controls = true;
+      const p = video.play();
+      if (p && p.catch) p.catch(() => {});
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); start(); });
+    video.addEventListener('click', () => { if (!video.controls) start(); });
+    // Si algo lo reproduce por otro lado (atajos, PiP), mostrar los controles igual.
+    video.addEventListener('play', () => { if (!video.controls) { btn.remove(); video.controls = true; } });
+    wrap.appendChild(btn);
+  }
+
+  function scan(root) {
+    if (!themeOn() || !root || !root.querySelectorAll) return;
+    if (root.matches && root.matches('video.file-video')) enhance(root);
+    root.querySelectorAll('video.file-video').forEach(enhance);
+  }
+
+  function startObserving() {
+    new MutationObserver((muts) => {
+      for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+    }).observe(document.body, { childList: true, subtree: true });
+    scan(document);
+    // El tema puede terminar de cargar despues que los primeros mensajes.
+    setTimeout(() => scan(document), 2000);
+    setTimeout(() => scan(document), 6000);
+  }
+  if (document.body) startObserving();
+  else document.addEventListener('DOMContentLoaded', startObserving);
+})();
