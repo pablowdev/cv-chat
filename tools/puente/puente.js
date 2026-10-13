@@ -26,6 +26,8 @@
 // Ferry (el puente que trae Haven) debe estar APAGADO: si no, ambos
 // publicarian lo mismo dos veces.
 
+const fs = require('fs');
+const path = require('path');
 const WebSocket = require('/app/node_modules/ws');
 const vincular = require('./vincular.js');
 const adjuntos = require('./adjuntos.js');
@@ -95,6 +97,12 @@ function start(deps) {
       discord_channel_id TEXT NOT NULL,
       discord_thread_id TEXT
     );
+    -- Adjuntos de Discord que subio el puente por cada mensaje de Haven (para
+    -- sacarlos si se borra solo la imagen de un mensaje que se junto con su texto)
+    CREATE TABLE IF NOT EXISTS puente_adjuntos (
+      haven_message_id INTEGER PRIMARY KEY,
+      attachment_ids TEXT NOT NULL
+    );
   `);
   for (const w of db.prepare('SELECT webhook_id FROM puente_webhooks').all()) ourWebhookIds.add(w.webhook_id);
 
@@ -131,6 +139,30 @@ async function api(method, endpoint, body, attempt = 0) {
   }
   if ((res.status === 0 || res.status >= 500) && attempt < 3) { await sleep(1000 * (attempt + 1)); return api(method, endpoint, body, attempt + 1); }
   if (res.status === 204) return {};
+  let data = null;
+  try { data = await res.json(); } catch { /* sin cuerpo */ }
+  if (!res.ok) return { __error: res.status, __body: data };
+  return data;
+}
+
+// Igual que api(), pero subiendo archivos (multipart). files: [{ data, name }]
+async function apiFiles(method, endpoint, payload, files, attempt = 0) {
+  const form = new FormData();
+  form.append('payload_json', JSON.stringify(payload));
+  files.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.data]), f.name));
+  const res = await fetch(API + endpoint, {
+    method,
+    headers: { Authorization: `Bot ${token}`, 'User-Agent': 'HavenPuente (local, 1.0)' },
+    body: form,
+    signal: AbortSignal.timeout(120000),
+  }).catch(err => ({ ok: false, status: 0, err }));
+  if (res.status === 429 && attempt < 5) {
+    let wait = 1;
+    try { wait = (await res.json()).retry_after || 1; } catch { /* sin cuerpo */ }
+    await sleep(wait * 1000 + 100);
+    return apiFiles(method, endpoint, payload, files, attempt + 1);
+  }
+  if ((res.status === 0 || res.status >= 500) && attempt < 2) { await sleep(2000 * (attempt + 1)); return apiFiles(method, endpoint, payload, files, attempt + 1); }
   let data = null;
   try { data = await res.json(); } catch { /* sin cuerpo */ }
   if (!res.ok) return { __error: res.status, __body: data };
@@ -524,6 +556,64 @@ async function discordTarget(m) {
   return { channelId: ch.discord_channel_id, threadId: th.id, havenChannel: ch };
 }
 
+// ── Imagenes y archivos de Haven como adjuntos de Discord ──
+// Haven guarda una foto con texto como dos mensajes seguidos (el texto y la
+// imagen). En Discord van juntos en uno solo, con la imagen adjunta como si se
+// hubiera subido ahi: si un mensaje de solo imagenes/archivos llega pocos
+// segundos despues de otro de la misma persona en el mismo lugar, se le agrega
+// a ese. Lo que pasa el limite de Discord para webhooks sigue yendo como enlace.
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const MERGE_MS = 5000;
+const MAX_ATTACHMENTS = 10;
+const IMG_LINE = /^(spoiler-img:)?(\/uploads\/\S+)$/;
+const FILE_LINE = /^\[file:([^\]\n]+)\]\((\/uploads\/[^\s|)]+)\|[^)\n]*\)$/;
+const lastOut = new Map(); // "canal:hilo:usuario" -> { discordId, at, createdAt, attachments }
+
+// Separa las lineas de archivos subidos a Haven del resto del texto.
+function splitMedia(content) {
+  const text = [], media = [];
+  for (const line of String(content || '').split('\n')) {
+    const l = line.trim();
+    let mm = IMG_LINE.exec(l);
+    if (mm) { media.push({ rel: mm[2], name: path.basename(mm[2]), spoiler: !!mm[1], line }); continue; }
+    mm = FILE_LINE.exec(l);
+    if (mm) { media.push({ rel: mm[2], name: mm[1], spoiler: false, line }); continue; }
+    text.push(line);
+  }
+  return { text: text.join('\n').trim(), media };
+}
+
+// Lee los archivos para subirlos a Discord, o null si alguno no esta o se pasa del limite.
+function readUploads(media) {
+  let total = 0;
+  const files = [];
+  for (const f of media) {
+    const p = path.posix.normalize(path.posix.join('/data', f.rel));
+    if (!p.startsWith('/data/uploads/')) return null;
+    let st;
+    try { st = fs.statSync(p); } catch { return null; }
+    total += st.size;
+    if (total > UPLOAD_MAX_BYTES || files.length >= MAX_ATTACHMENTS) return null;
+    const name = String(f.name).replace(/[^\w.\-]+/g, '_').slice(-100) || 'archivo';
+    files.push({ data: fs.readFileSync(p), name: (f.spoiler ? 'SPOILER_' : '') + name });
+  }
+  return files;
+}
+
+const sqlMs = s => new Date(String(s || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z')).getTime();
+const footerFor = link => (link ? `\n-# ✅ desde Haven · <@${link.discord_user_id}>` : '');
+
+function saveOut(havenId, discordId, target, attachments, ownId) {
+  db.transaction(() => {
+    db.prepare('INSERT OR REPLACE INTO puente_salientes (haven_message_id, discord_message_id, discord_channel_id, discord_thread_id) VALUES (?, ?, ?, ?)')
+      .run(havenId, discordId, target.channelId, target.threadId);
+    if (ownId) db.prepare('UPDATE messages SET discord_message_id = ? WHERE id = ? AND discord_message_id IS NULL').run(discordId, havenId);
+    if (attachments && attachments.length) {
+      db.prepare('INSERT OR REPLACE INTO puente_adjuntos (haven_message_id, attachment_ids) VALUES (?, ?)').run(havenId, JSON.stringify(attachments));
+    }
+  })();
+}
+
 async function outboundCreate(havenMessageId) {
   const m = stmts().messageById.get(havenMessageId);
   if (!m || !m.user_id || m.imported_from || m.is_webhook || m.discord_message_id) return;
@@ -535,7 +625,29 @@ async function outboundCreate(havenMessageId) {
   return enqueue('out:' + target.channelId, async () => {
     const hook = await ensureWebhook(target.channelId);
     if (!hook) return;
-    let content = sanitizeOut(m.content);
+    const key = `${target.channelId}:${target.threadId || ''}:${m.user_id}`;
+    const { text, media } = splitMedia(m.content);
+    const files = media.length ? readUploads(media) : null;
+    const threadQs = target.threadId ? `thread_id=${target.threadId}` : '';
+
+    // Solo imagenes/archivos, justo despues de otro mensaje suyo: se agregan a ese
+    const prev = lastOut.get(key);
+    if (files && files.length && !text && !m.reply_to && prev && Date.now() - prev.at < MERGE_MS * 2 &&
+        Math.abs(sqlMs(m.created_at) - prev.createdAt) <= MERGE_MS && prev.attachments.length + files.length <= MAX_ATTACHMENTS) {
+      const payload = { attachments: [...prev.attachments.map(id => ({ id })), ...files.map((f, i) => ({ id: i, filename: f.name }))] };
+      const r = await apiFiles('PATCH', `/webhooks/${hook.webhook_id}/${hook.webhook_token}/messages/${prev.discordId}${threadQs ? '?' + threadQs : ''}`, payload, files);
+      if (!r.__error && Array.isArray(r.attachments)) {
+        const added = r.attachments.map(a => a.id).filter(id => !prev.attachments.includes(id));
+        prev.attachments = r.attachments.map(a => a.id);
+        prev.at = Date.now();
+        saveOut(m.id, prev.discordId, target, added, false);
+        return;
+      }
+      warn(`no pude agregar la imagen ${m.id} al mensaje anterior en Discord:`, r.__error, '- va aparte');
+    }
+
+    // Texto: sin las lineas de archivos que se suben como adjuntos
+    let content = sanitizeOut(files && files.length ? text : m.content);
     if (m.reply_to) {
       const p = stmts().messageById.get(m.reply_to);
       if (p) {
@@ -545,7 +657,7 @@ async function outboundCreate(havenMessageId) {
         content = `-# ↪ respondiendo a **${webhookName(who)}**${jump}\n${content}`;
       }
     }
-    if (link) content += `\n-# ✅ desde Haven · <@${link.discord_user_id}>`;
+    content = (content + footerFor(link)).trim();
     if (content.length > 1990) content = content.slice(0, 1985) + ' […]';
 
     const body = {
@@ -554,18 +666,28 @@ async function outboundCreate(havenMessageId) {
       avatar_url: link ? (link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : undefined) : (absolute(m.uavatar) || undefined),
       allowed_mentions: { parse: [] }, // nunca notifica a nadie (ni @everyone, ni @here)
     };
-    const qs = `?wait=true${target.threadId ? '&thread_id=' + target.threadId : ''}`;
-    const sent = await api('POST', `/webhooks/${hook.webhook_id}/${hook.webhook_token}${qs}`, body);
+    const url = `/webhooks/${hook.webhook_id}/${hook.webhook_token}?wait=true${threadQs ? '&' + threadQs : ''}`;
+    let sent;
+    if (files && files.length) {
+      sent = await apiFiles('POST', url, { ...body, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }, files);
+      if (sent.__error) { // por ejemplo, Discord rechazo el archivo: va como enlace
+        warn(`no pude subir los archivos del mensaje ${m.id} a Discord (${sent.__error}); van como enlace`);
+        let c = sanitizeOut(m.content) + footerFor(link);
+        if (c.length > 1990) c = c.slice(0, 1985) + ' […]';
+        sent = await api('POST', url, { ...body, content: c });
+      }
+    } else {
+      sent = await api('POST', url, body);
+    }
     if (sent.__error) {
       if (sent.__error === 404) db.prepare('DELETE FROM puente_webhooks WHERE discord_channel_id = ?').run(target.channelId); // lo borraron: se recrea
       warn(`no pude publicar el mensaje ${m.id} en Discord:`, sent.__error, JSON.stringify(sent.__body || '').slice(0, 200));
       return;
     }
-    db.transaction(() => {
-      db.prepare('INSERT OR REPLACE INTO puente_salientes (haven_message_id, discord_message_id, discord_channel_id, discord_thread_id) VALUES (?, ?, ?, ?)')
-        .run(m.id, sent.id, target.channelId, target.threadId);
-      db.prepare('UPDATE messages SET discord_message_id = ? WHERE id = ? AND discord_message_id IS NULL').run(sent.id, m.id);
-    })();
+    const attachments = (sent.attachments || []).map(a => a.id);
+    saveOut(m.id, sent.id, target, attachments, true);
+    lastOut.set(key, { discordId: sent.id, at: Date.now(), createdAt: sqlMs(m.created_at), attachments });
+    if (lastOut.size > 500) lastOut.delete(lastOut.keys().next().value);
   });
 }
 
@@ -574,14 +696,17 @@ async function outboundEdit(havenMessageId) {
   if (!out) return;
   const m = stmts().messageById.get(havenMessageId);
   if (!m) return;
+  const uploaded = db.prepare('SELECT 1 FROM puente_adjuntos WHERE haven_message_id = ?').get(havenMessageId);
+  const { text } = splitMedia(m.content);
+  if (uploaded && !text) return; // solo imagenes: no hay texto que cambiar
   return enqueue('out:' + out.discord_channel_id, async () => {
     const hook = await ensureWebhook(out.discord_channel_id);
     if (!hook) return;
     const link = stmts().linkByHaven.get(m.user_id);
-    let content = sanitizeOut(m.content);
-    if (link) content += `\n-# ✅ desde Haven · <@${link.discord_user_id}>`;
+    let content = (sanitizeOut(uploaded ? text : m.content) + footerFor(link)).trim();
     if (content.length > 1990) content = content.slice(0, 1985) + ' […]';
     const qs = out.discord_thread_id ? `?thread_id=${out.discord_thread_id}` : '';
+    // Sin "attachments": Discord deja los adjuntos que ya tiene el mensaje
     const r = await api('PATCH', `/webhooks/${hook.webhook_id}/${hook.webhook_token}/messages/${out.discord_message_id}${qs}`, { content, allowed_mentions: { parse: [] } });
     if (r.__error) warn(`no pude editar en Discord el mensaje ${havenMessageId}:`, r.__error);
   });
@@ -594,9 +719,26 @@ async function outboundDelete(havenMessageId) {
     const hook = await ensureWebhook(out.discord_channel_id);
     if (!hook) return;
     const qs = out.discord_thread_id ? `?thread_id=${out.discord_thread_id}` : '';
-    const r = await api('DELETE', `/webhooks/${hook.webhook_id}/${hook.webhook_token}/messages/${out.discord_message_id}${qs}`);
-    if (r.__error && r.__error !== 404) warn(`no pude borrar en Discord el mensaje ${havenMessageId}:`, r.__error);
+    const msgUrl = `/webhooks/${hook.webhook_id}/${hook.webhook_token}/messages/${out.discord_message_id}${qs}`;
+    const others = db.prepare('SELECT COUNT(*) n FROM puente_salientes WHERE discord_message_id = ? AND haven_message_id != ?').get(out.discord_message_id, havenMessageId).n;
+    const mine = JSON.parse((db.prepare('SELECT attachment_ids FROM puente_adjuntos WHERE haven_message_id = ?').get(havenMessageId) || {}).attachment_ids || '[]');
+    let r;
+    if (others) {
+      // El mensaje de Discord tambien lleva otro de Haven (texto + imagen): se
+      // saca solo la parte borrada.
+      const cur = await api('GET', msgUrl);
+      if (cur && !cur.__error) {
+        const body = mine.length
+          ? { attachments: (cur.attachments || []).filter(a => !mine.includes(a.id)).map(a => ({ id: a.id })) }
+          : { content: ((cur.content || '').split('\n').filter(l => l.startsWith('-# ✅ desde Haven')).pop() || '') };
+        r = await api('PATCH', msgUrl, { ...body, allowed_mentions: { parse: [] } });
+      }
+    } else {
+      r = await api('DELETE', msgUrl);
+    }
+    if (r && r.__error && r.__error !== 404) warn(`no pude borrar en Discord el mensaje ${havenMessageId}:`, r.__error);
     db.prepare('DELETE FROM puente_salientes WHERE haven_message_id = ?').run(havenMessageId);
+    db.prepare('DELETE FROM puente_adjuntos WHERE haven_message_id = ?').run(havenMessageId);
   });
 }
 

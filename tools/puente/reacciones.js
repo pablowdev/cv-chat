@@ -86,7 +86,10 @@ async function onHavenReactions(payload, discordTargetFor) {
   const messageId = payload && payload.messageId;
   if (!messageId) return;
   if (payload.fromPuente) return; // lo emitio el puente (vino de Discord)
-  const m = db.prepare('SELECT id, channel_id, thread_id, discord_message_id FROM messages WHERE id = ?').get(messageId);
+  // Una imagen que el puente junto con el texto anterior en un solo mensaje de
+  // Discord solo tiene ese id en puente_salientes.
+  const m = db.prepare(`SELECT m.id, m.channel_id, m.thread_id, COALESCE(m.discord_message_id, s.discord_message_id) discord_message_id
+    FROM messages m LEFT JOIN puente_salientes s ON s.haven_message_id = m.id WHERE m.id = ?`).get(messageId);
   if (!m || !m.discord_message_id || !/^\d+$/.test(m.discord_message_id)) return;
   const target = await discordTargetFor(m);
   if (!target) return;
