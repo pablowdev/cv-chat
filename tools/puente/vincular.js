@@ -154,6 +154,33 @@ function sessionUser(req) {
   return db.prepare('SELECT id, username, display_name FROM users WHERE id = ?').get(decoded.id) || null;
 }
 
+// Reacciones rapidas del menu del celular (web/aviso.js), como la fila de
+// Discord: las que mas usa la persona y, para completar, las mas usadas del
+// servidor. Los emojis del servidor van con su imagen.
+const FREQ_N = 7, FREQ_TTL_MS = 10 * 60 * 1000;
+const freqCache = new Map(); // user id (0 = servidor) -> { at, list }
+function topReactions(userId) {
+  const hit = freqCache.get(userId);
+  if (hit && Date.now() - hit.at < FREQ_TTL_MS) return hit.list;
+  const list = (userId
+    ? db.prepare('SELECT emoji, COUNT(*) n FROM reactions WHERE user_id = ? GROUP BY emoji ORDER BY n DESC LIMIT 20').all(userId)
+    : db.prepare('SELECT emoji, COUNT(*) n FROM reactions GROUP BY emoji ORDER BY n DESC LIMIT 20').all()).map(r => r.emoji);
+  freqCache.set(userId, { at: Date.now(), list });
+  return list;
+}
+function frequentReactions(userId) {
+  const custom = new Map(db.prepare('SELECT name, filename FROM custom_emojis').all().map(r => [r.name, r.filename]));
+  const out = [], seen = new Set();
+  for (const e of [...topReactions(userId), ...topReactions(0), '👍', '❤️', '😂', '😮', '😢', '🔥', '👀']) {
+    if (out.length >= FREQ_N || seen.has(e)) continue;
+    const m = /^:([a-z0-9_-]+):$/.exec(e);
+    if (m && !custom.has(m[1])) continue; // emoji que ya no existe
+    seen.add(e);
+    out.push(m ? { emoji: e, url: '/uploads/' + custom.get(m[1]) } : { emoji: e });
+  }
+  return out;
+}
+
 const STATIC = path.join(__dirname, 'web');
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
@@ -176,6 +203,12 @@ async function handle(req, res) {
 
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
     return send(res, 200, 'application/javascript', temaFijo.script(db));
+  }
+
+  if (p === '/puente/api/reacciones-frecuentes' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    return json(res, 200, { emojis: frequentReactions(user.id) });
   }
 
   if (p === '/puente/api/estado' && req.method === 'GET') {

@@ -368,6 +368,62 @@ html .reaction-badge.own { background: rgba(88, 101, 242, 0.15); border-color: #
 html .reaction-badge .reaction-custom-emoji { width: 1rem; height: 1rem; object-fit: contain; }
 html .reaction-badge .puente-reaction-emoji { font-size: 1rem; line-height: 1; }
 
+/* Menu de un mensaje en pantallas tactiles: hoja que sube desde abajo, como
+   en la app de Discord (la arma tools/puente/web/aviso.js con las opciones
+   de Haven). Colores medidos sobre una captura de Discord. */
+#puente-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 99998;
+  background: rgba(0, 0, 0, 0.6);
+  animation: puente-fade 0.18s ease-out;
+}
+html #message-context-menu.puente-sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0; top: auto;
+  z-index: 99999;
+  width: 100%;
+  max-width: 37.5rem;
+  max-height: 85vh;
+  margin: 0 auto;
+  padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  background: #252429;
+  border: 0;
+  border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease;
+  animation: puente-sheet-up 0.22s ease-out;
+}
+@keyframes puente-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes puente-fade { from { opacity: 0; } to { opacity: 1; } }
+.puente-sheet-handle { width: 2.5rem; height: 0.25rem; margin: 0.25rem auto 0.875rem; border-radius: 2px; background: #3c3b41; }
+.puente-sheet-reactions { display: flex; gap: 0.5rem; justify-content: space-between; margin-bottom: 1rem; }
+.puente-sheet-react {
+  flex: 1 1 0; max-width: 3.5rem; aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 0.75rem;
+  background: #333237; color: #b5bac1;
+  font-size: 1.75rem; line-height: 1; cursor: pointer;
+}
+.puente-sheet-react img { width: 1.875rem; height: 1.875rem; object-fit: contain; pointer-events: none; }
+.puente-sheet-react:active { background: #3f3e44; }
+.puente-sheet-react-more { font-size: 1.875rem; }
+.puente-sheet-group { margin-bottom: 1rem; border-radius: 1rem; background: #2e2d32; overflow: hidden; }
+html .puente-sheet .channel-ctx-item {
+  display: flex; align-items: center; gap: 1rem;
+  width: 100%; min-height: 3.5rem;
+  padding: 0 1.125rem;
+  border: 0; border-radius: 0;
+  background: transparent;
+  color: #fbfbfb; font-size: 1rem; font-weight: 500; text-align: left;
+}
+html .puente-sheet .channel-ctx-item + .channel-ctx-item { box-shadow: inset 3.375rem 1px 0 -1px #2e2d32, inset 0 1px 0 #3b3a3f; }
+html .puente-sheet .channel-ctx-item:active { background: #36353b; }
+html .puente-sheet .channel-ctx-item.danger { color: #f2777a; }
+.puente-sheet-icon { width: 1.375rem; flex-shrink: 0; text-align: center; font-size: 1.25rem; filter: grayscale(1) brightness(1.6); }
+.puente-sheet .channel-ctx-item.danger .puente-sheet-icon { filter: none; }
+
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.

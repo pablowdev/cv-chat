@@ -356,3 +356,175 @@
   document.addEventListener('touchend', finish, { passive: true, capture: true });
   document.addEventListener('touchcancel', finish, { passive: true, capture: true });
 })();
+
+// Pantallas tactiles: el menu de un mensaje (mantener apretado o el boton ⋯)
+// como la hoja de la app de Discord: sube desde abajo, con una fila de
+// reacciones rapidas (las que mas usas) y las opciones en filas grandes,
+// agrupadas. Las opciones son las del menu de Haven (mismos permisos y mismas
+// acciones); solo cambian el aspecto y el orden, y se agrega "Copiar texto".
+// Se cierra tocando afuera o deslizando la hoja hacia abajo.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const GROUPS = [
+    ['reply', 'thread', 'quote'],
+    ['edit', 'copy-text', 'copy-link', 'pin', 'unpin'],
+    [], // el resto (proteger, mensaje oficial, etiquetas...)
+    ['delete'],
+  ];
+  let quick = null; // reacciones rapidas [{ emoji, url? }]
+
+  function loadQuick() {
+    let token = null;
+    try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!token) return;
+    fetch('/puente/api/reacciones-frecuentes', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) quick = d.emojis; }).catch(() => {});
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  }
+
+  function hide(app) {
+    document.getElementById('puente-sheet-backdrop')?.remove();
+    if (app && typeof app._hideMessageContextMenu === 'function') app._hideMessageContextMenu();
+  }
+
+  function toggleReaction(app, msgEl, msgId, emoji) {
+    const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === emoji);
+    app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji });
+  }
+
+  function toSheet(app, msgEl) {
+    const menu = document.getElementById('message-context-menu');
+    if (!menu || menu.classList.contains('puente-sheet')) return;
+    const msgId = parseInt(msgEl.dataset.msgId, 10);
+    menu.classList.add('puente-sheet');
+    menu.style.left = ''; menu.style.top = '';
+
+    const buttons = [...menu.querySelectorAll('button[data-action]')];
+    const reactBtn = buttons.find(b => b.dataset.action === 'react');
+    menu.textContent = '';
+
+    // Icono (el emoji del texto de Haven) y nombre, separados para alinearlos
+    for (const b of buttons) {
+      const first = b.firstChild;
+      if (first && first.nodeType === 3 && first.nodeValue.trim()) {
+        b.replaceChild(el('span', 'puente-sheet-icon', first.nodeValue.trim()), first);
+      }
+    }
+
+    menu.appendChild(el('div', 'puente-sheet-handle'));
+
+    // Fila de reacciones rapidas; la ultima abre el selector completo de Haven
+    const row = el('div', 'puente-sheet-reactions');
+    for (const q of quick || []) {
+      const b = el('button', 'puente-sheet-react');
+      b.type = 'button';
+      b.title = q.emoji;
+      if (q.url) { const img = el('img'); img.src = q.url; img.alt = q.emoji; b.appendChild(img); }
+      else b.textContent = q.emoji;
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); toggleReaction(app, msgEl, msgId, q.emoji); hide(app); });
+      row.appendChild(b);
+    }
+    if (reactBtn) {
+      const more = el('button', 'puente-sheet-react puente-sheet-react-more', '☺');
+      more.type = 'button';
+      more.dataset.action = 'react'; // la accion de Haven: abre el selector de emojis
+      more.setAttribute('aria-label', reactBtn.textContent.trim());
+      row.appendChild(more);
+    }
+    if (row.children.length) menu.appendChild(row);
+
+    // "Copiar texto", como en Discord
+    const raw = msgEl.dataset.rawContent;
+    if (raw && raw.trim()) {
+      const copy = el('button', 'channel-ctx-item');
+      copy.type = 'button';
+      copy.dataset.puenteAction = 'copy-text';
+      copy.append(el('span', 'puente-sheet-icon', '📋'), el('span', '', 'Copiar texto'));
+      copy.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const done = () => { if (app._showToast) app._showToast('Texto copiado', 'success'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(raw).then(done, () => {});
+        hide(app);
+      });
+      buttons.push(copy);
+    }
+
+    const actionOf = (b) => b.dataset.action || b.dataset.puenteAction;
+    const groupOf = (b) => {
+      const i = GROUPS.findIndex(g => g.includes(actionOf(b)));
+      return i < 0 ? 2 : i;
+    };
+    GROUPS.forEach((g, gi) => {
+      const items = buttons.filter(b => b !== reactBtn && groupOf(b) === gi)
+        .sort((x, y) => g.indexOf(actionOf(x)) - g.indexOf(actionOf(y)));
+      if (!items.length) return;
+      const box = el('div', 'puente-sheet-group');
+      items.forEach(b => box.appendChild(b));
+      menu.appendChild(box);
+    });
+
+    if (!document.getElementById('puente-sheet-backdrop')) {
+      const back = el('div');
+      back.id = 'puente-sheet-backdrop';
+      back.addEventListener('click', () => hide(app));
+      document.body.appendChild(back);
+    }
+
+    // Deslizar hacia abajo para cerrar
+    let y0 = null, dy = 0;
+    menu.addEventListener('touchstart', (e) => {
+      y0 = menu.scrollTop <= 0 ? e.touches[0].clientY : null;
+      dy = 0;
+      menu.style.transition = 'none';
+    }, { passive: true });
+    menu.addEventListener('touchmove', (e) => {
+      if (y0 === null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      if (dy > 0) menu.style.transform = 'translateY(' + dy + 'px)';
+    }, { passive: true });
+    menu.addEventListener('touchend', () => {
+      menu.style.transition = '';
+      if (dy > 90) hide(app); else menu.style.transform = '';
+      y0 = null;
+    }, { passive: true });
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showMessageContextMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    loadQuick();
+    setInterval(loadQuick, 10 * 60 * 1000);
+    const show = app._showMessageContextMenu;
+    app._showMessageContextMenu = function (e, msgEl, ...rest) {
+      const r = show.call(this, e, msgEl, ...rest);
+      try { toSheet(this, msgEl); } catch (err) { console.warn('[puente] hoja del mensaje:', err); }
+      return r;
+    };
+    const hideOrig = app._hideMessageContextMenu;
+    if (typeof hideOrig === 'function') {
+      app._hideMessageContextMenu = function (...a) {
+        const b = document.getElementById('puente-sheet-backdrop');
+        if (b) b.remove();
+        return hideOrig.apply(this, a);
+      };
+    }
+    // El boton ⋯ de cada mensaje abre la misma hoja (en vez de la barrita de iconos)
+    document.addEventListener('click', (e) => {
+      const dots = e.target instanceof Element && e.target.closest('.msg-dots-btn');
+      if (!dots) return;
+      const msgEl = dots.closest('.message, .message-compact');
+      if (!msgEl || !msgEl.dataset.msgId) return;
+      e.stopPropagation(); e.preventDefault();
+      const r = dots.getBoundingClientRect();
+      app._showMessageContextMenu({ clientX: r.left, clientY: r.top, preventDefault() {}, target: dots }, msgEl);
+    }, true);
+  })();
+})();
