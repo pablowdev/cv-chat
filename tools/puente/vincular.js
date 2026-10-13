@@ -182,66 +182,32 @@ function frequentReactions(userId, n = FREQ_N) {
 }
 
 // Quien reacciono a un mensaje, por emoji, como la ventana de Discord (web/aviso.js).
-// En Haven, las reacciones que vinieron de cuentas de Discord sin vincular (y las
-// del historial) estan todas a nombre del usuario tecnico "discord-historial";
-// para esas se le pregunta a Discord quien fue. El bot del puente no se lista:
-// su reaccion en Discord es la de la gente de Haven, que ya aparece con su nombre.
-const reactorsCache = new Map(); // "mensaje|emoji" -> { at, users }
-async function whoReacted(user, messageId) {
-  const m = db.prepare(`SELECT m.id, m.channel_id, m.thread_id, c.discord_channel_id,
-      COALESCE(m.discord_message_id, s.discord_message_id) did, s.discord_thread_id
-    FROM messages m JOIN channels c ON c.id = m.channel_id
-    LEFT JOIN puente_salientes s ON s.haven_message_id = m.id WHERE m.id = ?`).get(messageId);
-  if (!m) return null;
+// Las de Discord salen persona por persona (reacciones.js las consulta a Discord
+// la primera vez y despues las mantiene al dia).
+function canSeeMessage(user, messageId) {
+  const m = db.prepare('SELECT channel_id FROM messages WHERE id = ?').get(messageId);
+  if (!m) return false;
   const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
-  const member = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(m.channel_id, user.id);
-  if (!member && !(admin && admin.is_admin)) return null;
-
-  const ghost = (db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get() || {}).id;
-  const rows = db.prepare(`SELECT r.emoji, r.user_id, u.username, COALESCE(u.display_name, u.username) name, u.avatar
-    FROM reactions r JOIN users u ON u.id = r.user_id WHERE r.message_id = ? ORDER BY r.id`).all(messageId);
-  const byEmoji = new Map();
-  for (const r of rows) {
-    if (!byEmoji.has(r.emoji)) byEmoji.set(r.emoji, { emoji: r.emoji, users: [], ghost: false });
-    const e = byEmoji.get(r.emoji);
-    if (r.user_id === ghost) { e.ghost = true; continue; }
-    e.users.push({ id: r.user_id, name: r.name, avatar: r.avatar || null, propio: r.user_id === user.id });
-  }
-
-  // Los de Discord: solo si el mensaje esta en Discord (y no en un hilo que no conocemos)
-  const channelForApi = m.thread_id ? m.discord_thread_id : m.discord_channel_id;
-  if (m.did && /^\d+$/.test(String(m.did)) && channelForApi) {
-    const linked = new Set(db.prepare('SELECT discord_user_id FROM puente_vinculos').all().map(r => r.discord_user_id));
-    const bot = await botId();
-    for (const e of byEmoji.values()) {
-      const param = adjuntos.discordReactionParam(db, e.emoji);
-      if (!param) continue;
-      const key = m.did + '|' + param;
-      let hit = reactorsCache.get(key);
-      if (!hit || Date.now() - hit.at > 60000) {
-        const r = await api('GET', `/channels/${channelForApi}/messages/${m.did}/reactions/${encodeURIComponent(param)}?limit=100`);
-        hit = { at: Date.now(), users: Array.isArray(r) ? r : [] };
-        reactorsCache.set(key, hit);
-        if (reactorsCache.size > 2000) reactorsCache.delete(reactorsCache.keys().next().value);
-      }
-      for (const du of hit.users) {
-        if (!du || du.id === bot || linked.has(du.id)) continue; // el bot o alguien que ya figura con su cuenta de Haven
-        e.users.push({ name: du.global_name || du.username, avatar: du.avatar ? `https://cdn.discordapp.com/avatars/${du.id}/${du.avatar}.png?size=64` : null, discord: true });
-      }
-    }
-  }
-  return [...byEmoji.values()].map(e => {
-    // Si Discord no respondio, al menos queda "Discord" para las que vinieron de ahi
-    if (e.ghost && !e.users.some(x => x.discord)) e.users.push({ name: 'Discord', avatar: null, discord: true });
-    return { emoji: e.emoji, users: e.users };
-  });
+  if (admin && admin.is_admin) return true;
+  return !!db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(m.channel_id, user.id);
 }
-let cachedBotId = null;
-async function botId() {
-  if (cachedBotId) return cachedBotId;
-  const me = await api('GET', '/users/@me');
-  if (me && me.id) cachedBotId = me.id;
-  return cachedBotId;
+async function whoReacted(user, messageId) {
+  if (!canSeeMessage(user, messageId)) return null;
+  const reacciones = require('./reacciones.js');
+  try { if (await reacciones.refreshFromDiscord(messageId)) reacciones.emitReactions(messageId); } catch { /* sin Discord: lo que ya se sabe */ }
+  return reacciones.reactorsOf(messageId, user.id);
+}
+// La aplicacion avisa que mensajes se estan viendo; los que tienen reacciones de
+// Discord sin consultar se consultan (de a uno) y se actualizan para todos.
+function reviewReactions(user, ids) {
+  const reacciones = require('./reacciones.js');
+  let n = 0;
+  for (const id of ids) {
+    if (!reacciones.needsReview(id) || !canSeeMessage(user, id)) continue;
+    n++;
+    reacciones.refreshFromDiscord(id).then(changed => { if (changed) reacciones.emitReactions(id); }).catch(() => {});
+  }
+  return n;
 }
 
 const STATIC = path.join(__dirname, 'web');
@@ -283,6 +249,13 @@ async function handle(req, res) {
     const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
     const perms = accesos.isEnabled() && /^[a-f0-9]{8}$/i.test(code) ? accesos.channelPermissions(user.id, !!(admin && admin.is_admin), code) : null;
     return json(res, 200, perms || { enviar: true, hilos: true, reaccionar: true, adjuntar: true });
+  }
+
+  if (p === '/puente/api/reacciones/revisar' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const ids = String(u.searchParams.get('mensajes') || '').split(',').map(x => parseInt(x, 10)).filter(x => x > 0).slice(0, 60);
+    return json(res, 200, { revisando: reviewReactions(user, ids) });
   }
 
   if (p === '/puente/api/reacciones' && req.method === 'GET') {

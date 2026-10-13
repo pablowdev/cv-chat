@@ -482,11 +482,29 @@ function hookHavenEmits() {
       const emit = op.emit.bind(op);
       op.emit = function (event, payload, ...rest) {
         try { onHavenEmit(event, payload); } catch (err) { warn('hook:', err.message); }
+        // Las reacciones de Discord, persona por persona (un objeto nuevo: el de
+        // Haven queda igual para el resto del puente)
+        if (event === 'reactions-updated' && payload && payload.messageId && Array.isArray(payload.reactions)) {
+          try { payload = { ...payload, reactions: reacciones.expandReactions(payload.messageId, payload.reactions) }; } catch (err) { warn('reacciones:', err.message); }
+        }
         return emit(event, payload, ...rest);
       };
       return op;
     };
   }
+  // Lo mismo en el historial de un canal y de un hilo
+  io.on('connection', socket => {
+    const emit = socket.emit;
+    socket.emit = function (event, payload, ...rest) {
+      if ((event === 'message-history' || event === 'thread-messages') && payload && Array.isArray(payload.messages)) {
+        try {
+          payload = { ...payload, messages: payload.messages.map(m => (m && Array.isArray(m.reactions) && m.reactions.length
+            ? { ...m, reactions: reacciones.expandReactions(m.id, m.reactions) } : m)) };
+        } catch (err) { warn('reacciones:', err.message); }
+      }
+      return emit.call(this, event, payload, ...rest);
+    };
+  });
 }
 
 function onHavenEmit(event, p) {

@@ -509,7 +509,7 @@ html #emoji-picker.puente-emoji-sheet {
 #puente-who-backdrop { position: fixed; inset: 0; z-index: 100018; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.18s ease-out; }
 .puente-who-sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 100019;
-  width: 100%; max-width: 37.5rem; max-height: 75vh; margin: 0 auto;
+  width: 100%; max-width: 37.5rem; height: 60vh; max-height: 85vh; margin: 0 auto;
   display: flex; flex-direction: column; box-sizing: border-box;
   padding: 0.5rem 0 env(safe-area-inset-bottom, 0px);
   background: #252429; border-radius: 1.25rem 1.25rem 0 0;

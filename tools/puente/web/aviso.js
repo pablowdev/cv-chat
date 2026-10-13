@@ -1081,3 +1081,55 @@
     if (app.currentChannel) check(app.currentChannel);
   })();
 })();
+
+// Reacciones de mensajes viejos que vinieron de Discord: Haven las tenia todas a
+// nombre del usuario "Discord" (una sola por emoji). Cuando un mensaje con
+// reacciones aparece en pantalla, se le pide al puente que consulte a Discord
+// quien reacciono; el numero de cada reaccion se corrige solo para todos.
+(function () {
+  'use strict';
+  const asked = new Set();
+  let pending = new Set(), timer = null;
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  function flush() {
+    timer = null;
+    const ids = [...pending].slice(0, 60);
+    ids.forEach(id => pending.delete(id));
+    if (pending.size) timer = setTimeout(flush, 1500);
+    const tk = token();
+    if (!ids.length || !tk) return;
+    fetch('/puente/api/reacciones/revisar?mensajes=' + ids.join(','), { headers: { Authorization: 'Bearer ' + tk } }).catch(() => {});
+  }
+
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      io.unobserve(e.target);
+      const id = parseInt(e.target.dataset.msgId, 10);
+      if (!id || asked.has(id)) continue;
+      asked.add(id);
+      pending.add(id);
+    }
+    if (pending.size && !timer) timer = setTimeout(flush, 600);
+  }) : null;
+
+  function watch(root) {
+    if (!io || !root || !root.querySelectorAll) return;
+    const msgs = root.matches && root.matches('.message, .message-compact') ? [root] : [];
+    root.querySelectorAll('.message, .message-compact').forEach(m => msgs.push(m));
+    for (const m of msgs) {
+      if (m.dataset.puenteRevisar || !m.querySelector('.reaction-badge')) continue;
+      m.dataset.puenteRevisar = '1';
+      io.observe(m);
+    }
+  }
+
+  function start() {
+    new MutationObserver((muts) => {
+      for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) watch(n.closest ? (n.closest('.message, .message-compact') || n) : n);
+    }).observe(document.body, { childList: true, subtree: true });
+    watch(document);
+  }
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
