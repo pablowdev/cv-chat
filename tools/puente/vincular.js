@@ -167,7 +167,9 @@ async function handle(req, res) {
     if (file.endsWith('.js')) {
       // Solo letras, numeros, espacios y signos simples (va dentro de un string de JS).
       const title = String(process.env.PUENTE_TITULO || '').replace(/[^\p{L}\p{N} ._!?¡¿-]/gu, '').slice(0, 60);
-      body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title);
+      // Canales que se abren al entrar por primera vez (PUENTE_CANAL_INICIO): nombres separados por comas.
+      const start = String(process.env.PUENTE_CANAL_INICIO || '').replace(/[^\p{L}\p{N}_,-]/gu, '').slice(0, 200);
+      body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title).replace(/__PUENTE_CANAL_INICIO__/g, start);
     }
     return send(res, 200, type, body);
   }

@@ -161,3 +161,47 @@
   } catch { return; }
   document.title = desc.get.call(document);
 })();
+
+// Al entrar, abrir un canal en vez de la pantalla "Bienvenido a Haven": el
+// ultimo que abriste en este navegador o, la primera vez, el canal de inicio
+// (PUENTE_CANAL_INICIO en .env: nombres separados por comas, se usa el primero
+// que la persona puede ver). Los enlaces a un canal (?channel=) o de
+// invitacion (?invite=) siguen mandando, y si el canal ya no esta disponible
+// se usa el de inicio.
+(function () {
+  'use strict';
+  const START = '__PUENTE_CANAL_INICIO__';
+  const KEY = 'puente_ultimo_canal';
+  const store = (fn) => { try { return fn(localStorage); } catch { return null; } };
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^#/, '');
+  const params = new URLSearchParams(location.search);
+  let opened = !!(params.get('channel') || params.get('invite'));
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function' || !Array.isArray(app.channels) || !app.channels.length) {
+      if (++tries < 120) setTimeout(wait, 500);
+      return;
+    }
+    // Recordar cada canal que se abre
+    const orig = app.switchChannel;
+    app.switchChannel = function (code, ...rest) {
+      if (code) store(s => s.setItem(KEY, String(code)));
+      return orig.call(this, code, ...rest);
+    };
+    if (app.currentChannel) store(s => s.setItem(KEY, String(app.currentChannel)));
+    if (opened || app.currentChannel) return;
+    opened = true;
+    const has = (code) => app.channels.some(c => c && c.code === code);
+    const last = store(s => s.getItem(KEY));
+    let target = last && has(last) ? last : null;
+    if (!target && START && START.indexOf('__PUENTE') !== 0) {
+      for (const name of START.split(',')) {
+        const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name));
+        if (ch) { target = ch.code; break; }
+      }
+    }
+    if (target) app.switchChannel(target);
+  })();
+})();
