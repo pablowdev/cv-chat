@@ -134,7 +134,7 @@ function buildContent(msg, attLines) {
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
   }
-  return adjuntos.emojisToHaven(db, content.trim());
+  return adjuntos.mentionsToHaven(db, adjuntos.emojisToHaven(db, content.trim()), msg);
 }
 
 // ── Haven ────────────────────────────────────────────────────────────────
@@ -401,7 +401,7 @@ async function main() {
   // 2) Hilos: los activos siempre; los archivados cada ARCHIVED_EVERY_MS (o con --completo).
   const threads = new Map();
   const active = await api(`/guilds/${guildId}/threads/active`);
-  for (const th of active.threads || []) threads.set(th.id, th);
+  for (const th of active.threads || []) { threads.set(th.id, th); adjuntos.rememberChannel(th); }
   const checkArchived = FULL || !estado.ultimosArchivados || Date.now() - estado.ultimosArchivados > ARCHIVED_EVERY_MS;
   if (checkArchived) {
     for (const parent of [...textChannels, ...forums]) {
@@ -410,7 +410,7 @@ async function main() {
       for (;;) {
         const page = await api(`/channels/${parent.id}/threads/archived/public?limit=100${before ? '&before=' + encodeURIComponent(before) : ''}`);
         if (page.__error || !page.threads) break;
-        for (const th of page.threads) threads.set(th.id, th);
+        for (const th of page.threads) { threads.set(th.id, th); adjuntos.rememberChannel(th); }
         if (!page.has_more || !page.threads.length) break;
         before = page.threads[page.threads.length - 1].thread_metadata?.archive_timestamp;
         if (!before) break;

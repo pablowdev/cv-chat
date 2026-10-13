@@ -185,5 +185,61 @@ function discordReactionParam(db, key) {
   return e ? `${e.discord_name}:${e.discord_id}` : null;
 }
 
+// ── Menciones de Discord -> texto de Haven ──
+// <@id> -> @usuario de Haven si esa cuenta de Discord esta vinculada (Haven la
+// resalta como mencion); si no, @Nombre de Discord. <#id> -> #canal, <@&id> -> @rol.
+// Los nombres salen del propio mensaje de Discord (msg.mentions), de los
+// canales y roles que va viendo el puente, o del historial importado.
+const roleNames = new Map();     // id de rol -> nombre
+const channelNames = new Map();  // id de canal o hilo de Discord -> nombre
+const userNames = new Map();     // id de usuario de Discord -> nombre (vistos o buscados)
+function rememberRoles(roles) { for (const r of roles || []) if (r && r.id && r.name) roleNames.set(String(r.id), r.name); }
+function rememberChannel(c) { if (c && c.id && c.name) channelNames.set(String(c.id), c.name); }
+function rememberUser(id, name) { if (id && name) userNames.set(String(id), String(name)); }
+
+const mentionStmts = new WeakMap();
+function stmts(db) {
+  let s = mentionStmts.get(db);
+  if (!s) {
+    s = {
+      linked: db.prepare('SELECT u.username FROM puente_vinculos v JOIN users u ON u.id = v.haven_user_id WHERE v.discord_user_id = ?'),
+      author: db.prepare(`SELECT m.webhook_username n FROM puente_autores pa JOIN messages m ON m.id = pa.message_id
+        WHERE pa.discord_user_id = ? AND m.webhook_username IS NOT NULL AND m.webhook_username != '' ORDER BY pa.message_id DESC LIMIT 1`),
+      channel: db.prepare('SELECT name FROM channels WHERE discord_channel_id = ?'),
+    };
+    mentionStmts.set(db, s);
+  }
+  return s;
+}
+
+// Nombre para @ de un usuario de Discord, o null si no se conoce
+function mentionUser(db, id, fromMsg) {
+  const s = stmts(db);
+  const link = s.linked.get(id);
+  if (link) return link.username;
+  if (fromMsg && fromMsg.has(id)) return fromMsg.get(id);
+  if (userNames.has(id)) return userNames.get(id);
+  const a = s.author.get(id);
+  return a ? a.n : null;
+}
+function mentionChannel(db, id) {
+  const c = stmts(db).channel.get(id);
+  return c ? c.name : channelNames.get(id) || null;
+}
+
+function mentionsToHaven(db, text, msg) {
+  if (!text || text.indexOf('<') < 0) return text;
+  const fromMsg = new Map();
+  for (const u of (msg && msg.mentions) || []) {
+    if (u && u.id) fromMsg.set(String(u.id), (u.member && u.member.nick) || u.global_name || u.username);
+  }
+  try { stmts(db); } catch { return text; } // sin las tablas del puente: se deja como esta
+  return text
+    .replace(/<@!?(\d{5,25})>/g, (full, id) => '@' + (mentionUser(db, id, fromMsg) || 'usuario'))
+    .replace(/<@&(\d{5,25})>/g, (full, id) => '@' + (roleNames.get(id) || 'rol'))
+    .replace(/<#(\d{5,25})>/g, (full, id) => '#' + (mentionChannel(db, id) || 'canal'));
+}
+
 module.exports = { localize, localizeAll, gifInstead, forwarded, avatar, fallback,
-  emojisToHaven, emojisToDiscord, reactionKey, discordReactionParam };
+  emojisToHaven, emojisToDiscord, reactionKey, discordReactionParam,
+  mentionsToHaven, mentionUser, mentionChannel, rememberRoles, rememberChannel, rememberUser };

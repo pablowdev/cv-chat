@@ -180,7 +180,7 @@ function buildContent(msg, attLines) {
     if (e.description) content += `\n${e.description}`;
     if (e.url && !content.includes(e.url)) content += `\n${e.url}`;
   }
-  return adjuntos.emojisToHaven(db, content.trim());
+  return adjuntos.mentionsToHaven(db, adjuntos.emojisToHaven(db, content.trim()), msg);
 }
 
 const q = () => ({
@@ -264,6 +264,7 @@ async function connectGateway(resume = false) {
 }
 
 function cacheChannel(c) {
+  adjuntos.rememberChannel(c); // para convertir menciones de hilos
   if (c && c.id) discordChannels.set(c.id, { id: c.id, name: c.name, type: c.type, parent_id: c.parent_id || null, permission_overwrites: c.permission_overwrites || (discordChannels.get(c.id) || {}).permission_overwrites || [] });
 }
 
@@ -282,6 +283,7 @@ function onDispatch(t, d) {
         guildId = d.id;
         (d.channels || []).forEach(cacheChannel);
         (d.threads || []).forEach(cacheChannel);
+        adjuntos.rememberRoles(d.roles); // para convertir menciones de roles
         // Nombres renombrados en Discord mientras el puente estaba apagado
         (d.channels || []).forEach(c => estadisticas.onDiscordChannelUpdate(c));
         break;
@@ -290,6 +292,9 @@ function onDispatch(t, d) {
         if (guildId && d.guild_id && d.guild_id !== guildId) return;
         cacheChannel(d);
         if (t === 'CHANNEL_UPDATE') estadisticas.onDiscordChannelUpdate(d);
+        break;
+      case 'GUILD_ROLE_CREATE': case 'GUILD_ROLE_UPDATE':
+        if (d.guild_id === guildId) adjuntos.rememberRoles([d.role]);
         break;
       case 'MESSAGE_CREATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundCreate(d)); break;
       case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundUpdate(d)); break;
