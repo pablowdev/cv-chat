@@ -424,6 +424,48 @@ html .puente-sheet .channel-ctx-item.danger { color: #f2777a; }
 .puente-sheet-icon { width: 1.375rem; flex-shrink: 0; text-align: center; font-size: 1.25rem; filter: grayscale(1) brightness(1.6); }
 .puente-sheet .channel-ctx-item.danger .puente-sheet-icon { filter: none; }
 
+/* Selector de reacciones en pantallas tactiles: hoja con buscador, frecuentes,
+   emojis del servidor y categorias, como en la app de Discord (aviso.js). */
+#puente-react-backdrop { position: fixed; inset: 0; z-index: 100018; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.18s ease-out; }
+.puente-react-picker {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100019;
+  width: 100%; max-width: 37.5rem; height: 82vh; margin: 0 auto;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  padding: 0.5rem 0.75rem 0;
+  background: #252429; border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease; animation: puente-sheet-up 0.22s ease-out;
+}
+.puente-react-search {
+  flex-shrink: 0; width: 100%; box-sizing: border-box; height: 2.75rem; margin: 0 0 0.5rem;
+  padding: 0 1rem; border: 1px solid #3b3a3f; border-radius: 0.625rem;
+  background: #1a191e; color: #fbfbfb; font: inherit; font-size: 1rem; outline: none;
+}
+.puente-react-search:focus { border-color: #5865f2; }
+.puente-react-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 0.5rem; }
+.puente-react-title { padding: 0.75rem 0.25rem 0.375rem; color: #dbdee1; font-size: 0.9375rem; font-weight: 600; }
+.puente-react-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.875rem, 1fr)); gap: 0.25rem; }
+.puente-react-btn {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 0.5rem; background: transparent;
+  font-size: 1.875rem; line-height: 1; cursor: pointer;
+}
+.puente-react-btn img { width: 2.25rem; height: 2.25rem; object-fit: contain; pointer-events: none; }
+.puente-react-btn:active { background: #36353b; }
+.puente-react-empty { padding: 2rem 0; text-align: center; color: #81828a; }
+.puente-react-tabs {
+  flex-shrink: 0; display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none;
+  margin: 0 -0.75rem; padding: 0.375rem 0.75rem calc(0.375rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #3b3a3f; background: #222126;
+}
+.puente-react-tab {
+  flex: 0 0 auto; width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 1.375rem; cursor: pointer;
+  filter: grayscale(1); opacity: 0.75;
+}
+.puente-react-tab img { width: 1.75rem; height: 1.75rem; border-radius: 50%; object-fit: cover; }
+.puente-react-tab:active { background: #36353b; filter: none; opacity: 1; }
+
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.

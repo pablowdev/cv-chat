@@ -163,16 +163,16 @@ function topReactions(userId) {
   const hit = freqCache.get(userId);
   if (hit && Date.now() - hit.at < FREQ_TTL_MS) return hit.list;
   const list = (userId
-    ? db.prepare('SELECT emoji, COUNT(*) n FROM reactions WHERE user_id = ? GROUP BY emoji ORDER BY n DESC LIMIT 20').all(userId)
-    : db.prepare('SELECT emoji, COUNT(*) n FROM reactions GROUP BY emoji ORDER BY n DESC LIMIT 20').all()).map(r => r.emoji);
+    ? db.prepare('SELECT emoji, COUNT(*) n FROM reactions WHERE user_id = ? GROUP BY emoji ORDER BY n DESC LIMIT 40').all(userId)
+    : db.prepare('SELECT emoji, COUNT(*) n FROM reactions GROUP BY emoji ORDER BY n DESC LIMIT 40').all()).map(r => r.emoji);
   freqCache.set(userId, { at: Date.now(), list });
   return list;
 }
-function frequentReactions(userId) {
+function frequentReactions(userId, n = FREQ_N) {
   const custom = new Map(db.prepare('SELECT name, filename FROM custom_emojis').all().map(r => [r.name, r.filename]));
   const out = [], seen = new Set();
   for (const e of [...topReactions(userId), ...topReactions(0), '👍', '❤️', '😂', '😮', '😢', '🔥', '👀']) {
-    if (out.length >= FREQ_N || seen.has(e)) continue;
+    if (out.length >= n || seen.has(e)) continue;
     const m = /^:([a-z0-9_-]+):$/.exec(e);
     if (m && !custom.has(m[1])) continue; // emoji que ya no existe
     seen.add(e);
@@ -208,7 +208,8 @@ async function handle(req, res) {
   if (p === '/puente/api/reacciones-frecuentes' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });
-    return json(res, 200, { emojis: frequentReactions(user.id) });
+    const n = Math.max(1, Math.min(36, parseInt(u.searchParams.get('n'), 10) || FREQ_N));
+    return json(res, 200, { emojis: frequentReactions(user.id, n) });
   }
 
   if (p === '/puente/api/estado' && req.method === 'GET') {

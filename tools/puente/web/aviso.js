@@ -528,3 +528,174 @@
     }, true);
   })();
 })();
+
+// Pantallas tactiles: elegir una reaccion como en la app de Discord. En vez de
+// la barrita de Haven (8 emojis y un "..." que abre un panel chico), una hoja
+// que sube desde abajo con buscador, "Usados frecuentemente", los emojis del
+// servidor y todas las categorias, con una barra abajo para saltar entre ellas.
+// Tocar un emoji reacciona (o saca la reaccion si ya estaba) y cierra.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const tr = (key, fallback) => {
+    try { const v = typeof t === 'function' ? t(key) : null; return v && v !== key ? v : fallback; } catch { return fallback; }
+  };
+  let frequent = null;
+
+  function loadFrequent() {
+    let token = null;
+    try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!token) return;
+    fetch('/puente/api/reacciones-frecuentes?n=24', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) frequent = d.emojis; }).catch(() => {});
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text) n.textContent = text;
+    return n;
+  }
+
+  function close() {
+    document.getElementById('puente-react-picker')?.remove();
+    document.getElementById('puente-react-backdrop')?.remove();
+  }
+
+  function open(app, msgEl, msgId) {
+    close();
+    const root = msgEl && msgEl.closest('#dm-pip-messages, #messages, #thread-messages');
+    const code = root && root.id === 'dm-pip-messages' ? app._activeDMPip : app.currentChannel;
+    if (app._channelAllowsReactions && !app._channelAllowsReactions(code)) {
+      if (app._showToast) app._showToast(tr('channel_functions.reactions_disabled', 'Las reacciones están desactivadas en este canal'), 'info');
+      return;
+    }
+    const react = (emoji) => {
+      const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === emoji);
+      app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji });
+      close();
+    };
+    const tone = (e) => (typeof app._toneEmoji === 'function' ? app._toneEmoji(e) : e);
+    const named = (e) => {
+      const m = typeof e === 'string' && /^:([a-zA-Z0-9_-]+):$/.exec(e);
+      return m && typeof app._findNamedEmoji === 'function' ? app._findNamedEmoji(m[1]) : null;
+    };
+
+    const back = el('div');
+    back.id = 'puente-react-backdrop';
+    back.addEventListener('click', close);
+    const sheet = el('div', 'puente-react-picker');
+    sheet.id = 'puente-react-picker';
+    sheet.appendChild(el('div', 'puente-sheet-handle'));
+    const search = el('input', 'puente-react-search');
+    search.type = 'search';
+    search.placeholder = tr('reactions.search_placeholder', 'Buscar emojis...');
+    sheet.appendChild(search);
+    const body = el('div', 'puente-react-body');
+    const tabs = el('div', 'puente-react-tabs');
+    sheet.append(body, tabs);
+
+    // Secciones: [{ id, title, tab (texto o url), items: [{ value, url?, label }] }]
+    const sections = [];
+    if (frequent && frequent.length) {
+      sections.push({ id: 'freq', title: tr('emoji.frequent', 'Usados frecuentemente'), tab: '🕒',
+        items: frequent.map(f => ({ value: f.emoji, url: f.url, label: f.emoji })) });
+    }
+    if (Array.isArray(app.customEmojis) && app.customEmojis.length) {
+      const server = (app.serverSettings && app.serverSettings.server_name) || tr('emoji.categories.custom', 'Personalizado');
+      sections.push({ id: 'custom', title: server, tab: { url: '/puente/icono-192.png' },
+        items: app.customEmojis.map(ce => ({ value: `:${ce.name}:`, url: ce.url, label: ce.name })) });
+    }
+    for (const [cat, list] of Object.entries(app.emojiCategories || {})) {
+      if (!Array.isArray(list) || !list.length) continue;
+      const items = list.map(e => {
+        const n = named(e);
+        return n ? { value: e, url: n.url, label: e } : { value: tone(e), label: (app.emojiNames && app.emojiNames[e]) || '', raw: e };
+      });
+      const first = items[0];
+      sections.push({ id: 'cat-' + cat, title: tr('emoji.categories.' + cat.toLowerCase(), cat), tab: first.url ? { url: first.url } : first.value, items });
+    }
+
+    const button = (it) => {
+      const b = el('button', 'puente-react-btn');
+      b.type = 'button';
+      b.title = it.label || it.value;
+      if (it.url) { const img = el('img'); img.src = it.url; img.alt = it.value; img.loading = 'lazy'; b.appendChild(img); }
+      else b.textContent = it.value;
+      b.addEventListener('click', () => react(it.value));
+      return b;
+    };
+
+    function render(filter) {
+      body.textContent = '';
+      const q = (filter || '').trim().toLowerCase();
+      for (const s of sections) {
+        if (q && s.id === 'freq') continue;
+        const items = q ? s.items.filter(it => {
+          if (it.raw && typeof app._emojiSearchMatch === 'function') return app._emojiSearchMatch(it.raw, it.label, q);
+          return String(it.label || it.value).toLowerCase().includes(q);
+        }) : s.items;
+        if (!items.length) continue;
+        const head = el('div', 'puente-react-title', s.title);
+        head.id = 'puente-react-' + s.id;
+        const grid = el('div', 'puente-react-grid');
+        items.forEach(it => grid.appendChild(button(it)));
+        body.append(head, grid);
+      }
+      if (!body.children.length) body.appendChild(el('div', 'puente-react-empty', tr('emoji.no_results', 'No se encontraron emojis')));
+    }
+
+    for (const s of sections) {
+      const b = el('button', 'puente-react-tab');
+      b.type = 'button';
+      b.title = s.title;
+      if (s.tab && s.tab.url) { const img = el('img'); img.src = s.tab.url; img.alt = ''; b.appendChild(img); }
+      else b.textContent = s.tab;
+      b.addEventListener('click', () => {
+        if (search.value) { search.value = ''; render(''); }
+        const target = document.getElementById('puente-react-' + s.id);
+        if (target) body.scrollTo({ top: target.offsetTop - body.offsetTop, behavior: 'smooth' });
+      });
+      tabs.appendChild(b);
+    }
+
+    let timer = null;
+    search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => render(search.value), 120); });
+    render('');
+
+    // Deslizar la manija hacia abajo para cerrar
+    let y0 = null, dy = 0;
+    sheet.addEventListener('touchstart', (e) => {
+      const onTop = e.target === sheet || e.target.classList.contains('puente-sheet-handle');
+      y0 = onTop ? e.touches[0].clientY : null; dy = 0; sheet.style.transition = 'none';
+    }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => {
+      if (y0 === null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+    }, { passive: true });
+    sheet.addEventListener('touchend', () => {
+      sheet.style.transition = '';
+      if (y0 !== null && dy > 90) close(); else sheet.style.transform = '';
+      y0 = null;
+    }, { passive: true });
+
+    document.body.append(back, sheet);
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showReactionPicker !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    loadFrequent();
+    setInterval(loadFrequent, 10 * 60 * 1000);
+    const orig = app._showReactionPicker;
+    app._showReactionPicker = function (msgEl, msgId, ...rest) {
+      try { open(this, msgEl, msgId); } catch (err) {
+        console.warn('[puente] selector de reacciones:', err);
+        close();
+        return orig.call(this, msgEl, msgId, ...rest); // el de Haven, si algo falla
+      }
+    };
+  })();
+})();
