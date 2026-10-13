@@ -31,6 +31,7 @@ const ESTADO_PATH = path.join(__dirname, 'sincronizacion-estado.json');
 const BACKUP_DIR = '/data/backups';
 const API = 'https://discord.com/api/v10';
 const CONCURRENCY = 4;               // Discord limita por canal: 4 a la vez es seguro
+const DOWNLOADS_AT_ONCE = 8;         // adjuntos descargados a la vez por canal
 const ARCHIVED_EVERY_MS = 6 * 3600e3; // cada cuanto revisar hilos archivados
 // --rehacer: vuelve a leer TODO el historial y corrige el texto de los mensajes
 // ya guardados que vinieron de Discord (por ejemplo, despues de cambiar
@@ -244,11 +245,18 @@ async function pullMessages(discordChannelId, after, channelId, threadRoot, skip
     page.sort((a, b) => (big(a.id) < big(b.id) ? -1 : 1));
     const msgs = skipId ? page.filter(m => m.id !== skipId) : page;
     // Los adjuntos se descargan antes de la transaccion (que tiene que ser corta).
+    // Varias descargas a la vez (de un CDN, no de la API de Discord, asi que no
+    // cuentan para los limites del bot).
     const attByMsg = new Map();
-    for (const m of msgs) {
-      const hasFiles = (m.attachments && m.attachments.length) || (m.message_snapshots || []).some(s => s.message && s.message.attachments && s.message.attachments.length);
-      if (hasFiles) attByMsg.set(m.id, await adjuntos.localizeAll(m));
-    }
+    const withFiles = msgs.filter(m => (m.attachments && m.attachments.length) ||
+      (m.message_snapshots || []).some(s => s.message && s.message.attachments && s.message.attachments.length));
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(DOWNLOADS_AT_ONCE, withFiles.length) }, async () => {
+      while (next < withFiles.length) {
+        const m = withFiles[next++];
+        attByMsg.set(m.id, await adjuntos.localizeAll(m));
+      }
+    }));
     total += insertPage(msgs, channelId, threadRoot, attByMsg);
     cursor = page[page.length - 1].id;
     if (page.length < 100) break;
