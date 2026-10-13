@@ -492,6 +492,20 @@ function hookHavenEmits() {
       return op;
     };
   }
+  // Borrados hechos por una persona en Haven: antes de que Haven borre, se
+  // anota a que mensaje de Discord corresponde (despues ya no esta en la base),
+  // para borrarlo tambien alla cuando Haven confirme. La limpieza automatica de
+  // Haven no pasa por aca, asi que no borra historial de Discord.
+  io.on('connection', socket => {
+    socket.use((packet, next) => {
+      try {
+        const [event, data] = packet;
+        if (data && event === 'delete-message' && Number.isInteger(data.messageId)) rememberDelete(data.messageId);
+        else if (data && event === 'delete-messages' && Array.isArray(data.messageIds)) data.messageIds.slice(0, 500).forEach(id => Number.isInteger(id) && rememberDelete(id));
+      } catch (err) { warn('borrados:', err.message); }
+      next();
+    });
+  });
   // Lo mismo en el historial de un canal y de un hilo
   io.on('connection', socket => {
     const emit = socket.emit;
@@ -740,9 +754,39 @@ async function outboundEdit(havenMessageId) {
   });
 }
 
+// Mensajes que vinieron de Discord y alguien esta borrando en Haven:
+// id de Haven -> { did, channel (canal o hilo de Discord), at }
+const pendingDeletes = new Map();
+function rememberDelete(havenId) {
+  const m = db.prepare(`SELECT m.discord_message_id did, m.thread_id, c.discord_channel_id ch FROM messages m
+    JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(havenId);
+  if (!m || !m.did || !/^\d+$/.test(String(m.did)) || !m.ch || !isBridged(m.ch)) return;
+  if (db.prepare('SELECT 1 FROM puente_salientes WHERE haven_message_id = ?').get(havenId)) return; // salio de Haven: lo borra el webhook
+  let channel = m.ch;
+  if (m.thread_id) {
+    const root = db.prepare('SELECT discord_message_id did FROM messages WHERE id = ?').get(m.thread_id);
+    if (!root || !root.did) return;
+    channel = String(root.did).replace(/^thread-/, '');
+  }
+  const now = Date.now();
+  for (const [k, v] of pendingDeletes) if (now - v.at > 120000) pendingDeletes.delete(k);
+  pendingDeletes.set(havenId, { did: String(m.did), channel, parent: m.ch, at: now });
+}
+
 async function outboundDelete(havenMessageId) {
   const out = db.prepare('SELECT * FROM puente_salientes WHERE haven_message_id = ?').get(havenMessageId);
-  if (!out) return;
+  if (!out) {
+    // Vino de Discord y una persona lo borro en Haven: borrarlo tambien en Discord
+    const p = pendingDeletes.get(havenMessageId);
+    if (!p) return;
+    pendingDeletes.delete(havenMessageId);
+    return enqueue('out:' + p.parent, async () => {
+      const r = await api('DELETE', `/channels/${p.channel}/messages/${p.did}`);
+      if (r && r.__error && r.__error !== 404) {
+        warn(`no pude borrar en Discord el mensaje ${p.did}:`, r.__error, r.__error === 403 ? '(al bot le falta "Gestionar mensajes" en ese canal)' : '');
+      }
+    });
+  }
   return enqueue('out:' + out.discord_channel_id, async () => {
     const hook = await ensureWebhook(out.discord_channel_id);
     if (!hook) return;
