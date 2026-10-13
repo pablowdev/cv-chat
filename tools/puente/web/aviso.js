@@ -221,11 +221,30 @@
   const params = new URLSearchParams(location.search);
   let opened = !!(params.get('channel') || params.get('invite'));
 
+  // El tema oculta la pantalla de bienvenida de Haven (y el "Selecciona un
+  // canal" de arriba) hasta que esta clase diga lo contrario: solo si de verdad
+  // no hay ningun canal para abrir.
+  const showWelcome = () => document.documentElement.classList.add('puente-bienvenida');
+
+  function pick(app) {
+    const has = (code) => app.channels.some(c => c && c.code === code);
+    const last = store(s => s.getItem(KEY));
+    if (last && has(last)) return last;
+    if (START && START.indexOf('__PUENTE') !== 0) {
+      for (const name of START.split(',')) {
+        const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name));
+        if (ch) return ch.code;
+      }
+    }
+    const first = app.channels.find(c => c && !c.is_dm && !c.is_group);
+    return first ? first.code : null;
+  }
+
   let tries = 0;
   (function wait() {
     const app = window.app;
     if (!app || typeof app.switchChannel !== 'function' || !Array.isArray(app.channels) || !app.channels.length) {
-      if (++tries < 120) setTimeout(wait, 500);
+      if (++tries < 300) setTimeout(wait, 100); else showWelcome(); // 30 s sin canales
       return;
     }
     // Recordar cada canal que se abre
@@ -235,18 +254,27 @@
       return orig.call(this, code, ...rest);
     };
     if (app.currentChannel) store(s => s.setItem(KEY, String(app.currentChannel)));
-    if (opened || app.currentChannel) return;
-    opened = true;
-    const has = (code) => app.channels.some(c => c && c.code === code);
-    const last = store(s => s.getItem(KEY));
-    let target = last && has(last) ? last : null;
-    if (!target && START && START.indexOf('__PUENTE') !== 0) {
-      for (const name of START.split(',')) {
-        const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name));
-        if (ch) { target = ch.code; break; }
-      }
+    if (!opened && !app.currentChannel) {
+      opened = true;
+      const target = pick(app);
+      if (target) app.switchChannel(target); else showWelcome();
     }
-    if (target) app.switchChannel(target);
+    // Por si un enlace (?channel= / ?invite=) no llego a abrir nada
+    setTimeout(() => {
+      if (app.currentChannel) return;
+      const target = pick(app);
+      if (target) app.switchChannel(target); else showWelcome();
+    }, 5000);
+    // Si mas tarde Haven vuelve a la bienvenida (por ejemplo, borraron el canal
+    // abierto o te sacaron el acceso), abrir otro en vez de dejarla.
+    const welcome = document.getElementById('no-channel-msg');
+    if (welcome) {
+      new MutationObserver(() => {
+        if (welcome.style.display === 'none' || app.currentChannel) return;
+        const target = Array.isArray(app.channels) && app.channels.length ? pick(app) : null;
+        if (target) app.switchChannel(target); else showWelcome();
+      }).observe(welcome, { attributes: true, attributeFilter: ['style'] });
+    }
   })();
 })();
 

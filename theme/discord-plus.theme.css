@@ -544,6 +544,11 @@ span.puente-who-emoji { font-size: 1.5rem; line-height: 1; }
 .puente-sin-permiso #message-input::placeholder { color: #81828a; }
 .puente-sin-permiso .input-actions-box, .puente-sin-permiso #send-btn, .puente-sin-permiso [data-compact-composer] .input-actions-box { display: none !important; }
 
+/* Pantalla "Bienvenido a Haven" al abrir: no se muestra, se entra directo a un
+   canal (aviso.js). Solo aparece si no hay ningun canal para abrir. */
+html:not(.puente-bienvenida) #no-channel-msg { visibility: hidden !important; }
+html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name { visibility: hidden; }
+
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.
