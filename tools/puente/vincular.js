@@ -275,6 +275,16 @@ async function handle(req, res) {
     return json(res, 200, { emojis: frequentReactions(user.id, n) });
   }
 
+  if (p === '/puente/api/permisos' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const accesos = require('./accesos.js');
+    const code = String(u.searchParams.get('canal') || '');
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    const perms = accesos.isEnabled() && /^[a-f0-9]{8}$/i.test(code) ? accesos.channelPermissions(user.id, !!(admin && admin.is_admin), code) : null;
+    return json(res, 200, perms || { enviar: true, hilos: true, reaccionar: true, adjuntar: true });
+  }
+
   if (p === '/puente/api/reacciones' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

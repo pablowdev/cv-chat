@@ -8,12 +8,24 @@
 //    sale/la expulsan/la banean del servidor, se actualiza al momento.
 //  - Las cuentas sin vincular solo ven los canales propios de Haven (p. ej. #bienvenida).
 //  - Los administradores de Haven siguen viendo todo.
+//  - Tambien se copian los permisos de escribir, escribir en hilos, reaccionar y
+//    adjuntar archivos de cada canal (tabla puente_permisos): Haven rechaza lo que
+//    Discord no dejaria hacer. Las cuentas sin vincular tienen los de @everyone.
 //
 // Solo se quitan accesos que dio este modulo (tabla puente_accesos): las
 // membresias que un admin agrego a mano no se tocan.
 
 const VIEW = 1n << 10n;
 const ADMINISTRATOR = 1n << 3n;
+// Permisos de Discord que se copian, y su bit en puente_permisos.flags
+const P = {
+  send: { bit: 1, discord: 1n << 11n },     // SEND_MESSAGES
+  thread: { bit: 2, discord: 1n << 38n },   // SEND_MESSAGES_IN_THREADS
+  react: { bit: 4, discord: 1n << 6n },     // ADD_REACTIONS
+  attach: { bit: 8, discord: 1n << 15n },   // ATTACH_FILES
+};
+const ALL_FLAGS = Object.values(P).reduce((a, x) => a | x.bit, 0);
+const toFlags = p => Object.values(P).reduce((a, x) => a | ((p & x.discord) ? x.bit : 0), 0);
 const THREAD_TYPES = new Set([10, 11, 12]);
 
 let db, io, api, log, warn, getGuildId, channelInfo;
@@ -31,10 +43,17 @@ function setup(ctx) {
       channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
       PRIMARY KEY (haven_user_id, channel_id)
     );
+    CREATE TABLE IF NOT EXISTS puente_permisos (
+      haven_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      flags INTEGER NOT NULL,
+      PRIMARY KEY (haven_user_id, channel_id)
+    );
   `);
   if (!enabled) { log('accesos: modo abierto (PUENTE_ACCESO no es "vinculados")'); return; }
   const n = db.prepare('UPDATE channels SET is_private = 1 WHERE discord_channel_id IS NOT NULL AND is_private = 0').run().changes;
   guardJoinByCode();
+  guardPosting();
   log(`accesos: modo vinculados${n ? ` (${n} canales pasaron a privados)` : ''}`);
 }
 
@@ -61,6 +80,78 @@ function guardJoinByCode() {
       next();
     });
   });
+}
+
+// ── Escribir, reaccionar, adjuntar: lo mismo que deja Discord ─────────────
+// Permisos (flags) de un usuario de Haven en un canal que viene de Discord, o
+// null si el canal no es de Discord (sin restricciones del puente).
+function flagsFor(havenUserId, channelId) {
+  const ch = db.prepare('SELECT discord_channel_id FROM channels WHERE id = ?').get(channelId);
+  if (!ch || !ch.discord_channel_id) return null;
+  const row = db.prepare('SELECT flags FROM puente_permisos WHERE haven_user_id = ? AND channel_id = ?').get(havenUserId, channelId);
+  if (row) return row.flags;
+  // Sin vincular (o sin calcular todavia): los permisos de @everyone en ese canal
+  const info = channelInfo(ch.discord_channel_id);
+  if (!info || !roles.size) return ALL_FLAGS; // todavia sin datos de Discord: no bloquear
+  return toFlags(permissions({ user: { id: '0' }, roles: [] }, info));
+}
+
+const NO = {
+  send: 'No tenés permiso para enviar mensajes en este canal.',
+  thread: 'No tenés permiso para escribir en los hilos de este canal.',
+  react: 'No tenés permiso para agregar reacciones nuevas en este canal.',
+  attach: 'No tenés permiso para adjuntar archivos en este canal.',
+};
+const UPLOAD_LINE = /(^|\n)\s*(spoiler-img:)?\/uploads\/\S+|\[file:[^\]\n]+\]\(\/uploads\//;
+
+function guardPosting() {
+  const byCode = db.prepare('SELECT id FROM channels WHERE code = ?');
+  const byMessage = db.prepare('SELECT channel_id FROM messages WHERE id = ?');
+  const hasReaction = db.prepare('SELECT 1 FROM reactions WHERE message_id = ? AND emoji = ? LIMIT 1');
+  io.on('connection', socket => {
+    socket.use((packet, next) => {
+      let deny = null;
+      try {
+        const [event, data] = packet;
+        if (!socket.user || socket.user.isAdmin || !data || typeof data !== 'object') return next();
+        let channelId = null, need = [];
+        if (event === 'send-message' || event === 'schedule-message' || event === 'create-poll') {
+          const c = typeof data.code === 'string' ? byCode.get(data.code.trim()) : null;
+          channelId = c && c.id;
+          need = ['send'];
+          if (typeof data.content === 'string' && UPLOAD_LINE.test(data.content)) need.push('attach');
+        } else if (event === 'send-thread-message') {
+          const m = byMessage.get(data.parentId);
+          channelId = m && m.channel_id;
+          need = ['thread'];
+          if (typeof data.content === 'string' && UPLOAD_LINE.test(data.content)) need.push('attach');
+        } else if (event === 'add-reaction') {
+          const m = byMessage.get(data.messageId);
+          channelId = m && m.channel_id;
+          // Como en Discord: sumarse a una reaccion que ya esta no necesita permiso
+          if (m && !hasReaction.get(data.messageId, String(data.emoji || ''))) need = ['react'];
+        }
+        if (channelId && need.length) {
+          const flags = flagsFor(socket.user.id, channelId);
+          if (flags !== null) deny = need.find(k => !(flags & P[k].bit)) || null;
+        }
+      } catch (err) { warn('accesos: guardia de permisos:', err.message); }
+      if (!deny) return next();
+      const cb = packet[packet.length - 1];
+      if (typeof cb === 'function') cb({ error: NO[deny] });
+      socket.emit('error-msg', NO[deny]);
+      // no se pasa a Haven
+    });
+  });
+}
+
+// Para la aplicacion: que puede hacer el usuario en un canal (por codigo)
+function channelPermissions(havenUserId, isAdmin, code) {
+  const ch = db.prepare('SELECT id FROM channels WHERE code = ?').get(code);
+  if (!ch) return null;
+  const flags = isAdmin ? ALL_FLAGS : flagsFor(havenUserId, ch.id);
+  const f = flags === null ? ALL_FLAGS : flags;
+  return { enviar: !!(f & P.send.bit), hilos: !!(f & P.thread.bit), reaccionar: !!(f & P.react.bit), adjuntar: !!(f & P.attach.bit) };
 }
 
 // ── Datos del servidor de Discord ─────────────────────────────────────────
@@ -101,13 +192,20 @@ function permissions(member, ch) {
 function apply(havenUserId, member) {
   const channels = db.prepare('SELECT id, name, discord_channel_id FROM channels WHERE discord_channel_id IS NOT NULL').all();
   const want = new Set();
+  const flags = new Map(); // channel id -> flags (escribir, hilos, reaccionar, adjuntar)
   if (member) {
     for (const c of channels) {
       const info = channelInfo(c.discord_channel_id);
       if (!info || THREAD_TYPES.has(info.type)) continue;
-      if (permissions(member, info) & VIEW) want.add(c.id);
+      const p = permissions(member, info);
+      if (p & VIEW) { want.add(c.id); flags.set(c.id, toFlags(p)); }
     }
   }
+  db.transaction(() => {
+    db.prepare('DELETE FROM puente_permisos WHERE haven_user_id = ?').run(havenUserId);
+    const put = db.prepare('INSERT INTO puente_permisos (haven_user_id, channel_id, flags) VALUES (?, ?, ?)');
+    for (const [id, f] of flags) put.run(havenUserId, id, f);
+  })();
   const granted = new Set(db.prepare('SELECT channel_id FROM puente_accesos WHERE haven_user_id = ?').all(havenUserId).map(r => r.channel_id));
   const isMember = db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?');
   let added = 0, removed = 0;
@@ -181,4 +279,4 @@ function onDispatch(t, d) {
   }
 }
 
-module.exports = { setup, onDispatch, recomputeUser, revokeAll, isEnabled: () => enabled };
+module.exports = { setup, onDispatch, recomputeUser, revokeAll, channelPermissions, isEnabled: () => enabled };

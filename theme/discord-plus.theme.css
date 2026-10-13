@@ -539,6 +539,11 @@ span.puente-who-emoji { font-size: 1.5rem; line-height: 1; }
 .puente-who-remove { flex-shrink: 0; width: 2.75rem; height: 2.75rem; border: 0; border-radius: 50%; background: transparent; color: #dbdee1; font-size: 1.375rem; cursor: pointer; }
 .puente-who-remove:active { background: #36353b; }
 
+/* Canal donde Discord no te deja escribir: cuadro desactivado con el aviso (aviso.js) */
+.puente-sin-permiso #message-input { cursor: not-allowed; opacity: 0.75; }
+.puente-sin-permiso #message-input::placeholder { color: #81828a; }
+.puente-sin-permiso .input-actions-box, .puente-sin-permiso #send-btn, .puente-sin-permiso [data-compact-composer] .input-actions-box { display: none !important; }
+
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
 /* El codigo del canal (8b293fed) y su boton de copiar: Discord no los muestra.

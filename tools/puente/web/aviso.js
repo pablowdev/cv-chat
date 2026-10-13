@@ -906,3 +906,61 @@
     try { open(window.app, badge); } catch (err) { console.warn('[puente] quien reacciono:', err); }
   }, true);
 })();
+
+// Canales donde Discord no te deja escribir (por ejemplo los de anuncios): el
+// cuadro de escribir queda desactivado con el aviso de Discord, en vez de dejar
+// escribir y que despues el servidor rechace el mensaje. Los permisos los
+// calcula el puente con tus roles de Discord (/puente/api/permisos).
+(function () {
+  'use strict';
+  const MSG = 'No tenés permiso para enviar mensajes en este canal.';
+  const cache = new Map(); // codigo -> { at, perms }
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  function applyPerms(perms) {
+    const area = document.getElementById('message-input-area');
+    const input = document.getElementById('message-input');
+    if (!area || !input) return;
+    const blocked = perms && perms.enviar === false;
+    area.classList.toggle('puente-sin-permiso', !!blocked);
+    if (blocked) {
+      if (!input.dataset.puentePlaceholder) input.dataset.puentePlaceholder = input.placeholder;
+      input.value = '';
+      input.placeholder = MSG;
+      input.disabled = true;
+    } else if (input.disabled && input.dataset.puentePlaceholder !== undefined) {
+      input.disabled = false;
+      input.placeholder = input.dataset.puentePlaceholder;
+      delete input.dataset.puentePlaceholder;
+    }
+  }
+
+  async function check(code) {
+    if (!code || !/^[a-f0-9]{8}$/i.test(code)) { applyPerms(null); return; }
+    const hit = cache.get(code);
+    if (hit && Date.now() - hit.at < 60000) { applyPerms(hit.perms); return; }
+    const tk = token();
+    if (!tk) return;
+    try {
+      const r = await fetch('/puente/api/permisos?canal=' + encodeURIComponent(code), { headers: { Authorization: 'Bearer ' + tk } });
+      if (!r.ok) return;
+      const perms = await r.json();
+      cache.set(code, { at: Date.now(), perms });
+      if (window.app && window.app.currentChannel === code) applyPerms(perms);
+    } catch { /* sin conexion: no se cambia nada */ }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app.switchChannel;
+    app.switchChannel = function (code, ...rest) {
+      applyPerms(null); // mientras se consulta, como estaba
+      const r = orig.call(this, code, ...rest);
+      Promise.resolve(r).finally(() => check(this.currentChannel));
+      return r;
+    };
+    if (app.currentChannel) check(app.currentChannel);
+  })();
+})();
