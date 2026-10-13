@@ -111,10 +111,36 @@
     if (el.textContent !== text) el.textContent = text;
   }
 
+  // Avatar mini de quien escribio el mensaje citado, como en Discord. Se copia
+  // del mensaje original si esta cargado, o de otro mensaje de esa persona.
+  function replyAvatar(banner) {
+    if (banner.dataset.puenteAvatar) return;
+    banner.dataset.puenteAvatar = '1';
+    const id = banner.dataset.replyMsgId;
+    let av = id ? document.querySelector(`[data-msg-id="${CSS.escape(id)}"] .message-avatar`) : null;
+    if (!av) {
+      const name = (banner.querySelector('.reply-author') || {}).textContent;
+      if (name) {
+        for (const a of document.querySelectorAll('.message .message-author')) {
+          if (a.textContent === name) { av = a.closest('.message').querySelector('.message-avatar'); if (av) break; }
+        }
+      }
+    }
+    if (!av) return;
+    const mini = av.cloneNode(true);
+    mini.removeAttribute('id');
+    mini.className = 'puente-reply-avatar' + (av.tagName === 'IMG' ? '' : ' avatar-circle');
+    mini.setAttribute('aria-hidden', 'true');
+    const author = banner.querySelector('.reply-author');
+    banner.insertBefore(mini, author || banner.firstChild);
+  }
+
   function scan(root) {
     if (!root || !root.querySelectorAll) return;
     root.querySelectorAll('.reply-preview, .reply-bar-text').forEach(cleanReply);
     if (!themeOn()) return;
+    if (root.matches && root.matches('.reply-banner')) replyAvatar(root);
+    root.querySelectorAll('.reply-banner').forEach(replyAvatar);
     if (root.matches && root.matches('video.file-video')) enhance(root);
     root.querySelectorAll('video.file-video').forEach(enhance);
   }

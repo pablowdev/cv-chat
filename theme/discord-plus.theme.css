@@ -240,7 +240,8 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
   html .message-content { font-size: 0.875rem; line-height: 1.1875rem; }
   html .message-author { font-size: 0.9375rem; }
   html .message-time { font-size: 0.6875rem; }
-  html .reply-banner, html .reply-preview, html .reply-author { font-size: 0.75rem; line-height: 1rem; }
+  html body .message, html body .message-compact { --rb-shift: 23px; --rb-h: 1rem; }
+  html body .reply-banner, html body .reply-banner .reply-preview, html body .reply-banner .reply-author { font-size: 0.75rem; }
   /* Barra "SERVER Connected" de abajo: la app de Discord no tiene */
   [data-haven-region="status-bar"] { display: none !important; }
   /* Boton ⋯ de cada mensaje: sin recuadro, gris y chico */
@@ -274,29 +275,72 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
 /* Rol en cada mensaje (ADMIN...): Discord lo muestra solo con el color del nombre */
 .message .msg-role-badge, .message .user-role-badge { display: none; }
 
-/* Respuestas: linea curva fina en vez de recuadro */
-.reply-banner {
+/* Respuestas como en Discord: una sola linea chica arriba del mensaje
+   (avatar mini, @Nombre y el comienzo del texto), unida al avatar con una linea
+   curva que sale de arriba del avatar. El avatar baja para quedar al lado del
+   nombre. --rb-shift: distancia del centro del avatar al texto del mensaje. */
+.message, .message-compact { --rb-shift: 30px; --rb-h: 1.25rem; --rb-gap: 0.25rem; }
+html .reply-banner {
   position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: none;
+  height: var(--rb-h);
+  margin: 0 0 var(--rb-gap) calc(-1 * var(--rb-shift));
+  padding: 0 0 0 var(--rb-shift);
   background: none;
   border-radius: 0;
-  padding: 0 0 0 1.75rem;
-  margin: 0 0 0.125rem 0;
   font-size: 0.875rem;
-  color: var(--text-muted);
+  line-height: var(--rb-h);
+  color: #b5bac1;
+  overflow: hidden;
 }
-.reply-banner::before {
+html .reply-banner::before {
   content: '';
   position: absolute;
-  left: 0.6rem;
+  left: 0;
   top: 50%;
-  width: 1rem;
-  height: 0.75rem;
-  border-left: 2px solid #3a3a3f;
-  border-top: 2px solid #3a3a3f;
+  width: calc(var(--rb-shift) - 0.375rem);
+  height: calc(50% + var(--rb-gap) + 1px);
+  border-left: 2px solid #4e5058;
+  border-top: 2px solid #4e5058;
   border-top-left-radius: 6px;
+  box-sizing: border-box;
 }
-.reply-banner .reply-line { display: none; }
-.reply-banner:hover { color: #efeff1; }
+html .reply-banner .reply-line { display: none; }
+html .reply-banner .reply-author { flex-shrink: 0; font-weight: 500; }
+html .reply-banner .reply-author::before { content: '@'; }
+html .reply-banner .reply-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  word-break: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+html .reply-banner:hover { background: none; color: #efeff1; }
+html .reply-banner:hover .reply-preview { opacity: 1; }
+/* Avatar mini de quien escribio el mensaje citado (lo agrega tools/puente/web/aviso.js) */
+.puente-reply-avatar {
+  flex-shrink: 0;
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  border-radius: 50%;
+  object-fit: cover;
+  font-size: 0.5rem !important;
+  line-height: 1rem !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* El avatar del mensaje baja a la altura del nombre */
+.message-row:has(> .message-body > .reply-banner) > .message-avatar { margin-top: calc(var(--rb-h) + var(--rb-gap)); }
 
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
