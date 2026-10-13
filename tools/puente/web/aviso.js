@@ -249,3 +249,59 @@
     if (target) app.switchChannel(target);
   })();
 })();
+
+// Celular: deslizar el dedo hacia la derecha en cualquier parte del chat abre
+// la lista de canales, y hacia la izquierda la de miembros, como en la app de
+// Discord (Haven solo lo hace si se empieza desde el borde de la pantalla).
+// No se activa sobre algo que se desplaza de costado (codigo, tablas), videos,
+// el cuadro de escribir o los selectores de emojis y GIF.
+(function () {
+  'use strict';
+  const MIN_DX = 60;
+  const SKIP = 'input, textarea, select, [contenteditable="true"], video, audio, pre, table, ' +
+    '.modal-overlay, .gif-picker, .emoji-picker, .reaction-full-picker, .reaction-picker, [role="slider"]';
+  let start = null;
+
+  function scrollsSideways(el) {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (n.scrollWidth > n.clientWidth + 2) {
+        const o = getComputedStyle(n).overflowX;
+        if (o === 'auto' || o === 'scroll') return true;
+      }
+    }
+    return false;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    start = null;
+    if (e.touches.length !== 1 || window.innerWidth > 768) return;
+    const body = document.getElementById('app-body');
+    const target = e.target instanceof Element ? e.target : null;
+    if (!body || !target || !target.closest('[data-haven-region="main"]')) return;
+    // Con un panel abierto, Haven ya se encarga de cerrarlo al deslizar
+    if (body.classList.contains('mobile-sidebar-open') || body.classList.contains('mobile-right-open')) return;
+    if (target.closest(SKIP) || scrollsSideways(target)) return;
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true, capture: true });
+
+  document.addEventListener('touchend', (e) => {
+    if (!start) return;
+    const s = start;
+    start = null;
+    const dx = e.changedTouches[0].clientX - s.x;
+    const dy = e.changedTouches[0].clientY - s.y;
+    if (Math.abs(dx) < MIN_DX || Math.abs(dx) < Math.abs(dy) * 1.5 || Date.now() - s.t > 1000) return;
+    if (window.getSelection && String(window.getSelection())) return; // estaba seleccionando texto
+    const body = document.getElementById('app-body');
+    const overlay = document.getElementById('mobile-overlay');
+    if (!body || !overlay) return;
+    if (dx > 0) {
+      body.classList.add('mobile-sidebar-open');
+      body.classList.remove('mobile-right-open');
+    } else {
+      body.classList.add('mobile-right-open');
+      body.classList.remove('mobile-sidebar-open');
+    }
+    overlay.classList.add('active');
+  }, { passive: true });
+})();
