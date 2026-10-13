@@ -29,6 +29,12 @@ services:
       # PARCHE: ver patches/import-timeout.js
       - NODE_OPTIONS=--require /patches/import-timeout.js --require /tools/puente/cargar.js
     restart: unless-stopped
+    # Registros: hasta 10 archivos de 100 MB (1 GB) por programa; recien ahi se borran los mas viejos
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
 
   caddy:
     image: caddy:2
@@ -44,3 +50,9 @@ services:
     depends_on:
       - haven
     restart: unless-stopped
+    # Registros: hasta 10 archivos de 100 MB (1 GB) por programa; recien ahi se borran los mas viejos
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
