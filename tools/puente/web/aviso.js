@@ -2374,9 +2374,18 @@ function sheetDrag(sheet, opts) {
   let bar = null, target = null;
 
   const isComposer = (t) => t instanceof HTMLTextAreaElement && (['message-input', 'thread-input', 'dm-pip-input'].includes(t.id) || t.classList.contains('edit-textarea'));
+  // El cuadro con emojis dibujados (mas abajo) escribe en el de Haven, que queda invisible
+  const resolve = (t) => (t && t.id === 'puente-editor' ? document.getElementById('message-input') : t);
+  const onEditor = () => document.activeElement && document.activeElement.id === 'puente-editor';
 
   // Reemplaza lo seleccionado de forma que Ctrl+Z lo deshaga
   function replaceSelection(ta, text, selStart, selEnd) {
+    if (ta.classList.contains('puente-ta-oculto')) {
+      ta.setRangeText(text);
+      ta.setSelectionRange(selStart, selEnd);
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
     ta.focus();
     let ok = false;
     try { ok = document.execCommand('insertText', false, text); } catch { ok = false; }
@@ -2445,7 +2454,7 @@ function sheetDrag(sheet, opts) {
           const b = el('button', 'puente-formato-btn');
           b.type = 'button'; b.title = TITLES[k]; b.innerHTML = ICONS[k]; b.dataset.k = k;
           b.addEventListener('mousedown', (ev) => ev.preventDefault()); // que no se pierda la seleccion
-          b.addEventListener('click', () => { if (target) { apply(k, target); place(target); } });
+          b.addEventListener('click', () => { if (target) { apply(k, target); setTimeout(() => target && place(target), 30); } });
           bar.appendChild(b);
         }
       });
@@ -2458,8 +2467,13 @@ function sheetDrag(sheet, opts) {
 
   function place(ta) {
     if (!bar || ta.selectionStart === ta.selectionEnd) { hide(); return; }
-    const a = caretXY(ta, ta.selectionStart), b = caretXY(ta, ta.selectionEnd);
-    const r = ta.getBoundingClientRect();
+    let a, b, r;
+    const sel = onEditor() && window.getSelection();
+    if (sel && sel.rangeCount) {
+      r = document.getElementById('puente-editor').getBoundingClientRect();
+      const rr = sel.getRangeAt(0).getBoundingClientRect();
+      a = { x: rr.left, y: rr.top }; b = { x: rr.right, y: rr.top };
+    } else { a = caretXY(ta, ta.selectionStart); b = caretXY(ta, ta.selectionEnd); r = ta.getBoundingClientRect(); }
     const sameLine = Math.abs(a.y - b.y) < 2;
     let x = sameLine ? (a.x + b.x) / 2 : r.left + r.width / 2;
     const top = Math.max(r.top, Math.min(a.y, b.y));
@@ -2470,11 +2484,11 @@ function sheetDrag(sheet, opts) {
   }
 
   function check() {
-    const ta = document.activeElement;
+    const ta = resolve(document.activeElement);
     if (isComposer(ta) && ta.selectionStart !== ta.selectionEnd) show(ta); else hide();
   }
 
-  document.addEventListener('selectionchange', () => { if (bar && bar.style.display !== 'none' || isComposer(document.activeElement)) setTimeout(check, 0); });
+  document.addEventListener('selectionchange', () => { if (bar && bar.style.display !== 'none' || isComposer(resolve(document.activeElement))) setTimeout(check, 0); });
   document.addEventListener('mouseup', () => setTimeout(check, 0), true);
   document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key.startsWith('Arrow') || e.key === 'a') setTimeout(check, 0); }, true);
   document.addEventListener('focusout', () => setTimeout(check, 0), true);
@@ -2482,4 +2496,369 @@ function sheetDrag(sheet, opts) {
   document.addEventListener('scroll', () => { if (target) place(target); }, true);
 
   // Ctrl+B, Ctrl+I y Ctrl+U ya los maneja Haven (_handleMarkdownShortcuts)
+})();
+
+// PC: los emojis del servidor (:nombre:) se ven como imagen mientras escribis,
+// como en Discord. El cuadro de escribir de Haven (#message-input) sigue siendo
+// el que manda: queda invisible debajo, con el mismo texto y la misma seleccion,
+// y todo lo de Haven sigue enganchado a el (enviar con Enter, @menciones,
+// :emojis:, #canales, /comandos, listas, Ctrl+B/I/U, pegar imagenes, "esta
+// escribiendo", editar el ultimo mensaje con la flecha). Encima va un cuadro
+// que muestra el mismo texto con los emojis dibujados y le pasa cada tecla al
+// de Haven. Si algo no cuadra, el cuadro nuevo se saca solo y queda el de Haven.
+// Para apagarlo en un navegador: localStorage puente_editor = 'no'.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  try { if (localStorage.getItem('puente_editor') === 'no') return; } catch { /* sin almacenamiento */ }
+  const NATIVE = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  const EMOJI_RE = /:([a-zA-Z0-9_-]+):/g;
+  const STYLE_PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'color', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'backgroundColor', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
+    'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'borderRadius', 'boxSizing', 'textAlign',
+    'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'order'];
+
+  let app = null, ta = null, ed = null, alive = false;
+  let busy = false;          // el cambio lo hizo el cuadro nuevo: no redibujar
+  let composing = false;     // escribiendo con acentos o un teclado de otro idioma
+  let lastValue = '';
+  let pending = false;       // Haven cambio el texto y falta mostrarlo: no pisarle el cursor
+  const scheduleToEditor = () => { pending = true; setTimeout(() => { pending = false; toEditor(); }, 0); };
+  const undo = [], redo = [];
+  let undoTimer = null;
+
+  const findEmoji = (name) => { try { return app && typeof app._findNamedEmoji === 'function' ? app._findNamedEmoji(name) : null; } catch { return null; } };
+  const getVal = () => NATIVE.get.call(ta);
+  const setVal = (v) => NATIVE.set.call(ta, v);
+
+  // ── Texto <-> cuadro nuevo ─────────────────────────────
+  function render(value, s, e) {
+    const frag = document.createDocumentFragment();
+    const pushText = (t) => {
+      const parts = t.split('\n');
+      parts.forEach((p, i) => { if (i) frag.appendChild(document.createElement('br')); if (p) frag.appendChild(document.createTextNode(p)); });
+    };
+    let last = 0;
+    value.replace(EMOJI_RE, (m, name, at) => {
+      const em = findEmoji(name);
+      if (!em || !em.url) return m;
+      pushText(value.slice(last, at));
+      const img = document.createElement('img');
+      img.className = 'puente-ed-emoji'; img.src = em.url; img.alt = m; img.dataset.t = m; img.draggable = false;
+      frag.appendChild(img);
+      last = at + m.length;
+      return m;
+    });
+    pushText(value.slice(last));
+    if (value.endsWith('\n')) { const br = document.createElement('br'); br.dataset.fin = '1'; frag.appendChild(br); }
+    ed.textContent = '';
+    ed.appendChild(frag);
+    ed.classList.toggle('puente-ed-vacio', value === '');
+    if (s != null && document.activeElement === ed) setSel(s, e == null ? s : e);
+  }
+
+  // Recorre el cuadro nuevo en orden y arma el texto (y, si se pide, el indice de un punto)
+  function walk(stopNode, stopOffset) {
+    let out = '', found = null;
+    const visit = (node, isFirstBlock) => {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        if (node === stopNode && i === stopOffset && found === null) found = out.length;
+        const c = node.childNodes[i];
+        if (c.nodeType === 3) {
+          if (c === stopNode && found === null) found = out.length + Math.min(stopOffset, c.nodeValue.length);
+          out += c.nodeValue.replace(/​/g, '');
+        } else if (c.nodeName === 'BR') {
+          if (!c.dataset.fin) out += '\n';
+        } else if (c.nodeName === 'IMG') {
+          out += c.dataset.t || c.alt || '';
+        } else if (c.nodeType === 1) {
+          const block = /^(DIV|P)$/.test(c.nodeName);
+          if (block && out.length && !out.endsWith('\n')) out += '\n';
+          visit(c, false);
+        }
+      }
+      if (node === stopNode && stopOffset >= node.childNodes.length && found === null) found = out.length;
+    };
+    visit(ed, true);
+    return { text: out, index: found };
+  }
+  const serialize = () => walk(null, 0).text;
+
+  function getSel() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) { const n = getVal().length; return { s: n, e: n }; }
+    const r = sel.getRangeAt(0);
+    const a = walk(r.startContainer, r.startOffset).index, b = walk(r.endContainer, r.endOffset).index;
+    return { s: a == null ? 0 : a, e: b == null ? (a || 0) : b };
+  }
+  // Punto del DOM para un indice del texto
+  function pointAt(index) {
+    let pos = 0, res = null;
+    const visit = (node) => {
+      for (let i = 0; i < node.childNodes.length && !res; i++) {
+        const c = node.childNodes[i];
+        if (c.nodeType === 3) {
+          const len = c.nodeValue.length;
+          if (index <= pos + len) { res = [c, index - pos]; return; }
+          pos += len;
+        } else if (c.nodeName === 'BR') {
+          if (c.dataset.fin) continue;
+          if (index <= pos) { res = [node, i]; return; }
+          pos += 1;
+        } else if (c.nodeName === 'IMG') {
+          const len = (c.dataset.t || c.alt || '').length;
+          if (index <= pos) { res = [node, i]; return; }
+          pos += len;
+          if (index < pos) { res = [node, i + 1]; return; }
+        } else if (c.nodeType === 1) visit(c);
+      }
+    };
+    visit(ed);
+    return res || [ed, ed.childNodes.length - (ed.lastChild && ed.lastChild.dataset && ed.lastChild.dataset.fin ? 1 : 0)];
+  }
+  function setSel(s, e) {
+    try {
+      const [n1, o1] = pointAt(s), [n2, o2] = pointAt(e);
+      const r = document.createRange(); r.setStart(n1, o1); r.setEnd(n2, o2);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    } catch { /* seleccion fuera de rango */ }
+  }
+
+  // El texto que tiene un emoji del servidor escrito como :nombre: todavia sin dibujar
+  const needsRender = () => [...ed.childNodes].some(c => c.nodeType === 1 && c.nodeName !== 'BR' && c.nodeName !== 'IMG') ||
+    [...ed.querySelectorAll('*')].some(c => c.nodeName !== 'BR' && c.nodeName !== 'IMG') ||
+    walkTextHasEmoji();
+  function walkTextHasEmoji() {
+    const t = serialize();
+    let found = false;
+    t.replace(EMOJI_RE, (m, name) => { if (!found && findEmoji(name)) found = true; return m; });
+    if (!found) return false;
+    // Hay emojis en el texto: ver si alguno sigue como texto (no como imagen)
+    let textOnly = '';
+    for (const c of ed.childNodes) if (c.nodeType === 3) textOnly += c.nodeValue; else if (c.nodeName === 'BR') textOnly += '\n';
+    let pending = false;
+    textOnly.replace(EMOJI_RE, (m, name) => { if (findEmoji(name)) pending = true; return m; });
+    return pending;
+  }
+
+  // ── Del cuadro nuevo al de Haven ───────────────────────
+  function pushUndo(force) {
+    const snap = { v: getVal(), s: ta.selectionStart, e: ta.selectionEnd };
+    if (undo.length && undo[undo.length - 1].v === snap.v) return;
+    if (force) { undo.push(snap); if (undo.length > 200) undo.shift(); redo.length = 0; return; }
+    clearTimeout(undoTimer);
+    if (!undo.length) undo.push(snap);
+    undoTimer = setTimeout(() => { if (!undo.length || undo[undo.length - 1].v !== getVal()) { undo.push({ v: getVal(), s: ta.selectionStart, e: ta.selectionEnd }); if (undo.length > 200) undo.shift(); } }, 600);
+    redo.length = 0;
+  }
+
+  function fromEditor() {
+    if (!alive) return;
+    const text = serialize();
+    const { s, e } = getSel();
+    // Mas largo que el maximo de Haven (2000): como el cuadro de Haven, no entra
+    if (ta.maxLength > 0 && text.length > ta.maxLength) { const back = Math.max(0, s - (text.length - lastValue.length)); render(lastValue, back, back); return; }
+    const changed = text !== getVal();
+    if (changed) pushUndo(false);
+    busy = true;
+    try {
+      if (changed) setVal(text);
+      ta.setSelectionRange(s, e);
+      lastValue = text;
+      if (changed) ta.dispatchEvent(new Event('input', { bubbles: true }));
+    } finally { busy = false; }
+    // Haven puede haber cambiado el texto al reaccionar (raro): manda el de Haven
+    if (getVal() !== text) { toEditor(); return; }
+    if (!composing && needsRender()) render(text, s, e);
+    ed.classList.toggle('puente-ed-vacio', text === '');
+    check(text);
+  }
+
+  // ── Del de Haven al cuadro nuevo ───────────────────────
+  function toEditor() {
+    if (!alive) return;
+    const v = getVal();
+    lastValue = v;
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    render(v, s, e);
+    check(v);
+  }
+
+  // Control: lo que muestra el cuadro nuevo tiene que ser exactamente el texto de Haven
+  function check(expected) {
+    if (composing) return;
+    const got = serialize();
+    if (got !== expected) {
+      render(expected, ta.selectionStart, ta.selectionEnd);
+      if (serialize() !== expected) fail('el texto no coincide');
+    }
+  }
+
+  function syncSelToTa() {
+    if (!alive || pending || document.activeElement !== ed) return;
+    const { s, e } = getSel();
+    try { ta.setSelectionRange(s, e); } catch { /* nada */ }
+  }
+
+  // ── Teclas: primero las ve Haven ───────────────────────
+  function forwardKey(e) {
+    syncSelToTa();
+    const ev = new KeyboardEvent('keydown', { key: e.key, code: e.code, location: e.location, repeat: e.repeat, isComposing: e.isComposing,
+      shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, bubbles: false, cancelable: true });
+    const before = getVal();
+    ta.dispatchEvent(ev);
+    return { prevented: ev.defaultPrevented, changed: getVal() !== before };
+  }
+
+  function insertAtSel(text) {
+    const { s, e } = getSel();
+    if (ta.maxLength > 0) text = text.slice(0, Math.max(0, ta.maxLength - (getVal().length - (e - s))));
+    if (!text) return;
+    pushUndo(true);
+    busy = true;
+    try {
+      ta.setRangeText(text, s, e, 'end');
+      lastValue = getVal();
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    } finally { busy = false; }
+    render(getVal(), ta.selectionStart, ta.selectionEnd);
+    check(getVal());
+  }
+
+  function onKeyDown(e) {
+    if (!alive) return;
+    if (e.isComposing || composing) return;
+    const mod = e.ctrlKey || e.metaKey;
+    // Deshacer / rehacer propios (el cuadro se redibuja, el del navegador no sirve)
+    if (mod && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+      e.preventDefault();
+      const back = e.key.toLowerCase() === 'z' && !e.shiftKey;
+      const from = back ? undo : redo, to = back ? redo : undo;
+      const cur = { v: getVal(), s: ta.selectionStart, e: ta.selectionEnd };
+      let snap = from.pop();
+      while (snap && snap.v === cur.v) snap = from.pop();
+      if (!snap) return;
+      to.push(cur);
+      busy = true;
+      try { setVal(snap.v); ta.setSelectionRange(snap.s, snap.e); lastValue = snap.v; ta.dispatchEvent(new Event('input', { bubbles: true })); } finally { busy = false; }
+      render(snap.v, snap.s, snap.e);
+      return;
+    }
+    const r = forwardKey(e);
+    if (r.prevented) {
+      e.preventDefault();
+      if (r.changed) pushUndo(true);
+      // Haven ya actuo (envio, eligio una sugerencia, formato, listas...): mostrar su texto
+      scheduleToEditor();
+      return;
+    }
+    if (r.changed) { pushUndo(true); scheduleToEditor(); }
+    // Enter que Haven no uso (Shift+Enter): salto de linea, como en el cuadro de Haven
+    if (e.key === 'Enter') { e.preventDefault(); insertAtSel('\n'); return; }
+    // Tab que Haven no uso: que no salga del cuadro escribiendo nada raro (igual que el de Haven)
+  }
+
+  function onPaste(e) {
+    if (!alive) return;
+    syncSelToTa();
+    const before = getVal();
+    let ev = null;
+    try { ev = new ClipboardEvent('paste', { clipboardData: e.clipboardData, bubbles: false, cancelable: true }); } catch { ev = null; }
+    e.preventDefault();
+    if (ev && e.clipboardData) {
+      ta.dispatchEvent(ev);
+      if (ev.defaultPrevented) { if (getVal() !== before) pushUndo(true); scheduleToEditor(); return; } // imagenes, o un enlace sobre texto elegido
+    }
+    const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+    if (text) insertAtSel(text.replace(/\r\n?/g, '\n'));
+  }
+
+  // ── Arranque ───────────────────────────────────────────
+  function copyStyles() {
+    const hidden = ta.classList.contains('puente-ta-oculto');
+    if (hidden) ta.classList.remove('puente-ta-oculto');
+    const prevH = ta.style.height; ta.style.height = 'auto';
+    const cs = getComputedStyle(ta);
+    for (const p of STYLE_PROPS) ed.style[p] = cs[p];
+    ed.style.minHeight = Math.max(parseFloat(cs.minHeight) || 0, ta.getBoundingClientRect().height) + 'px';
+    ta.style.height = prevH;
+    if (hidden) ta.classList.add('puente-ta-oculto');
+    ed.style.setProperty('--puente-ed-ph', getComputedStyle(ta, '::placeholder').color || '#80848e');
+    ed.style.maxHeight = (window.innerWidth <= 480 ? 90 : 120) + 'px';
+  }
+  function syncAttrs() {
+    ed.dataset.placeholder = ta.placeholder || '';
+    const off = !!ta.disabled || !!ta.readOnly;
+    ed.contentEditable = off ? 'false' : 'true';
+    ed.classList.toggle('puente-ed-off', off);
+  }
+
+  function fail(why) {
+    if (!alive) return;
+    alive = false;
+    console.warn('[puente] cuadro con emojis apagado (' + why + '); queda el de Haven');
+    try {
+      const v = getVal();
+      ed.remove();
+      ta.classList.remove('puente-ta-oculto');
+      delete ta.value; delete ta.focus; delete ta.blur;
+      NATIVE.set.call(ta, v);
+    } catch { /* nada */ }
+  }
+
+  function start() {
+    ta = document.getElementById('message-input');
+    if (!ta || ta.tagName !== 'TEXTAREA' || document.getElementById('puente-editor')) return false;
+    ed = document.createElement('div');
+    ed.id = 'puente-editor';
+    ed.className = 'puente-editor';
+    ed.setAttribute('role', 'textbox');
+    ed.setAttribute('aria-multiline', 'true');
+    ed.setAttribute('dir', 'auto');
+    ed.spellcheck = true;
+    ta.parentNode.insertBefore(ed, ta);
+    copyStyles(); syncAttrs();
+    ta.classList.add('puente-ta-oculto');
+    alive = true;
+    lastValue = getVal();
+    render(lastValue);
+
+    // El de Haven cambia por su cuenta (envio, sugerencias, selector de emojis, borrador...)
+    Object.defineProperty(ta, 'value', {
+      configurable: true,
+      get() { return NATIVE.get.call(this); },
+      set(v) { NATIVE.set.call(this, v); if (!busy) { lastValue = NATIVE.get.call(this); scheduleToEditor(); } },
+    });
+    ta.addEventListener('input', () => { if (!busy) scheduleToEditor(); });
+    // Lo que enfoca el cuadro de Haven enfoca el nuevo
+    const nativeFocus = HTMLTextAreaElement.prototype.focus, nativeBlur = HTMLTextAreaElement.prototype.blur;
+    ta.focus = function () { if (!alive) return nativeFocus.apply(this, arguments); ed.focus(); if (!pending) setSel(ta.selectionStart, ta.selectionEnd); };
+    ta.blur = function () { if (!alive) return nativeBlur.apply(this, arguments); ed.blur(); };
+    ta.addEventListener('focus', () => { if (alive) { ed.focus(); if (!pending) setSel(ta.selectionStart, ta.selectionEnd); } });
+    new MutationObserver(syncAttrs).observe(ta, { attributes: true, attributeFilter: ['placeholder', 'disabled', 'readonly'] });
+
+    ed.addEventListener('keydown', onKeyDown);
+    ed.addEventListener('input', () => { if (!composing) fromEditor(); });
+    ed.addEventListener('compositionstart', () => { composing = true; });
+    ed.addEventListener('compositionend', () => { composing = false; fromEditor(); });
+    ed.addEventListener('paste', onPaste);
+    ed.addEventListener('drop', (e) => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('text/plain') && !(e.dataTransfer.files || []).length) { e.preventDefault(); const t = e.dataTransfer.getData('text/plain'); if (t) insertAtSel(t); } });
+    ed.addEventListener('blur', () => { try { ta.dispatchEvent(new FocusEvent('blur')); } catch { /* nada */ } });
+    document.addEventListener('selectionchange', syncSelToTa);
+    window.addEventListener('resize', () => { if (alive) copyStyles(); });
+
+    // Si Haven ya habia puesto el cursor en su cuadro, pasarlo al nuevo
+    if (document.activeElement === ta) { const s0 = ta.selectionStart, e0 = ta.selectionEnd; ed.focus(); setSel(s0, e0); }
+    // Por si algo cambia el texto de Haven sin avisar (setRangeText sin evento)
+    setInterval(() => { if (alive && !busy && !composing && getVal() !== lastValue) toEditor(); }, 300);
+    return true;
+  }
+
+  let tries = 0;
+  (function wait() {
+    app = window.app;
+    if (!app || typeof app._findNamedEmoji !== 'function' || !document.getElementById('message-input')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    try { if (!start()) return; } catch (err) { console.warn('[puente] cuadro con emojis:', err); fail('error al arrancar'); }
+    window.addEventListener('error', (ev) => { if (ev && ev.filename && /\/puente\/aviso\.js/.test(ev.filename) && /editor|puente-ed/i.test(String(ev.message))) fail('error'); });
+  })();
 })();

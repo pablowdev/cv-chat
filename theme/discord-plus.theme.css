@@ -1302,3 +1302,21 @@ html body #channel-functions-panel.puente-ajustes-panel {
 }
 .puente-formato-btn:hover { background: #2e2d32; color: #fbfbfb; }
 .puente-formato-sep { width: 1px; height: 1.25rem; margin: 0 0.25rem; background: #3a3940; }
+
+/* PC: cuadro de escribir con los emojis del servidor dibujados (aviso.js). El de
+   Haven queda debajo, invisible, y es el que manda el mensaje. */
+#message-input.puente-ta-oculto {
+  position: absolute !important; left: 0 !important; bottom: 0 !important; width: 1px !important; height: 1px !important;
+  min-height: 0 !important; padding: 0 !important; border: 0 !important; margin: 0 !important;
+  opacity: 0 !important; pointer-events: none !important; overflow: hidden !important; resize: none !important;
+}
+.puente-editor {
+  display: block; position: relative; min-width: 0; overflow-y: auto; overflow-x: hidden; cursor: text; outline: none;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; scrollbar-width: thin;
+}
+.puente-editor.puente-ed-vacio::before {
+  content: attr(data-placeholder); color: var(--puente-ed-ph, #80848e); pointer-events: none; position: absolute;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;
+}
+.puente-editor.puente-ed-off { cursor: not-allowed; opacity: 0.6; }
+.puente-ed-emoji { width: 1.375em; height: 1.375em; object-fit: contain; vertical-align: -0.3em; margin: 0 0.05em; }
