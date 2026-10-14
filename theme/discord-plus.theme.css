@@ -1290,3 +1290,15 @@ html body #channel-functions-panel.puente-ajustes-panel {
 /* Pantallas tactiles: la ventanita de Haven con quienes reaccionaron no aparece
    (la reemplaza la hoja de quienes reaccionaron, aviso.js) */
 @media (pointer: coarse) { html body #reaction-popout { display: none !important; } }
+
+/* PC: barrita de formato al seleccionar texto en el cuadro de escribir (aviso.js) */
+#puente-formato {
+  position: fixed; z-index: 100005; display: none; align-items: center; gap: 0.125rem; padding: 0.25rem;
+  border-radius: 0.5rem; background: #1e1e22; border: 1px solid #29292d; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.puente-formato-btn {
+  display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 0;
+  border-radius: 0.25rem; background: transparent; color: #dbdee1; cursor: pointer;
+}
+.puente-formato-btn:hover { background: #2e2d32; color: #fbfbfb; }
+.puente-formato-sep { width: 1px; height: 1.25rem; margin: 0 0.25rem; background: #3a3940; }

@@ -2349,3 +2349,145 @@ function sheetDrag(sheet, opts) {
     addGears(app);
   })();
 })();
+
+// PC: al seleccionar texto en el cuadro de escribir (o al editar un mensaje)
+// aparece arriba una barrita para darle formato, como en Discord: negrita,
+// cursiva, subrayado, tachado, cita, codigo y spoiler. Pone o saca las marcas
+// de formato de Haven (**, *, __, ~~, >, `, ||), asi el mensaje se ve igual en
+// Haven y en Discord. Tambien con Ctrl+B, Ctrl+I y Ctrl+U.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
+  const ICONS = {
+    bold: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 4h6.5a4.5 4.5 0 0 1 3.2 7.7A4.5 4.5 0 0 1 14 20H7V4Zm3 3v3.5h3.5a1.75 1.75 0 0 0 0-3.5H10Zm0 6.5V17h4a1.75 1.75 0 0 0 0-3.5h-4Z"/></svg>',
+    italic: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 4h8v3h-2.8l-3.4 10H15v3H7v-3h2.8l3.4-10H10V4Z"/></svg>',
+    underline: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 4h3v7a2 2 0 0 0 4 0V4h3v7a5 5 0 0 1-10 0V4Zm-2 15h14v2H5v-2Z"/></svg>',
+    strike: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 4c2.6 0 4.6 1.2 5.3 3.3l-2.8 1c-.4-1-1.3-1.5-2.5-1.5-1.4 0-2.3.6-2.3 1.5 0 .5.3.9 1 1.2H4v2h16v-2h-3.1c.1.3.1.6.1 1h0c0 .9-.2 1.6-.6 2.3h-3.3c.6-.4.9-.9.9-1.5 0-.5-.2-.8-.6-1.1L8 10.7c-.2-.4-.3-.9-.3-1.4C7.7 6.2 9.4 4 12 4Zm-4.6 11.7 2.8-1c.4 1 1.3 1.5 2.6 1.5 1.1 0 1.9-.3 2.3-.8h3.3c-.6 2.2-2.8 3.6-5.6 3.6-2.6 0-4.6-1.2-5.4-3.3Z"/></svg>',
+    quote: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 18v-6c0-4 2.3-6.5 6-7l.6 2C8.5 7.6 7.4 9 7.3 11H10v7H4Zm10 0v-6c0-4 2.3-6.5 6-7l.6 2c-2.1.6-3.2 2-3.3 4H20v7h-6Z"/></svg>',
+    code: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="m8.6 6.6 1.4 1.4-4 4 4 4-1.4 1.4L3.2 12l5.4-5.4Zm6.8 0L20.8 12l-5.4 5.4-1.4-1.4 4-4-4-4 1.4-1.4Z"/></svg>',
+    spoiler: '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5c5 0 8.6 3.6 10 7-1.4 3.4-5 7-10 7s-8.6-3.6-10-7c1.4-3.4 5-7 10-7Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6Z"/></svg>',
+  };
+  const WRAP = { bold: '**', italic: '*', underline: '__', strike: '~~', code: '`', spoiler: '||' };
+  const TITLES = { bold: 'Negrita (Ctrl+B)', italic: 'Cursiva (Ctrl+I)', underline: 'Subrayado (Ctrl+U)', strike: 'Tachado', quote: 'Cita', code: 'Código', spoiler: 'Spoiler' };
+
+  let bar = null, target = null;
+
+  const isComposer = (t) => t instanceof HTMLTextAreaElement && (['message-input', 'thread-input', 'dm-pip-input'].includes(t.id) || t.classList.contains('edit-textarea'));
+
+  // Reemplaza lo seleccionado de forma que Ctrl+Z lo deshaga
+  function replaceSelection(ta, text, selStart, selEnd) {
+    ta.focus();
+    let ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch { ok = false; }
+    if (!ok) { ta.setRangeText(text); ta.dispatchEvent(new Event('input', { bubbles: true })); }
+    ta.setSelectionRange(selStart, selEnd);
+  }
+
+  function apply(kind, ta) {
+    const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+    if (kind === 'quote') {
+      const ls = v.lastIndexOf('\n', s - 1) + 1;
+      const le = v.indexOf('\n', e); const lineEnd = le === -1 ? v.length : le;
+      const block = v.slice(ls, lineEnd);
+      const lines = block.split('\n');
+      const all = lines.every(l => /^> /.test(l));
+      const out = lines.map(l => (all ? l.replace(/^> /, '') : '> ' + l)).join('\n');
+      ta.setSelectionRange(ls, lineEnd);
+      replaceSelection(ta, out, ls, ls + out.length);
+      return;
+    }
+    const m = WRAP[kind];
+    const sel = v.slice(s, e);
+    // Ya tiene la marca alrededor (afuera o adentro de la seleccion): sacarla
+    if (v.slice(s - m.length, s) === m && v.slice(e, e + m.length) === m &&
+        !(kind === 'italic' && (v[s - 2] === '*' || v[e + 1] === '*'))) {
+      ta.setSelectionRange(s - m.length, e + m.length);
+      replaceSelection(ta, sel, s - m.length, e - m.length);
+      return;
+    }
+    if (sel.length >= 2 * m.length && sel.startsWith(m) && sel.endsWith(m) && !(kind === 'italic' && sel.startsWith('**'))) {
+      const inner = sel.slice(m.length, sel.length - m.length);
+      replaceSelection(ta, inner, s, s + inner.length);
+      return;
+    }
+    replaceSelection(ta, m + sel + m, s + m.length, e + m.length);
+  }
+
+  // Posicion en pantalla de un caracter del cuadro (copia invisible del texto)
+  function caretXY(ta, index) {
+    const cs = getComputedStyle(ta);
+    const div = el('div');
+    for (const p of ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+      'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'textIndent', 'tabSize']) div.style[p] = cs[p];
+    div.style.position = 'absolute'; div.style.visibility = 'hidden'; div.style.whiteSpace = 'pre-wrap'; div.style.wordWrap = 'break-word'; div.style.top = '0'; div.style.left = '-9999px';
+    div.textContent = ta.value.slice(0, index);
+    const span = el('span'); span.textContent = ta.value.slice(index) || '.';
+    div.appendChild(span);
+    document.body.appendChild(div);
+    const r = ta.getBoundingClientRect();
+    const x = r.left + span.offsetLeft - ta.scrollLeft;
+    const y = r.top + span.offsetTop - ta.scrollTop;
+    div.remove();
+    return { x, y };
+  }
+
+  function hide() { if (bar) bar.style.display = 'none'; target = null; }
+
+  function show(ta) {
+    if (!bar) {
+      bar = el('div', 'puente-formato');
+      bar.id = 'puente-formato';
+      const groups = [['bold', 'italic', 'underline', 'strike'], ['quote', 'code'], ['spoiler']];
+      groups.forEach((g, i) => {
+        if (i) bar.appendChild(el('span', 'puente-formato-sep'));
+        for (const k of g) {
+          const b = el('button', 'puente-formato-btn');
+          b.type = 'button'; b.title = TITLES[k]; b.innerHTML = ICONS[k]; b.dataset.k = k;
+          b.addEventListener('mousedown', (ev) => ev.preventDefault()); // que no se pierda la seleccion
+          b.addEventListener('click', () => { if (target) { apply(k, target); place(target); } });
+          bar.appendChild(b);
+        }
+      });
+      document.body.appendChild(bar);
+    }
+    target = ta;
+    bar.style.display = 'flex';
+    place(ta);
+  }
+
+  function place(ta) {
+    if (!bar || ta.selectionStart === ta.selectionEnd) { hide(); return; }
+    const a = caretXY(ta, ta.selectionStart), b = caretXY(ta, ta.selectionEnd);
+    const r = ta.getBoundingClientRect();
+    const sameLine = Math.abs(a.y - b.y) < 2;
+    let x = sameLine ? (a.x + b.x) / 2 : r.left + r.width / 2;
+    const top = Math.max(r.top, Math.min(a.y, b.y));
+    const w = bar.offsetWidth, h = bar.offsetHeight;
+    x = Math.max(8 + w / 2, Math.min(window.innerWidth - 8 - w / 2, x));
+    bar.style.left = (x - w / 2) + 'px';
+    bar.style.top = Math.max(8, top - h - 8) + 'px';
+  }
+
+  function check() {
+    const ta = document.activeElement;
+    if (isComposer(ta) && ta.selectionStart !== ta.selectionEnd) show(ta); else hide();
+  }
+
+  document.addEventListener('selectionchange', () => { if (bar && bar.style.display !== 'none' || isComposer(document.activeElement)) setTimeout(check, 0); });
+  document.addEventListener('mouseup', () => setTimeout(check, 0), true);
+  document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key.startsWith('Arrow') || e.key === 'a') setTimeout(check, 0); }, true);
+  document.addEventListener('focusout', () => setTimeout(check, 0), true);
+  window.addEventListener('resize', hide);
+  document.addEventListener('scroll', () => { if (target) place(target); }, true);
+
+  // Atajos de teclado como en Discord
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+    const k = { b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()];
+    if (!k || !isComposer(e.target)) return;
+    e.preventDefault();
+    apply(k, e.target);
+    setTimeout(check, 0);
+  }, true);
+})();
