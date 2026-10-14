@@ -247,19 +247,53 @@ function sheetDrag(sheet, opts) {
   else document.addEventListener('DOMContentLoaded', startObserving);
 })();
 
-// Titulo de la pestana: Haven pone "Haven: <servidor>" (o "(3) Haven: <servidor>"
-// con mensajes sin leer). Se cambia por el titulo elegido (PUENTE_TITULO en .env),
-// manteniendo el contador. Si no hay titulo configurado, no se toca nada.
+// Titulo de la ventana, como Discord: "#canal | <servidor>" (o "@persona" en un
+// mensaje directo) en vez del "Haven: <servidor>" de Haven. En el navegador
+// queda el contador de no leidos adelante ("(3) #canal | ..."); en la app
+// instalada no, porque ahi los no leidos van en el icono de la barra de tareas
+// (abajo). Si no hay titulo configurado (PUENTE_TITULO en .env), no se toca nada.
 (function () {
   'use strict';
   const TITLE = '__PUENTE_TITULO__';
   if (!TITLE || TITLE.indexOf('__PUENTE') === 0) return;
   const desc = Object.getOwnPropertyDescriptor(Document.prototype, 'title');
   if (!desc || !desc.set) return;
-  const fix = (v) => {
-    const m = /^(\(\d+\)\s*)?Haven(?::.*)?$/.exec(String(v));
-    return m ? (m[1] || '') + TITLE : v;
+  const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches;
+  const place = () => {
+    const app = window.app;
+    if (!app || !app.currentChannel) return '';
+    const ch = (app.channels || []).find(c => c.code === app.currentChannel);
+    if (!ch) return '';
+    if (ch.is_dm) {
+      const who = ch.dm_target && (ch.dm_target.display_name || ch.dm_target.username);
+      const head = ((document.getElementById('channel-header-name') || {}).textContent || '').trim().replace(/^@/, '');
+      return (who || head) ? '@' + (who || head) : '';
+    }
+    return ch.name ? '#' + ch.name : '';
   };
+  const fix = (v) => {
+    const m = /^(\(\d+\)\s*)?Haven(?::\s*(.*))?$/.exec(String(v));
+    if (!m) return v;
+    const server = ((window.app && window.app.serverSettings && window.app.serverSettings.server_name) || m[2] || '').trim();
+    const where = place();
+    const base = where ? where + (server ? ' | ' + server : '') : (server || TITLE);
+    return (installed() ? '' : (m[1] || '')) + base;
+  };
+  // Al cambiar de canal Haven no vuelve a poner el titulo: se pide de nuevo
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function' || typeof app._updateTabTitle !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app.switchChannel;
+    app.switchChannel = function (...args) {
+      const r = orig.apply(this, args);
+      const again = () => { try { app._updateTabTitle(); } catch { /* despues */ } };
+      const after = () => { setTimeout(again, 0); setTimeout(again, 800); };
+      Promise.resolve(r).then(after, after);
+      return r;
+    };
+    try { app._updateTabTitle(); } catch { /* despues */ }
+  })();
   try {
     Object.defineProperty(document, 'title', {
       configurable: true,
@@ -268,6 +302,48 @@ function sheetDrag(sheet, opts) {
     });
   } catch { return; }
   document.title = desc.get.call(document);
+})();
+
+// App instalada en la PC: los no leidos en el icono de la barra de tareas, como
+// Discord. Un numero con los mensajes directos sin leer y, si solo hay mensajes
+// sin leer en canales, un punto. Los canales silenciados no cuentan (igual que
+// en Haven). Haven ya calcula esto para su app de escritorio; aca se usa el
+// globito que el navegador le pone al icono de las apps instaladas.
+(function () {
+  'use strict';
+  if (!('setAppBadge' in navigator)) return;
+  let last = null;
+  function update(app) {
+    let muted;
+    try { muted = new Set(JSON.parse(localStorage.getItem('haven_muted_channels') || '[]')); } catch { muted = new Set(); }
+    const serverMute = (typeof app._serverMuteMode === 'function' && app._serverMuteMode()) || 'off';
+    let dms = 0, channels = 0;
+    for (const ch of app.channels || []) {
+      const n = (app.unreadCounts || {})[ch.code] || 0;
+      if (!n || muted.has(ch.code)) continue;
+      if (ch.is_dm) dms += n;
+      else if (serverMute === 'off') channels += n;
+    }
+    const value = dms > 0 ? dms : channels > 0 ? 0 : -1; // 0 = punto, -1 = nada
+    if (value === last) return;
+    last = value;
+    try {
+      const p = value < 0 ? navigator.clearAppBadge() : value === 0 ? navigator.setAppBadge() : navigator.setAppBadge(value);
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* el navegador no lo permite */ }
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._updateDesktopBadge !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._updateDesktopBadge;
+    app._updateDesktopBadge = function (...args) {
+      const r = orig.apply(this, args);
+      try { update(this); } catch { /* sin globito */ }
+      return r;
+    };
+    try { update(app); } catch { /* despues */ }
+  })();
 })();
 
 // Al entrar, abrir un canal en vez de la pantalla "Bienvenido a Haven": el
