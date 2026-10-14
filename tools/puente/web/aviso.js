@@ -2354,7 +2354,7 @@ function sheetDrag(sheet, opts) {
 // aparece arriba una barrita para darle formato, como en Discord: negrita,
 // cursiva, subrayado, tachado, cita, codigo y spoiler. Pone o saca las marcas
 // de formato de Haven (**, *, __, ~~, >, `, ||), asi el mensaje se ve igual en
-// Haven y en Discord. Tambien con Ctrl+B, Ctrl+I y Ctrl+U.
+// Haven y en Discord. (Ctrl+B, Ctrl+I y Ctrl+U ya vienen en Haven.)
 (function () {
   'use strict';
   if (matchMedia('(pointer: coarse)').matches) return;
@@ -2481,13 +2481,5 @@ function sheetDrag(sheet, opts) {
   window.addEventListener('resize', hide);
   document.addEventListener('scroll', () => { if (target) place(target); }, true);
 
-  // Atajos de teclado como en Discord
-  document.addEventListener('keydown', (e) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
-    const k = { b: 'bold', i: 'italic', u: 'underline' }[e.key.toLowerCase()];
-    if (!k || !isComposer(e.target)) return;
-    e.preventDefault();
-    apply(k, e.target);
-    setTimeout(check, 0);
-  }, true);
+  // Ctrl+B, Ctrl+I y Ctrl+U ya los maneja Haven (_handleMarkdownShortcuts)
 })();
