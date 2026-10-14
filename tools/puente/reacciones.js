@@ -97,13 +97,18 @@ function refreshFromDiscord(messageId, force = false) {
         after = users[users.length - 1].id;
       }
     }
+    // Quien reacciono con que, antes y despues: si es lo mismo, no hay que avisar a
+    // nadie (avisar igual hacia que Haven redibujara las reacciones de todos los
+    // mensajes que se estaban viendo, y se las veia saltar apenas al abrir)
+    const sig = (list) => list.map(x => x.emoji + '\u0000' + x.id).sort().join('\u0001');
+    const before = sig(db.prepare('SELECT emoji, discord_user_id AS id FROM puente_reacciones_discord WHERE message_id = ?').all(messageId));
     db.transaction(() => {
       db.prepare('DELETE FROM puente_reacciones_discord WHERE message_id = ?').run(messageId);
       const put = db.prepare('INSERT OR REPLACE INTO puente_reacciones_discord (message_id, emoji, discord_user_id, name, avatar) VALUES (?, ?, ?, ?, ?)');
       for (const x of rows) put.run(messageId, x.emoji, x.id, x.name, x.avatar);
       db.prepare('INSERT OR REPLACE INTO puente_reacciones_revisadas (message_id, at) VALUES (?, CURRENT_TIMESTAMP)').run(messageId);
     })();
-    return true;
+    return sig(rows) !== before;
   }).finally(() => inFlight.delete(messageId));
   inFlight.set(messageId, p);
   return p;
