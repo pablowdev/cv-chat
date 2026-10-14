@@ -207,7 +207,8 @@
 })();
 
 // Al entrar, abrir un canal en vez de la pantalla "Bienvenido a Haven": el
-// ultimo que abriste en este navegador o, la primera vez, el canal de inicio
+// ultimo canal que abriste en este navegador (nunca un mensaje privado) o, si
+// no, el canal de inicio
 // (PUENTE_CANAL_INICIO en .env: nombres separados por comas, se usa el primero
 // que la persona puede ver). Los enlaces a un canal (?channel=) o de
 // invitacion (?invite=) siguen mandando, y si el canal ya no esta disponible
@@ -226,10 +227,20 @@
   // no hay ningun canal para abrir.
   const showWelcome = () => document.documentElement.classList.add('puente-bienvenida');
 
+  // Haven vuelve a abrir al entrar la ventanita del ultimo mensaje privado: tampoco
+  try { localStorage.removeItem('haven_active_dm_pip'); } catch { /* sin almacenamiento */ }
+
+  // Mensaje privado (de a dos o en grupo): al entrar nunca se abre uno
+  function isPrivateChat(app, code) {
+    const ch = app.channels.find(c => c && c.code === code);
+    return !!(ch && (ch.is_dm || ch.is_group || ch.is_self_dm));
+  }
+
   function pick(app) {
     const has = (code) => app.channels.some(c => c && c.code === code);
     const last = store(s => s.getItem(KEY));
-    if (last && has(last)) return last;
+    // Nunca una conversacion privada: en ese caso, el canal de inicio
+    if (last && has(last) && !isPrivateChat(app, last)) return last;
     if (START && START.indexOf('__PUENTE') !== 0) {
       for (const name of START.split(',')) {
         const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name));

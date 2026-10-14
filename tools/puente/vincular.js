@@ -131,6 +131,14 @@ function injectScript(req, res, src) {
       if (isHtml() && !res.headersSent) {
         let html = body.toString('utf8');
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
+        // La pantalla "Bienvenido a Haven" (y el banner del servidor que la
+        // acompana) no se muestra ni un instante: aviso.js abre un canal enseguida.
+        // Va dentro de la pagina para que valga antes de que cargue el tema.
+        if (html.includes('id="no-channel-msg"') && !html.includes('puente-sin-bienvenida')) {
+          html = html.replace('</head>', '<style id="puente-sin-bienvenida">html:not(.puente-bienvenida) #no-channel-msg,' +
+            'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #server-banner-display,' +
+            'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name{visibility:hidden!important}</style></head>');
+        }
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         origSetHeader.call(this, 'Content-Length', body.length);
       }
