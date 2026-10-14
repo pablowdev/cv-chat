@@ -1821,16 +1821,36 @@
 // otra vez los ultimos mensajes del canal y vuelve a dibujar todo desde cero
 // (por eso el chat "pestañea", aunque no haya cambiado nada). Si llegan
 // exactamente los mismos mensajes que ya estan en pantalla, se deja como esta.
-// Si cambio algo (un mensaje nuevo, una edicion, una reaccion), se dibuja como
-// siempre.
+// Si cambio algo (un mensaje nuevo, una edicion, una reaccion), se vuelve a
+// dibujar, pero reusando los mensajes que no cambiaron (con sus imagenes ya
+// cargadas): asi la altura del chat no salta y no se ve el parpadeo. Pasa sobre
+// todo en el celular, donde al volver despues de un rato Haven se reconecta y
+// casi siempre llegaron mensajes nuevos mientras tanto.
 (function () {
   'use strict';
   let tries = 0;
   (function wait() {
     const app = window.app;
-    if (!app || typeof app._renderMessages !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    if (!app || typeof app._renderMessages !== 'function' || typeof app._createMessageEl !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
     const orig = app._renderMessages;
     let last = null; // { code, sig, read, first }
+    let reuse = null; // id de mensaje -> elemento que ya estaba en pantalla
+    // Cada mensaje recuerda como lo armo Haven; si al redibujar sale igual, se
+    // usa el que ya estaba
+    const create = app._createMessageEl;
+    app._createMessageEl = function (msg, ...rest) {
+      const el = create.call(this, msg, ...rest);
+      try {
+        if (!el || el.nodeType !== 1) return el;
+        const src = el.outerHTML;
+        if (reuse && msg && msg.id != null) {
+          const old = reuse.get(String(msg.id));
+          if (old && old.__puenteSrc === src) { reuse.delete(String(msg.id)); return old; }
+        }
+        el.__puenteSrc = src;
+      } catch { /* se usa el nuevo */ }
+      return el;
+    };
     app._renderMessages = function (messages, lastReadMessageId, ...rest) {
       const container = document.getElementById('messages');
       let sig = null;
@@ -1849,7 +1869,13 @@
           return;
         }
       } catch { /* ante la duda, dibujar */ }
-      const r = orig.call(this, messages, lastReadMessageId, ...rest);
+      // Mismo canal: los mensajes que ya estan en pantalla se pueden reusar
+      if (container && last && last.code === this.currentChannel && !this._jumpTargetId) {
+        reuse = new Map();
+        for (const el of container.querySelectorAll(':scope > [data-msg-id]')) if (el.__puenteSrc) reuse.set(el.dataset.msgId, el);
+      }
+      let r;
+      try { r = orig.call(this, messages, lastReadMessageId, ...rest); } finally { reuse = null; }
       last = sig && container ? { code: this.currentChannel, sig, read: lastReadMessageId, first: container.firstChild } : null;
       return r;
     };
