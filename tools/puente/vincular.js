@@ -8,7 +8,8 @@
 //  /puente/aviso.js            aviso "Vincula tu cuenta" que se inyecta en /app
 //  /puente/login.js            enlace "¿Olvidaste tu contraseña?" que se inyecta en el login
 //  /puente/api/recuperar/*     recuperar la contraseña iniciando sesion con Discord
-//  /puente/tema-fijo.js        el tema del servidor para todos (tema-fijo.js)
+//  /puente/tema-fijo.js        el tema y el diseño del servidor para todos (tema-fijo.js)
+//  /puente/api/ui-fija         POST -> un administrador publica su diseño (tema-fijo.js)
 //  /manifest.webmanifest       app instalable con el nombre e icono del servidor (instalable.js)
 //
 // Recuperar con Discord: quien entra con la cuenta de Discord vinculada puede
@@ -240,6 +241,18 @@ async function handle(req, res) {
 
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
     return send(res, 200, 'application/javascript', temaFijo.script(db));
+  }
+
+  // Un administrador publica su diseño para todos (tema-fijo.js)
+  if (p === '/puente/api/ui-fija' && req.method === 'POST') {
+    if (!temaFijo.on()) return json(res, 404, { error: 'apagado' });
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
+    const body = await readJson(req, 200000);
+    if (!body || !temaFijo.publish(db, body.forma, body.valores)) return json(res, 400, { error: 'datos invalidos' });
+    return json(res, 200, { ok: true });
   }
 
   if (p === '/puente/api/reacciones-frecuentes' && req.method === 'GET') {
