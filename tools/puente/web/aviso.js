@@ -1413,11 +1413,30 @@
       back.addEventListener('touchend', (e) => { swallow(e); app._closeProfilePopup(); }, { passive: false });
       document.body.appendChild(back);
     }
-    // Deslizar hacia abajo para cerrar
-    let y0 = null, dy = 0;
-    p.addEventListener('touchstart', (e) => { y0 = p.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; p.style.transition = 'none'; }, { passive: true });
-    p.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); p.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
-    p.addEventListener('touchend', () => { p.style.transition = ''; if (dy > 90) app._closeProfilePopup(); else p.style.transform = ''; y0 = null; }, { passive: true });
+    // Deslizar hacia arriba agranda el perfil (hasta casi toda la pantalla);
+    // hacia abajo lo baja y, si se baja bastante, se cierra
+    let y0 = null, dy = 0, h0 = 0;
+    p.addEventListener('touchstart', (e) => {
+      y0 = p.scrollTop <= 0 ? e.touches[0].clientY : null;
+      dy = 0; h0 = p.getBoundingClientRect().height; p.style.transition = 'none';
+    }, { passive: true });
+    p.addEventListener('touchmove', (e) => {
+      if (y0 === null) return;
+      dy = e.touches[0].clientY - y0;
+      if (dy < 0) {
+        p.style.maxHeight = '95vh';
+        p.style.height = Math.min(window.innerHeight * 0.95, h0 - dy) + 'px';
+        p.style.transform = '';
+        if (e.cancelable) e.preventDefault();
+      } else {
+        p.style.transform = 'translateY(' + dy + 'px)';
+      }
+    }, { passive: false });
+    p.addEventListener('touchend', () => {
+      p.style.transition = '';
+      if (dy > 90) app._closeProfilePopup(); else p.style.transform = '';
+      y0 = null;
+    }, { passive: true });
   }
 
   let tries = 0;
@@ -1503,5 +1522,84 @@
       return r;
     };
     placeholder();
+  })();
+})();
+
+// Pantallas tactiles: el menu de un usuario (el engranaje del perfil, o
+// mantener apretado su nombre) como hoja desde abajo, con el mismo diseño que
+// el menu de un mensaje: el nombre arriba, las opciones agrupadas en filas
+// grandes y las peligrosas en rojo. "Invitar al canal" se despliega en el
+// lugar en vez de abrir otra ventanita al costado. Son las opciones de Haven,
+// con sus mismos permisos; solo cambia como se muestran.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+
+  function removeBackdrop() { document.getElementById('puente-user-backdrop')?.remove(); }
+
+  // "👤 Ver perfil" -> icono y texto separados, para alinearlos
+  function splitIcon(btn) {
+    const first = btn.firstChild;
+    if (!first || first.nodeType !== 3) return;
+    const m = /^\s*(\S+)\s+([\s\S]*)$/.exec(first.nodeValue);
+    if (!m || /[a-z0-9]/i.test(m[1])) return;
+    btn.replaceChild(document.createTextNode(m[2]), first);
+    btn.insertBefore(el('span', 'puente-sheet-icon', m[1]), btn.firstChild);
+  }
+
+  function toSheet(app, menu) {
+    menu.classList.add('puente-user-sheet');
+    menu.style.left = ''; menu.style.top = '';
+    const kids = [...menu.children];
+    menu.textContent = '';
+    menu.appendChild(el('div', 'puente-sheet-handle'));
+    let group = null;
+    const newGroup = () => { group = el('div', 'puente-sheet-group'); menu.appendChild(group); };
+    for (const k of kids) {
+      if (k.classList.contains('user-ctx-header')) { k.classList.add('puente-user-title'); menu.appendChild(k); continue; }
+      if (k.classList.contains('user-ctx-divider')) { group = null; continue; }
+      if (!group) newGroup();
+      if (k.tagName === 'BUTTON') { splitIcon(k); group.appendChild(k); continue; }
+      if (k.classList.contains('user-ctx-submenu-wrapper')) {
+        const trigger = k.querySelector('.user-ctx-submenu-trigger');
+        const sub = k.querySelector('.user-ctx-submenu');
+        if (trigger) {
+          splitIcon(trigger);
+          trigger.addEventListener('click', (ev) => { ev.stopPropagation(); k.classList.toggle('puente-abierto'); });
+        }
+        if (sub) sub.removeAttribute('style');
+        group.appendChild(k);
+        continue;
+      }
+      group.appendChild(k);
+    }
+    for (const g of [...menu.querySelectorAll('.puente-sheet-group')]) if (!g.children.length) g.remove();
+
+    if (!document.getElementById('puente-user-backdrop')) {
+      const back = el('div');
+      back.id = 'puente-user-backdrop';
+      back.addEventListener('click', (e) => { e.stopPropagation(); app._hideUserContextMenu(); });
+      document.body.appendChild(back);
+    }
+    // Deslizar hacia abajo para cerrar
+    let y0 = null, dy = 0;
+    menu.addEventListener('touchstart', (e) => { y0 = menu.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; menu.style.transition = 'none'; }, { passive: true });
+    menu.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy) menu.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+    menu.addEventListener('touchend', () => { menu.style.transition = ''; if (dy > 90) app._hideUserContextMenu(); else menu.style.transform = ''; y0 = null; }, { passive: true });
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._placeUserContextMenu !== 'function' || typeof app._hideUserContextMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const place = app._placeUserContextMenu;
+    app._placeUserContextMenu = function (menu, e, ...rest) {
+      const r = place.call(this, menu, e, ...rest);
+      try { toSheet(this, menu); } catch (err) { console.warn('[puente] menu de usuario:', err); }
+      return r;
+    };
+    const hide = app._hideUserContextMenu;
+    app._hideUserContextMenu = function (...a) { removeBackdrop(); return hide.apply(this, a); };
   })();
 })();

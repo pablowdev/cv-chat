@@ -861,3 +861,30 @@ html body .puente-profile-sheet .profile-gear-btn::before { content: '⚙️'; f
 @media (max-width: 768px) {
   html body #message-input-area > .pip-input-resizer { display: none !important; }
 }
+
+/* ── Menu de un usuario en pantallas tactiles: hoja como la del menu de un mensaje ── (aviso.js) */
+#puente-user-backdrop { position: fixed; inset: 0; z-index: 100011; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.18s ease-out; }
+html body #user-context-menu.puente-user-sheet {
+  position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important;
+  z-index: 100012; width: 100%; max-width: 37.5rem; max-height: 85vh; margin: 0 auto; overflow-y: auto; overscroll-behavior: contain;
+  padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px)); box-sizing: border-box;
+  background: #252429; border: 0; border-radius: 1.25rem 1.25rem 0 0; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease; animation: puente-sheet-up 0.22s ease-out; min-width: 0;
+}
+.puente-user-sheet .puente-user-title { padding: 0.25rem 0.25rem 0.875rem; border: 0; font-size: 1.25rem; font-weight: 800; color: #fbfbfb; background: none; }
+.puente-user-sheet .puente-sheet-group > button,
+.puente-user-sheet .user-ctx-submenu-trigger,
+.puente-user-sheet .user-ctx-submenu > button {
+  display: flex; align-items: center; gap: 1rem; width: 100%; min-height: 3.5rem; padding: 0 1.125rem;
+  border: 0; border-radius: 0; background: transparent; color: #fbfbfb; font: inherit; font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer;
+}
+.puente-user-sheet .puente-sheet-group > * + * { box-shadow: inset 3.375rem 1px 0 -1px #2e2d32, inset 0 1px 0 #3b3a3f; }
+.puente-user-sheet .puente-sheet-group > button:active, .puente-user-sheet .user-ctx-submenu-trigger:active, .puente-user-sheet .user-ctx-submenu > button:active { background: #36353b; }
+.puente-user-sheet .user-ctx-danger { color: #f2777a !important; }
+.puente-user-sheet .user-ctx-danger .puente-sheet-icon { filter: none; }
+.puente-user-sheet .user-ctx-submenu-wrapper { position: static; }
+.puente-user-sheet .user-ctx-arrow { margin-left: auto; transition: transform 0.15s; }
+.puente-user-sheet .user-ctx-submenu-wrapper.puente-abierto .user-ctx-arrow { transform: rotate(90deg); }
+.puente-user-sheet .user-ctx-submenu { display: none !important; position: static !important; box-shadow: none !important; border: 0 !important; background: #252429 !important; max-height: none; padding: 0; margin: 0; }
+.puente-user-sheet .user-ctx-submenu-wrapper.puente-abierto .user-ctx-submenu { display: block !important; }
+.puente-user-sheet .user-ctx-submenu > button { padding-left: 3.5rem; color: #dbdee1; }
