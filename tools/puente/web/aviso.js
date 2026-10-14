@@ -1179,22 +1179,43 @@
     rail.append(dm, el('div', 'puente-rail-sep'), srv);
     sb.insertBefore(rail, sb.firstChild);
 
+    // En la PC, el mismo boton arriba de todo en la columna de servidores de Haven
+    const bar = document.getElementById('server-bar');
+    const home = document.getElementById('home-server');
+    let pcDm = null, pcBadge = null;
+    if (bar && home) {
+      pcDm = el('div', 'server-icon puente-pc-dm');
+      pcDm.title = 'Mensajes directos';
+      pcDm.innerHTML = CHAT_ICON;
+      pcBadge = el('span', 'puente-rail-badge');
+      pcDm.appendChild(pcBadge);
+      bar.insertBefore(pcDm, home);
+      bar.insertBefore(el('div', 'server-separator puente-pc-sep'), home);
+    }
+
     const showDms = (on) => {
       sb.classList.toggle('puente-ver-dms', on);
       dm.classList.toggle('active', on);
       srv.classList.toggle('active', !on);
+      if (pcDm) pcDm.classList.toggle('active', on);
+      if (home) home.classList.toggle('puente-inactivo', on);
       const list = document.getElementById('dm-list');
       if (on && list && list.style.display === 'none') document.getElementById('dm-toggle-header')?.click();
     };
     dm.addEventListener('click', () => showDms(true));
     srv.addEventListener('click', () => showDms(false));
+    if (pcDm) pcDm.addEventListener('click', () => showDms(true));
+    if (home) home.addEventListener('click', () => showDms(false));
 
     // Mensajes directos sin leer: el numero tambien en el boton de la columna
     const src = document.getElementById('dm-unread-badge');
     const sync = () => {
       const n = src && src.style.display !== 'none' ? src.textContent.trim() : '';
-      dmBadge.textContent = n;
-      dmBadge.style.display = n && n !== '0' ? '' : 'none';
+      for (const b of [dmBadge, pcBadge]) {
+        if (!b) continue;
+        b.textContent = n;
+        b.style.display = n && n !== '0' ? '' : 'none';
+      }
     };
     if (src) new MutationObserver(sync).observe(src, { attributes: true, childList: true, characterData: true, subtree: true });
     sync();
