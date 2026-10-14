@@ -1449,6 +1449,179 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// PC: pagina "Miembros" como la de Discord (solo administradores): arriba de
+// los canales, "Miembros" abre una tabla con todos los usuarios, desde cuando
+// estan, su cuenta de Discord y su antiguedad, con que invitacion entraron,
+// roles, cuantos mensajes escribieron y cuando fue el ultimo, y señales
+// (administrador, sin vincular, sin email...). Se busca por nombre y se ordena
+// tocando las columnas. Tocar a alguien abre su perfil.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-7 1.7-7 4.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.5C16 15.7 12.3 14 9 14Zm8-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm.5 2c-.6 0-1.2.1-1.7.2 1.3 1 2.2 2.4 2.2 4.3V20a3 3 0 0 1-.2 1H21a1 1 0 0 0 1-1v-1.2c0-2.6-2.4-4.8-4.5-4.8Z"/></svg>';
+  function ago(iso) {
+    if (!iso) return '—';
+    const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+    const units = [[31536000, 'año', 'años'], [2592000, 'mes', 'meses'], [86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']];
+    for (const [sec, one, many] of units) if (s >= sec) { const n = Math.floor(s / sec); return 'hace ' + n + ' ' + (n === 1 ? one : many); }
+    return 'recién';
+  }
+  const fecha = iso => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' }) : '');
+
+  let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '';
+  const COLS = [
+    ['nombre', 'NOMBRE'], ['desde', 'MIEMBRO DESDE'], ['discord', 'SE UNIÓ A DISCORD'], ['invitacion', 'CÓMO ENTRÓ'],
+    ['roles', 'ROLES'], ['mensajes', 'MENSAJES'], ['ultimo', 'ÚLTIMO MENSAJE'], ['senales', 'SEÑALES'],
+  ];
+  const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? (m.discord && m.discord.desde) || '' :
+    k === 'invitacion' ? m.invitacion || '' : k === 'roles' ? m.roles.length : k === 'senales' ? signals(m).length : (m[k] ?? '');
+  function signals(m) {
+    const out = [];
+    if (m.admin) out.push(['Admin', 'admin']);
+    if (m.enLinea) out.push(['En línea', 'ok']);
+    if (m.invitado) out.push(['Invitado', 'gris']);
+    if (!m.discord && !m.invitado) out.push(['Sin vincular', 'aviso']);
+    if (m.email === 'pendiente') out.push(['Email sin confirmar', 'aviso']);
+    else if (!m.email && !m.invitado) out.push(['Sin email', 'gris']);
+    if (m.dosPasos) out.push(['2 pasos', 'ok']);
+    return out;
+  }
+
+  function close() { if (page) { page.remove(); page = null; document.removeEventListener('keydown', onKey, true); } }
+  // Escape cierra la pagina (si hay un perfil abierto, primero ese, como siempre)
+  function onKey(e) {
+    if (e.key !== 'Escape' || !page) return;
+    const pop = [...document.querySelectorAll('.profile-popup, .user-profile-popup')].some(p => p.isConnected && getComputedStyle(p).display !== 'none' && p.getClientRects().length);
+    e.stopPropagation();
+    if (pop) { try { window.app._closeProfilePopup(); } catch { /* nada */ } return; }
+    close();
+  }
+
+  function renderRows() {
+    const body = page.querySelector('.pm-filas');
+    body.textContent = '';
+    const q = term.trim().toLowerCase();
+    const list = data.filter(m => !q || String(m.nombre).toLowerCase().includes(q) || String(m.usuario).toLowerCase().includes(q) ||
+      (m.discord && String(m.discord.usuario || '').toLowerCase().includes(q)));
+    list.sort((a, b) => { const x = value(a, sortKey), y = value(b, sortKey); return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
+    page.querySelector('.pm-total').textContent = list.length === data.length ? data.length + ' miembros' : list.length + ' de ' + data.length;
+    page.querySelectorAll('.pm-th').forEach(th => {
+      th.classList.toggle('actual', th.dataset.k === sortKey);
+      th.dataset.dir = th.dataset.k === sortKey ? (sortDir > 0 ? '▲' : '▼') : '';
+    });
+    for (const m of list) {
+      const tr = el('div', 'pm-fila');
+      const who = el('div', 'pm-c pm-nombre');
+      const av = el('div', 'pm-avatar');
+      if (m.avatar) { const img = el('img'); img.src = m.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+      else av.textContent = String(m.nombre).charAt(0).toUpperCase();
+      if (m.enLinea) av.appendChild(el('span', 'pm-punto'));
+      const names = el('div', 'pm-nombres');
+      names.append(el('div', 'pm-n1', m.nombre), el('div', 'pm-n2', m.usuario));
+      who.append(av, names);
+      const since = el('div', 'pm-c', ago(m.desde)); since.title = fecha(m.desde);
+      const dc = el('div', 'pm-c');
+      if (m.discord) { dc.textContent = ago(m.discord.desde); dc.title = '@' + m.discord.usuario + (m.discord.desde ? ' · cuenta creada el ' + fecha(m.discord.desde) : ''); }
+      else { dc.textContent = '—'; dc.classList.add('pm-vacio'); }
+      const how = el('div', 'pm-c');
+      if (m.invitacion) { const chip = el('span', 'pm-chip pm-invitacion', m.invitacion); how.appendChild(chip); }
+      else how.appendChild(el('span', 'pm-vacio', m.invitado ? 'Invitado' : 'Registro'));
+      const rl = el('div', 'pm-c pm-roles');
+      for (const r of m.roles.slice(0, 3)) {
+        const chip = el('span', 'pm-chip');
+        const dot = el('span', 'pm-rol-punto'); dot.style.background = r.color || '#80848e';
+        chip.append(dot, document.createTextNode(r.nombre));
+        rl.appendChild(chip);
+      }
+      if (m.roles.length > 3) rl.appendChild(el('span', 'pm-chip', '+' + (m.roles.length - 3)));
+      const msgs = el('div', 'pm-c pm-num', m.mensajes.toLocaleString('es-AR'));
+      const last = el('div', 'pm-c', ago(m.ultimo)); last.title = fecha(m.ultimo);
+      const sig = el('div', 'pm-c pm-roles');
+      for (const [label, kind] of signals(m)) sig.appendChild(el('span', 'pm-senal ' + kind, label));
+      tr.append(who, since, dc, how, rl, msgs, last, sig);
+      tr.addEventListener('click', () => {
+        const app = window.app;
+        if (!app || !app.socket) return;
+        app._isHoverPopup = false; app._hoverTarget = null; app._profilePopupAnchor = av;
+        app.socket.emit('get-user-profile', { userId: m.id });
+      });
+      body.appendChild(tr);
+    }
+    if (!list.length) body.appendChild(el('div', 'pm-sin', 'No hay nadie con ese nombre.'));
+  }
+
+  function open() {
+    close();
+    const side = document.querySelector('aside.sidebar');
+    page = el('div', 'puente-miembros');
+    page.id = 'puente-miembros';
+    const left = side ? side.getBoundingClientRect().right : 0;
+    page.style.left = left + 'px';
+    const head = el('div', 'pm-head');
+    const title = el('div', 'pm-titulo'); title.innerHTML = ICON; title.appendChild(el('span', '', 'Miembros'));
+    const x = el('button', 'pm-cerrar'); x.type = 'button'; x.title = 'Cerrar (Esc)';
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+    x.addEventListener('click', close);
+    head.append(title, x);
+    const card = el('div', 'pm-card');
+    const bar = el('div', 'pm-bar');
+    const h = el('div', 'pm-sub'); h.append(el('span', '', 'Miembros recientes'), el('span', 'pm-total', ''));
+    const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre o usuario';
+    search.addEventListener('input', () => { term = search.value; renderRows(); });
+    bar.append(h, search);
+    const table = el('div', 'pm-tabla');
+    const thead = el('div', 'pm-fila pm-encabezado');
+    for (const [k, label] of COLS) {
+      const th = el('button', 'pm-c pm-th', label); th.type = 'button'; th.dataset.k = k;
+      th.addEventListener('click', () => { if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = k === 'nombre' ? 1 : -1; } renderRows(); });
+      thead.appendChild(th);
+    }
+    const rows = el('div', 'pm-filas');
+    rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
+    table.append(thead, rows);
+    card.append(bar, table);
+    page.append(head, card);
+    document.body.appendChild(page);
+    document.addEventListener('keydown', onKey, true);
+    search.focus();
+    fetch('/puente/api/miembros', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!page) return;
+        if (!d || !Array.isArray(d.miembros)) { rows.textContent = ''; rows.appendChild(el('div', 'pm-sin', 'No se pudo cargar la lista.')); return; }
+        data = d.miembros;
+        renderRows();
+      }).catch(() => { if (page) { rows.textContent = ''; rows.appendChild(el('div', 'pm-sin', 'No hay conexión.')); } });
+  }
+
+  // "Miembros" arriba de los canales, como en Discord
+  function addEntry(app) {
+    if (!app.user || !app.user.isAdmin) return;
+    const pane = document.getElementById('channels-pane');
+    const list = document.getElementById('channel-list');
+    if (!pane || !list || document.getElementById('puente-miembros-btn')) return;
+    const b = el('button', 'puente-miembros-btn');
+    b.id = 'puente-miembros-btn'; b.type = 'button';
+    b.innerHTML = ICON;
+    b.appendChild(el('span', '', 'Miembros'));
+    b.addEventListener('click', () => (page ? close() : open()));
+    list.parentElement.insertBefore(b, list);
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.user || !document.getElementById('channel-list')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    addEntry(app);
+    // Al elegir un canal (o un mensaje directo) se vuelve al chat
+    if (typeof app.switchChannel === 'function') {
+      const orig = app.switchChannel;
+      app.switchChannel = function (...args) { close(); return orig.apply(this, args); };
+    }
+    addEventListener('resize', () => { if (page) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
+  })();
+})();
+
 // PC: el boton + del cuadro de escribir como en Discord: un menu con iconos
 // ("Subir un archivo", "Crear encuesta"...) en lugar de la fila de botones de
 // Haven, que ademas repetia la carita y el GIF de la derecha. Cada opcion usa el

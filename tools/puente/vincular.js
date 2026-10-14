@@ -360,6 +360,15 @@ async function handle(req, res) {
     return json(res, 200, { ok: true });
   }
 
+  // Pagina "Miembros" (web/aviso.js), como la de Discord: solo administradores
+  if (p === '/puente/api/miembros' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
+    return json(res, 200, { miembros: members() });
+  }
+
   // Personas para completar from: y mentions: del buscador (buscar.js)
   if (p === '/puente/api/buscar/personas' && req.method === 'GET') {
     const user = sessionUser(req);
@@ -615,6 +624,47 @@ function resultPage(title, text) {
 <body class="auth-page"><div class="auth-container"><div class="auth-card"><div class="auth-header">
 <img class="puente-login-logo" src="/puente/logo-carga.png" alt=""><h1>${esc(title)}</h1><p class="puente-login-sub">${esc(text)}</p></div>
 <a class="btn-primary puente-boton" href="/app">Ir a ${esc(appName())}</a></div></div></body></html>`;
+}
+
+// Todos los usuarios con lo que muestra la pagina "Miembros": desde cuando
+// estan, su cuenta de Discord (y su antiguedad, que va en el numero de la
+// cuenta), con que invitacion entraron, roles, mensajes y algunas señales.
+let membersCache = null;
+function members() {
+  if (membersCache && Date.now() - membersCache.at < 60 * 1000) return membersCache.list;
+  const users = db.prepare(`SELECT id, username, display_name, avatar, created_at, is_admin, is_guest, totp_enabled
+                            FROM users WHERE username != 'discord-historial'`).all();
+  const counts = new Map(db.prepare(`SELECT user_id, COUNT(*) n, MAX(created_at) ultimo FROM messages
+                                     WHERE user_id IS NOT NULL AND imported_from IS NULL GROUP BY user_id`).all().map(r => [r.user_id, r]));
+  const roles = new Map();
+  for (const r of db.prepare(`SELECT ur.user_id, r.name, r.color FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                              WHERE ur.channel_id IS NULL ORDER BY r.level DESC`).all()) {
+    if (!roles.has(r.user_id)) roles.set(r.user_id, []);
+    if (!roles.get(r.user_id).some(x => x.nombre === r.name)) roles.get(r.user_id).push({ nombre: r.name, color: r.color || null });
+  }
+  const invites = new Map(db.prepare(`SELECT u.user_id, c.code, c.label FROM invite_code_uses u JOIN invite_codes c ON c.id = u.invite_code_id`)
+    .all().map(r => [r.user_id, r.label || r.code]));
+  const links = new Map(db.prepare('SELECT haven_user_id, discord_user_id, discord_username, discord_global_name, linked_at FROM puente_vinculos').all()
+    .map(r => [r.haven_user_id, r]));
+  let emails = new Map();
+  try { emails = new Map(db.prepare('SELECT haven_user_id, confirmado FROM puente_emails').all().map(r => [r.haven_user_id, r.confirmado ? 'confirmado' : 'pendiente'])); } catch { /* sin email */ }
+  const online = new Set();
+  try { for (const so of io.of('/').sockets.values()) if (so.user && so.user.id) online.add(so.user.id); } catch { /* sin conexiones */ }
+  const utc = s => (!s ? null : s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
+  const discordCreated = id => { try { return new Date(Number((BigInt(id) >> 22n) + 1420070400000n)).toISOString(); } catch { return null; } };
+  const list = users.map(u => {
+    const c = counts.get(u.id), l = links.get(u.id);
+    return {
+      id: u.id, nombre: u.display_name || u.username, usuario: u.username, avatar: u.avatar || null,
+      desde: utc(u.created_at), admin: !!u.is_admin, invitado: !!u.is_guest, dosPasos: !!u.totp_enabled,
+      mensajes: c ? c.n : 0, ultimo: c ? utc(c.ultimo) : null,
+      roles: roles.get(u.id) || [], invitacion: invites.get(u.id) || null,
+      discord: l ? { usuario: l.discord_username, nombre: l.discord_global_name || null, desde: discordCreated(l.discord_user_id), vinculado: utc(l.linked_at) } : null,
+      email: emails.get(u.id) || null, enLinea: online.has(u.id),
+    };
+  });
+  membersCache = { at: Date.now(), list };
+  return list;
 }
 
 function redirectUri() { return `${publicUrl}/puente/discord/callback`; }
