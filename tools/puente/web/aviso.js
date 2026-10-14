@@ -116,7 +116,11 @@ function sheetDrag(sheet, opts) {
 // reproducir siguen funcionando); solo se ocultan los controles al principio.
 (function () {
   'use strict';
-  const themeOn = () => !!document.querySelector('link[href*="discord-plus.theme.css"]');
+  // El tema ya puesto, o el que va a cargar (con el tema fijo queda guardado antes de que Haven
+  // agregue la hoja de estilos): asi los mensajes se arreglan apenas aparecen y no un rato despues,
+  // que hacia saltar apenas las reacciones y las respuestas
+  const themeOn = () => !!document.querySelector('link[href*="discord-plus.theme.css"]') ||
+    (() => { try { return /discord-plus.theme.css/.test(localStorage.getItem('haven_theme') || ''); } catch { return false; } })();
 
   function enhance(video) {
     if (video.dataset.puentePlay) return;
