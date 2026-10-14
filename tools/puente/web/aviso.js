@@ -3565,6 +3565,8 @@ function sheetDrag(sheet, opts) {
     tag: svg('M21.4 11.6 12.4 2.6A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9a2 2 0 0 0 2.82 0l7-7a2 2 0 0 0-.01-2.82ZM6.5 8A1.5 1.5 0 1 1 6.5 5a1.5 1.5 0 0 1 0 3Z'),
     megaphone: svg('M18 3v18l-6-4H6a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3h6l6-4Zm2 6h2v6h-2V9Z'),
     more: svg('M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'),
+    eyes: svg('M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5Zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z'),
+    close: svg('M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'),
     chevron: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.6 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>',
   };
   // Opciones de Haven: nombre como en Discord, icono y grupo
@@ -3605,6 +3607,88 @@ function sheetDrag(sheet, opts) {
   }
   function copy(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
+  }
+
+  // ── Ventana "Reacciones", como Discord: los emojis con su numero a la
+  // izquierda y quienes reaccionaron con ese a la derecha ─────────────
+  let lastBadgeEmoji = null; // la reaccion sobre la que se hizo clic derecho
+  document.addEventListener('contextmenu', (e) => {
+    const b = e.target instanceof Element && e.target.closest('.reaction-badge');
+    lastBadgeEmoji = b ? b.dataset.emoji || null : null;
+  }, true);
+  function emojiFace(app, emoji) {
+    const m = /^:([a-zA-Z0-9_-]+):$/.exec(emoji || '');
+    const ce = m && typeof app._findNamedEmoji === 'function' ? app._findNamedEmoji(m[1]) : null;
+    if (ce) { const img = el('img', 'puente-vr-emoji-img'); img.src = ce.url; img.alt = emoji; img.draggable = false; return img; }
+    return el('span', 'puente-vr-emoji-txt', emoji);
+  }
+  function closeReactions() {
+    const o = document.getElementById('puente-ver-reacciones');
+    if (o) { if (o.__off) o.__off(); o.remove(); }
+  }
+  function viewReactions(app, msgEl, startEmoji) {
+    closeReactions();
+    const msgId = parseInt(msgEl.dataset.msgId, 10);
+    let tk = null;
+    try { tk = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!msgId || !tk) return;
+    const overlay = el('div', 'puente-vr-fondo');
+    overlay.id = 'puente-ver-reacciones';
+    const box = el('div', 'puente-vr');
+    box.setAttribute('role', 'dialog');
+    const head = el('div', 'puente-vr-head');
+    head.appendChild(el('h2', 'puente-vr-title', 'Reacciones'));
+    const x = el('button', 'puente-vr-close'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.innerHTML = I.close;
+    x.addEventListener('click', closeReactions);
+    head.appendChild(x);
+    const body = el('div', 'puente-vr-body');
+    const left = el('div', 'puente-vr-emojis');
+    const right = el('div', 'puente-vr-users');
+    body.append(left, right);
+    box.append(head, body);
+    overlay.appendChild(box);
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) closeReactions(); });
+    const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeReactions(); } };
+    document.addEventListener('keydown', key, true);
+    overlay.__off = () => document.removeEventListener('keydown', key, true);
+    right.appendChild(el('div', 'puente-vr-empty', 'Cargando…'));
+    document.body.appendChild(overlay);
+
+    const showUsers = (group) => {
+      right.textContent = '';
+      for (const u of group.users) {
+        const row = el('div', 'puente-vr-user');
+        const av = el('div', 'puente-vr-avatar');
+        if (u.avatar) { const img = el('img'); img.src = u.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+        else av.textContent = String(u.name || '?').trim().charAt(0).toUpperCase();
+        const names = el('div', 'puente-vr-names');
+        names.appendChild(el('div', 'puente-vr-name', u.name || 'Alguien'));
+        const sub = el('div', 'puente-vr-sub');
+        if (u.usuario && u.usuario !== u.name) sub.appendChild(el('span', '', u.usuario));
+        if (u.discord) sub.appendChild(el('span', 'puente-vr-tag', 'DISCORD'));
+        if (sub.children.length) names.appendChild(sub);
+        row.append(av, names);
+        right.appendChild(row);
+      }
+    };
+    fetch('/puente/api/reacciones?mensaje=' + msgId, { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        const list = d && Array.isArray(d.reacciones) ? d.reacciones : [];
+        if (!document.body.contains(overlay)) return;
+        if (!list.length) { right.textContent = ''; right.appendChild(el('div', 'puente-vr-empty', 'Este mensaje no tiene reacciones.')); return; }
+        let first = null;
+        for (const g of list) {
+          const b = el('button', 'puente-vr-pill'); b.type = 'button';
+          b.append(emojiFace(app, g.emoji), el('span', 'puente-vr-count', String(g.users.length)));
+          b.addEventListener('click', () => {
+            left.querySelectorAll('.puente-vr-pill').forEach(p => p.classList.toggle('actual', p === b));
+            showUsers(g);
+          });
+          left.appendChild(b);
+          if (g.emoji === startEmoji) first = b;
+        }
+        (first || left.firstChild).click();
+      }).catch(() => { right.textContent = ''; right.appendChild(el('div', 'puente-vr-empty', 'No se pudieron cargar las reacciones.')); });
   }
 
   // ── Barrita al pasar el mouse ───────────────────────────
@@ -3689,6 +3773,17 @@ function sheetDrag(sheet, opts) {
       const b = row(by.get('react'), 'react', I.chevron);
       b.querySelector('.puente-mm-label').textContent = 'Agregar reacción';
       groups[0].push(b);
+    }
+    // Ver reacciones (si el mensaje tiene)
+    if (msgEl.querySelector('.reaction-badge')) {
+      const vb = el('button', 'channel-ctx-item puente-mm-item');
+      vb.type = 'button';
+      vb.dataset.action = 'puente-ver-reacciones';
+      vb.append(el('span', 'puente-mm-label', 'Ver reacciones'));
+      const ic = el('span', 'puente-mm-icon'); ic.innerHTML = I.eyes; vb.appendChild(ic);
+      const start = lastBadgeEmoji;
+      vb.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); viewReactions(app, msgEl, start); });
+      groups[0].push(vb);
     }
     const used = new Set(['react']);
     for (const a of ORDER) if (by.has(a)) { used.add(a); groups[(ITEMS[a] || [0, 0, 3])[2] - 1].push(row(by.get(a), a)); }

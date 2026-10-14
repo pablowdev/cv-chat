@@ -148,12 +148,12 @@ function reactorsOf(messageId, viewerId) {
   const ghost = ghostId();
   const out = new Map();
   const add = (emoji, u) => { if (!out.has(emoji)) out.set(emoji, []); out.get(emoji).push(u); };
-  const haven = db.prepare(`SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) name, u.avatar
+  const haven = db.prepare(`SELECT r.emoji, r.user_id, COALESCE(u.display_name, u.username) name, u.username, u.avatar
     FROM reactions r JOIN users u ON u.id = r.user_id WHERE r.message_id = ? ORDER BY r.id`).all(messageId);
   let ghostEmojis = new Set();
   for (const r of haven) {
     if (r.user_id === ghost) { ghostEmojis.add(r.emoji); if (!out.has(r.emoji)) out.set(r.emoji, []); continue; }
-    add(r.emoji, { id: r.user_id, name: r.name, avatar: r.avatar || null, propio: r.user_id === viewerId });
+    add(r.emoji, { id: r.user_id, name: r.name, usuario: r.username, avatar: r.avatar || null, propio: r.user_id === viewerId });
   }
   if (isReviewed(messageId)) {
     const rows = db.prepare(`SELECT d.emoji, d.name, d.avatar, v.haven_user_id FROM puente_reacciones_discord d
