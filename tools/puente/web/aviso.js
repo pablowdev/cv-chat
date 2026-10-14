@@ -1347,3 +1347,37 @@
     }, true);
   })();
 })();
+
+// Sin "pestañeo" al entrar: cuando llegan las preferencias, Haven vuelve a
+// aplicar el tema y para eso saca el que ya esta cargado y lo descarga de nuevo.
+// Mientras tanto la pagina queda sin tema un instante (se ve el banner y la
+// lista se rearma). Si el tema pedido ya esta cargado, se deja como esta; si de
+// verdad cambia, el anterior queda puesto hasta que termina de cargar el nuevo.
+(function () {
+  'use strict';
+  const orig = window.applyPublishedThemeBase;
+  if (typeof orig !== 'function') return;
+  const href = (l) => (l.getAttribute('href') || '').split('?')[0];
+  window.applyPublishedThemeBase = function (file, persist = true, meta = null) {
+    try {
+      const want = '/themes/' + encodeURIComponent(file);
+      const links = [...document.querySelectorAll('link[id^="haven-theme-"]')];
+      const current = links.find(l => href(l) === want && l.sheet);
+      if (current) {
+        document.documentElement.setAttribute('data-theme', 'haven');
+        if (persist) { try { localStorage.setItem('haven_theme', 'file:' + file); } catch { /* sin almacenamiento */ } }
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === 'file:' + file));
+        return current;
+      }
+      // Otro tema: los de antes quedan (con otro id, asi Haven no los saca) hasta que cargue el nuevo
+      links.forEach((l, i) => { l.id = 'puente-tema-saliendo-' + i; });
+      const link = orig.call(this, file, persist, meta);
+      const drop = () => links.forEach(l => l.remove());
+      if (link) { link.addEventListener('load', drop, { once: true }); link.addEventListener('error', drop, { once: true }); setTimeout(drop, 10000); }
+      else drop();
+      return link;
+    } catch (err) {
+      return orig.call(this, file, persist, meta);
+    }
+  };
+})();
