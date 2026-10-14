@@ -1381,3 +1381,62 @@
     }
   };
 })();
+
+// Pantallas tactiles: el perfil de una persona (tocar su nombre o su foto) como
+// en la app de Discord: una hoja que sube desde abajo, con el fondo oscuro
+// detras. Tocar afuera solo cierra el perfil (antes el toque seguia de largo y
+// abria lo que hubiera debajo, por ejemplo los emojis). Se cierra tambien
+// deslizandola hacia abajo. Es el perfil de Haven, con su contenido y botones.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+
+  function removeBackdrop() { document.getElementById('puente-profile-backdrop')?.remove(); }
+
+  function toSheet(app) {
+    const p = document.getElementById('profile-popup');
+    if (!p || p.classList.contains('profile-popup-hover') || p.classList.contains('puente-profile-sheet')) return;
+    p.classList.add('puente-profile-sheet');
+    ['left', 'top', 'right', 'bottom'].forEach(k => p.style.removeProperty(k));
+    const handle = document.createElement('div');
+    handle.className = 'puente-sheet-handle puente-profile-handle';
+    p.insertBefore(handle, p.firstChild);
+    if (!document.getElementById('puente-profile-backdrop')) {
+      const back = document.createElement('div');
+      back.id = 'puente-profile-backdrop';
+      // El toque se queda aca: no llega a lo que esta debajo
+      const swallow = (e) => { e.preventDefault(); e.stopPropagation(); };
+      back.addEventListener('touchstart', swallow, { passive: false });
+      back.addEventListener('click', (e) => { swallow(e); app._closeProfilePopup(); });
+      back.addEventListener('touchend', (e) => { swallow(e); app._closeProfilePopup(); }, { passive: false });
+      document.body.appendChild(back);
+    }
+    // Deslizar hacia abajo para cerrar
+    let y0 = null, dy = 0;
+    p.addEventListener('touchstart', (e) => { y0 = p.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; p.style.transition = 'none'; }, { passive: true });
+    p.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); p.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
+    p.addEventListener('touchend', () => { p.style.transition = ''; if (dy > 90) app._closeProfilePopup(); else p.style.transform = ''; y0 = null; }, { passive: true });
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showProfilePopup !== 'function' || typeof app._closeProfilePopup !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const show = app._showProfilePopup;
+    app._showProfilePopup = function (...a) {
+      const r = show.apply(this, a);
+      try { toSheet(this); } catch (err) { console.warn('[puente] perfil:', err); }
+      return r;
+    };
+    const close = app._closeProfilePopup;
+    app._closeProfilePopup = function (...a) { removeBackdrop(); return close.apply(this, a); };
+    // Haven reacomoda el perfil cuando cambia el tamano de la ventana: en la hoja no
+    const pos = app._positionProfilePopup;
+    if (typeof pos === 'function') {
+      app._positionProfilePopup = function (popup, ...a) {
+        if (popup && popup.classList && popup.classList.contains('puente-profile-sheet')) return;
+        return pos.call(this, popup, ...a);
+      };
+    }
+  })();
+})();
