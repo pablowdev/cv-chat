@@ -775,12 +775,15 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
-// PC: elegir una reaccion como en Discord. En vez de la barrita de Haven (8
-// emojis y un "..." que abre un panel chico), un panel grande junto al mensaje:
-// buscador arriba, categorias a la izquierda, "Usados frecuentemente", los
-// emojis del servidor y todas las categorias, y abajo el nombre del emoji que
-// esta debajo del mouse. Un clic reacciona (o saca la reaccion si ya estaba) y
-// cierra; con Shift queda abierto para poner varias, como en Discord.
+// PC: el panel de emojis de Discord, en todos lados. Para reaccionar (en vez de
+// la barrita de Haven con 8 emojis y un "..." que abre un panel chico) y para
+// escribir (el boton de la carita del cuadro de escribir, tambien al editar, en
+// los hilos y en la ventanita de mensajes directos; ahi con la pestaña de
+// stickers del servidor): buscador arriba, categorias a la izquierda, "Usados
+// frecuentemente", los emojis del servidor y todas las categorias, y abajo el
+// nombre del emoji que esta debajo del mouse. Un clic reacciona (o saca la
+// reaccion si ya estaba) o escribe el emoji, y cierra; con Shift queda abierto
+// para poner varios, como en Discord.
 (function () {
   'use strict';
   if (matchMedia('(pointer: coarse)').matches) return;
@@ -797,24 +800,45 @@ function sheetDrag(sheet, opts) {
   }
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
 
-  let current = null; // { msgId, msgEl, pop, off }
+  let current = null; // { key, msgEl?, target?, pop, off }
   let anchorEl = null; // el boton gris al lado de las reacciones, si se abrio desde ahi
   function close() {
     if (!current) return;
-    current.off();
-    current.pop.remove();
-    current.msgEl.classList.remove('puente-rp-abierto');
+    const c = current;
     current = null;
+    c.off();
+    c.pop.remove();
+    if (c.msgEl) c.msgEl.classList.remove('puente-rp-abierto');
+    if (c.target) focusBox(c.target);
+  }
+  // El cuadro de escribir (o el editor con emojis que lo tapa)
+  function focusBox(ta) {
+    const ed = ta.id === 'message-input' && document.getElementById('puente-editor');
+    try { (ed && ed.isConnected ? ed : ta).focus(); } catch { /* ya no esta */ }
+  }
+  // Escribe el emoji donde estaba el cursor, como el selector de Haven
+  function insertInto(ta, value) {
+    if (!ta || !ta.isConnected) return;
+    const start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? start;
+    ta.value = ta.value.substring(0, start) + value + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + value.length;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  function open(app, msgEl, msgId) {
-    if (current && current.msgId === msgId) { close(); return; } // el mismo boton lo cierra
+  // opts: { msgEl, msgId } para reaccionar, o { insert: true, anchor, target } para escribir
+  function open(app, opts) {
+    const msgEl = opts.msgEl || null, msgId = opts.msgId;
+    const insert = !!opts.insert;
+    const openKey = insert ? 'escribir' : 'm' + msgId;
+    if (current && current.key === openKey) { close(); return; } // el mismo boton lo cierra
     close();
-    const root = msgEl && msgEl.closest('#dm-pip-messages, #messages, #thread-messages');
-    const code = root && root.id === 'dm-pip-messages' ? app._activeDMPip : app.currentChannel;
-    if (app._channelAllowsReactions && !app._channelAllowsReactions(code)) {
-      if (app._showToast) app._showToast(tr('channel_functions.reactions_disabled', 'Las reacciones están desactivadas en este canal'), 'info');
-      return;
+    if (!insert) {
+      const root = msgEl && msgEl.closest('#dm-pip-messages, #messages, #thread-messages');
+      const code = root && root.id === 'dm-pip-messages' ? app._activeDMPip : app.currentChannel;
+      if (app._channelAllowsReactions && !app._channelAllowsReactions(code)) {
+        if (app._showToast) app._showToast(tr('channel_functions.reactions_disabled', 'Las reacciones están desactivadas en este canal'), 'info');
+        return;
+      }
     }
     const tone = (e) => (typeof app._toneEmoji === 'function' ? app._toneEmoji(e) : e);
     const named = (e) => {
@@ -850,9 +874,31 @@ function sheetDrag(sheet, opts) {
     const searchBox = el('label', 'puente-rp-search');
     const search = el('input');
     search.type = 'text';
-    search.placeholder = 'Buscá la reacción perfecta';
+    search.placeholder = insert ? 'Buscá el emoji perfecto' : 'Buscá la reacción perfecta';
     search.spellcheck = false;
     searchBox.append(el('span', 'puente-rp-lupa'), search);
+    // Al escribir: pestañas Stickers / Emoji arriba, como en Discord
+    const stickers = insert && Array.isArray(app.stickers) ? app.stickers.filter(st => st && st.url) : [];
+    let showStickers = false;
+    if (stickers.length) {
+      const tabsRow = el('div', 'puente-rp-modos');
+      const mk = (label, on) => {
+        const b = el('button', 'puente-rp-modo' + (on ? ' actual' : ''), label);
+        b.type = 'button';
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showStickers = label === 'Stickers';
+          tabsRow.querySelectorAll('.puente-rp-modo').forEach(x => x.classList.toggle('actual', x === b));
+          search.placeholder = showStickers ? 'Buscar stickers' : 'Buscá el emoji perfecto';
+          search.value = '';
+          render('');
+          search.focus();
+        });
+        return b;
+      };
+      tabsRow.append(mk('Stickers', false), mk('Emoji', true));
+      head.appendChild(tabsRow);
+    }
     head.appendChild(searchBox);
     const main = el('div', 'puente-rp-main');
     const side = el('div', 'puente-rp-side');
@@ -871,6 +917,11 @@ function sheetDrag(sheet, opts) {
       footName.textContent = it.label || it.value;
     };
     const react = (it, keep) => {
+      if (insert) {
+        insertInto(opts.target, it.value);
+        if (!keep) close();
+        return;
+      }
       const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === it.value);
       app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji: it.value });
       if (!keep) close();
@@ -887,9 +938,33 @@ function sheetDrag(sheet, opts) {
     };
 
     const tabs = new Map();
+    function renderStickers(q) {
+      const list = q ? stickers.filter(st => String(st.name || '').toLowerCase().includes(q) || String(st.pack_name || '').toLowerCase().includes(q)) : stickers;
+      const packs = [...new Set(list.map(st => st.pack_name || 'General'))];
+      for (const pack of packs) {
+        const h = el('div', 'puente-rp-title', pack);
+        const grid = el('div', 'puente-rp-grid puente-rp-stickers');
+        for (const st of list.filter(x => (x.pack_name || 'General') === pack)) {
+          const b = el('button', 'puente-rp-sticker');
+          b.type = 'button';
+          b.setAttribute('aria-label', st.name || 'sticker');
+          const img = el('img'); img.src = st.url; img.alt = st.name || ''; img.loading = 'lazy'; img.draggable = false;
+          b.appendChild(img);
+          b.addEventListener('mouseenter', () => preview({ url: st.url, label: st.name || '' }));
+          b.addEventListener('click', (e) => { e.stopPropagation(); close(); app._sendStickerMessage(st.url); });
+          grid.appendChild(b);
+        }
+        body.append(h, grid);
+      }
+      if (!body.children.length) body.appendChild(el('div', 'puente-rp-empty', 'No se encontraron stickers'));
+      body.scrollTop = 0;
+      preview(list[0] ? { url: list[0].url, label: list[0].name || '' } : null);
+    }
     function render(filter) {
       body.textContent = '';
       const q = (filter || '').trim().toLowerCase();
+      pop.classList.toggle('puente-rp-con-stickers', showStickers);
+      if (showStickers) { renderStickers(q); return; }
       let firstItem = null;
       for (const s of sections) {
         if (q && s.id === 'freq') continue;
@@ -937,7 +1012,7 @@ function sheetDrag(sheet, opts) {
     let timer = null;
     search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => render(search.value), 120); });
     search.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { const first = body.querySelector('.puente-rp-btn'); if (first) first.click(); e.preventDefault(); }
+      if (e.key === 'Enter') { const first = body.querySelector('.puente-rp-btn, .puente-rp-sticker'); if (first) first.click(); e.preventDefault(); }
     });
 
     document.body.appendChild(pop);
@@ -947,10 +1022,16 @@ function sheetDrag(sheet, opts) {
     // (el boton de Haven esta escondido detras de la barrita nueva: se usa el que se ve)
     const visible = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return r.width && r.height ? r : null; };
     const pw = pop.offsetWidth, ph = pop.offsetHeight;
-    const fromRow = visible(anchorEl && msgEl.contains(anchorEl) ? anchorEl : null);
+    const fromRow = visible(anchorEl && msgEl && msgEl.contains(anchorEl) ? anchorEl : null);
     anchorEl = null;
     let left, top;
-    if (fromRow) {
+    const fromBox = insert ? (visible(opts.anchor) || visible(opts.target)) : null;
+    if (fromBox) {
+      // Desde el cuadro de escribir: arriba del boton, alineado a su derecha, como Discord
+      left = fromBox.right - pw;
+      top = fromBox.top - ph - 8;
+      if (top < 8) top = fromBox.bottom + 8;
+    } else if (fromRow) {
       // Desde el boton al lado de las reacciones: abajo de el (o arriba si no entra)
       left = Math.min(fromRow.left, innerWidth - pw - 8);
       top = fromRow.bottom + 6;
@@ -965,19 +1046,20 @@ function sheetDrag(sheet, opts) {
     if (top + ph > innerHeight - 8) top = innerHeight - ph - 8;
     pop.style.left = Math.max(8, left) + 'px';
     pop.style.top = Math.max(8, top) + 'px';
-    msgEl.classList.add('puente-rp-abierto');
+    if (msgEl) msgEl.classList.add('puente-rp-abierto');
 
     const outside = (e) => {
       if (pop.contains(e.target)) return;
-      // El boton de reaccionar de este mensaje lo cierra solo (open)
-      if (msgEl.contains(e.target) && e.target.closest('[data-action="react"], .puente-rp-add')) return;
+      // El boton que lo abrio lo cierra solo (open)
+      if (msgEl && msgEl.contains(e.target) && e.target.closest('[data-action="react"], .puente-rp-add')) return;
+      if (insert && opts.anchor && opts.anchor.contains(e.target)) return;
       close();
     };
     const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     document.addEventListener('mousedown', outside, true);
     document.addEventListener('keydown', key, true);
     addEventListener('resize', close);
-    current = { msgId, msgEl, pop, off() { document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', key, true); removeEventListener('resize', close); } };
+    current = { key: openKey, msgEl, target: insert ? opts.target : null, pop, off() { document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', key, true); removeEventListener('resize', close); } };
     search.focus();
   }
 
@@ -1010,12 +1092,116 @@ function sheetDrag(sheet, opts) {
     app._showReactionPicker = function (msgEl, msgId, ...rest) {
       // Dentro de la ventanita flotante de mensajes directos queda el de Haven
       if (!msgEl || msgEl.closest('.dm-pip-panel, .thread-panel.pip')) return orig.call(this, msgEl, msgId, ...rest);
-      try { open(this, msgEl, msgId); } catch (err) {
+      try { open(this, { msgEl, msgId }); } catch (err) {
         console.warn('[puente] selector de reacciones (PC):', err);
         close();
         return orig.call(this, msgEl, msgId, ...rest); // el de Haven, si algo falla
       }
     };
+    // El boton de la carita para escribir: el mismo panel en lugar del selector de Haven
+    if (typeof app._toggleEmojiPicker === 'function') {
+      const origToggle = app._toggleEmojiPicker;
+      app._toggleEmojiPicker = function (anchor, ...rest) {
+        const havenPicker = document.getElementById('emoji-picker');
+        if (havenPicker && havenPicker.style.display === 'flex') return origToggle.call(this, anchor, ...rest); // el de Haven ya abierto: lo cierra
+        try {
+          const target = typeof this._emojiInsertTarget === 'function' ? this._emojiInsertTarget() : document.getElementById('message-input');
+          if (!target) return origToggle.call(this, anchor, ...rest);
+          let a = anchor instanceof Element ? anchor : null;
+          if (!a && target.id === 'message-input') a = document.getElementById('emoji-btn');
+          open(this, { insert: true, anchor: a, target });
+        } catch (err) {
+          console.warn('[puente] selector de emojis (PC):', err);
+          close();
+          return origToggle.call(this, anchor, ...rest);
+        }
+      };
+    }
+  })();
+})();
+
+// PC: el boton + del cuadro de escribir como en Discord: un menu con iconos
+// ("Subir un archivo", "Crear encuesta"...) en lugar de la fila de botones de
+// Haven, que ademas repetia la carita y el GIF de la derecha. Cada opcion usa el
+// boton de Haven, asi que hace lo mismo que antes; solo aparecen las que Haven
+// muestra en ese canal (por ejemplo, sin archivos si el canal no los permite).
+// Con el mensaje que se autodestruye (o el de borrar al leer) encendido, el +
+// queda marcado.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const svg = d => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const ITEMS = [
+    ['upload-btn', 'Subir un archivo', svg('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6.3a6.5 6.5 0 0 1-.3-2H6V4h7v5h5v2.1a6.5 6.5 0 0 1 2 .6V8l-6-6Zm4 12-3.5 3.5 1.4 1.4 1.1-1.1V22h2v-4.2l1.1 1.1 1.4-1.4L18 14Z')],
+    ['poll-btn', 'Crear encuesta', svg('M4 5h11a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3Zm0 5.5h16a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3ZM4 16h7a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3Z')],
+    ['voice-btn', 'Mensaje de voz', svg('M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2Z')],
+    ['time-btn', 'Insertar fecha y hora', svg('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm1-13h-2v6l5 3 1-1.7-4-2.3V7Z')],
+    ['format-btn', 'Formato y comandos', svg('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z')],
+    ['self-destruct-btn', 'Mensaje que se autodestruye', svg('M13.5 1s.7 2.6.7 4.7c0 2-1.3 3.7-3.4 3.7S7.4 7.7 7.4 5.7V5.4C5.3 7.9 4 11.2 4 14.7A8 8 0 0 0 20 14.7c0-5.4-2.6-10.2-6.5-13.7ZM12 20a3 3 0 0 1-3-2.9c0-1.4.9-2.4 2.5-2.7 1.6-.3 3.2-1.1 4.1-2.3.4 1.2.6 2.5.6 3.9A4.2 4.2 0 0 1 12 20Z'), true],
+    ['burn-btn', 'Borrar al leer', svg('M13.5 1s.7 2.6.7 4.7c0 2-1.3 3.7-3.4 3.7S7.4 7.7 7.4 5.7V5.4C5.3 7.9 4 11.2 4 14.7A8 8 0 0 0 20 14.7c0-5.4-2.6-10.2-6.5-13.7Z'), true],
+    ['highlight-btn', 'Mensaje oficial', svg('M12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.2l-7.2-.6L12 2Z'), true],
+  ];
+  const shown = (b) => b && b.style.display !== 'none' && !b.closest('[style*="display: none"]') && !b.disabled;
+  const armed = (b) => b && (b.classList.contains('active') || b.getAttribute('aria-pressed') === 'true');
+
+  let menu = null;
+  function close() {
+    if (!menu) return;
+    menu.remove(); menu = null;
+    document.getElementById('composer-plus-btn')?.setAttribute('aria-expanded', 'false');
+  }
+  function mark() {
+    const plus = document.getElementById('composer-plus-btn');
+    if (plus) plus.classList.toggle('puente-armado', ['self-destruct-btn', 'burn-btn'].some(id => armed(document.getElementById(id))));
+  }
+  function open(plus) {
+    close();
+    menu = document.createElement('div');
+    menu.id = 'puente-mas';
+    menu.className = 'puente-mas';
+    for (const [id, label, icon, toggle] of ITEMS) {
+      const btn = document.getElementById(id);
+      if (!shown(btn)) continue;
+      const it = document.createElement('button');
+      it.type = 'button';
+      it.className = 'puente-mas-item' + (toggle && armed(btn) ? ' activo' : '');
+      it.innerHTML = icon;
+      const text = document.createElement('span');
+      text.textContent = label;
+      it.appendChild(text);
+      if (toggle) { const st = document.createElement('span'); st.className = 'puente-mas-estado'; st.textContent = armed(btn) ? 'Activado' : ''; it.appendChild(st); }
+      it.addEventListener('click', (e) => {
+        e.stopPropagation();
+        close();
+        // Despues de este clic, para que los selectores de Haven no se cierren con el
+        setTimeout(() => { btn.click(); setTimeout(mark, 50); }, 0);
+      });
+      menu.appendChild(it);
+    }
+    if (!menu.children.length) { menu = null; return; }
+    document.body.appendChild(menu);
+    const r = plus.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.style.top = Math.max(8, r.top - menu.offsetHeight - 8) + 'px';
+    plus.setAttribute('aria-expanded', 'true');
+  }
+
+  // Antes que Haven: el + abre este menu y no la fila de botones
+  document.addEventListener('click', (e) => {
+    const plus = e.target instanceof Element && e.target.closest('#composer-plus-btn');
+    if (plus) { e.stopPropagation(); e.preventDefault(); if (menu) close(); else open(plus); return; }
+    if (menu && !menu.contains(e.target)) close();
+  }, true);
+  document.addEventListener('keydown', (e) => { if (menu && e.key === 'Escape') { e.stopPropagation(); close(); } }, true);
+  addEventListener('resize', close);
+  // El + marcado mientras el mensaje que se autodestruye esta encendido (Haven lo apaga al cambiar de canal)
+  let tries = 0;
+  (function wait() {
+    const ids = ['self-destruct-btn', 'burn-btn'].map(id => document.getElementById(id)).filter(Boolean);
+    if (!ids.length) { if (++tries < 120) setTimeout(wait, 500); return; }
+    const mo = new MutationObserver(mark);
+    ids.forEach(b => mo.observe(b, { attributes: true, attributeFilter: ['class', 'aria-pressed', 'style'] }));
+    mark();
   })();
 })();
 
