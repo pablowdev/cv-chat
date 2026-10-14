@@ -500,6 +500,11 @@ function hookHavenEmits() {
     socket.use((packet, next) => {
       try {
         const [event, data] = packet;
+        // El usuario tecnico que representa a la gente de Discord sin vincular no recibe mensajes directos
+        if (data && event === 'start-dm' && Number(data.targetUserId) === (db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get() || {}).id) {
+          socket.emit('error-msg', 'Ese usuario representa a la gente de Discord sin cuenta vinculada: no se le pueden mandar mensajes directos.');
+          return;
+        }
         if (data && event === 'delete-message' && Number.isInteger(data.messageId)) rememberDelete(data.messageId);
         else if (data && event === 'delete-messages' && Array.isArray(data.messageIds)) data.messageIds.slice(0, 500).forEach(id => Number.isInteger(id) && rememberDelete(id));
       } catch (err) { warn('borrados:', err.message); }

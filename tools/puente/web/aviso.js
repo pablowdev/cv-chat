@@ -1397,6 +1397,8 @@
     const p = document.getElementById('profile-popup');
     if (!p || p.classList.contains('profile-popup-hover') || p.classList.contains('puente-profile-sheet')) return;
     p.classList.add('puente-profile-sheet');
+    // El usuario tecnico que representa a la gente de Discord sin vincular: no se le escribe
+    if ((p.querySelector('.profile-popup-username') || {}).textContent === '@discord-historial') p.querySelector('.profile-dm-btn')?.remove();
     ['left', 'top', 'right', 'bottom'].forEach(k => p.style.removeProperty(k));
     const handle = document.createElement('div');
     handle.className = 'puente-sheet-handle puente-profile-handle';
@@ -1438,5 +1440,31 @@
         return pos.call(this, popup, ...a);
       };
     }
+  })();
+})();
+
+// Sin la ventanita flotante de mensajes directos: todo lo que la abria (el boton
+// "Mensaje" del perfil, la lista de mensajes directos, el menu de un usuario)
+// abre la conversacion en pantalla completa, como en Discord. En pantallas
+// tactiles, ademas, no aparece el teclado solo al abrirla.
+(function () {
+  'use strict';
+  const touch = matchMedia('(pointer: coarse)').matches;
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._openDMPiP !== 'function' || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    app._openDMPiP = function (code) {
+      try { if (typeof this._closeDMPiP === 'function') this._closeDMPiP(); } catch { /* no habia ventanita */ }
+      if (!code || code === this.currentChannel) return;
+      this.switchChannel(code);
+      try { this._closeMobilePanels?.(); } catch { /* nada */ }
+      try { this._closeProfilePopup?.(); } catch { /* nada */ }
+      if (touch) {
+        // Haven pone el cursor en el cuadro de escribir: sacarlo para que no aparezca el teclado
+        const blur = () => { const a = document.activeElement; if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT')) a.blur(); };
+        setTimeout(blur, 50); setTimeout(blur, 400);
+      }
+    };
   })();
 })();
