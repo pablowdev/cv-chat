@@ -1328,7 +1328,7 @@ function sheetDrag(sheet, opts) {
     // Ajustes: el engranaje pasa a la tarjeta del usuario, como en Discord
     const gear = document.getElementById('mobile-settings-btn');
     const account = document.querySelector('[data-haven-region="account"]');
-    if (gear && account) { gear.classList.add('puente-account-gear'); account.appendChild(gear); }
+    if (gear && account) { gear.classList.add('puente-account-gear'); account.appendChild(gear); document.documentElement.classList.add('puente-gear-cuenta'); }
     return true;
   }
 
@@ -2534,6 +2534,8 @@ function sheetDrag(sheet, opts) {
   let busy = false;          // el cambio lo hizo el cuadro nuevo: no redibujar
   let composing = false;     // escribiendo con acentos o un teclado de otro idioma
   let lastValue = '';
+  let inputPending = false;  // a Haven le falta el aviso de que cambio el texto
+  const flushInput = () => { if (!inputPending) return; inputPending = false; busy = true; try { ta.dispatchEvent(new Event('input', { bubbles: true })); } finally { busy = false; } if (getVal() !== lastValue) toEditor(); };
   let pending = false;       // Haven cambio el texto y falta mostrarlo: no pisarle el cursor
   const scheduleToEditor = () => { pending = true; setTimeout(() => { pending = false; toEditor(); }, 0); };
   const undo = [], redo = [];
@@ -2548,7 +2550,8 @@ function sheetDrag(sheet, opts) {
   // emojis del servidor como imagen, el formato de Haven aplicado (negrita,
   // cursiva, subrayado, tachado, codigo, spoiler, cita) con sus marcas en gris, y
   // @everyone, @here, las @menciones y los #canales resaltados, como en Discord.
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const attr = (s) => esc(s).replace(/"/g, '&quot;');
   const RULES = [
     { re: /`([^`\n]+)`/, cls: 'code', m: '`' },
     { re: /\|\|([^\n]+?)\|\|/, cls: 'spoiler', m: '||' },
@@ -2563,17 +2566,22 @@ function sheetDrag(sheet, opts) {
       const em = findEmoji(name);
       if (!em || !em.url) return m;
       out += esc(t.slice(last, at));
-      out += '<img class="puente-ed-emoji" src="' + esc(em.url) + '" alt="' + esc(m) + '" data-t="' + esc(m) + '" draggable="false">';
+      out += '<img class="puente-ed-emoji" src="' + attr(em.url) + '" alt="' + attr(m) + '" data-t="' + attr(m) + '" draggable="false">';
       last = at + m.length;
       return m;
     });
     return out + esc(t.slice(last));
   }
+  let knownCache = null, knownKey = null;
   function known() {
+    const key = [app.channelMembers, app.channelMembers && app.channelMembers.length, app.channels, app.channels && app.channels.length];
+    if (knownCache && knownKey && key.every((k, i) => k === knownKey[i])) return knownCache;
+    knownKey = key;
     const users = new Set(), chans = new Set();
     try { for (const m of (app.channelMembers || [])) if (m && m.username) users.add(String(m.username).toLowerCase()); } catch { /* sin lista */ }
     try { for (const c of (app.channels || [])) if (c && !c.is_dm && c.name) chans.add(String(c.name).toLowerCase()); } catch { /* sin lista */ }
-    return { users, chans };
+    knownCache = { users, chans };
+    return knownCache;
   }
   let names = null;
   function mentions(t) {
@@ -2607,8 +2615,6 @@ function sheetDrag(sheet, opts) {
     }).join('<br>');
     return value.endsWith('\n') ? html + '<br data-fin="1">' : html;
   }
-  const tpl = document.createElement('template');
-  const normalize = (html) => { tpl.innerHTML = html; return tpl.innerHTML; };
   function render(value, s, e) {
     ed.innerHTML = markup(value);
     ed.classList.toggle('puente-ed-vacio', value === '');
@@ -2626,7 +2632,9 @@ function sheetDrag(sheet, opts) {
           if (c === stopNode && found === null) found = out.length + Math.min(stopOffset, c.nodeValue.length);
           out += c.nodeValue.replace(/​/g, '');
         } else if (c.nodeName === 'BR') {
-          if (!c.dataset.fin) out += '\n';
+          // El ultimo <br> que deja el navegador para que se vea el renglon (al borrar todo, o la
+          // ultima letra de una linea) no es un Enter: el nuestro lleva data-fin
+          if (!c.dataset.fin && c !== ed.lastChild) out += '\n';
         } else if (c.nodeName === 'IMG') {
           out += c.dataset.t || c.alt || '';
         } else if (c.nodeType === 1) {
@@ -2660,7 +2668,7 @@ function sheetDrag(sheet, opts) {
           if (index <= pos + len) { res = [c, index - pos]; return; }
           pos += len;
         } else if (c.nodeName === 'BR') {
-          if (c.dataset.fin) continue;
+          if (c.dataset.fin || c === ed.lastChild) continue;
           if (index <= pos) { res = [node, i]; return; }
           pos += 1;
         } else if (c.nodeName === 'IMG') {
@@ -2684,7 +2692,7 @@ function sheetDrag(sheet, opts) {
 
   // Lo que se ve ya no corresponde al texto (un emoji o una marca de formato nuevos, o
   // algo que metio el navegador): hay que redibujar
-  const needsRender = () => ed.innerHTML !== normalize(markup(serialize()));
+  const needsRender = (text) => ed.innerHTML !== markup(text);
 
   // ── Del cuadro nuevo al de Haven ───────────────────────
   function pushUndo(force) {
@@ -2710,13 +2718,10 @@ function sheetDrag(sheet, opts) {
       if (changed) setVal(text);
       ta.setSelectionRange(s, e);
       lastValue = text;
-      if (changed) ta.dispatchEvent(new Event('input', { bubbles: true }));
+      if (changed && !inputPending) { inputPending = true; setTimeout(flushInput, 0); }
     } finally { busy = false; }
-    // Haven puede haber cambiado el texto al reaccionar (raro): manda el de Haven
-    if (getVal() !== text) { toEditor(); return; }
-    if (!composing && needsRender()) render(text, s, e);
+    if (!composing && needsRender(text)) { render(text, s, e); check(text); }
     ed.classList.toggle('puente-ed-vacio', text === '');
-    check(text);
   }
 
   // ── Del de Haven al cuadro nuevo ───────────────────────
@@ -2739,7 +2744,9 @@ function sheetDrag(sheet, opts) {
     }
   }
 
-  function syncSelToTa() {
+  let selQueued = false;
+  function syncSelToTa(now) {
+    if (now !== true) { if (!selQueued) { selQueued = true; requestAnimationFrame(() => { selQueued = false; syncSelToTa(true); }); } return; }
     if (!alive || pending || document.activeElement !== ed) return;
     const { s, e } = getSel();
     try { ta.setSelectionRange(s, e); } catch { /* nada */ }
@@ -2747,7 +2754,8 @@ function sheetDrag(sheet, opts) {
 
   // ── Teclas: primero las ve Haven ───────────────────────
   function forwardKey(e) {
-    syncSelToTa();
+    syncSelToTa(true);
+    flushInput();
     const ev = new KeyboardEvent('keydown', { key: e.key, code: e.code, location: e.location, repeat: e.repeat, isComposing: e.isComposing,
       shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey, bubbles: false, cancelable: true });
     const before = getVal();
@@ -2805,7 +2813,8 @@ function sheetDrag(sheet, opts) {
 
   function onPaste(e) {
     if (!alive) return;
-    syncSelToTa();
+    syncSelToTa(true);
+    flushInput();
     const before = getVal();
     let ev = null;
     try { ev = new ClipboardEvent('paste', { clipboardData: e.clipboardData, bubbles: false, cancelable: true }); } catch { ev = null; }
@@ -2978,4 +2987,19 @@ function sheetDrag(sheet, opts) {
     }
     setTimeout(check, 100);
   })();
+})();
+
+// Marca html.puente-con-canal mientras hay un canal abierto (la bienvenida de
+// Haven esta oculta). El tema la usa en vez de un selector :has() sobre toda la
+// app, que hacia recalcular los estilos de la pagina entera en cada letra.
+(function () {
+  'use strict';
+  function start() {
+    const w = document.getElementById('no-channel-msg');
+    if (!w) return;
+    const sync = () => document.documentElement.classList.toggle('puente-con-canal', w.style.display === 'none');
+    new MutationObserver(sync).observe(w, { attributes: true, attributeFilter: ['style'] });
+    sync();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

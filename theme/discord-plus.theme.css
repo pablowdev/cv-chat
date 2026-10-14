@@ -550,7 +550,7 @@ span.puente-who-emoji { font-size: 1.5rem; line-height: 1; }
 /* Pantalla "Bienvenido a Haven" al abrir: no se muestra, se entra directo a un
    canal (aviso.js). Solo aparece si no hay ningun canal para abrir. */
 html:not(.puente-bienvenida) #no-channel-msg { visibility: hidden !important; }
-html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name { visibility: hidden; }
+html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name { visibility: hidden; }
 
 /* ── Barra superior ────────────────────────────────── */
 [data-haven-region="channel-header"] { background: #1a1a1e; border-bottom: 1px solid #29292d; box-shadow: none; }
@@ -1024,7 +1024,7 @@ html body #user-context-menu.puente-user-sheet {
   html body [data-haven-region="account"] .icon-btn:hover,
   html body [data-haven-region="account"] .puente-account-gear:hover { background: #2e2d32; opacity: 1; }
   /* El engranaje ya esta abajo a la izquierda: sin el boton "Settings" del panel derecho */
-  html body:has([data-haven-region="account"] .puente-account-gear) .right-sidebar .sidebar-settings-panel { display: none !important; }
+  html.puente-gear-cuenta body .right-sidebar .sidebar-settings-panel { display: none !important; }
 }
 
 /* PC: pantalla de mensajes directos (cuando todavia no abriste ninguna
@@ -1311,6 +1311,8 @@ html body #channel-functions-panel.puente-ajustes-panel {
   position: absolute !important; left: 0 !important; bottom: 0 !important; width: 1px !important; height: 1px !important;
   min-height: 0 !important; padding: 0 !important; border: 0 !important; margin: 0 !important;
   opacity: 0 !important; pointer-events: none !important; overflow: hidden !important; resize: none !important;
+  /* Haven recalcula su alto en cada letra: aislado, no obliga a reacomodar el resto de la pagina */
+  contain: strict !important;
 }
 .puente-editor {
   display: block; position: relative; min-width: 0; overflow-y: auto; overflow-x: hidden; cursor: text; outline: none;
@@ -1335,3 +1337,7 @@ html body #channel-functions-panel.puente-ajustes-panel {
 
 /* Emoji animado esperando que Haven lo deje quieto: invisible, con su lugar (aviso.js) */
 img.puente-congelando { visibility: hidden; }
+
+/* Sin la manija de Haven para cambiar el alto del cuadro de escribir (con el cuadro con
+   emojis no hace nada; el cuadro crece solo con el texto, como en Discord) */
+html body .pip-input-resizer { display: none !important; }

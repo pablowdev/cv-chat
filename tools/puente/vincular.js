@@ -137,8 +137,8 @@ function injectScript(req, res, src) {
         // Va dentro de la pagina para que valga antes de que cargue el tema.
         if (html.includes('id="no-channel-msg"') && !html.includes('puente-sin-bienvenida')) {
           html = html.replace('</head>', '<style id="puente-sin-bienvenida">html:not(.puente-bienvenida) #no-channel-msg,' +
-            'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #server-banner-display,' +
-            'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name{visibility:hidden!important}</style></head>');
+            'html:not(.puente-bienvenida):not(.puente-con-canal) #server-banner-display,' +
+            'html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name{visibility:hidden!important}</style></head>');
         }
         // Pantalla de carga con el logo, como Discord: tapa la pagina vacia de Haven
         // mientras se conecta y se acomoda todo, con el logo grande girando como las
