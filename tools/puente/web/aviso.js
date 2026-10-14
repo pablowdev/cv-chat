@@ -1850,10 +1850,32 @@ function sheetDrag(sheet, opts) {
     // Cada mensaje recuerda como lo armo Haven; si al redibujar sale igual, se
     // usa el que ya estaba
     const create = app._createMessageEl;
-    app._createMessageEl = function (msg, ...rest) {
-      const el = create.call(this, msg, ...rest);
+    // Un mensaje que llega en vivo se compara con el anterior que esta en pantalla,
+    // pero Haven solo lee de ese elemento el usuario y la hora: sin saber que
+    // tambien vino de Discord ni de quien, nunca los agrupa (en Discord si, y al
+    // recargar tambien). Se le completa lo que falta con los datos de ese mensaje.
+    const KEYS = ['type', 'is_webhook', 'webhook_username', 'imported_from'];
+    const pick = m => { const o = {}; for (const k of KEYS) o[k] = m[k] == null ? null : m[k]; return o; };
+    app._createMessageEl = function (msg, prev, ...more) {
+      try {
+        if (prev && prev.id == null && msg && msg.imported_from) {
+          const box = document.getElementById('messages');
+          const lastEl = box && box.lastElementChild;
+          if (lastEl && lastEl.dataset && String(lastEl.dataset.msgId) !== String(msg.id)) {
+            let info = lastEl.__puenteMsg;
+            if (!info) {
+              const id = parseInt(lastEl.dataset.msgId, 10);
+              const m = (this._lastRenderedMessages || []).find(x => x && x.id === id);
+              if (m) info = pick(m);
+            }
+            if (info) prev = Object.assign({}, prev, info);
+          }
+        }
+      } catch { /* como lo hace Haven */ }
+      const el = create.call(this, msg, prev, ...more);
       try {
         if (!el || el.nodeType !== 1) return el;
+        if (msg) el.__puenteMsg = pick(msg);
         const src = el.outerHTML;
         if (reuse && msg && msg.id != null) {
           const old = reuse.get(String(msg.id));
