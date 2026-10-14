@@ -3086,6 +3086,8 @@ function sheetDrag(sheet, opts) {
     if (row.children.length) row.appendChild(el('span', 'puente-tb-sep'));
     // Botones con la accion de Haven: el chat ya sabe que hacer con cada una
     const react = btn('', 'Agregar reacción', I.react); react.dataset.action = 'react'; row.appendChild(react);
+    // Editar, solo en los mensajes propios (Haven pone su boton de editar solo en esos)
+    if (tb.querySelector('[data-action="edit"]')) { const edit = btn('', 'Editar', I.edit); edit.dataset.action = 'edit'; row.appendChild(edit); }
     const reply = btn('', 'Responder', I.reply); reply.dataset.action = 'reply'; row.appendChild(reply);
     const quote = btn('', 'Citar', I.quote); quote.dataset.action = 'quote'; row.appendChild(quote);
     const more = btn('puente-tb-more', 'Más', I.more);

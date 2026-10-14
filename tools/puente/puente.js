@@ -700,6 +700,23 @@ function retryMissing() {
   } catch (err) { warn('reintento:', err.message); }
 }
 
+// Los webhooks no pueden responder de verdad en Discord: arriba del mensaje va una
+// linea chiquita con a quien responde, el comienzo de ese mensaje y el enlace a el.
+function replyHeader(m, channelId, threadId) {
+  if (!m.reply_to) return '';
+  const p = stmts().messageById.get(m.reply_to);
+  if (!p) return '';
+  const who = p.imported_from ? (p.webhook_username || 'alguien') : (p.uname || 'alguien');
+  let did = p.discord_message_id;
+  if (!did) { const o = db.prepare('SELECT discord_message_id FROM puente_salientes WHERE haven_message_id = ?').get(p.id); did = o && o.discord_message_id; }
+  const jump = did && /^\d+$/.test(did) && guildId ? ` · https://discord.com/channels/${guildId}/${threadId || channelId}/${did}` : '';
+  const { text, media } = splitMedia(p.content);
+  let snip = sanitizeOut(text).replace(/https?:\/\/\S+/g, '🔗').replace(/[*_~`|\\]/g, '').replace(/\s+/g, ' ').trim();
+  if ([...snip].length > 70) snip = [...snip].slice(0, 70).join('').trim() + '…';
+  if (!snip && media.length) snip = '📎 archivo';
+  return `-# ↪ respondiendo a **${webhookName(who)}**${snip ? ': ' + snip : ''}${jump}\n`;
+}
+
 async function outboundCreate(havenMessageId) {
   const m = stmts().messageById.get(havenMessageId);
   if (!m || !m.user_id || m.imported_from || m.is_webhook || m.discord_message_id) return;
@@ -735,16 +752,7 @@ async function outboundCreate(havenMessageId) {
     }
 
     // Texto: sin las lineas de archivos que se suben como adjuntos
-    let content = sanitizeOut(files && files.length ? text : m.content);
-    if (m.reply_to) {
-      const p = stmts().messageById.get(m.reply_to);
-      if (p) {
-        const who = p.imported_from ? (p.webhook_username || 'alguien') : (p.uname || 'alguien');
-        const jump = p.discord_message_id && /^\d+$/.test(p.discord_message_id) && guildId
-          ? ` · https://discord.com/channels/${guildId}/${target.threadId || target.channelId}/${p.discord_message_id}` : '';
-        content = `-# ↪ respondiendo a **${webhookName(who)}**${jump}\n${content}`;
-      }
-    }
+    let content = replyHeader(m, target.channelId, target.threadId) + sanitizeOut(files && files.length ? text : m.content);
     content = (content + footerFor(link)).trim();
     if (content.length > 1990) content = content.slice(0, 1985) + ' […]';
 
@@ -760,7 +768,7 @@ async function outboundCreate(havenMessageId) {
       sent = await apiFiles('POST', url, { ...body, attachments: files.map((f, i) => ({ id: i, filename: f.name })) }, files);
       if (sent.__error) { // por ejemplo, Discord rechazo el archivo: va como enlace
         warn(`no pude subir los archivos del mensaje ${m.id} a Discord (${sent.__error}); van como enlace`);
-        let c = sanitizeOut(m.content) + footerFor(link);
+        let c = replyHeader(m, target.channelId, target.threadId) + sanitizeOut(m.content) + footerFor(link);
         if (c.length > 1990) c = c.slice(0, 1985) + ' […]';
         sent = await api('POST', url, { ...body, content: c });
       }
@@ -792,7 +800,8 @@ async function outboundEdit(havenMessageId) {
     const hook = await ensureWebhook(out.discord_channel_id);
     if (!hook) return;
     const link = stmts().linkByHaven.get(m.user_id);
-    let content = (sanitizeOut(uploaded ? text : m.content) + footerFor(link)).trim();
+    // La linea de "respondiendo a" tambien va al editar (si no, la edicion la borra en Discord)
+    let content = (replyHeader(m, out.discord_channel_id, out.discord_thread_id) + sanitizeOut(uploaded ? text : m.content) + footerFor(link)).trim();
     if (content.length > 1990) content = content.slice(0, 1985) + ' […]';
     const qs = out.discord_thread_id ? `?thread_id=${out.discord_thread_id}` : '';
     // Sin "attachments": Discord deja los adjuntos que ya tiene el mensaje
