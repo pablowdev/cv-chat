@@ -1157,6 +1157,73 @@
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
   const CHAT_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.94 2 11.8c0 2.4 1.1 4.57 2.88 6.16-.17 1.2-.7 2.36-1.6 3.27a.5.5 0 0 0 .4.86c1.9-.1 3.5-.8 4.66-1.62 1.13.33 2.35.52 3.66.52 5.52 0 10-3.94 10-8.8S17.52 3 12 3Z"/></svg>';
 
+  const KEY_DM = 'puente_ultimo_dm', KEY_CANAL = 'puente_ultimo_canal_servidor';
+  const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } };
+  const findCh = (code) => (window.app && Array.isArray(window.app.channels) ? window.app.channels.find(c => c && c.code === code) : null);
+  const isDm = (ch) => !!(ch && ch.is_dm);
+
+  // Pantalla de mensajes directos (si todavia no abriste ninguna conversacion):
+  // la lista de conversaciones con su avatar, como "Amigos" en Discord
+  function dmHome(show) {
+    let box = document.getElementById('puente-dm-home');
+    if (!show) { if (box) box.remove(); return; }
+    const main = document.querySelector('[data-haven-region="main"]');
+    if (!main) return;
+    if (!box) { box = el('div', 'puente-dm-home'); box.id = 'puente-dm-home'; main.appendChild(box); }
+    box.textContent = '';
+    box.appendChild(el('div', 'puente-dm-home-title', 'Mensajes directos'));
+    const items = [...document.querySelectorAll('#dm-list .dm-item')];
+    if (!items.length) { box.appendChild(el('div', 'puente-dm-home-empty', 'Todavía no tenés mensajes directos. Para empezar uno, tocá el nombre de una persona y elegí "Mensaje".')); return; }
+    for (const item of items) {
+      const row = el('button', 'puente-dm-home-row');
+      row.type = 'button';
+      const av = item.querySelector('.puente-dm-avatar');
+      row.appendChild(av ? av.cloneNode(true) : el('span', 'puente-dm-avatar', '?'));
+      row.appendChild(el('span', 'puente-dm-home-name', ((item.querySelector('.channel-name') || {}).textContent || '').trim()));
+      row.appendChild(el('span', 'puente-dm-home-chat', '💬'));
+      row.addEventListener('click', () => { if (window.app) window.app.switchChannel(item.dataset.code); });
+      box.appendChild(row);
+    }
+  }
+
+  function goTo(dms) {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function') return;
+    const want = store(dms ? KEY_DM : KEY_CANAL);
+    const ch = want && findCh(want);
+    if (ch && isDm(ch) === dms) { dmHome(false); if (app.currentChannel !== want) app.switchChannel(want); return; }
+    if (dms) { dmHome(true); return; }
+    dmHome(false);
+    // Sin canal guardado y viendo un mensaje directo: el primer canal de la lista
+    const first = document.querySelector('#channel-list .channel-item[data-code]');
+    if (first && isDm(findCh(app.currentChannel))) app.switchChannel(first.dataset.code);
+  }
+
+  // Recordar el ultimo canal y la ultima conversacion privada, y que la lista de
+  // la izquierda siga a lo que se esta viendo (abrir un mensaje directo desde un
+  // perfil muestra la lista de mensajes directos, como en Discord)
+  function followChannels(showDms) {
+    let tries = 0;
+    (function wait() {
+      const app = window.app;
+      if (!app || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+      const note = (code) => {
+        const ch = findCh(code);
+        if (!ch) return;
+        store(isDm(ch) ? KEY_DM : KEY_CANAL, code);
+        dmHome(false);
+        showDms(isDm(ch));
+      };
+      const orig = app.switchChannel;
+      app.switchChannel = function (code, ...rest) {
+        const r = orig.call(this, code, ...rest);
+        try { note(code); } catch (err) { console.warn('[puente] canal:', err); }
+        return r;
+      };
+      if (app.currentChannel) note(app.currentChannel);
+    })();
+  }
+
   function build() {
     const sb = document.querySelector('[data-haven-region="navigation-sidebar"]');
     if (!sb || document.getElementById('puente-rail')) return !!sb;
@@ -1204,8 +1271,12 @@
     };
     dm.addEventListener('click', () => showDms(true));
     srv.addEventListener('click', () => showDms(false));
-    if (pcDm) pcDm.addEventListener('click', () => showDms(true));
-    if (home) home.addEventListener('click', () => showDms(false));
+    // En la PC, como Discord de escritorio, cambia toda la pantalla: los mensajes
+    // directos abren la ultima conversacion privada (o una pantalla con todas) y
+    // el servidor vuelve al ultimo canal donde estabas
+    if (pcDm) pcDm.addEventListener('click', () => { showDms(true); goTo(true); });
+    if (home) home.addEventListener('click', () => { showDms(false); goTo(false); });
+    followChannels(showDms);
 
     // Mensajes directos sin leer: el numero tambien en el boton de la columna
     const src = document.getElementById('dm-unread-badge');
