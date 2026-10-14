@@ -771,3 +771,6 @@ html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #cha
 .category-label > .channel-badge-nested-dot,
 .category-label > .channel-badge,
 .category-label > .cat-unread-badge { display: none !important; }
+
+/* "+ Create Temp Channel" (canal de voz temporal): Discord no lo tiene */
+.channel-item.temp-channel-create-btn { display: none !important; }
