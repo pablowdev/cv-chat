@@ -1,0 +1,8 @@
+[Unit]
+Description=Haven: control diario de accesos a canales (que nadie vea lo que en Discord no puede ver)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -u node haven node /tools/auditoria-accesos.js

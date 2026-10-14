@@ -1,0 +1,9 @@
+[Unit]
+Description=Control de accesos a canales una vez al dia
+
+[Timer]
+OnCalendar=*-*-* 14:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

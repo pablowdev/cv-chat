@@ -19,6 +19,7 @@ Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com
 | Sincronización completa | `tools/sincronizar-discord.js` | Importa todo el historial (canales, hilos y foros, con categorías y orden) y luego trae solo lo nuevo, cada 10 minutos, como respaldo del puente. Guarda de a 100 mensajes, así que gasta poca memoria. |
 | Menciones | `tools/puente/adjuntos.js`, `tools/menciones-discord.js` | Las menciones de Discord (`<@id>`, `<#id>`, `<@&id>`) se muestran como `@usuario` de Haven si la cuenta está vinculada, `@Nombre` si no, `#canal` y `@rol`. El puente lo hace con los mensajes nuevos; el script, una vez, con el historial importado (guarda el texto original para poder deshacerlo). |
 | Hilos de la importación oficial | `tools/hilos-discord.js` | Convierte en hilos de verdad los canales sueltos que crea el importador de Haven, y marca como privados los canales que eran privados en Discord. |
+| Control de accesos | `tools/auditoria-accesos.js` | Una vez al día recalcula con los datos de Discord quién puede ver cada canal y lo compara con Haven: avisa en el canal de admins si un canal de Discord es público, si hay alguien sin vincular adentro o si alguien ve un canal que en Discord no puede ver. |
 | Copias de seguridad | `tools/backup.sh` | Copia diaria de la base de datos (consistente aunque Haven esté funcionando) y de la configuración, subida con rclone. |
 
 ## Tema Discord+ (`theme/`)
