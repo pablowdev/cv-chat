@@ -1986,3 +1986,335 @@
     };
   })();
 })();
+
+// PC: editar un canal como en Discord de escritorio. Al pasar el mouse por un
+// canal aparece un engranaje ("Editar canal") que abre los ajustes en pantalla
+// completa: a la izquierda las secciones (Informacion general, Funciones,
+// Permisos, Integraciones y Eliminar canal) y a la derecha la seccion elegida,
+// con la barra de "cambios sin guardar" abajo. Todo usa las mismas acciones de
+// Haven y muestra solo lo que Haven te deja hacer en ese canal. El clic derecho
+// sigue abriendo el menu del canal, ahora donde esta el mouse y con el aspecto
+// de Discord.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const pc = () => window.innerWidth > 768;
+  const GEAR = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.9h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>';
+  const SLOW = [[0, 'Desactivado'], [5, '5 s'], [10, '10 s'], [15, '15 s'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min'], [600, '10 min'], [900, '15 min'], [1800, '30 min'], [3600, '1 h']];
+
+  let page = null; // { code, root, section, base, fields }
+
+  const findCh = (app, code) => (app.channels || []).find(c => c && c.code === code);
+
+  // Lo que Haven te deja hacer en este canal: se arma su menu (sin mostrarlo) y
+  // se mira que opciones quedaron visibles
+  function permsFor(app, code, anchor) {
+    const menu = document.getElementById('channel-ctx-menu');
+    const out = { rename: false, functions: false, roles: false, webhooks: false, delete: false };
+    if (!menu || typeof app._openChannelCtxMenu !== 'function') return out;
+    const vis = menu.style.visibility;
+    menu.style.visibility = 'hidden';
+    try {
+      app._openChannelCtxMenu(code, anchor);
+      const shown = (a) => { const b = menu.querySelector('[data-action="' + a + '"]'); return !!b && b.style.display !== 'none' && getComputedStyle(b).display !== 'none'; };
+      out.rename = shown('rename-channel');
+      out.functions = shown('channel-functions');
+      out.roles = shown('channel-roles');
+      out.webhooks = shown('webhooks');
+      out.delete = shown('delete');
+    } catch (err) { console.warn('[puente] permisos del canal:', err); }
+    try { app._closeChannelCtxMenu(); } catch { /* nada */ }
+    menu.style.visibility = vis;
+    out.topic = !!(app.user && (app.user.isAdmin || (app._hasPerm && app._hasPerm('set_channel_topic'))));
+    return out;
+  }
+
+  function categoryOf(item) {
+    let n = item;
+    while (n) {
+      n = n.previousElementSibling || (n.parentElement && n.parentElement.id !== 'channel-list' ? n.parentElement : null);
+      if (n && n.classList && n.classList.contains('category-label')) return n.textContent.replace(/[▾▸▼▶⌄]/g, '').trim();
+    }
+    return '';
+  }
+
+  // ── El panel de Funciones de Haven, prestado dentro de la pagina ──
+  let panelHome = null;
+  function borrowPanel(app, host, ch) {
+    const panel = document.getElementById('channel-functions-panel');
+    if (!panel) return false;
+    if (!panelHome) panelHome = { parent: panel.parentNode, next: panel.nextSibling };
+    app._ctxMenuChannel = ch.code;
+    try { app._updateChannelFunctionsPanel(ch); } catch { /* nada */ }
+    panel.classList.add('puente-ajustes-panel');
+    panel.style.left = ''; panel.style.top = '';
+    panel.style.display = 'block';
+    host.appendChild(panel);
+    return true;
+  }
+  function returnPanel() {
+    const panel = document.getElementById('channel-functions-panel');
+    if (!panel || !panelHome) return;
+    panel.classList.remove('puente-ajustes-panel');
+    panel.style.display = 'none';
+    if (panelHome.parent && panelHome.parent.isConnected) panelHome.parent.insertBefore(panel, panelHome.next && panelHome.next.parentNode === panelHome.parent ? panelHome.next : null);
+  }
+
+  function close(force) {
+    if (!page) return;
+    if (!force && page.dirty && page.dirty()) { page.shake(); return; }
+    returnPanel();
+    clearInterval(page.timer);
+    page.root.remove();
+    document.removeEventListener('keydown', onKey, true);
+    const app = window.app;
+    if (app) app._ctxMenuChannel = null;
+    page = null;
+  }
+  function modalOpen() {
+    return [...document.querySelectorAll('.modal-overlay, .modal')].some(m => !page.root.contains(m) && m.getClientRects().length > 0 && getComputedStyle(m).visibility !== 'hidden');
+  }
+  function onKey(e) {
+    if (e.key !== 'Escape' || !page || modalOpen()) return;
+    e.stopPropagation();
+    close(false);
+  }
+
+  function overview(app, ch, perms, content, bar) {
+    content.appendChild(el('h2', 'pa-title', 'Información general'));
+    const base = { name: ch.name || '', topic: ch.topic || '', slow: ch.slow_mode_interval || 0, nsfw: ch.is_nsfw ? 1 : 0 };
+    const f = {};
+    const field = (label) => { const w = el('div', 'pa-field'); w.appendChild(el('label', 'pa-label', label)); content.appendChild(w); return w; };
+    if (perms.rename) {
+      const w = field('Nombre del canal');
+      f.name = el('input', 'pa-input'); f.name.type = 'text'; f.name.maxLength = 100; f.name.value = base.name;
+      w.appendChild(f.name);
+    }
+    if (perms.topic) {
+      const w = field('Tema del canal');
+      const box = el('div', 'pa-textarea-wrap');
+      f.topic = el('textarea', 'pa-textarea'); f.topic.maxLength = 256; f.topic.value = base.topic;
+      f.topic.placeholder = 'Contale a la gente de qué se trata este canal';
+      const left = el('span', 'pa-count');
+      const upd = () => { left.textContent = String(256 - f.topic.value.length); };
+      f.topic.addEventListener('input', upd); upd();
+      box.append(f.topic, left);
+      w.appendChild(box);
+    }
+    if (perms.functions) {
+      const w = field('Modo lento');
+      f.slow = el('select', 'pa-select');
+      const opts = SLOW.slice();
+      if (!opts.some(o => o[0] === base.slow)) opts.push([base.slow, base.slow + ' s']);
+      for (const [v, t] of opts) { const o = el('option', null, t); o.value = String(v); if (v === base.slow) o.selected = true; f.slow.appendChild(o); }
+      w.appendChild(f.slow);
+      w.appendChild(el('div', 'pa-help', 'Cada persona solo puede mandar un mensaje cada tanto tiempo en este canal.'));
+
+      const v = field('Visibilidad del contenido');
+      const radio = (value, title, desc) => {
+        const r = el('label', 'pa-radio');
+        const i = el('input'); i.type = 'radio'; i.name = 'puente-nsfw'; i.value = String(value); i.checked = base.nsfw === value;
+        const txt = el('span', 'pa-radio-text'); txt.append(el('span', 'pa-radio-title', title), el('span', 'pa-radio-desc', desc));
+        r.append(i, txt);
+        v.appendChild(r);
+        return i;
+      };
+      f.nsfw0 = radio(0, 'Normal', 'El contenido del canal siempre se ve.');
+      f.nsfw1 = radio(1, 'Para mayores de edad', 'Hay que confirmar ser mayor de edad para ver el contenido de este canal.');
+    }
+    if (!Object.keys(f).length) content.appendChild(el('div', 'pa-help', 'No tenés permiso para cambiar estos datos de este canal.'));
+
+    const now = () => ({
+      name: f.name ? f.name.value.trim() : base.name,
+      topic: f.topic ? f.topic.value : base.topic,
+      slow: f.slow ? parseInt(f.slow.value, 10) || 0 : base.slow,
+      nsfw: f.nsfw1 ? (f.nsfw1.checked ? 1 : 0) : base.nsfw,
+    });
+    const dirty = () => { const n = now(); return n.name !== base.name || n.topic !== base.topic || n.slow !== base.slow || n.nsfw !== base.nsfw; };
+    const refresh = () => bar.classList.toggle('visible', dirty());
+    content.addEventListener('input', refresh);
+    content.addEventListener('change', refresh);
+    page.dirty = dirty;
+    page.reset = () => {
+      if (f.name) f.name.value = base.name;
+      if (f.topic) { f.topic.value = base.topic; f.topic.dispatchEvent(new Event('input')); }
+      if (f.slow) f.slow.value = String(base.slow);
+      if (f.nsfw0) { f.nsfw0.checked = base.nsfw === 0; f.nsfw1.checked = base.nsfw === 1; }
+      refresh();
+    };
+    page.save = () => {
+      const n = now();
+      const s = app.socket;
+      if (!s) return;
+      if (n.name && n.name !== base.name) s.emit('rename-channel', { code: ch.code, name: n.name });
+      if (n.topic !== base.topic) s.emit('set-channel-topic', { code: ch.code, topic: n.topic.slice(0, 256) });
+      if (n.slow !== base.slow) s.emit('set-slow-mode', { code: ch.code, interval: n.slow });
+      if (n.nsfw !== base.nsfw) s.emit('toggle-channel-permission', { code: ch.code, permission: 'nsfw' });
+      Object.assign(base, n);
+      if (n.name) page.head.firstChild.textContent = '# ' + n.name;
+      refresh();
+    };
+  }
+
+  function open(app, code, item) {
+    close(true);
+    const ch = findCh(app, code);
+    if (!ch) return;
+    const perms = permsFor(app, code, item.querySelector('.channel-more-btn') || item);
+    if (!perms.rename && !perms.topic && !perms.functions && !perms.roles && !perms.webhooks && !perms.delete) return;
+
+    const root = el('div', 'puente-ajustes');
+    root.id = 'puente-ajustes';
+    const nav = el('nav', 'pa-nav');
+    const navIn = el('div', 'pa-nav-in');
+    const head = el('div', 'pa-head');
+    head.append(el('span', null, '# ' + ch.name), el('span', 'pa-head-cat', categoryOf(item)));
+    navIn.appendChild(head);
+    nav.appendChild(navIn);
+    const main = el('main', 'pa-main');
+    const content = el('div', 'pa-content');
+    const x = el('button', 'pa-close');
+    x.type = 'button';
+    x.innerHTML = '<span class="pa-close-x">✕</span><span class="pa-close-esc">ESC</span>';
+    x.addEventListener('click', () => close(false));
+    const col = el('div', 'pa-col');
+    col.appendChild(content);
+    main.append(col, x);
+    const bar = el('div', 'pa-savebar');
+    bar.appendChild(el('span', 'pa-savebar-text', '¡Cuidado! Tenés cambios sin guardar.'));
+    const reset = el('button', 'pa-reset', 'Restablecer'); reset.type = 'button';
+    const save = el('button', 'pa-save', 'Guardar cambios'); save.type = 'button';
+    reset.addEventListener('click', () => page && page.reset && page.reset());
+    save.addEventListener('click', () => page && page.save && page.save());
+    bar.append(reset, save);
+    col.appendChild(bar);
+    root.append(nav, main);
+    document.body.appendChild(root);
+
+    page = { code, root, head, dirty: null, reset: null, save: null, timer: null };
+    page.shake = () => { bar.classList.remove('shake'); void bar.offsetWidth; bar.classList.add('shake'); };
+
+    const items = [];
+    const show = (key) => {
+      if (page.dirty && page.dirty()) { page.shake(); return; }
+      returnPanel();
+      content.textContent = '';
+      page.dirty = null; page.reset = null; page.save = null;
+      bar.classList.remove('visible');
+      for (const it of items) it.btn.classList.toggle('active', it.key === key);
+      const cur = findCh(app, code) || ch;
+      if (key === 'overview') overview(app, cur, perms, content, bar);
+      if (key === 'functions') {
+        content.appendChild(el('h2', 'pa-title', 'Funciones'));
+        content.appendChild(el('div', 'pa-help', 'Qué se puede hacer en este canal. Los cambios se guardan al instante.'));
+        const host = el('div', 'pa-panel-host');
+        content.appendChild(host);
+        if (!borrowPanel(app, host, cur)) content.appendChild(el('div', 'pa-help', 'No se pudieron cargar las funciones.'));
+      }
+    };
+    const addItem = (key, label, onClick, cls) => {
+      const b = el('button', 'pa-item' + (cls ? ' ' + cls : ''), label);
+      b.type = 'button';
+      b.addEventListener('click', onClick || (() => show(key)));
+      navIn.appendChild(b);
+      items.push({ key, btn: b });
+    };
+    addItem('overview', 'Información general');
+    if (perms.functions) addItem('functions', 'Funciones');
+    if (perms.roles) addItem('roles', 'Permisos', () => app._openChannelRolesModal(code));
+    if (perms.webhooks) addItem('webhooks', 'Integraciones', () => app._openWebhookModal(code));
+    if (perms.delete) {
+      navIn.appendChild(el('div', 'pa-sep'));
+      addItem('delete', 'Eliminar canal', () => {
+        if (page.dirty && page.dirty()) { page.shake(); return; }
+        app._ctxMenuChannel = code;
+        document.querySelector('#channel-ctx-menu [data-action="delete"]')?.click();
+      }, 'pa-danger');
+    }
+    show('overview');
+    // Si se borra el canal (o te sacan el acceso), cerrar
+    page.timer = setInterval(() => { if (!findCh(app, code)) close(true); }, 1000);
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  // Engranaje "Editar canal" en cada canal que podrias administrar
+  function mightManage(app, ch) {
+    const u = app.user || {};
+    const has = (p) => !!(app._hasPerm && app._hasPerm(p));
+    return !!(u.isAdmin || ch.canManageSettings || (app._canModerate && app._canModerate()) ||
+      has('rename_channel') || has('rename_sub_channel') || has('set_channel_topic') || has('manage_webhooks') || has('delete_channel'));
+  }
+  function addGears(app) {
+    const list = document.getElementById('channel-list');
+    if (!list) return;
+    for (const item of list.querySelectorAll('.channel-item[data-code]')) {
+      if (item.querySelector('.puente-canal-gear') || item.classList.contains('dm-item')) continue;
+      const ch = findCh(app, item.dataset.code);
+      if (!ch || ch.is_dm || !mightManage(app, ch)) continue;
+      const g = el('button', 'puente-canal-gear');
+      g.type = 'button';
+      g.title = 'Editar canal';
+      g.innerHTML = GEAR;
+      g.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); if (pc()) open(app, item.dataset.code, item); });
+      const more = item.querySelector('.channel-more-btn');
+      item.insertBefore(g, more || null);
+    }
+  }
+
+  // "✅ Marcar como leido" -> "Marcar como leido" (Discord no pone iconos)
+  function dropIcons(menu) {
+    for (const b of menu.querySelectorAll('.channel-ctx-item')) {
+      const first = b.firstChild;
+      if (first && first.nodeType === 3) {
+        const m = /^\s*(\S+)\s*([\s\S]*)$/.exec(first.nodeValue);
+        if (m && !/[a-z0-9áéíóúñ]/i.test(m[1])) first.nodeValue = m[2];
+      }
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const list = document.getElementById('channel-list');
+    if (!app || !list || typeof app._openChannelCtxMenu !== 'function' || typeof app._closeChannelCtxMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+
+    // Mientras la pagina esta abierta, el panel de Funciones sigue apuntando a este canal
+    const closeMenu = app._closeChannelCtxMenu;
+    app._closeChannelCtxMenu = function (...a) {
+      const r = closeMenu.apply(this, a);
+      if (page) {
+        this._ctxMenuChannel = page.code;
+        const panel = document.getElementById('channel-functions-panel');
+        if (panel && page.root.contains(panel)) panel.style.display = 'block';
+      }
+      return r;
+    };
+
+    // Clic derecho: el menu donde esta el mouse, con el aspecto de Discord
+    let lastRight = null;
+    list.addEventListener('contextmenu', (e) => { lastRight = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+    const openMenu = app._openChannelCtxMenu;
+    app._openChannelCtxMenu = function (code, btn, ...rest) {
+      const r = openMenu.call(this, code, btn, ...rest);
+      const menu = document.getElementById('channel-ctx-menu');
+      if (menu && pc()) {
+        menu.classList.add('puente-pc-canal-menu');
+        dropIcons(menu);
+        if (lastRight && Date.now() - lastRight.t < 300 && menu.style.visibility !== 'hidden') {
+          const p = lastRight;
+          menu.style.left = p.x + 'px'; menu.style.top = p.y + 'px';
+          requestAnimationFrame(() => {
+            const mr = menu.getBoundingClientRect();
+            if (mr.right > innerWidth - 8) menu.style.left = Math.max(8, innerWidth - mr.width - 8) + 'px';
+            if (mr.bottom > innerHeight - 8) menu.style.top = Math.max(8, innerHeight - mr.height - 8) + 'px';
+          });
+        }
+      }
+      return r;
+    };
+
+    new MutationObserver(() => addGears(app)).observe(list, { childList: true, subtree: true });
+    addGears(app);
+  })();
+})();

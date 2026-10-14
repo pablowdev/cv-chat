@@ -1175,3 +1175,114 @@ html body #profile-popup.puente-pc-card {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
 }
+
+/* PC: engranaje "Editar canal" al pasar el mouse por un canal (aviso.js) */
+.puente-canal-gear { display: none; }
+@media (min-width: 769px) {
+  html body .channel-item .puente-canal-gear {
+    display: none; margin-left: auto; width: 1.25rem; height: 1.25rem; padding: 0; border: 0;
+    background: transparent; color: #b5bac1; cursor: pointer; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  html body .channel-item:hover .puente-canal-gear, html body .channel-item.active .puente-canal-gear { display: flex; }
+  html body .channel-item .puente-canal-gear:hover { color: #fbfbfb; }
+  /* El "⋯" de Haven no se ve (el menu sigue con clic derecho) pero queda en su lugar */
+  html body .channel-item:has(.puente-canal-gear) .channel-more-btn { opacity: 0; width: 0; min-width: 0; padding: 0; margin: 0; overflow: hidden; pointer-events: none; }
+
+  /* Menu del canal (clic derecho) con el aspecto de Discord */
+  html body #channel-ctx-menu.puente-pc-canal-menu {
+    min-width: 13rem; padding: 0.5rem; border-radius: 0.5rem;
+    background: #1e1e22 !important; border: 1px solid #29292d; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .puente-pc-canal-menu .channel-ctx-item {
+    display: flex; align-items: center; width: 100%; min-height: 2rem; padding: 0.375rem 0.5rem; gap: 0.25rem;
+    border: 0; border-radius: 0.25rem; background: transparent; color: #dbdee1;
+    font: inherit; font-size: 0.875rem; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .puente-pc-canal-menu .channel-ctx-item:hover { background: #2e2d32; color: #fbfbfb; }
+  .puente-pc-canal-menu .channel-ctx-item.danger { color: #f23f43; }
+  .puente-pc-canal-menu .channel-ctx-item.danger:hover { background: #f23f43; color: #fff; }
+  .puente-pc-canal-menu .cfn-arrow { margin-left: auto; color: #96969e; font-size: 0.625rem; }
+  .puente-pc-canal-menu hr.channel-ctx-sep { border: 0; height: 1px; margin: 0.25rem 0.375rem; background: #29292d; }
+}
+
+/* PC: ajustes del canal en pantalla completa, como Discord de escritorio */
+#puente-ajustes { position: fixed; inset: 0; z-index: 100000; display: flex; background: #1a1a1e; color: #dbdee1; animation: puente-fade 0.12s ease-out; }
+.pa-nav { flex: 1 0 13.5rem; display: flex; justify-content: flex-end; background: #121214; overflow-y: auto; }
+.pa-nav-in { width: 13.5rem; padding: 3.75rem 0.5rem 1.25rem 1.25rem; box-sizing: content-box; }
+.pa-head { padding: 0.375rem 0.625rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #96969e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-head-cat { margin-left: 0.375rem; color: #dbdee1; }
+.pa-item {
+  display: block; width: 100%; margin-bottom: 0.125rem; padding: 0.375rem 0.625rem; border: 0; border-radius: 0.25rem;
+  background: transparent; color: #b5bac1; font: inherit; font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer;
+}
+.pa-item:hover { background: #29292e; color: #dbdee1; }
+.pa-item.active { background: #343338; color: #fbfbfb; }
+.pa-item.pa-danger { color: #f23f43; }
+.pa-item.pa-danger:hover { background: rgba(242, 63, 67, 0.1); }
+.pa-sep { height: 1px; margin: 0.5rem 0.625rem; background: #29292d; }
+.pa-main { flex: 1 1 50rem; position: relative; display: flex; overflow-y: auto; }
+.pa-col { flex: 1 1 auto; max-width: 41.25rem; min-width: 0; padding: 3.75rem 2.5rem 1.25rem; display: flex; flex-direction: column; }
+.pa-content { flex: 1 0 auto; padding-bottom: 5rem; }
+.pa-title { margin: 0 0 1.25rem; font-size: 1.25rem; font-weight: 700; color: #fbfbfb; }
+.pa-field { margin-bottom: 1.5rem; }
+.pa-label { display: block; margin-bottom: 0.5rem; font-size: 1rem; font-weight: 600; color: #fbfbfb; }
+.pa-input, .pa-select, .pa-textarea {
+  width: 100%; box-sizing: border-box; border: 1px solid #2e2d32; border-radius: 0.5rem; background: #121214;
+  color: #dbdee1; font: inherit; font-size: 1rem; outline: none;
+}
+.pa-input, .pa-select { height: 2.5rem; padding: 0 0.75rem; }
+.pa-input:focus, .pa-select:focus, .pa-textarea:focus { border-color: #5865f2; }
+.pa-textarea-wrap { position: relative; }
+.pa-textarea { min-height: 8rem; padding: 0.75rem 0.75rem 1.75rem; resize: vertical; line-height: 1.375rem; }
+.pa-count { position: absolute; right: 0.75rem; bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #dbdee1; }
+.pa-help { margin-top: 0.5rem; font-size: 0.8125rem; color: #96969e; line-height: 1.125rem; }
+.pa-radio { display: flex; gap: 0.75rem; align-items: flex-start; margin-bottom: 0.875rem; cursor: pointer; }
+.pa-radio input { width: 1.25rem; height: 1.25rem; margin: 0.125rem 0 0; accent-color: #5865f2; flex-shrink: 0; }
+.pa-radio-text { display: flex; flex-direction: column; }
+.pa-radio-title { font-size: 1rem; color: #fbfbfb; }
+.pa-radio-desc { font-size: 0.875rem; color: #96969e; }
+.pa-close {
+  position: sticky; top: 3.75rem; align-self: flex-start; flex-shrink: 0; margin: 3.75rem 1.25rem 0 0;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem; border: 0; background: transparent; color: #b5bac1; cursor: pointer;
+}
+.pa-close-x { width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+.pa-close-esc { font-size: 0.8125rem; font-weight: 600; }
+.pa-close:hover { color: #fbfbfb; }
+/* Barra de "cambios sin guardar" */
+.pa-savebar {
+  position: sticky; bottom: 1.25rem; transform: translateY(150%); width: 100%;
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem 0.625rem 1rem; box-sizing: border-box;
+  border-radius: 0.5rem; background: #111113; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.pa-savebar.visible { transform: none; opacity: 1; pointer-events: auto; }
+.pa-savebar-text { flex: 1 1 auto; font-size: 0.9375rem; font-weight: 500; color: #dbdee1; }
+.pa-reset { border: 0; background: transparent; color: #dbdee1; font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; padding: 0.5rem 0.75rem; }
+.pa-reset:hover { text-decoration: underline; }
+.pa-save { border: 0; border-radius: 0.375rem; background: #248046; color: #fff; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; padding: 0.5rem 1rem; }
+.pa-save:hover { background: #1a6334; }
+.pa-savebar.shake { animation: pa-shake 0.4s; background: #f23f43; }
+.pa-savebar.shake .pa-savebar-text { color: #fff; }
+@keyframes pa-shake { 0%, 100% { transform: none; } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+/* El panel de Funciones de Haven dentro de la pagina */
+html body #channel-functions-panel.puente-ajustes-panel {
+  position: static !important; display: block; width: 100% !important; max-width: none; max-height: none; overflow: visible;
+  margin: 1rem 0 0; padding: 0; border: 0; background: transparent !important; box-shadow: none !important;
+}
+.puente-ajustes-panel .cfn-row {
+  display: flex; align-items: center; justify-content: space-between; min-height: 3rem; padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #29292d; border-radius: 0; font-size: 1rem; color: #dbdee1; cursor: pointer;
+}
+.puente-ajustes-panel .cfn-row:hover { background: #222226; }
+/* Funciones de si/no: interruptores como los de Discord en vez de "ON/OFF" */
+.puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge {
+  position: relative; width: 2.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 0.75rem;
+  font-size: 0; color: transparent; background: #80848e; transition: background 0.15s; flex-shrink: 0;
+}
+.puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge::after {
+  content: ""; position: absolute; top: 0.1875rem; left: 0.1875rem; width: 1.125rem; height: 1.125rem; border-radius: 50%;
+  background: #fff; transition: left 0.15s;
+}
+.puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge.cfn-on { background: #248046; }
+.puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge.cfn-on::after { left: 1.1875rem; }
