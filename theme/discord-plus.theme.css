@@ -809,3 +809,16 @@ html body #profile-popup.puente-profile-sheet {
 .puente-profile-sheet .profile-popup-roles { order: 8; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 .puente-profile-sheet .profile-popup-role { border: 0 !important; background: #252429; color: #fbfbfb !important; border-radius: 0.5rem; padding: 0.375rem 0.75rem; font-size: 1rem; }
 .puente-profile-sheet #profile-popup-activity-slot { order: 9; }
+/* Botones del perfil: "Mensaje" ancho en una linea y el engranaje cuadrado al lado, como Discord */
+html body .puente-profile-sheet .profile-popup-actions { flex-wrap: nowrap; align-items: stretch; width: 100%; }
+html body .puente-profile-sheet .profile-dm-btn,
+html body .puente-profile-sheet .profile-edit-btn {
+  flex: 1 1 0 !important; width: auto !important; min-width: 0; max-width: none !important;
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 0.5rem; white-space: nowrap;
+}
+html body .puente-profile-sheet .profile-gear-btn {
+  flex: 0 0 3rem !important; width: 3rem !important; min-width: 3rem; max-width: 3rem !important; height: 3rem; padding: 0 !important;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-size: 0 !important; color: transparent; background: #252429 !important; border: 0 !important;
+}
+html body .puente-profile-sheet .profile-gear-btn::before { content: '⚙️'; font-size: 1.25rem; color: #dbdee1; filter: grayscale(1) brightness(1.6); }
