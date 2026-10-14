@@ -857,3 +857,7 @@ html body .puente-profile-sheet .profile-gear-btn::before { content: '⚙️'; f
   html body #message-input-area .input-actions-box:not(.open) > #emoji-btn { width: 2.75rem !important; height: 2.75rem !important; min-width: 2.75rem; }
   html body #message-input-area .input-actions-box:not(.open) { gap: 0.125rem !important; flex: 0 0 auto; }
 }
+/* Celular: sin la manija gris para cambiar el alto del cuadro de escribir (Discord no la tiene) */
+@media (max-width: 768px) {
+  html body #message-input-area > .pip-input-resizer { display: none !important; }
+}
