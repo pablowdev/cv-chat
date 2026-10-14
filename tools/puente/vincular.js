@@ -141,8 +141,8 @@ function injectScript(req, res, src) {
             'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name{visibility:hidden!important}</style></head>');
         }
         // Pantalla de carga con el logo, como Discord: tapa la pagina vacia de Haven
-        // mientras se conecta y se acomoda todo, con el logo grande girando sobre su
-        // eje; aviso.js la saca con un fundido cuando ya cargaron los canales y los
+        // mientras se conecta y se acomoda todo, con el logo grande girando como las
+        // agujas del reloj; aviso.js la saca con un fundido cuando ya cargaron los canales y los
         // mensajes. Si algo falla, se va sola a los 8 s.
         if (html.includes('id="no-channel-msg"') && !html.includes('puente-carga')) {
           const size = 'min(62vmin,520px)';
@@ -155,7 +155,7 @@ function injectScript(req, res, src) {
             'z-index:2147483646;background:url(/puente/logo-carga.png) center/contain no-repeat;' +
             'animation:puente-carga-gira 2.4s linear infinite,puente-carga-fin .3s ease 8s forwards}' +
             'html.puente-listo::before,html.puente-listo::after{opacity:0;visibility:hidden;pointer-events:none}' +
-            '@keyframes puente-carga-gira{from{transform:perspective(1600px) rotateY(0deg)}to{transform:perspective(1600px) rotateY(360deg)}}' +
+            '@keyframes puente-carga-gira{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}' +
             '@keyframes puente-carga-fin{to{opacity:0;visibility:hidden}}</style></head>');
         }
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
