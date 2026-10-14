@@ -1111,3 +1111,67 @@ html body [data-haven-region="main"]:has(> #puente-dm-home) { position: relative
 .puente-yo-sub { display: none; padding-left: 0.75rem; }
 .puente-yo-status-wrap.abierto .puente-yo-sub { display: block; }
 .puente-yo-sub .puente-yo-item.actual { color: #fbfbfb; font-weight: 600; }
+
+/* PC: perfil de una persona como la tarjeta de Discord de escritorio (aviso.js):
+   banner alto con el boton ⋯ arriba a la derecha, avatar grande redondo, nombre
+   grande, y abajo el cuadro "Mensaje @nombre" en vez de los botones */
+html body #profile-popup.puente-pc-card {
+  width: 18.75rem; padding: 0; overflow: visible; border-radius: 0.5rem;
+  background: #1a1a1e !important; border: 1px solid #29292d; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.puente-pc-card .profile-popup-banner { height: 6.5rem; border-radius: 0.5rem 0.5rem 0 0; }
+.puente-pc-card .profile-popup-close { display: none; }
+.puente-card-tools { position: absolute; top: 0.75rem; right: 0.75rem; display: flex; gap: 0.5rem; }
+.puente-card-more {
+  width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 1.125rem; font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.puente-card-more:hover { background: rgba(0, 0, 0, 0.75); }
+.puente-pc-card .profile-popup-avatar-wrapper { width: 5.5rem; height: 5.5rem; margin: -3rem 0 0 1rem; }
+.puente-pc-card .profile-popup-avatar {
+  width: 5rem !important; height: 5rem !important; border-radius: 50% !important;
+  border: 0.375rem solid #1a1a1e; box-sizing: content-box; font-size: 2rem;
+}
+.puente-pc-card .profile-popup-status-dot { width: 1rem; height: 1rem; right: 0.125rem; bottom: 0.125rem; border: 0.3125rem solid #1a1a1e; }
+.puente-pc-card .profile-popup-body { padding: 0.5rem 1rem 1rem; }
+.puente-pc-card .profile-popup-displayname { font-size: 1.25rem; font-weight: 700; color: #fbfbfb; }
+.puente-pc-card .profile-popup-username { font-size: 0.875rem; color: #dbdee1; }
+.puente-pc-card .profile-popup-divider { display: none; }
+.puente-pc-card .profile-popup-section-label { margin-top: 0.75rem; font-size: 0.75rem; text-transform: none; letter-spacing: 0; color: #96969e; font-weight: 600; }
+.puente-pc-card .profile-popup-role { border: 0; border-radius: 0.25rem; background: #252429; color: #dbdee1 !important; }
+.puente-pc-card .profile-popup-join-date { font-size: 0.875rem; color: #dbdee1; }
+/* Los botones "Mensaje" y "Mas acciones" de Haven: los reemplazan el cuadro y el ⋯ */
+.puente-pc-card:has(.puente-card-msg) .profile-popup-actions { display: none; }
+.puente-card-msg { margin-top: 1rem; }
+.puente-card-msg input {
+  width: 100%; height: 2.75rem; box-sizing: border-box; padding: 0 0.75rem;
+  border: 1px solid #2e2d32; border-radius: 0.5rem; background: transparent;
+  color: #dbdee1; font: inherit; font-size: 0.875rem; outline: none;
+}
+.puente-card-msg input:focus { border-color: #4e4d55; }
+.puente-card-msg input::placeholder { color: #80848e; }
+
+/* PC: el menu de opciones de una persona (⋯ o clic derecho) como el de Discord */
+@media (min-width: 769px) {
+  html body #user-context-menu.puente-pc-menu {
+    min-width: 11.5rem; padding: 0.5rem; border-radius: 0.5rem;
+    background: #1e1e22 !important; border: 1px solid #29292d; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .puente-pc-menu .user-ctx-header { display: none; }
+  .puente-pc-menu button {
+    display: flex; align-items: center; width: 100%; min-height: 2rem; padding: 0.375rem 0.5rem;
+    border: 0; border-radius: 0.25rem; background: transparent; color: #dbdee1;
+    font: inherit; font-size: 0.875rem; font-weight: 500; text-align: left; cursor: pointer;
+  }
+  .puente-pc-menu button:hover { background: #2e2d32; color: #fbfbfb; }
+  .puente-pc-menu button.user-ctx-danger { color: #f23f43; }
+  .puente-pc-menu button.user-ctx-danger:hover { background: #f23f43; color: #fff; }
+  .puente-pc-menu .user-ctx-divider { height: 1px; margin: 0.25rem 0.375rem; background: #29292d; }
+  .puente-pc-menu .user-ctx-submenu {
+    padding: 0.5rem; border-radius: 0.5rem; background: #1e1e22 !important; border: 1px solid #29292d;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}

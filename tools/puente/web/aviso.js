@@ -1855,3 +1855,134 @@
     };
   })();
 })();
+
+// PC: el perfil de una persona como la tarjeta de Discord de escritorio. Arriba
+// a la derecha del banner un boton ⋯ que abre el menu de opciones al lado de la
+// tarjeta (sin cerrarla), y abajo un cuadro "Mensaje @nombre": escribis, Enter,
+// y se abre la conversacion con el mensaje enviado. Las opciones del menu son
+// las de Haven, con sus mismos permisos; solo cambia como se ven.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const pc = () => window.innerWidth > 768;
+
+  // "👤 Ver perfil" -> "Ver perfil" (Discord no pone iconos a la izquierda)
+  function dropIcon(btn) {
+    const first = btn.firstChild;
+    if (!first || first.nodeType !== 3) return;
+    const m = /^\s*(\S+)\s+([\s\S]*)$/.exec(first.nodeValue);
+    if (m && !/[a-z0-9áéíóúñ]/i.test(m[1])) first.nodeValue = m[2];
+  }
+
+  // Mandar el mensaje cuando se abra la conversacion con esa persona
+  function sendWhenOpen(app, userId, text) {
+    const t0 = Date.now();
+    (function check() {
+      const ch = (app.channels || []).find(c => c && c.code === app.currentChannel);
+      const input = document.getElementById('message-input');
+      if (ch && ch.is_dm && ch.dm_target && ch.dm_target.id === userId && input && !input.disabled) {
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        document.getElementById('send-btn')?.click();
+        return;
+      }
+      if (Date.now() - t0 < 5000) setTimeout(check, 150);
+      else if (input && !input.value) { input.value = text; input.focus(); } // no se pudo mandar solo: queda escrito
+    })();
+  }
+
+  function openMenu(app, popup, btn, profile) {
+    const keep = app._closeProfilePopup;
+    app._closeProfilePopup = function () {}; // el menu de Haven cierra la tarjeta al abrirse: aca no
+    try {
+      const pr = popup.getBoundingClientRect(), br = btn.getBoundingClientRect();
+      app._showUserContextMenu({ clientX: pr.right + 8, clientY: br.top, target: btn, preventDefault() {}, stopPropagation() {} }, profile.id, profile.username);
+    } finally { app._closeProfilePopup = keep; }
+    const menu = document.getElementById('user-context-menu');
+    if (!menu) return;
+    menu.classList.add('puente-pc-menu');
+    // Si no entra a la derecha de la tarjeta, a la izquierda
+    const mr = menu.getBoundingClientRect(), pr = popup.getBoundingClientRect();
+    if (mr.left < pr.right) menu.style.left = Math.max(8, pr.left - mr.width - 8) + 'px';
+  }
+
+  function decorate(app, popup, profile) {
+    if (!popup || popup.classList.contains('profile-popup-hover') || popup.classList.contains('puente-pc-card')) return;
+    popup.classList.add('puente-pc-card');
+    const isSelf = app.user && profile.id === app.user.id;
+    const banner = popup.querySelector('.profile-popup-banner');
+    if (!isSelf && banner) {
+      const tools = el('div', 'puente-card-tools');
+      const more = el('button', 'puente-card-more');
+      more.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="12" r="2.2" fill="currentColor"/></svg>';
+      more.type = 'button';
+      more.title = 'Más opciones';
+      // Un segundo clic lo cierra (Haven ya cierra el menu al empezar el clic)
+      let wasOpen = false;
+      more.addEventListener('mousedown', () => { wasOpen = !!document.getElementById('user-context-menu'); });
+      more.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (wasOpen) { app._hideUserContextMenu(); wasOpen = false; return; }
+        openMenu(app, popup, more, profile);
+      });
+      tools.appendChild(more);
+      banner.appendChild(tools);
+    }
+    if (!isSelf && profile.username !== 'discord-historial') {
+      const box = el('div', 'puente-card-msg');
+      const input = el('input');
+      input.type = 'text';
+      input.maxLength = 2000;
+      input.placeholder = 'Mensaje @' + (profile.displayName || profile.username);
+      input.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || e.shiftKey) return;
+        e.preventDefault();
+        const text = input.value.trim();
+        const dmBtn = popup.querySelector('.profile-dm-btn');
+        if (!dmBtn) return;
+        dmBtn.click(); // abre la conversacion (y cierra la tarjeta)
+        if (text) sendWhenOpen(app, profile.id, text);
+      });
+      box.appendChild(input);
+      (popup.querySelector('.profile-popup-body') || popup).appendChild(box);
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showProfilePopup !== 'function' || typeof app._showUserContextMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const show = app._showProfilePopup;
+    app._showProfilePopup = function (profile, ...rest) {
+      const r = show.call(this, profile, ...rest);
+      try { if (pc() && profile) decorate(this, document.getElementById('profile-popup'), profile); } catch (err) { console.warn('[puente] tarjeta:', err); }
+      return r;
+    };
+    // Una tarjeta de vista previa (pasando el mouse) que pasa a ser la de verdad
+    const promote = app._promoteHoverPopup;
+    if (typeof promote === 'function') {
+      app._promoteHoverPopup = function (popup, ...rest) {
+        const r = promote.call(this, popup, ...rest);
+        try {
+          const id = this._openProfileUserId;
+          if (pc() && popup && id != null) {
+            const name = ((popup.querySelector('.profile-popup-username') || {}).textContent || '').replace(/^@/, '');
+            const display = ((popup.querySelector('.profile-popup-displayname') || {}).textContent || '').trim();
+            decorate(this, popup, { id, username: name, displayName: display });
+          }
+        } catch (err) { console.warn('[puente] tarjeta:', err); }
+        return r;
+      };
+    }
+    // El menu de opciones con el aspecto de Discord (tambien con clic derecho)
+    const place = app._placeUserContextMenu;
+    app._placeUserContextMenu = function (menu, e, ...rest) {
+      if (pc() && menu) {
+        menu.classList.add('puente-pc-menu');
+        for (const b of menu.querySelectorAll('button')) dropIcon(b);
+      }
+      return place.call(this, menu, e, ...rest);
+    };
+  })();
+})();
