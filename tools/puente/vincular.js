@@ -304,6 +304,13 @@ async function handle(req, res) {
     return json(res, 200, { ok: true });
   }
 
+  // Personas para completar from: y mentions: del buscador (buscar.js)
+  if (p === '/puente/api/buscar/personas' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    return json(res, 200, { personas: require('./buscar.js').people(u.searchParams.get('q') || '') });
+  }
+
   if (p === '/puente/api/reacciones-frecuentes' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

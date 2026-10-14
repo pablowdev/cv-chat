@@ -1196,6 +1196,259 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// PC: el buscador como el de Discord. La caja "Buscar en <servidor>" queda
+// siempre a la derecha del encabezado del canal (la de Haven estaba escondida
+// detras de la lupa) y al hacer clic abre la lista de Discord: "Filtros" (de un
+// usuario, en un canal, con un tipo de contenido, que menciona a alguien, y mas
+// filtros con fechas y fijados) y el "Historial" de busquedas. Escribiendo
+// from:, in:, has: o mentions: aparecen sugerencias (personas, tambien las de
+// Discord; canales; tipos). Busca con Enter, como Discord (Haven buscaba a cada
+// tecla). Los resultados salen en el panel de Haven, a la derecha; buscar.js
+// del puente los arma con los autores de Discord.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const svg = d => `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const IC = {
+    from: svg('M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1c0-2.8-3.6-5-8-5Z'),
+    in: svg('M10.9 3.2a1 1 0 0 1 .8 1.2L11 8h4l.8-4.2a1 1 0 1 1 2 .4L17 8h3a1 1 0 1 1 0 2h-3.4l-.8 4H19a1 1 0 1 1 0 2h-3.6l-.8 4.2a1 1 0 1 1-2-.4L13.4 16h-4l-.8 4.2a1 1 0 1 1-2-.4L7.4 16H4a1 1 0 1 1 0-2h3.8l.8-4H5a1 1 0 0 1 0-2h4l.7-4a1 1 0 0 1 1.2-.8ZM10.6 10l-.8 4h4l.8-4h-4Z'),
+    has: svg('M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6h-1.5Z'),
+    mentions: svg('M12 2a10 10 0 1 0 4.3 19 1 1 0 1 0-.9-1.8A8 8 0 1 1 20 12v1a2 2 0 0 1-4 0V8h-2v.8A5 5 0 1 0 15 16a4 4 0 0 0 7-3v-1A10 10 0 0 0 12 2Zm0 13a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z'),
+    more: svg('M4 6h9v2H4V6Zm13 0h3v2h-3v1.5h-2v-5h2V6ZM4 16h3v2H4v-2Zm7 0h9v2h-9v1.5H9v-5h2V16Zm-7-5h9v2H4v-2Zm13 0h3v2h-3v1.5h-2v-5h2V11Z'),
+    hist: svg('M10 2a8 8 0 1 0 4.9 14.3l5.4 5.4 1.4-1.4-5.4-5.4A8 8 0 0 0 10 2Zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Z'),
+    trash: svg('M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'),
+    cal: svg('M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7ZM5 9h14v11H5V9Z'),
+    pin: svg('M16 3a1 1 0 0 1 .7 1.7L15 6.4v4.1l2.7 2.7A1 1 0 0 1 17 15h-4v6l-1 1-1-1v-6H7a1 1 0 0 1-.7-1.7L9 10.5V6.4L7.3 4.7A1 1 0 0 1 8 3h8Z'),
+  };
+  const HAS = [['enlace', 'Enlace'], ['imagen', 'Imagen'], ['video', 'Video'], ['archivo', 'Archivo'], ['audio', 'Audio']];
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const quote = v => (/\s/.test(v) ? `"${v}"` : v);
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  let app = null, input = null, drop = null, items = [], active = -1, timer = null, seq = 0;
+  const isDm = () => { const ch = (app.channels || []).find(c => c.code === app.currentChannel); return !!(ch && ch.is_dm); };
+
+  function hide() { if (drop) drop.style.display = 'none'; items = []; active = -1; }
+  function place() {
+    const r = input.closest('.search-container').getBoundingClientRect();
+    drop.style.top = (r.bottom + 6) + 'px';
+    drop.style.left = Math.max(8, Math.min(r.right - drop.offsetWidth, innerWidth - drop.offsetWidth - 8)) + 'px';
+  }
+  function mark(i) {
+    active = i;
+    items.forEach((it, j) => it.classList.toggle('actual', j === i));
+    if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+  }
+  function row(icon, title, sub, onPick, cls) {
+    const b = el('button', 'puente-busca-item' + (cls ? ' ' + cls : ''));
+    b.type = 'button';
+    const ic = el('span', 'puente-busca-icon');
+    if (icon && icon.url) { const img = el('img'); img.src = icon.url; img.alt = ''; ic.classList.add('avatar'); ic.appendChild(img); }
+    else if (icon && icon.letter) { ic.classList.add('avatar'); ic.textContent = icon.letter; }
+    else ic.innerHTML = icon || '';
+    const txt = el('span', 'puente-busca-txt');
+    txt.appendChild(el('span', 'puente-busca-title', title));
+    if (sub) { const s = el('span', 'puente-busca-sub'); if (sub.nodeType) s.appendChild(sub); else s.textContent = sub; txt.appendChild(s); }
+    b.append(ic, txt);
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // sin perder el foco de la caja
+    b.addEventListener('click', (e) => { e.stopPropagation(); onPick(); });
+    b.addEventListener('mouseenter', () => mark(items.indexOf(b)));
+    items.push(b);
+    return b;
+  }
+  function section(title, extra) {
+    const h = el('div', 'puente-busca-sec');
+    h.appendChild(el('span', '', title));
+    if (extra) h.appendChild(extra);
+    drop.appendChild(h);
+  }
+  // Pone el filtro (o su valor) en la caja, reemplazando lo que se estaba escribiendo
+  function put(text, run) {
+    const v = input.value;
+    const m = /(?:^|\s)(\w+:(?:"[^"]*"?|\S*))$/.exec(v);
+    const base = m && !/\s$/.test(v) ? v.slice(0, v.length - m[1].length) : v.replace(/\s*$/, v.trim() ? ' ' : '');
+    input.value = base + text + (run ? ' ' : '');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    if (run) { hide(); go(); } else render();
+  }
+  function go() {
+    const q = input.value.trim();
+    if (!q) return;
+    hide();
+    try { app._searchSaveRecent(q); app._searchRun(q); } catch (err) { console.warn('[puente] buscador:', err); }
+  }
+
+  function renderRoot() {
+    if (!isDm()) {
+      section('Filtros');
+      drop.appendChild(row(IC.from, 'De un usuario específico', exampleSub('from:', 'usuario'), () => put('from:')));
+      drop.appendChild(row(IC.in, 'Enviado en un canal específico', exampleSub('in:', 'canal'), () => put('in:')));
+      drop.appendChild(row(IC.has, 'Incluye un tipo de contenido', exampleSub('has:', 'enlace, imagen, video o archivo'), () => put('has:')));
+      drop.appendChild(row(IC.mentions, 'Menciona a un usuario', exampleSub('mentions:', 'usuario'), () => put('mentions:')));
+      drop.appendChild(row(IC.more, 'Más filtros', 'fechas y mensajes fijados', () => renderMore()));
+    }
+    const recent = (app._searchLoadRecent ? app._searchLoadRecent() : []).filter(Boolean);
+    if (recent.length) {
+      if (!isDm()) drop.appendChild(el('div', 'puente-busca-sep'));
+      const clear = el('button', 'puente-busca-borrar'); clear.type = 'button'; clear.title = 'Borrar el historial'; clear.innerHTML = IC.trash;
+      clear.addEventListener('mousedown', (e) => e.preventDefault());
+      clear.addEventListener('click', (e) => { e.stopPropagation(); try { localStorage.removeItem('haven_recent_searches'); } catch { /* nada */ } render(); });
+      section('Historial', clear);
+      for (const q of recent) drop.appendChild(row(IC.hist, q, null, () => { input.value = q; go(); }, 'historial'));
+    }
+  }
+  function exampleSub(key, what) {
+    const s = document.createDocumentFragment();
+    s.appendChild(el('b', '', key));
+    s.appendChild(document.createTextNode(' ' + what));
+    const w = el('span'); w.appendChild(s); return w;
+  }
+  function renderMore() {
+    drop.textContent = ''; items = []; active = -1;
+    section('Más filtros');
+    drop.appendChild(row(IC.cal, 'Antes de una fecha', exampleSub('before:', 'fecha'), () => put('before:')));
+    drop.appendChild(row(IC.cal, 'Después de una fecha', exampleSub('after:', 'fecha'), () => put('after:')));
+    drop.appendChild(row(IC.cal, 'En una fecha', exampleSub('during:', 'fecha'), () => put('during:')));
+    drop.appendChild(row(IC.pin, 'Mensajes fijados', exampleSub('pinned:', 'true'), () => put('pinned:true', true)));
+    show();
+  }
+  function renderPeople(key, term) {
+    const my = ++seq;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      fetch('/puente/api/buscar/personas?q=' + encodeURIComponent(term), { headers: { Authorization: 'Bearer ' + token() } })
+        .then(r => (r.ok ? r.json() : null)).then(d => {
+          if (my !== seq || !d) return;
+          drop.textContent = ''; items = []; active = -1;
+          section(key === 'from' ? 'De' : 'Menciona a');
+          for (const p of d.personas || []) {
+            const sub = p.discord ? 'Discord' : (p.usuario || '');
+            drop.appendChild(row(p.avatar ? { url: p.avatar } : { letter: String(p.nombre).charAt(0).toUpperCase() }, p.nombre, sub,
+              () => put(key + ':' + quote(p.nombre), true)));
+          }
+          if (!items.length) drop.appendChild(el('div', 'puente-busca-vacio', term ? 'No encontramos a nadie con ese nombre' : 'Escribí un nombre'));
+          else mark(0);
+          show();
+        }).catch(() => {});
+    }, 150);
+  }
+  function renderDate(key) {
+    drop.textContent = ''; items = []; active = -1;
+    section(key === 'before' ? 'Antes de' : key === 'after' ? 'Después de' : 'En la fecha');
+    const box = el('div', 'puente-busca-fecha');
+    const d = el('input'); d.type = 'date';
+    d.max = new Date().toISOString().slice(0, 10);
+    const ok = el('button', 'puente-busca-ok', 'Aplicar'); ok.type = 'button';
+    const apply = () => { if (d.value) put(key + ':' + d.value, true); };
+    ok.addEventListener('click', (e) => { e.stopPropagation(); apply(); });
+    d.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } if (e.key === 'Escape') { input.focus(); hide(); } });
+    box.append(d, ok);
+    drop.appendChild(box);
+    show();
+  }
+  function render() {
+    if (!drop) return;
+    drop.textContent = ''; items = []; active = -1;
+    const v = input.value;
+    const m = !isDm() && /(?:^|\s)(from|mentions|in|has|before|after|during):("?)([^"]*)$/.exec(v);
+    if (m && !(m[2] === '' && /\s/.test(m[3]))) {
+      const key = m[1], term = m[3].trim().toLowerCase();
+      if (key === 'from' || key === 'mentions') { renderPeople(key, m[3].trim()); return; }
+      if (key === 'in') {
+        section('En');
+        for (const c of (app.channels || []).filter(c => !c.is_dm && c.name && String(c.name).toLowerCase().startsWith(term)).slice(0, 12)) {
+          drop.appendChild(row(IC.in, c.name, null, () => put('in:' + c.name, true)));
+        }
+      } else if (key === 'has') {
+        section('Incluye');
+        for (const [val, label] of HAS.filter(([val]) => val.startsWith(term))) drop.appendChild(row(IC.has, label, 'has:' + val, () => put('has:' + val, true)));
+      } else { renderDate(key); return; }
+      if (!items.length) drop.appendChild(el('div', 'puente-busca-vacio', 'Sin coincidencias'));
+      else mark(0);
+      show();
+      return;
+    }
+    renderRoot();
+    if (drop.children.length) show(); else hide();
+  }
+  function show() { drop.style.display = 'block'; place(); }
+
+  function setup() {
+    input = document.getElementById('search-input');
+    const box = input && input.closest('.search-container');
+    if (!box) return false;
+    // A la derecha de todo en el encabezado, siempre visible
+    if (box.parentElement && box.parentElement.lastElementChild !== box) box.parentElement.appendChild(box);
+    box.classList.add('puente-busca-caja');
+    // "Buscar en <servidor>" (el nombre llega un poco despues que la pagina)
+    input.removeAttribute('data-i18n-placeholder');
+    const named = () => {
+      const server = app.serverSettings && app.serverSettings.server_name;
+      input.placeholder = 'Buscar en ' + (server || 'el servidor');
+      return !!server;
+    };
+    if (!named()) { let n = 0; const iv = setInterval(() => { if (named() || ++n > 60) clearInterval(iv); }, 1000); }
+    const lupa = el('span', 'puente-busca-lupa'); lupa.innerHTML = IC.hist;
+    const x = el('button', 'puente-busca-x'); x.type = 'button'; x.title = 'Borrar la búsqueda';
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+    x.addEventListener('mousedown', (e) => e.preventDefault());
+    x.addEventListener('click', (e) => { e.stopPropagation(); hide(); try { app._searchClose(); } catch { /* nada */ } input.value = ''; box.classList.remove('con-texto'); });
+    box.append(lupa, x);
+    // Con resultados, la columna de la derecha se ensancha (como el panel de Discord)
+    const panel = document.getElementById('search-panel');
+    const column = panel && panel.parentElement;
+    if (column && column !== document.body) {
+      const wide = () => column.classList.toggle('puente-busca-ancha', panel.style.display !== 'none' && panel.style.display !== '');
+      new MutationObserver(wide).observe(panel, { attributes: true, attributeFilter: ['style'] });
+      wide();
+    }
+    drop = el('div', 'puente-busca');
+    drop.id = 'puente-busca';
+    drop.style.display = 'none';
+    document.body.appendChild(drop);
+
+    // Antes que Haven: sin buscar a cada tecla, Enter busca, flechas eligen
+    document.addEventListener('input', (e) => {
+      if (e.target !== input) return;
+      e.stopPropagation();
+      box.classList.toggle('con-texto', !!input.value);
+      render();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+      if (e.target !== input) return;
+      const open = drop.style.display !== 'none' && items.length;
+      if (e.key === 'ArrowDown' && open) { e.preventDefault(); e.stopPropagation(); mark((active + 1) % items.length); return; }
+      if (e.key === 'ArrowUp' && open) { e.preventDefault(); e.stopPropagation(); mark((active - 1 + items.length) % items.length); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+        const v = input.value;
+        const typing = /(?:^|\s)(from|mentions|in|has):("?)[^"\s]*$/.test(v) || /(?:^|\s)(from|mentions):"[^"]*$/.test(v);
+        if (open && active >= 0 && (typing || !v.trim())) items[active].click();
+        else go();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        if (drop.style.display !== 'none') hide();
+        else input.blur();
+      }
+    }, true);
+    input.addEventListener('focus', () => { box.classList.add('enfocada'); render(); });
+    input.addEventListener('blur', () => { box.classList.remove('enfocada'); setTimeout(() => { if (document.activeElement !== input && !drop.contains(document.activeElement)) hide(); }, 150); });
+    document.addEventListener('mousedown', (e) => { if (drop.style.display !== 'none' && !drop.contains(e.target) && !box.contains(e.target)) hide(); }, true);
+    addEventListener('resize', () => { if (drop.style.display !== 'none') place(); });
+    return true;
+  }
+
+  let tries = 0;
+  (function wait() {
+    app = window.app;
+    if (!app || typeof app._searchRun !== 'function' || !app.serverSettings || !document.getElementById('search-input')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    try { setup(); } catch (err) { console.warn('[puente] buscador:', err); }
+  })();
+})();
+
 // PC: el boton + del cuadro de escribir como en Discord: un menu con iconos
 // ("Subir un archivo", "Crear encuesta"...) en lugar de la fila de botones de
 // Haven, que ademas repetia la carita y el GIF de la derecha. Cada opcion usa el

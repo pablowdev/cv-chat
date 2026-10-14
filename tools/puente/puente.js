@@ -116,6 +116,7 @@ function start(deps) {
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
   require('./tema-fijo.js').setup({ db, io, log });
   require('./medicion.js').setup({ io, db });
+  require('./buscar.js').setup({ db, io, log, warn });
   hookHavenEmits();
   connectGateway();
   // Mensajes que no llegaron a Discord: se reintentan (el primero, cuando ya se conecto)
