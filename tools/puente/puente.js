@@ -323,7 +323,7 @@ function onDispatch(t, d) {
       case 'CHANNEL_CREATE': case 'CHANNEL_UPDATE': case 'THREAD_CREATE': case 'THREAD_UPDATE':
         if (guildId && d.guild_id && d.guild_id !== guildId) return;
         cacheChannel(d);
-        if (t === 'CHANNEL_UPDATE') estadisticas.onDiscordChannelUpdate(d);
+        if (t === 'CHANNEL_UPDATE') { estadisticas.onDiscordChannelUpdate(d); if (isBridged(d.id)) onDiscordTopic(d); }
         break;
       case 'GUILD_ROLE_CREATE': case 'GUILD_ROLE_UPDATE':
         if (d.guild_id === guildId) adjuntos.rememberRoles([d.role]);
@@ -505,6 +505,7 @@ function hookHavenEmits() {
           socket.emit('error-msg', 'Ese usuario representa a la gente de Discord sin cuenta vinculada: no se le pueden mandar mensajes directos.');
           return;
         }
+        if (data && (event === 'rename-channel' || event === 'set-channel-topic') && typeof data.code === 'string') watchChannelEdit(data.code, socket);
         if (data && event === 'delete-message' && Number.isInteger(data.messageId)) rememberDelete(data.messageId);
         else if (data && event === 'delete-messages' && Array.isArray(data.messageIds)) data.messageIds.slice(0, 500).forEach(id => Number.isInteger(id) && rememberDelete(id));
       } catch (err) { warn('borrados:', err.message); }
@@ -767,6 +768,46 @@ async function outboundEdit(havenMessageId) {
 
 // Mensajes que vinieron de Discord y alguien esta borrando en Haven:
 // id de Haven -> { did, channel (canal o hilo de Discord), at }
+// Nombre y tema de un canal cambiados en Haven: lo mismo en Discord. Se mira el
+// canal antes y despues de que Haven procese el pedido (Haven ya revisa los
+// permisos); si cambio, el bot lo cambia alla. Discord deja cambiar el nombre o
+// el tema de un canal solo 2 veces cada 10 minutos: si se pasa, se espera.
+function watchChannelEdit(code, socket) {
+  const sel = db.prepare('SELECT name, topic, discord_channel_id FROM channels WHERE code = ? AND is_dm = 0');
+  const before = sel.get(code.trim());
+  if (!before || !before.discord_channel_id || !isBridged(before.discord_channel_id)) return;
+  setTimeout(() => {
+    try {
+      const after = sel.get(code.trim());
+      if (!after || after.discord_channel_id !== before.discord_channel_id) return;
+      const body = {};
+      if (after.name !== before.name && after.name) body.name = after.name;
+      if ((after.topic || '') !== (before.topic || '')) body.topic = (after.topic || '').slice(0, 1024);
+      if (!Object.keys(body).length) return;
+      enqueue('canal:' + after.discord_channel_id, async () => {
+        const r = await api('PATCH', `/channels/${after.discord_channel_id}`, body);
+        if (r && r.__error) {
+          warn(`no se pudo cambiar el canal en Discord (${r.__error}):`, JSON.stringify(r.__body || {}).slice(0, 200));
+          const why = r.__error === 403 ? 'el bot no tiene el permiso "Gestionar canales" en Discord'
+            : r.__error === 429 ? 'Discord deja cambiar el nombre o el tema solo 2 veces cada 10 minutos' : 'Discord respondió ' + r.__error;
+          try { socket.emit('error-msg', 'Se cambió en CV Chat, pero no en Discord: ' + why + '.'); } catch { /* sesion cerrada */ }
+        } else log(`canal ${after.discord_channel_id} cambiado en Discord:`, Object.keys(body).join(', '));
+      });
+    } catch (err) { warn('cambio de canal:', err.message); }
+  }, 500);
+}
+
+// Tema cambiado en Discord: lo mismo en Haven (el nombre ya lo hace estadisticas.js)
+function onDiscordTopic(d) {
+  if (!d || !d.id || typeof d.topic === 'undefined') return;
+  const ch = db.prepare('SELECT id, code, topic FROM channels WHERE discord_channel_id = ? AND is_dm = 0').get(d.id);
+  if (!ch) return;
+  const topic = [...(d.topic || '')].slice(0, 256).join('');
+  if ((ch.topic || '') === topic) return;
+  db.prepare('UPDATE channels SET topic = ? WHERE id = ?').run(topic, ch.id);
+  try { io.to(`channel:${ch.code}`).emit('channel-topic-changed', { code: ch.code, topic }); } catch { /* sin sesiones */ }
+}
+
 const pendingDeletes = new Map();
 function rememberDelete(havenId) {
   const m = db.prepare(`SELECT m.discord_message_id did, m.thread_id, c.discord_channel_id ch FROM messages m
