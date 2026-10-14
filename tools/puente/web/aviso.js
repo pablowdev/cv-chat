@@ -798,6 +798,7 @@ function sheetDrag(sheet, opts) {
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
 
   let current = null; // { msgId, msgEl, pop, off }
+  let anchorEl = null; // el boton gris al lado de las reacciones, si se abrio desde ahi
   function close() {
     if (!current) return;
     current.off();
@@ -945,12 +946,22 @@ function sheetDrag(sheet, opts) {
     // Al lado de la barrita del mensaje (a su izquierda, como Discord), sin salirse de la pantalla
     // (el boton de Haven esta escondido detras de la barrita nueva: se usa el que se ve)
     const visible = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return r.width && r.height ? r : null; };
-    const ar = visible(msgEl.querySelector('.puente-tb-row [data-action="react"]')) || visible(msgEl.querySelector('.msg-toolbar')) ||
-      msgEl.getBoundingClientRect();
     const pw = pop.offsetWidth, ph = pop.offsetHeight;
-    let left = ar.left - pw - 8;
-    if (left < 8) left = Math.min(innerWidth - pw - 8, ar.right + 8);
-    let top = ar.top;
+    const fromRow = visible(anchorEl && msgEl.contains(anchorEl) ? anchorEl : null);
+    anchorEl = null;
+    let left, top;
+    if (fromRow) {
+      // Desde el boton al lado de las reacciones: abajo de el (o arriba si no entra)
+      left = Math.min(fromRow.left, innerWidth - pw - 8);
+      top = fromRow.bottom + 6;
+      if (top + ph > innerHeight - 8) top = fromRow.top - ph - 6;
+    } else {
+      const ar = visible(msgEl.querySelector('.puente-tb-row [data-action="react"]')) || visible(msgEl.querySelector('.msg-toolbar')) ||
+        msgEl.getBoundingClientRect();
+      left = ar.left - pw - 8;
+      if (left < 8) left = Math.min(innerWidth - pw - 8, ar.right + 8);
+      top = ar.top;
+    }
     if (top + ph > innerHeight - 8) top = innerHeight - ph - 8;
     pop.style.left = Math.max(8, left) + 'px';
     pop.style.top = Math.max(8, top) + 'px';
@@ -959,7 +970,7 @@ function sheetDrag(sheet, opts) {
     const outside = (e) => {
       if (pop.contains(e.target)) return;
       // El boton de reaccionar de este mensaje lo cierra solo (open)
-      if (msgEl.contains(e.target) && e.target.closest('[data-action="react"]')) return;
+      if (msgEl.contains(e.target) && e.target.closest('[data-action="react"], .puente-rp-add')) return;
       close();
     };
     const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -976,6 +987,25 @@ function sheetDrag(sheet, opts) {
     if (!app || typeof app._showReactionPicker !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
     loadFrequent();
     setInterval(loadFrequent, 10 * 60 * 1000);
+    // Boton gris para agregar otra reaccion, al final de las que ya hay (se ve al pasar el mouse, como en Discord)
+    const ADD_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM12 17.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5Z"/></svg>';
+    document.addEventListener('mouseover', (e) => {
+      const msgEl = e.target instanceof Element && e.target.closest('.message, .message-compact');
+      if (!msgEl || !msgEl.dataset.msgId || msgEl.closest('.dm-pip-panel, .thread-panel.pip')) return;
+      const row = msgEl.querySelector('.reactions-row');
+      if (!row || row.querySelector('.puente-rp-add') || !row.querySelector('.reaction-badge')) return;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'puente-rp-add';
+      b.title = 'Agregar reacción';
+      b.innerHTML = ADD_ICON;
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation(); ev.preventDefault();
+        anchorEl = b;
+        app._showReactionPicker(msgEl, parseInt(msgEl.dataset.msgId, 10));
+      });
+      row.appendChild(b);
+    }, { passive: true });
     const orig = app._showReactionPicker;
     app._showReactionPicker = function (msgEl, msgId, ...rest) {
       // Dentro de la ventanita flotante de mensajes directos queda el de Haven

@@ -1345,6 +1345,14 @@ html body .pip-input-resizer { display: none !important; }
 /* PC: panel para elegir una reaccion, como el de Discord de escritorio (aviso.js) */
 @media (hover: hover) and (pointer: fine) {
   html body .puente-rp-abierto .msg-toolbar { display: flex; }
+  /* Boton gris para agregar otra reaccion, al lado de las que ya hay: solo con el mouse encima */
+  html body .reactions-row .puente-rp-add {
+    display: none; align-items: center; justify-content: center; height: 1.875rem; padding: 0 0.5rem; box-sizing: border-box;
+    border: 1px solid transparent; border-radius: 0.5rem; background: #2a2a2e; color: #b5bac1; cursor: pointer;
+  }
+  html body .reactions-row .puente-rp-add:hover { background: #2f2f34; border-color: #3f3f46; color: #dbdee1; }
+  html body .message:hover .reactions-row .puente-rp-add, html body .message-compact:hover .reactions-row .puente-rp-add,
+  html body .puente-rp-abierto .reactions-row .puente-rp-add { display: inline-flex; }
   .puente-rp-abierto { background: rgba(255, 255, 255, 0.025); }
   .puente-rp {
     position: fixed; z-index: 100020; width: 33rem; height: min(30rem, calc(100vh - 1rem)); display: flex; flex-direction: column;
