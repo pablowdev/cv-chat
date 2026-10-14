@@ -1320,3 +1320,13 @@ html body #channel-functions-panel.puente-ajustes-panel {
 }
 .puente-editor.puente-ed-off { cursor: not-allowed; opacity: 0.6; }
 .puente-ed-emoji { width: 1.375em; height: 1.375em; object-fit: contain; vertical-align: -0.3em; margin: 0 0.05em; }
+/* Vista previa del formato en el cuadro de escribir, como Discord: las marcas en
+   gris, el formato aplicado y las menciones resaltadas */
+.puente-editor .ped-mk { color: #80848e; font-weight: 400; font-style: normal; text-decoration: none; }
+.puente-editor .ped-bold { font-weight: 700; }
+.puente-editor .ped-italic { font-style: italic; }
+.puente-editor .ped-underline > .ped-in { text-decoration: underline; }
+.puente-editor .ped-strike > .ped-in { text-decoration: line-through; }
+.puente-editor .ped-code { font-family: Consolas, 'Courier New', monospace; font-size: 0.875em; background: #121214; border-radius: 0.25rem; }
+.puente-editor .ped-spoiler { background: #121214; border-radius: 0.25rem; }
+.puente-editor .ped-mention { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; border-radius: 0.1875rem; font-weight: 500; }

@@ -2483,13 +2483,18 @@ function sheetDrag(sheet, opts) {
     bar.style.top = Math.max(8, top - h - 8) + 'px';
   }
 
+  // Como en Discord: mientras se arrastra para seleccionar no aparece; recien al soltar
+  let dragging = false;
+  document.addEventListener('mousedown', (e) => { if (!(bar && bar.contains(e.target))) dragging = true; }, true);
+  window.addEventListener('blur', () => { dragging = false; });
   function check() {
+    if (dragging) { hide(); return; }
     const ta = resolve(document.activeElement);
     if (isComposer(ta) && ta.selectionStart !== ta.selectionEnd) show(ta); else hide();
   }
 
   document.addEventListener('selectionchange', () => { if (bar && bar.style.display !== 'none' || isComposer(resolve(document.activeElement))) setTimeout(check, 0); });
-  document.addEventListener('mouseup', () => setTimeout(check, 0), true);
+  document.addEventListener('mouseup', () => { dragging = false; setTimeout(check, 0); }, true);
   document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key.startsWith('Arrow') || e.key === 'a') setTimeout(check, 0); }, true);
   document.addEventListener('focusout', () => setTimeout(check, 0), true);
   window.addEventListener('resize', hide);
@@ -2532,27 +2537,73 @@ function sheetDrag(sheet, opts) {
   const setVal = (v) => NATIVE.set.call(ta, v);
 
   // ── Texto <-> cuadro nuevo ─────────────────────────────
-  function render(value, s, e) {
-    const frag = document.createDocumentFragment();
-    const pushText = (t) => {
-      const parts = t.split('\n');
-      parts.forEach((p, i) => { if (i) frag.appendChild(document.createElement('br')); if (p) frag.appendChild(document.createTextNode(p)); });
-    };
-    let last = 0;
-    value.replace(EMOJI_RE, (m, name, at) => {
+  // Arma lo que se ve a partir del texto, sin cambiar ni un caracter: los
+  // emojis del servidor como imagen, el formato de Haven aplicado (negrita,
+  // cursiva, subrayado, tachado, codigo, spoiler, cita) con sus marcas en gris, y
+  // @everyone, @here, las @menciones y los #canales resaltados, como en Discord.
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const RULES = [
+    { re: /`([^`\n]+)`/, cls: 'code', m: '`' },
+    { re: /\|\|([^\n]+?)\|\|/, cls: 'spoiler', m: '||' },
+    { re: /\*\*([^\n]+?)\*\*/, cls: 'bold', m: '**' },
+    { re: /__([^\n]+?)__/, cls: 'underline', m: '__' },
+    { re: /~~([^\n]+?)~~/, cls: 'strike', m: '~~' },
+    { re: /(?<!\*)\*(?![\s*])([^\n*]+?)(?<![\s*])\*(?!\*)/, cls: 'italic', m: '*' },
+  ];
+  function leaf(t) {
+    let out = '', last = 0;
+    t.replace(EMOJI_RE, (m, name, at) => {
       const em = findEmoji(name);
       if (!em || !em.url) return m;
-      pushText(value.slice(last, at));
-      const img = document.createElement('img');
-      img.className = 'puente-ed-emoji'; img.src = em.url; img.alt = m; img.dataset.t = m; img.draggable = false;
-      frag.appendChild(img);
+      out += esc(t.slice(last, at));
+      out += '<img class="puente-ed-emoji" src="' + esc(em.url) + '" alt="' + esc(m) + '" data-t="' + esc(m) + '" draggable="false">';
       last = at + m.length;
       return m;
     });
-    pushText(value.slice(last));
-    if (value.endsWith('\n')) { const br = document.createElement('br'); br.dataset.fin = '1'; frag.appendChild(br); }
-    ed.textContent = '';
-    ed.appendChild(frag);
+    return out + esc(t.slice(last));
+  }
+  function known() {
+    const users = new Set(), chans = new Set();
+    try { for (const m of (app.channelMembers || [])) if (m && m.username) users.add(String(m.username).toLowerCase()); } catch { /* sin lista */ }
+    try { for (const c of (app.channels || [])) if (c && !c.is_dm && c.name) chans.add(String(c.name).toLowerCase()); } catch { /* sin lista */ }
+    return { users, chans };
+  }
+  let names = null;
+  function mentions(t) {
+    if (!names) names = known();
+    let out = '', last = 0;
+    t.replace(/(^|[^\w@#&])([@#])([\p{L}\p{N}_.-]{1,50})/gu, (full, pre, sym, name, at) => {
+      const low = name.toLowerCase();
+      const ok = sym === '@' ? (low === 'everyone' || low === 'here' || names.users.has(low)) : names.chans.has(low);
+      if (!ok) return full;
+      const start = at + pre.length;
+      out += leaf(t.slice(last, start)) + '<span class="ped-mention">' + leaf(sym + name) + '</span>';
+      last = start + 1 + name.length;
+      return full;
+    });
+    return out + leaf(t.slice(last));
+  }
+  function fmt(t) {
+    let best = null;
+    for (const r of RULES) { const x = r.re.exec(t); if (x && (!best || x.index < best.x.index)) best = { r, x }; }
+    if (!best) return mentions(t);
+    const { r, x } = best;
+    const mk = '<span class="ped-mk">' + esc(r.m) + '</span>';
+    const inner = r.cls === 'code' ? esc(x[1]) : fmt(x[1]);
+    return mentions(t.slice(0, x.index)) + '<span class="ped-' + r.cls + '">' + mk + '<span class="ped-in">' + inner + '</span>' + mk + '</span>' + fmt(t.slice(x.index + x[0].length));
+  }
+  function markup(value) {
+    names = null;
+    const html = value.split('\n').map(line => {
+      const q = /^> /.exec(line);
+      return q ? '<span class="ped-quote"><span class="ped-mk">&gt; </span>' + fmt(line.slice(2)) + '</span>' : fmt(line);
+    }).join('<br>');
+    return value.endsWith('\n') ? html + '<br data-fin="1">' : html;
+  }
+  const tpl = document.createElement('template');
+  const normalize = (html) => { tpl.innerHTML = html; return tpl.innerHTML; };
+  function render(value, s, e) {
+    ed.innerHTML = markup(value);
     ed.classList.toggle('puente-ed-vacio', value === '');
     if (s != null && document.activeElement === ed) setSel(s, e == null ? s : e);
   }
@@ -2624,22 +2675,9 @@ function sheetDrag(sheet, opts) {
     } catch { /* seleccion fuera de rango */ }
   }
 
-  // El texto que tiene un emoji del servidor escrito como :nombre: todavia sin dibujar
-  const needsRender = () => [...ed.childNodes].some(c => c.nodeType === 1 && c.nodeName !== 'BR' && c.nodeName !== 'IMG') ||
-    [...ed.querySelectorAll('*')].some(c => c.nodeName !== 'BR' && c.nodeName !== 'IMG') ||
-    walkTextHasEmoji();
-  function walkTextHasEmoji() {
-    const t = serialize();
-    let found = false;
-    t.replace(EMOJI_RE, (m, name) => { if (!found && findEmoji(name)) found = true; return m; });
-    if (!found) return false;
-    // Hay emojis en el texto: ver si alguno sigue como texto (no como imagen)
-    let textOnly = '';
-    for (const c of ed.childNodes) if (c.nodeType === 3) textOnly += c.nodeValue; else if (c.nodeName === 'BR') textOnly += '\n';
-    let pending = false;
-    textOnly.replace(EMOJI_RE, (m, name) => { if (findEmoji(name)) pending = true; return m; });
-    return pending;
-  }
+  // Lo que se ve ya no corresponde al texto (un emoji o una marca de formato nuevos, o
+  // algo que metio el navegador): hay que redibujar
+  const needsRender = () => ed.innerHTML !== normalize(markup(serialize()));
 
   // ── Del cuadro nuevo al de Haven ───────────────────────
   function pushUndo(force) {
