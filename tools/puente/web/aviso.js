@@ -3003,3 +3003,185 @@ function sheetDrag(sheet, opts) {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
+
+// PC: la barrita que aparece al pasar el mouse por un mensaje y el menu del clic
+// derecho, como en Discord de escritorio. La barrita: tres reacciones rapidas
+// (las mas usadas), agregar reaccion, responder, citar y "mas" (abre el menu).
+// El menu: reacciones rapidas arriba, "Agregar reaccion", y las opciones de Haven
+// ordenadas como en Discord, con su icono a la derecha y "Copiar texto". Son las
+// mismas acciones y permisos de Haven; solo cambian el aspecto y el orden.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const svg = (d) => '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="' + d + '"/></svg>';
+  const I = {
+    react: svg('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-3.5-9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM12 17.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5Z'),
+    reply: svg('M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11Z'),
+    quote: svg('M6 17h3l2-4V7H5v6h3l-2 4Zm8 0h3l2-4V7h-6v6h3l-2 4Z'),
+    thread: svg('M5 3h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 4v-4H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h10V8H7Zm0 4v2h7v-2H7Z'),
+    copy: svg('M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z'),
+    pin: svg('M16 3a1 1 0 0 1 .7 1.7L15 6.4v4.1l2.7 2.7A1 1 0 0 1 17 15h-4v6l-1 1-1-1v-6H7a1 1 0 0 1-.7-1.7L9 10.5V6.4L7.3 4.7A1 1 0 0 1 8 3h8Z'),
+    link: svg('M10.6 13.4a1 1 0 0 0 1.4 0l4-4a3 3 0 0 0-4.2-4.2l-1.5 1.5 1.4 1.4 1.5-1.5a1 1 0 0 1 1.4 1.4l-4 4a1 1 0 0 0 0 1.4Zm2.8-2.8a1 1 0 0 0-1.4 0l-4 4a3 3 0 0 0 4.2 4.2l1.5-1.5-1.4-1.4-1.5 1.5a1 1 0 0 1-1.4-1.4l4-4a1 1 0 0 0 0-1.4Z'),
+    edit: svg('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z'),
+    trash: svg('M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h2v-8h-2Zm4 0v8h2v-8h-2Z'),
+    shield: svg('M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Z'),
+    tag: svg('M21.4 11.6 12.4 2.6A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9a2 2 0 0 0 2.82 0l7-7a2 2 0 0 0-.01-2.82ZM6.5 8A1.5 1.5 0 1 1 6.5 5a1.5 1.5 0 0 1 0 3Z'),
+    megaphone: svg('M18 3v18l-6-4H6a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3h6l6-4Zm2 6h2v6h-2V9Z'),
+    more: svg('M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'),
+    chevron: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.6 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>',
+  };
+  // Opciones de Haven: nombre como en Discord, icono y grupo
+  const ITEMS = {
+    edit: ['Editar mensaje', I.edit, 1], reply: ['Responder', I.reply, 1], quote: ['Citar', I.quote, 1], thread: ['Crear hilo', I.thread, 1],
+    'puente-copiar': ['Copiar texto', I.copy, 2], pin: ['Fijar mensaje', I.pin, 2], unpin: ['Desfijar mensaje', I.pin, 2],
+    'copy-link': ['Copiar enlace del mensaje', I.link, 2], 'copy-href': ['Copiar dirección del enlace', I.link, 2],
+    archive: [null, I.shield, 3], unarchive: [null, I.shield, 3], 'edit-tags': [null, I.tag, 3], 'edit-role-menu': [null, I.tag, 3],
+    'highlight-on': [null, I.megaphone, 3], 'highlight-off': [null, I.megaphone, 3],
+    delete: ['Eliminar mensaje', I.trash, 4],
+  };
+  const ORDER = ['edit', 'reply', 'quote', 'thread', 'puente-copiar', 'pin', 'unpin', 'copy-link', 'copy-href'];
+
+  let quick = null;
+  function loadQuick() {
+    let tk = null;
+    try { tk = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!tk) return;
+    fetch('/puente/api/reacciones-frecuentes?n=4', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) quick = d.emojis; }).catch(() => {});
+  }
+  function emojiNode(q) {
+    if (q.url) { const img = el('img'); img.src = q.url; img.alt = q.emoji; img.draggable = false; return img; }
+    return el('span', 'puente-tb-emoji', q.emoji);
+  }
+  function toggleReaction(app, msgEl, emoji) {
+    const msgId = parseInt(msgEl.dataset.msgId, 10);
+    if (!msgId || !app.socket) return;
+    const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === emoji);
+    app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji });
+  }
+  function rawText(app, msgEl) {
+    const id = parseInt(msgEl.dataset.msgId, 10);
+    const m = (app._lastRenderedMessages || []).find(x => x && x.id === id);
+    if (m && typeof m.content === 'string') return m.content;
+    const c = msgEl.querySelector('.message-content');
+    return c ? c.innerText : '';
+  }
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
+  }
+
+  // ── Barrita al pasar el mouse ───────────────────────────
+  function decorate(app, msgEl) {
+    const tb = msgEl.querySelector('.msg-toolbar');
+    if (!tb || tb.classList.contains('puente-tb')) return;
+    const row = el('div', 'puente-tb-row');
+    const btn = (cls, tip, html) => { const b = el('button', 'puente-tb-btn ' + cls); b.type = 'button'; b.dataset.tip = tip; if (html) b.innerHTML = html; return b; };
+    for (const q of (quick || []).slice(0, 3)) {
+      const b = btn('puente-tb-quick', q.emoji);
+      b.appendChild(emojiNode(q));
+      b.addEventListener('click', (e) => { e.stopPropagation(); toggleReaction(app, msgEl, q.emoji); });
+      row.appendChild(b);
+    }
+    if (row.children.length) row.appendChild(el('span', 'puente-tb-sep'));
+    // Botones con la accion de Haven: el chat ya sabe que hacer con cada una
+    const react = btn('', 'Agregar reacción', I.react); react.dataset.action = 'react'; row.appendChild(react);
+    const reply = btn('', 'Responder', I.reply); reply.dataset.action = 'reply'; row.appendChild(reply);
+    const quote = btn('', 'Citar', I.quote); quote.dataset.action = 'quote'; row.appendChild(quote);
+    const more = btn('puente-tb-more', 'Más', I.more);
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = more.getBoundingClientRect();
+      app._showMessageContextMenu({ clientX: r.left, clientY: r.bottom + 4, preventDefault() {}, stopPropagation() {}, target: more, puenteDesde: more }, msgEl);
+      const menu = document.getElementById('message-context-menu');
+      if (menu) {
+        const mr = menu.getBoundingClientRect();
+        let left = r.right - mr.width, top = r.bottom + 4;
+        if (top + mr.height > innerHeight - 8) top = Math.max(8, r.top - mr.height - 4);
+        menu.style.left = Math.max(8, left) + 'px'; menu.style.top = top + 'px';
+      }
+    });
+    row.appendChild(more);
+    tb.classList.add('puente-tb');
+    tb.appendChild(row);
+  }
+
+  // ── Menu del clic derecho ───────────────────────────────
+  function restyle(app, msgEl) {
+    const menu = document.getElementById('message-context-menu');
+    if (!menu || menu.classList.contains('puente-pc-msgmenu')) return;
+    menu.classList.add('puente-pc-msgmenu');
+    const buttons = [...menu.querySelectorAll('button[data-action]')];
+    const by = new Map(buttons.map(b => [b.dataset.action, b]));
+    // Copiar texto (Discord lo tiene; Haven no)
+    const copyBtn = el('button', 'channel-ctx-item');
+    copyBtn.dataset.action = 'puente-copiar';
+    copyBtn.addEventListener('click', () => copy(rawText(app, msgEl)));
+    by.set('puente-copiar', copyBtn);
+    // El nombre de Haven esta en su <span>; sin <span>, se le saca el emoji del principio
+    const label = (b, a) => {
+      const it = ITEMS[a];
+      if (it && it[0]) return it[0];
+      const span = b.querySelector('span');
+      return span ? span.textContent.trim() : b.textContent.replace(/^\s*[^\p{L}\p{N}\s]+\s*/u, '').trim();
+    };
+    const row = (b, a, extraIcon) => {
+      const it = ITEMS[a] || [null, '', 3];
+      const name = label(b, a);
+      b.textContent = '';
+      b.classList.add('puente-mm-item');
+      b.append(el('span', 'puente-mm-label', name));
+      const ic = el('span', 'puente-mm-icon'); ic.innerHTML = extraIcon || it[1] || ''; b.appendChild(ic);
+      return b;
+    };
+    menu.textContent = '';
+    // Reacciones rapidas arriba
+    if (quick && quick.length) {
+      const qr = el('div', 'puente-mm-quick');
+      for (const q of quick.slice(0, 4)) {
+        const b = el('button', 'puente-mm-quick-btn'); b.type = 'button'; b.title = q.emoji;
+        b.appendChild(emojiNode(q));
+        b.addEventListener('click', (e) => { e.stopPropagation(); toggleReaction(app, msgEl, q.emoji); app._hideMessageContextMenu(); });
+        qr.appendChild(b);
+      }
+      menu.appendChild(qr);
+    }
+    const groups = [[], [], [], []];
+    if (by.has('react')) {
+      const b = row(by.get('react'), 'react', I.chevron);
+      b.querySelector('.puente-mm-label').textContent = 'Agregar reacción';
+      groups[0].push(b);
+    }
+    const used = new Set(['react']);
+    for (const a of ORDER) if (by.has(a)) { used.add(a); groups[(ITEMS[a] || [0, 0, 3])[2] - 1].push(row(by.get(a), a)); }
+    for (const [a, b] of by) if (!used.has(a) && a !== 'delete') groups[2].push(row(b, a));
+    if (by.has('delete')) groups[3].push(row(by.get('delete'), 'delete'));
+    groups.filter(g => g.length).forEach((g, i) => {
+      if (i) menu.appendChild(el('div', 'puente-mm-sep'));
+      g.forEach(b => menu.appendChild(b));
+    });
+    // Que entre en la pantalla con su tamano nuevo
+    const mr = menu.getBoundingClientRect();
+    if (mr.right > innerWidth - 8) menu.style.left = Math.max(8, innerWidth - mr.width - 8) + 'px';
+    if (mr.bottom > innerHeight - 8) menu.style.top = Math.max(8, innerHeight - mr.height - 8) + 'px';
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const box = document.getElementById('messages');
+    if (!app || !box || typeof app._showMessageContextMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    loadQuick();
+    setInterval(loadQuick, 10 * 60 * 1000);
+    box.addEventListener('mouseover', (e) => {
+      const msgEl = e.target instanceof Element && e.target.closest('.message, .message-compact');
+      if (msgEl && msgEl.dataset.msgId) { try { decorate(app, msgEl); } catch (err) { console.warn('[puente] barrita del mensaje:', err); } }
+    });
+    const show = app._showMessageContextMenu;
+    app._showMessageContextMenu = function (e, msgEl, ...rest) {
+      const r = show.call(this, e, msgEl, ...rest);
+      try { if (msgEl) restyle(this, msgEl); } catch (err) { console.warn('[puente] menu del mensaje:', err); }
+      return r;
+    };
+  })();
+})();
