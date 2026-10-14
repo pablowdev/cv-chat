@@ -1,6 +1,6 @@
 # Puente Discord ↔ Haven
 
-Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com/ancsemi/Haven)** sin cortar con Discord: las dos plataformas funcionan a la vez, en tiempo real y con la identidad de cada persona verificada. Funcionan sobre Haven 4.21 y 4.22 **sin modificar sus archivos** (salvo tres parches pequeños, explicados abajo).
+Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com/ancsemi/Haven)** sin cortar con Discord: las dos plataformas funcionan a la vez, en tiempo real y con la identidad de cada persona verificada. Funcionan sobre Haven 4.23 **sin modificar sus archivos** (salvo un parche pequeño, explicado abajo).
 
 > **English summary for Haven developers:** a Discord ↔ Haven bridge that runs inside the Haven process. It hooks `initFerry` through a `--require` preload to reach the same `db` and `io`, so no core files are touched. It adds live two-way relay (including threads, edits and deletes), Discord account linking via OAuth2 `identify`, unforgeable verified identity on relayed messages, channel access mirrored from Discord permissions, Discord-based password recovery, full-history sync and member counter channels. See the issues on ancsemi/Haven for the bugs and proposals that came out of this work.
 
@@ -28,7 +28,7 @@ Un tema de archivo de Haven con colores, tipografía y disposición parecidos a 
 
 La app de Android de Haven (Google Play) es nativa y no usa temas. Para tener el tema en el celular, la página se instala como app desde Chrome ("Instalar app"); con `PUENTE_TITULO` configurado, esa app lleva el nombre elegido, el icono del servidor y los colores del tema (`tools/puente/instalable.js`). En ese caso, los carteles de bienvenida de Haven que recomiendan su app de Android y la de PC se reemplazan por uno propio para instalar esta app, en la PC y en el celular (`tools/puente/web/instalar.js`).
 
-Con `PUENTE_TEMA_FIJO=1`, todos ven siempre el tema por defecto del servidor y no se puede elegir otro: se ocultan el botón de temas, la barra de temas del inicio de sesión y la lista de temas en Configuración (`tools/puente/tema-fijo.js`). El admin lo sigue cambiando para todos desde **Settings → Server Branding**.
+Con `PUENTE_TEMA_FIJO=1`, todos ven siempre el tema por defecto del servidor y no se puede elegir otro: se ocultan el botón de temas, la barra de temas del inicio de sesión y la lista de temas en Configuración (`tools/puente/tema-fijo.js`). El admin lo sigue cambiando para todos desde **Settings → Server Branding**. Además, las opciones de diseño de Configuración (disposición, densidad, accesibilidad, iconos, imágenes...) quedan solo para los administradores, y lo que elige un administrador se aplica a todos, por separado en la PC y en pantallas táctiles.
 
 Al entrar se abre el último canal que se usó en ese navegador, en vez de la pantalla de bienvenida de Haven; la primera vez, el primero de `PUENTE_CANAL_INICIO` que la persona puede ver (por ejemplo `general,bienvenida`).
 
@@ -36,11 +36,11 @@ Instalación: copiar `theme/discord-plus.theme.css` a `/opt/haven/tema/` y desca
 
 ## Parches a Haven (`patches/`)
 
-- `app-discord-import.js`: corrige el error "t is not a function" al listar canales con hilos en *Import Discord History*.
-- `import.js`: la importación de Discord lee 4 canales a la vez.
 - `import-timeout.js`: evita que la importación se corte a los 2 minutos. Solo afecta a `/api/import/discord/*`.
 
-Están reportados o propuestos en el repositorio de Haven. Cuando Haven los incorpore, basta con quitar las líneas de `deploy/docker-compose.yml`.
+Los parches anteriores del importador (canales con hilos y leer 4 canales a la vez) ya vienen en Haven 4.23.
+
+**Al pasar de Haven 4.22 a 4.23:** antes de arrancar la 4.23 por primera vez hay que guardar `import_authors_cleared = 1` en la tabla `server_settings`. Esa migración de Haven le quita el dueño a todos los mensajes importados de Discord, y acá son del usuario `discord-historial` a propósito (de eso dependen la vinculación de cuentas y las reacciones de la gente sin vincular).
 
 ## Instalación (resumen)
 

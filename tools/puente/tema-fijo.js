@@ -19,7 +19,8 @@
 //    administradores, las secciones de diseño de Configuracion.
 
 const on = () => process.env.PUENTE_TEMA_FIJO === '1';
-const BLOCKED_PREFS = new Set(['theme', 'effects']);
+// channel_order: el orden de canales propio de cada uno (Haven 4.23); todos ven el del servidor
+const BLOCKED_PREFS = new Set(['theme', 'effects', 'channel_order']);
 
 // Opciones de diseño que Haven guarda en el navegador
 const UI_KEYS = [
@@ -30,6 +31,9 @@ const UI_KEYS = [
   'haven_compact_composer', 'haven_hide_send_btn', 'haven_show_statusbar', 'haven_enabled_plugins', 'haven_enabled_themes',
   'haven_color_base', 'haven_custom_hsv', 'haven_rgb_settings', 'haven_crt_scanline', 'haven_crt_vignette',
   'haven_glitch_freq', 'haven_fx_speeds', 'haven_fx_sacred_intensity',
+  // Haven 4.23: Accesibilidad, categorias como lista o pestanas y aspecto de los mensajes oficiales
+  'haven-text-size', 'haven-line-spacing', 'haven-letter-spacing', 'haven-reduce-motion', 'haven-readable-font',
+  'haven-contrast', 'haven-underline-links', 'haven-large-targets', 'haven_category_layout', 'haven_official_style',
 ];
 const UI_SET = new Set(UI_KEYS);
 const FORMS = new Set(['pc', 'movil']);
@@ -60,7 +64,7 @@ function setup({ db, io, log }) {
     };
   });
   // Las elecciones viejas ya no sirven: se borran para que no vuelvan si se apaga esto.
-  const n = db.prepare("DELETE FROM user_preferences WHERE key IN ('theme', 'effects')").run().changes;
+  const n = db.prepare("DELETE FROM user_preferences WHERE key IN ('theme', 'effects', 'channel_order')").run().changes;
   log(`tema fijo para todos${n ? ` (${n} elecciones propias borradas)` : ''}`);
 }
 
@@ -120,7 +124,8 @@ function script(db) {
 }
 
 const HIDE_CSS = '<style id="puente-tema-fijo">#theme-popup-toggle,#theme-popup,#auth-theme-bar,' +
-  '#theme-list,h6:has(+ #theme-list){display:none!important}' +
+  '#theme-list,h6:has(+ #theme-list),#arrange-channels-btn{display:none!important}' +
+  'html:not(.puente-ui-admin) .settings-subsection:has(#official-style-select),html:not(.puente-ui-admin) #official-style-select{display:none!important}' +
   UI_SECTIONS.map(s => `html:not(.puente-ui-admin) .settings-nav-item[data-target="${s}"],html:not(.puente-ui-admin) #${s}`).join(',') +
   '{display:none!important}</style>';
 

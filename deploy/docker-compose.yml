@@ -4,17 +4,15 @@
 # Para migrar: copiar /opt/haven entero a otro servidor y `docker compose up -d`.
 services:
   haven:
-    # Version fijada (4.22.0): los parches de patches/ se revisaron para esta version. Revisarlos antes de actualizar.
-    image: ghcr.io/ancsemi/haven@sha256:bb1eab54fe970ddef1fd56a93036efe5e1f31c456c43b22435f4f74e77edc423
+    # Version fijada (4.23.0): el puente, el tema y patches/ se revisaron para esta version. Revisarlos antes de actualizar.
+    # Antes de pasar a 4.23.0 se marco import_authors_cleared=1 en server_settings: esa migracion de
+    # Haven le saca el dueño a los mensajes importados, y aca son del usuario discord-historial a proposito.
+    image: ghcr.io/ancsemi/haven@sha256:f17925ccfef01fb4140b74f5114ce4de62b9c3f22d95edb7b3b488d698e2d8ea
     container_name: haven
     volumes:
       - ./haven-data:/data
-      # PARCHE: bug "t is not a function" al listar canales con hilos (Haven 4.21.0).
-      # Quitar esta linea cuando Haven lo corrija oficialmente.
-      - ./patches/app-discord-import.js:/app/public/js/modules/app-discord-import.js:ro
+      # Los parches del importador de Discord (app-discord-import.js e import.js) ya vienen en Haven 4.23.0.
       - ./patches/import-timeout.js:/patches/import-timeout.js:ro
-      # PARCHE velocidad: importa 4 canales a la vez. Quitar al actualizar Haven si el importador cambia.
-      - ./patches/import.js:/app/src/routes/import.js:ro
       # Herramientas propias (script de hilos y privados, ejecutado por haven-hilos.timer)
       - ./tools:/tools
       # Tema Discord+ (solo aspecto) y su fuente Inter, servidos desde /themes
