@@ -116,6 +116,9 @@ function start(deps) {
   require('./medicion.js').setup({ io, db });
   hookHavenEmits();
   connectGateway();
+  // Mensajes que no llegaron a Discord: se reintentan (el primero, cuando ya se conecto)
+  setTimeout(retryMissing, 60 * 1000);
+  setInterval(retryMissing, 5 * 60 * 1000);
   log(`encendido para ${allow ? [...allow].join(', ') : 'todos los canales'}; cuentas sin vincular: ${unlinkedPolicy}`);
 }
 
@@ -668,6 +671,27 @@ function saveOut(havenId, discordId, target, attachments, ownId) {
   })();
 }
 
+const sentAlready = (id) => !!(db.prepare('SELECT discord_message_id d FROM messages WHERE id = ?').get(id) || {}).d ||
+  !!db.prepare('SELECT 1 FROM puente_salientes WHERE haven_message_id = ? LIMIT 1').get(id);
+
+// Reintento: los mensajes escritos en Haven en las ultimas 24 h que no llegaron a
+// Discord (por ejemplo, porque al bot le faltaba un permiso en ese canal) se
+// mandan en orden cada 5 minutos, hasta que salgan. Los que ya salieron quedan
+// anotados (puente_salientes), asi que nunca se repiten.
+function retryMissing() {
+  try {
+    const rows = db.prepare(`SELECT m.id FROM messages m JOIN channels c ON c.id = m.channel_id
+      WHERE c.discord_channel_id IS NOT NULL AND c.discord_channel_id != '' AND c.is_dm = 0
+        AND m.user_id IS NOT NULL AND m.imported_from IS NULL AND (m.is_webhook IS NULL OR m.is_webhook = 0)
+        AND m.discord_message_id IS NULL
+        AND m.created_at > datetime('now', '-1 day') AND m.created_at < datetime('now', '-1 minute')
+        AND NOT EXISTS (SELECT 1 FROM puente_salientes s WHERE s.haven_message_id = m.id)
+      ORDER BY m.id LIMIT 200`).all();
+    if (rows.length) log(`reintentando ${rows.length} mensaje(s) que no llegaron a Discord`);
+    for (const r of rows) outboundCreate(r.id).catch(err => warn('reintento:', err.message));
+  } catch (err) { warn('reintento:', err.message); }
+}
+
 async function outboundCreate(havenMessageId) {
   const m = stmts().messageById.get(havenMessageId);
   if (!m || !m.user_id || m.imported_from || m.is_webhook || m.discord_message_id) return;
@@ -677,6 +701,8 @@ async function outboundCreate(havenMessageId) {
   if (!link && unlinkedPolicy === 'bloquear') return;
 
   return enqueue('out:' + target.channelId, async () => {
+    // Ya salio mientras esperaba en la fila (por ejemplo, lo mando el reintento): no repetir
+    if (sentAlready(m.id)) return;
     const hook = await ensureWebhook(target.channelId);
     if (!hook) return;
     const key = `${target.channelId}:${target.threadId || ''}:${m.user_id}`;
