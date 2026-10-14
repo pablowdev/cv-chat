@@ -1695,3 +1695,124 @@
     app._hideUserContextMenu = function (...a) { removeBackdrop(); return hide.apply(this, a); };
   })();
 })();
+
+// PC: al hacer clic en tu nombre o avatar (abajo a la izquierda) se abre tu
+// tarjeta, como en Discord de escritorio: avatar grande, nombre, tu estado
+// personalizado, "Editar perfil" y el estado (en linea, ausente, no molestar,
+// invisible). Usa las mismas opciones de Haven (el lapiz y el selector de
+// estado del puntito verde, que quedan ocultos).
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const STATES = [['online', 'En línea'], ['away', 'Ausente'], ['dnd', 'No molestar'], ['invisible', 'Invisible']];
+  const pc = () => window.innerWidth > 768;
+
+  function close() {
+    document.getElementById('puente-yo')?.remove();
+    document.removeEventListener('mousedown', outside, true);
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function outside(e) {
+    const card = document.getElementById('puente-yo');
+    // (el clic en tu nombre o avatar ya lo abre o lo cierra)
+    if (card && !card.contains(e.target) && !(e.target instanceof Element && e.target.closest('[data-haven-region="account"] .user-names, .puente-account-avatar'))) close();
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+
+  function setStatus(status) {
+    const opt = document.querySelector('#status-picker .status-option[data-status="' + status + '"]');
+    if (opt) opt.click();
+  }
+  function setText(text) {
+    const input = document.getElementById('status-text-input');
+    if (!input) return;
+    input.value = text;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const picker = document.getElementById('status-picker');
+    if (picker) picker.style.display = 'none';
+  }
+
+  function open(app, account) {
+    close();
+    const card = el('div', 'puente-yo');
+    card.id = 'puente-yo';
+    card.appendChild(el('div', 'puente-yo-banner'));
+
+    const av = el('div', 'puente-yo-avatar');
+    const img = account.querySelector('.puente-account-avatar img');
+    if (img) { const i = el('img'); i.src = img.src; i.alt = ''; av.appendChild(i); }
+    else av.textContent = ((document.getElementById('current-user') || {}).textContent || '?').trim().charAt(0).toUpperCase();
+    const status = app.userStatus || 'online';
+    av.appendChild(el('span', 'puente-yo-dot ' + status));
+    card.appendChild(av);
+
+    // Estado personalizado: el globito al lado del avatar
+    const bubble = el('button', 'puente-yo-bubble');
+    bubble.type = 'button';
+    const text = (app.userStatusText || '').trim();
+    bubble.textContent = text || '+ Agregar un estado';
+    if (!text) bubble.classList.add('vacio');
+    bubble.addEventListener('click', () => {
+      const input = el('input', 'puente-yo-input');
+      input.type = 'text'; input.maxLength = 128; input.value = text; input.placeholder = '¿Qué estás haciendo?';
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); setText(input.value.trim()); close(); }
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      });
+      bubble.replaceWith(input);
+      input.focus();
+    });
+    card.appendChild(bubble);
+
+    card.appendChild(el('div', 'puente-yo-name', ((document.getElementById('current-user') || {}).textContent || '').trim()));
+    card.appendChild(el('div', 'puente-yo-login', ((document.getElementById('login-name') || {}).textContent || '').trim().replace(/^@/, '')));
+
+    const box = el('div', 'puente-yo-box');
+    const edit = el('button', 'puente-yo-item');
+    edit.type = 'button';
+    edit.append(el('span', 'puente-yo-icon', '✏️'), el('span', 'puente-yo-label', 'Editar perfil'));
+    edit.addEventListener('click', () => { close(); document.getElementById('rename-btn')?.click(); });
+    box.appendChild(edit);
+    box.appendChild(el('div', 'puente-yo-sep'));
+
+    const cur = STATES.find(s => s[0] === status) || STATES[0];
+    const st = el('button', 'puente-yo-item puente-yo-status');
+    st.type = 'button';
+    st.append(el('span', 'puente-yo-dot-sm ' + cur[0]), el('span', 'puente-yo-label', cur[1]), el('span', 'puente-yo-arrow', '›'));
+    const sub = el('div', 'puente-yo-sub');
+    for (const [code, label] of STATES) {
+      const b = el('button', 'puente-yo-item' + (code === status ? ' actual' : ''));
+      b.type = 'button';
+      b.append(el('span', 'puente-yo-dot-sm ' + code), el('span', 'puente-yo-label', label));
+      b.addEventListener('click', () => { setStatus(code); close(); });
+      sub.appendChild(b);
+    }
+    const wrap = el('div', 'puente-yo-status-wrap');
+    wrap.append(st, sub);
+    st.addEventListener('click', () => wrap.classList.toggle('abierto'));
+    box.appendChild(wrap);
+    card.appendChild(box);
+
+    document.body.appendChild(card);
+    const r = account.getBoundingClientRect();
+    card.style.left = Math.max(8, r.left) + 'px';
+    card.style.bottom = Math.max(8, window.innerHeight - r.top + 8) + 'px';
+    setTimeout(() => {
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', onKey, true);
+    }, 0);
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const account = document.querySelector('[data-haven-region="account"]');
+    if (!app || !account) { if (++tries < 120) setTimeout(wait, 500); return; }
+    account.addEventListener('click', (e) => {
+      if (!pc() || !(e.target instanceof Element) || !e.target.closest('.user-names, .puente-account-avatar')) return;
+      e.stopPropagation();
+      if (document.getElementById('puente-yo')) close(); else open(app, account);
+    });
+    window.addEventListener('resize', close);
+  })();
+})();

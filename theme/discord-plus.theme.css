@@ -1050,3 +1050,64 @@ html body [data-haven-region="main"]:has(> #puente-dm-home) { position: relative
   display: flex; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center;
   border-radius: 50%; background: #252429; filter: grayscale(1); font-size: 1rem;
 }
+
+/* PC: linea que separa la columna de iconos del panel de canales (con la
+   esquina de arriba redondeada, como Discord), y la barra de desplazamiento
+   de los canales invisible hasta pasar el mouse por encima */
+@media (min-width: 769px) {
+  html body [data-haven-region="navigation-sidebar"] {
+    border-left: 1px solid #29292d; border-top: 1px solid #29292d; border-top-left-radius: 0.5rem; box-sizing: border-box;
+  }
+  html body [data-haven-region="navigation-sidebar"] * { scrollbar-color: transparent transparent; }
+  html body [data-haven-region="navigation-sidebar"]:hover * { scrollbar-color: #2e2d32 transparent; }
+  /* El puntito de estado de Haven: el estado se elige desde tu tarjeta */
+  html body [data-haven-region="account"] #user-status-btn { display: none !important; }
+  html body [data-haven-region="account"] .user-names,
+  html body [data-haven-region="account"] .puente-account-avatar { cursor: pointer; }
+  html body [data-haven-region="account"] .user-names:hover .current-user { text-decoration: none; color: #fff; }
+}
+
+/* PC: tu tarjeta al hacer clic en tu nombre o avatar (aviso.js) */
+#puente-yo {
+  position: fixed; z-index: 100010; width: 18.75rem; box-sizing: border-box; padding-bottom: 0.75rem;
+  border-radius: 0.5rem; background: #121214; border: 1px solid #29292d; color: #dbdee1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); overflow: visible; font-size: 0.875rem;
+  animation: puente-fade 0.12s ease-out;
+}
+.puente-yo-banner { height: 6.5rem; border-radius: 0.5rem 0.5rem 0 0; background: #3a3a40; }
+.puente-yo-avatar {
+  position: relative; width: 5rem; height: 5rem; margin: -2.75rem 0 0 1rem; border-radius: 50%;
+  border: 0.375rem solid #121214; background: #5865f2; color: #fff; font-size: 2rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.puente-yo-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.puente-yo-dot, .puente-yo-dot-sm { border-radius: 50%; background: #23a55a; flex-shrink: 0; }
+.puente-yo-dot { position: absolute; right: -0.125rem; bottom: -0.125rem; width: 1rem; height: 1rem; border: 0.3125rem solid #121214; }
+.puente-yo-dot.away, .puente-yo-dot-sm.away { background: #f0b232; }
+.puente-yo-dot.dnd, .puente-yo-dot-sm.dnd { background: #f23f43; }
+.puente-yo-dot.invisible, .puente-yo-dot-sm.invisible { background: #80848e; }
+.puente-yo-bubble, .puente-yo-input {
+  position: absolute; left: 6.75rem; top: 6.25rem; max-width: 10.5rem; padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem; border: 0; background: #252429; color: #dbdee1; font: inherit; font-size: 0.8125rem;
+  text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.puente-yo-bubble.vacio { color: #96969e; }
+.puente-yo-bubble:hover { background: #2e2d32; }
+.puente-yo-input { width: 10.5rem; cursor: text; outline: 1px solid #5865f2; }
+.puente-yo-name { margin: 0.75rem 1rem 0; font-size: 1.25rem; font-weight: 700; color: #fbfbfb; }
+.puente-yo-login { margin: 0 1rem; font-size: 0.875rem; color: #dbdee1; }
+.puente-yo-box { margin: 0.75rem 0.75rem 0; padding: 0.375rem; border-radius: 0.5rem; background: #1e1e22; }
+.puente-yo-item {
+  display: flex; align-items: center; gap: 0.625rem; width: 100%; min-height: 2.25rem; padding: 0 0.5rem;
+  border: 0; border-radius: 0.25rem; background: transparent; color: #dbdee1; font: inherit; text-align: left; cursor: pointer;
+}
+.puente-yo-item:hover { background: #2e2d32; color: #fbfbfb; }
+.puente-yo-icon { width: 1rem; text-align: center; filter: grayscale(1); }
+.puente-yo-label { flex: 1 1 auto; }
+.puente-yo-arrow { color: #96969e; font-size: 1.125rem; transition: transform 0.15s; }
+.puente-yo-status-wrap.abierto .puente-yo-arrow { transform: rotate(90deg); }
+.puente-yo-dot-sm { width: 0.625rem; height: 0.625rem; margin: 0 0.1875rem; }
+.puente-yo-sep { height: 1px; margin: 0.25rem 0.5rem; background: #29292d; }
+.puente-yo-sub { display: none; padding-left: 0.75rem; }
+.puente-yo-status-wrap.abierto .puente-yo-sub { display: block; }
+.puente-yo-sub .puente-yo-item.actual { color: #fbfbfb; font-weight: 600; }
