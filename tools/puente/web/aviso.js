@@ -2818,7 +2818,10 @@ function sheetDrag(sheet, opts) {
     const prevH = ta.style.height; ta.style.height = 'auto';
     const cs = getComputedStyle(ta);
     for (const p of STYLE_PROPS) ed.style[p] = cs[p];
-    ed.style.minHeight = Math.max(parseFloat(cs.minHeight) || 0, ta.getBoundingClientRect().height) + 'px';
+    // Alto minimo de una linea (no el que tenga el cuadro de Haven en ese momento, que crece con el texto)
+    const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) || 16) * 1.2;
+    const oneLine = lh + (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+    ed.style.minHeight = Math.max(parseFloat(cs.minHeight) || 0, oneLine) + 'px';
     ta.style.height = prevH;
     if (hidden) ta.classList.add('puente-ta-oculto');
     ed.style.setProperty('--puente-ed-ph', getComputedStyle(ta, '::placeholder').color || '#80848e');
@@ -2899,4 +2902,32 @@ function sheetDrag(sheet, opts) {
     try { if (!start()) return; } catch (err) { console.warn('[puente] cuadro con emojis:', err); fail('error al arrancar'); }
     window.addEventListener('error', (ev) => { if (ev && ev.filename && /\/puente\/aviso\.js/.test(ev.filename) && /editor|puente-ed/i.test(String(ev.message))) fail('error'); });
   })();
+})();
+
+// Sin el temblor de los emojis animados al abrir: cuando la animacion esta en
+// "al pasar el mouse", Haven deja quieto cada GIF recien despues de que carga, y
+// en ese ratito se lo ve moverse. Mientras tanto queda invisible (ocupando su
+// lugar, asi no se mueve el texto). Si Haven no lo pudo frenar, a los 1,5 s se
+// muestra igual.
+(function () {
+  'use strict';
+  const SEL = 'img.custom-emoji, img.chat-image, img.reaction-custom-emoji';
+  const timers = new WeakMap();
+  function update(img) {
+    const src = img.getAttribute('src') || '';
+    const waiting = img.dataset.chatAnimatedSrc && img.dataset.chatAnimPlaying !== '1' && !src.startsWith('data:');
+    if (waiting && !img.classList.contains('puente-congelando')) {
+      img.classList.add('puente-congelando');
+      timers.set(img, setTimeout(() => img.classList.remove('puente-congelando'), 1500));
+    } else if (!waiting && img.classList.contains('puente-congelando')) {
+      img.classList.remove('puente-congelando');
+      clearTimeout(timers.get(img));
+    }
+  }
+  function start() {
+    new MutationObserver((muts) => {
+      for (const m of muts) if (m.target.nodeType === 1 && m.target.matches(SEL)) update(m.target);
+    }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['data-chat-animated-src', 'data-chat-anim-playing', 'src'] });
+  }
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();
