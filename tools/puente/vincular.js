@@ -141,13 +141,21 @@ function injectScript(req, res, src) {
             'html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #channel-header-name{visibility:hidden!important}</style></head>');
         }
         // Pantalla de carga con el logo, como Discord: tapa la pagina vacia de Haven
-        // mientras se conecta y se acomoda todo; aviso.js la saca con un fundido
-        // cuando ya cargaron los canales y los mensajes. Si algo falla, se va sola a los 8 s.
+        // mientras se conecta y se acomoda todo, con el logo grande girando sobre su
+        // eje; aviso.js la saca con un fundido cuando ya cargaron los canales y los
+        // mensajes. Si algo falla, se va sola a los 8 s.
         if (html.includes('id="no-channel-msg"') && !html.includes('puente-carga')) {
-          html = html.replace('</head>', '<style id="puente-carga">body::after{content:"";position:fixed;inset:0;z-index:2147483646;' +
-            'background:#121214 url(/puente/icono-192.png) center/88px 88px no-repeat;opacity:1;visibility:visible;' +
-            'transition:opacity .25s ease,visibility 0s linear .25s;animation:puente-carga-fin .25s ease 8s forwards}' +
-            'html.puente-listo body::after{opacity:0;visibility:hidden;pointer-events:none}' +
+          const size = 'min(62vmin,520px)';
+          html = html.replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image">' +
+            '<style id="puente-carga">' +
+            'html::before,html::after{content:"";position:fixed;opacity:1;visibility:visible;' +
+            'transition:opacity .3s ease,visibility 0s linear .3s}' +
+            'html::before{inset:0;z-index:2147483645;background:#121214;animation:puente-carga-fin .3s ease 8s forwards}' +
+            'html::after{left:50%;top:50%;width:' + size + ';height:' + size + ';margin:calc(' + size + ' / -2) 0 0 calc(' + size + ' / -2);' +
+            'z-index:2147483646;background:url(/puente/logo-carga.png) center/contain no-repeat;' +
+            'animation:puente-carga-gira 2.4s linear infinite,puente-carga-fin .3s ease 8s forwards}' +
+            'html.puente-listo::before,html.puente-listo::after{opacity:0;visibility:hidden;pointer-events:none}' +
+            '@keyframes puente-carga-gira{from{transform:perspective(1600px) rotateY(0deg)}to{transform:perspective(1600px) rotateY(360deg)}}' +
             '@keyframes puente-carga-fin{to{opacity:0;visibility:hidden}}</style></head>');
         }
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
@@ -247,6 +255,14 @@ async function handle(req, res) {
       body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title).replace(/__PUENTE_CANAL_INICIO__/g, start);
     }
     return send(res, 200, type, body);
+  }
+
+  // Logo de la pantalla de carga: tools/puente/web/logo-carga.png (propio de cada servidor,
+  // no va al repositorio); si no esta, el icono de la app
+  if (p === '/puente/logo-carga.png' && req.method === 'GET') {
+    const file = path.join(STATIC, 'logo-carga.png');
+    if (!fs.existsSync(file)) { res.writeHead(302, { Location: '/puente/icono-512.png' }); return res.end(); }
+    return send(res, 200, 'image/png', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {

@@ -9,3 +9,6 @@ haven-data/
 caddy-data/
 caddy-config/
 backup-local/
+
+# Logo de la pantalla de carga: propio de cada servidor
+tools/puente/web/logo-carga.png
