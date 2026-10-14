@@ -1227,3 +1227,105 @@
     (async function again() { if (!(await details()) && ++t2 < 60) setTimeout(again, 5000); })();
   })();
 })();
+
+// Celular: los mensajes directos como en la app de Discord. Arriba "Mensajes"
+// (en vez del nombre del servidor) con un boton + para empezar una conversacion,
+// y cada conversacion con el avatar de la otra persona, su nombre y hace cuanto
+// fue la ultima actividad. Al tocar una, se abre en pantalla completa (en vez de
+// la ventanita flotante de Haven), como en Discord.
+(function () {
+  'use strict';
+  const mobile = () => window.innerWidth <= 768;
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const avatars = new Map(); // id de usuario -> { avatar, nombre }
+  let asking = false;
+
+  function ago(ts) {
+    const t = typeof ts === 'number' ? ts : Date.parse(ts);
+    if (!t) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + ' min';
+    if (s < 86400) return Math.round(s / 3600) + ' h';
+    if (s < 30 * 86400) return Math.round(s / 86400) + ' d';
+    if (s < 365 * 86400) return Math.round(s / (30 * 86400)) + ' mes';
+    return Math.round(s / (365 * 86400)) + ' a';
+  }
+
+  function loadAvatars(ids) {
+    const missing = ids.filter(id => !avatars.has(id));
+    const tk = token();
+    if (!missing.length || !tk || asking) return;
+    asking = true;
+    fetch('/puente/api/avatares?ids=' + missing.join(','), { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) { for (const id of missing) avatars.set(id, d[id] || { avatar: null }); decorate(); } })
+      .catch(() => {}).finally(() => { asking = false; });
+  }
+
+  function decorate() {
+    const app = window.app;
+    const list = document.getElementById('dm-list');
+    if (!app || !list || !Array.isArray(app.channels)) return;
+    const ids = [];
+    for (const item of list.querySelectorAll('.dm-item')) {
+      const ch = app.channels.find(c => c && c.code === item.dataset.code);
+      if (!ch) continue;
+      const target = ch.dm_target;
+      if (target && target.id) ids.push(target.id);
+      let av = item.querySelector('.puente-dm-avatar');
+      if (!av) {
+        av = el('span', 'puente-dm-avatar');
+        item.insertBefore(av, item.firstChild);
+      }
+      const info = target && avatars.get(target.id);
+      if (info && info.avatar && !av.querySelector('img')) { av.textContent = ''; const i = el('img'); i.src = info.avatar; i.alt = ''; av.appendChild(i); }
+      else if (!av.querySelector('img')) av.textContent = ch.is_group ? '👥' : ((item.querySelector('.channel-name') || {}).textContent || '?').trim().charAt(0).toUpperCase();
+      let time = item.querySelector('.puente-dm-time');
+      const when = ch.last_activity ? ago(ch.last_activity) : '';
+      if (when) {
+        if (!time) { time = el('span', 'puente-dm-time'); item.appendChild(time); }
+        time.textContent = when;
+      }
+    }
+    if (ids.length) loadAvatars([...new Set(ids)]);
+  }
+
+  function header(app) {
+    const pane = document.getElementById('dm-pane');
+    if (!pane || document.getElementById('puente-dm-new')) return;
+    const plus = el('button', 'puente-dm-new', '+');
+    plus.id = 'puente-dm-new';
+    plus.type = 'button';
+    plus.title = 'Nuevo mensaje';
+    plus.addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('new-group-dm-btn')?.click(); });
+    const head = document.getElementById('dm-toggle-header');
+    if (head) {
+      head.appendChild(plus);
+      // Titulo corto como en Discord ("Mensajes"); el de Haven queda para la PC
+      const label = head.querySelector('.section-label-text');
+      if (label) { const short = el('span', 'puente-dm-title', 'Mensajes'); label.insertAdjacentElement('afterend', short); }
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const list = document.getElementById('dm-list');
+    if (!app || !list) { if (++tries < 120) setTimeout(wait, 500); return; }
+    header(app);
+    new MutationObserver(() => decorate()).observe(list, { childList: true });
+    decorate();
+    setInterval(decorate, 60000); // "hace cuanto" al dia
+    // Tocar una conversacion en el celular: pantalla completa, como Discord
+    list.addEventListener('click', (e) => {
+      if (!mobile()) return;
+      const item = e.target instanceof Element && e.target.closest('.dm-item');
+      if (!item || e.target.closest('.dm-more-btn')) return;
+      e.stopPropagation(); e.preventDefault();
+      if (typeof app._closeDMPiP === 'function') app._closeDMPiP();
+      app.switchChannel(item.dataset.code);
+      if (typeof app._closeMobilePanels === 'function') app._closeMobilePanels();
+    }, true);
+  })();
+})();

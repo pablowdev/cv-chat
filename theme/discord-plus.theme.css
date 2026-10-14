@@ -726,3 +726,43 @@ html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #cha
   html body [data-haven-region="account"] #connection-led { position: absolute; left: 2.5rem; top: calc(50% - env(safe-area-inset-bottom, 0px) / 2 + 0.5rem); width: 0.75rem; height: 0.75rem; border: 3px solid #252429; z-index: 2; }
   html body [data-haven-region="account"] .puente-account-gear { display: flex !important; margin-left: auto; background: transparent; border: 0; filter: grayscale(1); opacity: 0.8; min-width: 2.75rem; min-height: 2.75rem; font-size: 1.25rem; align-items: center; justify-content: center; }
 }
+
+/* ── Celular: mensajes directos como la app de Discord ── (aviso.js) */
+.puente-dm-avatar, .puente-dm-time, .puente-dm-new { display: none; }
+@media (max-width: 768px) {
+  html body .puente-ver-dms .sidebar-header { display: none !important; }
+  html body .puente-ver-dms #dm-pane { border-top-left-radius: 1rem; background: #1a191e; padding-top: env(safe-area-inset-top, 0px); }
+  html body .puente-ver-dms #dm-toggle-header {
+    display: flex !important; align-items: center; gap: 0.5rem; cursor: default;
+    padding: 1rem 1rem 0.75rem !important; margin: 0; border: 0;
+    font-size: 1.5rem !important; font-weight: 800 !important; color: #fbfbfb !important;
+    text-transform: none !important; letter-spacing: 0 !important; opacity: 1 !important; white-space: nowrap;
+  }
+  html body .puente-ver-dms #dm-toggle-header #new-group-dm-btn,
+  html body .puente-ver-dms #dm-toggle-header #organize-dms-btn,
+  html body .puente-ver-dms #dm-toggle-header #dm-unread-badge { display: none !important; }
+  html body .puente-ver-dms .puente-dm-new {
+    display: flex; margin-left: auto; width: 2.5rem; height: 2.5rem; align-items: center; justify-content: center;
+    border: 0; border-radius: 0.75rem; background: #5865f2; color: #fff; font-size: 1.625rem; font-weight: 400; line-height: 1; cursor: pointer;
+  }
+  html body #dm-list .dm-item { min-height: 3.5rem; gap: 0.875rem; padding: 0.375rem 0.75rem; }
+  html body #dm-list .dm-item .channel-hash { display: none; }
+  html body #dm-list .dm-item .channel-name { font-size: 1.0625rem; font-weight: 500; color: #dbdee1; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html body #dm-list .dm-item:has(> .channel-badge) .channel-name { color: #fbfbfb; font-weight: 700; }
+  html body #dm-list .dm-item > .channel-badge:not(.channel-badge-bubble) {
+    display: inline-flex; min-width: 1.25rem; height: 1.25rem; padding: 0 0.375rem; border-radius: 0.625rem;
+    align-items: center; justify-content: center; background: #f23f43; color: #fff; font-size: 0.75rem; font-weight: 700;
+  }
+  html body #dm-list .dm-item.active { background: #343338; }
+  .puente-dm-avatar {
+    display: flex; flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 50%; overflow: hidden;
+    align-items: center; justify-content: center; background: #5865f2; color: #fff; font-weight: 700; font-size: 1.0625rem;
+  }
+  .puente-dm-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .puente-dm-time { display: block; flex-shrink: 0; margin-left: auto; color: #96969e; font-size: 0.8125rem; }
+}
+.puente-dm-title { display: none; }
+@media (max-width: 768px) {
+  html body .puente-ver-dms #dm-toggle-header .section-label-text { display: none !important; }
+  html body .puente-ver-dms #dm-toggle-header .puente-dm-title { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}

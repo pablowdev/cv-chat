@@ -241,6 +241,17 @@ async function handle(req, res) {
     return json(res, 200, { emojis: frequentReactions(user.id, n) });
   }
 
+  // Avatares para la lista de mensajes directos del celular (web/aviso.js)
+  if (p === '/puente/api/avatares' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const ids = String(u.searchParams.get('ids') || '').split(',').map(x => parseInt(x, 10)).filter(x => x > 0).slice(0, 200);
+    const out = {};
+    const q = db.prepare('SELECT id, avatar, COALESCE(display_name, username) name FROM users WHERE id = ?');
+    for (const id of ids) { const r = q.get(id); if (r) out[id] = { avatar: r.avatar || null, nombre: r.name }; }
+    return json(res, 200, out);
+  }
+
   if (p === '/puente/api/permisos' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });
