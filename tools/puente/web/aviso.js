@@ -2935,3 +2935,44 @@ function sheetDrag(sheet, opts) {
   }
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();
+
+// Saca la pantalla de carga (vincular.js) cuando la app ya esta lista: canales
+// cargados, mensajes del canal dibujados, la letra del tema lista y nada
+// moviendose por un momento. Asi no se ve la pagina vacia de Haven ni el
+// reacomodo del primer segundo.
+(function () {
+  'use strict';
+  const root = document.documentElement;
+  const done = () => root.classList.add('puente-listo');
+  let token = null;
+  try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+  if (!token) { done(); return; }           // sin sesion: Haven lleva al inicio de sesion
+  setTimeout(done, 8000);                    // pase lo que pase
+  const t0 = Date.now();
+  let fonts = false, last = Date.now(), firstMsg = 0;
+  try { document.fonts.ready.then(() => { fonts = true; }); } catch { fonts = true; }
+  const watch = () => {
+    for (const id of ['messages', 'channel-list', 'dm-list']) {
+      const n = document.getElementById(id);
+      if (n) new MutationObserver(() => { last = Date.now(); }).observe(n, { childList: true, subtree: true, characterData: true });
+    }
+  };
+  if (document.body) watch(); else document.addEventListener('DOMContentLoaded', watch);
+  (function check() {
+    if (root.classList.contains('puente-listo')) return;
+    const app = window.app;
+    const msgs = document.getElementById('messages');
+    const channels = !!(app && Array.isArray(app.channels) && app.channels.length);
+    const hasMsgs = !!(msgs && msgs.querySelector('[data-msg-id]'));
+    if (hasMsgs && !firstMsg) firstMsg = Date.now();
+    const shown = !!(app && app.currentChannel && msgs && (hasMsgs || Date.now() - t0 > 3000));
+    // Quieto un momento, o como mucho 1,2 s despues de que aparecen los mensajes (las vistas
+    // previas de enlaces pueden seguir cargando, y no vale la pena hacer esperar mas)
+    const settled = Date.now() - last > 300 || (firstMsg && Date.now() - firstMsg > 1200);
+    if (channels && shown && fonts && settled) {
+      requestAnimationFrame(() => requestAnimationFrame(done));
+      return;
+    }
+    setTimeout(check, 100);
+  })();
+})();
