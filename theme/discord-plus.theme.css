@@ -766,3 +766,8 @@ html:not(.puente-bienvenida) #app:has(#no-channel-msg:not([style*="none"])) #cha
   html body .puente-ver-dms #dm-toggle-header .section-label-text { display: none !important; }
   html body .puente-ver-dms #dm-toggle-header .puente-dm-title { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Categorias: sin el puntito ni el numero de "hay mensajes sin leer adentro" */
+.category-label > .channel-badge-nested-dot,
+.category-label > .channel-badge,
+.category-label > .cat-unread-badge { display: none !important; }
