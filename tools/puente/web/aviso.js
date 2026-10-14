@@ -1816,3 +1816,42 @@
     window.addEventListener('resize', close);
   })();
 })();
+
+// Sin parpadeo al volver a la ventana: si estabas al final del chat, Haven pide
+// otra vez los ultimos mensajes del canal y vuelve a dibujar todo desde cero
+// (por eso el chat "pestañea", aunque no haya cambiado nada). Si llegan
+// exactamente los mismos mensajes que ya estan en pantalla, se deja como esta.
+// Si cambio algo (un mensaje nuevo, una edicion, una reaccion), se dibuja como
+// siempre.
+(function () {
+  'use strict';
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._renderMessages !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._renderMessages;
+    let last = null; // { code, sig, read, first }
+    app._renderMessages = function (messages, lastReadMessageId, ...rest) {
+      const container = document.getElementById('messages');
+      let sig = null;
+      try { sig = Array.isArray(messages) ? JSON.stringify(messages) : null; } catch { sig = null; }
+      // La marca de "mensajes nuevos" tampoco cambiaria: misma ultima lectura, o
+      // ya leiste todo y no hay marca en pantalla
+      const newest = Array.isArray(messages) && messages.length ? messages[messages.length - 1].id : null;
+      const sameDivider = () => (last && last.read === lastReadMessageId) ||
+        (!document.getElementById('new-messages-divider') && (!lastReadMessageId || (newest !== null && lastReadMessageId >= newest)));
+      try {
+        if (sig && last && messages !== this._lastRenderedMessages && !this._jumpTargetId &&
+            last.code === this.currentChannel && last.sig === sig && sameDivider() &&
+            container && container.firstChild && container.firstChild === last.first) {
+          this._lastRenderedMessages = messages;
+          this._lastRenderedReadId = lastReadMessageId;
+          return;
+        }
+      } catch { /* ante la duda, dibujar */ }
+      const r = orig.call(this, messages, lastReadMessageId, ...rest);
+      last = sig && container ? { code: this.currentChannel, sig, read: lastReadMessageId, first: container.firstChild } : null;
+      return r;
+    };
+  })();
+})();
