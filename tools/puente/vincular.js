@@ -132,6 +132,16 @@ function injectScript(req, res, src) {
       if (isHtml() && !res.headersSent) {
         let html = body.toString('utf8');
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
+        // Pantalla de inicio de sesion ("/"): el logo y el nombre del servidor en vez
+        // de "HAVEN" y su lema, con el aspecto de la app (login.css). "by Haven" queda
+        // chiquito abajo, junto a la version.
+        if (html.includes('data-haven-page="auth"') && !html.includes('puente-login-logo')) {
+          const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
+          const name = String((row && row.value) || 'Haven').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+          html = html.replace('<div class="logo">⬡</div>', '<img class="puente-login-logo" src="/puente/logo-carga.png" alt="">')
+            .replace('<h1>HAVEN</h1>', `<h1>${name}</h1><p class="puente-login-sub">¡Qué bueno verte por acá!</p>`)
+            .replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image"><link rel="stylesheet" href="/puente/login.css"></head>');
+        }
         // La pantalla "Bienvenido a Haven" (y el banner del servidor que la
         // acompana) no se muestra ni un instante: aviso.js abre un canal enseguida.
         // Va dentro de la pagina para que valga antes de que cargue el tema.
@@ -242,7 +252,7 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css')) {
     const file = p === '/puente/vincular' ? 'vincular.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));

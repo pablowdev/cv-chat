@@ -3,6 +3,17 @@
 (function () {
   'use strict';
   if (document.getElementById('puente-recuperar')) return;
+  // Con el aspecto nuevo (login.css): un enlace mas dentro de la tarjeta, junto a los de Haven
+  const links = document.querySelector('#login-form .auth-recovery-links');
+  if (links && document.querySelector('link[href="/puente/login.css"]')) {
+    const a = document.createElement('a');
+    a.id = 'puente-recuperar';
+    a.className = 'puente-login-discord';
+    a.href = '/puente/vincular';
+    a.textContent = 'Recuperar la contraseña con Discord';
+    links.insertBefore(a, links.firstChild);
+    return;
+  }
   const box = document.createElement('div');
   box.id = 'puente-recuperar';
   box.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:99999;max-width:calc(100vw - 32px);' +
@@ -38,4 +49,21 @@
     });
   } catch { return; }
   document.title = desc.get.call(document);
+})();
+
+// El aviso de los terminos sale en ingles (a la traduccion de Haven le falta):
+// en castellano, sin tocar el enlace (Haven le engancha la ventana de los terminos)
+(function () {
+  'use strict';
+  const note = document.querySelector('.auth-consent-note');
+  if (!note) return;
+  const fix = () => {
+    const link = note.querySelector('#login-tos-link');
+    if (!link || !/By clicking/.test(note.textContent)) return;
+    link.textContent = 'términos actuales';
+    note.textContent = '';
+    note.append('Al iniciar sesión aceptás los ', link, ', que pueden ser distintos de los que regían cuando te registraste.');
+  };
+  fix();
+  new MutationObserver(fix).observe(note, { childList: true, characterData: true, subtree: true });
 })();
