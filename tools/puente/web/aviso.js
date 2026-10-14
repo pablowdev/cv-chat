@@ -1133,3 +1133,97 @@
   }
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();
+
+// Celular: el menu lateral como el de la app de Discord. Una columna a la
+// izquierda con el boton de mensajes directos y el icono del servidor (lo que
+// se ve a la derecha cambia entre los canales y los mensajes directos), el
+// nombre del servidor con la cantidad de miembros, y abajo la tarjeta del
+// usuario con su avatar y el engranaje de ajustes. El tema (solo en pantallas
+// chicas) se encarga del resto del aspecto.
+(function () {
+  'use strict';
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const CHAT_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.94 2 11.8c0 2.4 1.1 4.57 2.88 6.16-.17 1.2-.7 2.36-1.6 3.27a.5.5 0 0 0 .4.86c1.9-.1 3.5-.8 4.66-1.62 1.13.33 2.35.52 3.66.52 5.52 0 10-3.94 10-8.8S17.52 3 12 3Z"/></svg>';
+
+  function build() {
+    const sb = document.querySelector('[data-haven-region="navigation-sidebar"]');
+    if (!sb || document.getElementById('puente-rail')) return !!sb;
+    const rail = el('nav', 'puente-rail');
+    rail.id = 'puente-rail';
+    const dm = el('button', 'puente-rail-btn puente-rail-dm');
+    dm.type = 'button';
+    dm.title = 'Mensajes directos';
+    dm.innerHTML = CHAT_ICON;
+    const dmBadge = el('span', 'puente-rail-badge');
+    dm.appendChild(dmBadge);
+    const srv = el('button', 'puente-rail-btn puente-rail-server active');
+    srv.type = 'button';
+    srv.title = (document.querySelector('.brand-text') || {}).textContent || 'Servidor';
+    const img = el('img');
+    img.src = '/puente/icono-192.png';
+    img.alt = '';
+    img.onerror = () => { img.remove(); srv.textContent = (srv.title || 'S').charAt(0); };
+    srv.appendChild(img);
+    rail.append(dm, el('div', 'puente-rail-sep'), srv);
+    sb.insertBefore(rail, sb.firstChild);
+
+    const showDms = (on) => {
+      sb.classList.toggle('puente-ver-dms', on);
+      dm.classList.toggle('active', on);
+      srv.classList.toggle('active', !on);
+      const list = document.getElementById('dm-list');
+      if (on && list && list.style.display === 'none') document.getElementById('dm-toggle-header')?.click();
+    };
+    dm.addEventListener('click', () => showDms(true));
+    srv.addEventListener('click', () => showDms(false));
+
+    // Mensajes directos sin leer: el numero tambien en el boton de la columna
+    const src = document.getElementById('dm-unread-badge');
+    const sync = () => {
+      const n = src && src.style.display !== 'none' ? src.textContent.trim() : '';
+      dmBadge.textContent = n;
+      dmBadge.style.display = n && n !== '0' ? '' : 'none';
+    };
+    if (src) new MutationObserver(sync).observe(src, { attributes: true, childList: true, characterData: true, subtree: true });
+    sync();
+
+    // Ajustes: el engranaje pasa a la tarjeta del usuario, como en Discord
+    const gear = document.getElementById('mobile-settings-btn');
+    const account = document.querySelector('[data-haven-region="account"]');
+    if (gear && account) { gear.classList.add('puente-account-gear'); account.appendChild(gear); }
+    return true;
+  }
+
+  // Nombre del servidor con "N miembros" y el avatar propio en la tarjeta de abajo
+  async function details() {
+    const tk = token();
+    if (!tk) return false;
+    const r = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + tk } }).catch(() => null);
+    if (!r || !r.ok) return false;
+    const st = await r.json().catch(() => null);
+    if (!st) return false;
+    const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
+    if (brand && typeof st.miembros === 'number' && !document.getElementById('puente-server-info')) {
+      const info = el('div', 'puente-server-info', st.miembros.toLocaleString('es-AR') + ' miembros');
+      info.id = 'puente-server-info';
+      brand.insertAdjacentElement('afterend', info);
+    }
+    const account = document.querySelector('[data-haven-region="account"]');
+    if (account && !account.querySelector('.puente-account-avatar')) {
+      const av = el('div', 'puente-account-avatar');
+      if (st.avatar) { const i = el('img'); i.src = st.avatar; i.alt = ''; av.appendChild(i); }
+      else av.textContent = String(st.haven || '?').charAt(0).toUpperCase();
+      account.insertBefore(av, account.firstChild);
+    }
+    return true;
+  }
+
+  let tries = 0;
+  (function wait() {
+    const ok = build();
+    if (!ok && ++tries < 120) { setTimeout(wait, 500); return; }
+    let t2 = 0;
+    (async function again() { if (!(await details()) && ++t2 < 60) setTimeout(again, 5000); })();
+  })();
+})();

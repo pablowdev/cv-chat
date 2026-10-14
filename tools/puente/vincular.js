@@ -277,6 +277,9 @@ async function handle(req, res) {
       discord: link ? { id: link.discord_user_id, nombre: link.discord_global_name || link.discord_username, usuario: link.discord_username,
         avatar: link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : null } : null,
       disponible: !!(clientId && clientSecret),
+      // Para el menu lateral del celular (como Discord): miembros y avatar propio
+      miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial'").get().n,
+      avatar: (db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id) || {}).avatar || null,
     });
   }
 
