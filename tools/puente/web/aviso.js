@@ -1,3 +1,54 @@
+// Manija de las hojas que suben desde abajo (pantallas tactiles), igual en
+// todas, como en Discord: arrastrando hacia arriba la hoja se agranda hasta casi
+// toda la pantalla (y ahi el contenido se desplaza normal); hacia abajo se
+// achica y, si se baja bastante, se cierra. El arrastre empieza solo con el
+// contenido desplazado arriba del todo (o donde diga canStart).
+//   sheet: la hoja; opts.close(): cerrarla; opts.scroller: lo que se desplaza
+//   adentro (por defecto la hoja); opts.canStart(e): donde puede empezar.
+function sheetDrag(sheet, opts) {
+  'use strict';
+  const scroller = opts.scroller || sheet;
+  const canStart = opts.canStart || (() => scroller.scrollTop <= 0);
+  const max = () => window.innerHeight * 0.95;
+  let y0 = null, dy = 0, h0 = 0, base = 0, active = false;
+  sheet.addEventListener('touchstart', (e) => {
+    y0 = null;
+    if (e.touches.length !== 1 || !canStart(e)) return;
+    y0 = e.touches[0].clientY; dy = 0; active = false;
+    h0 = sheet.getBoundingClientRect().height;
+    if (!sheet.__puenteBase) sheet.__puenteBase = h0; // el alto con el que se abrio
+    base = sheet.__puenteBase;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+  sheet.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (!active && Math.abs(dy) < 6) return;
+    // Ya esta al maximo y sigue para arriba: que se desplace el contenido
+    if (!active && dy < 0 && h0 >= max() - 1) { y0 = null; sheet.style.transition = ''; return; }
+    active = true;
+    const target = h0 - dy;
+    if (target >= base) {
+      sheet.style.maxHeight = '95vh';
+      sheet.style.height = Math.min(max(), target) + 'px';
+      sheet.style.transform = '';
+    } else {
+      sheet.style.height = base + 'px';
+      sheet.style.transform = 'translateY(' + (base - target) + 'px)';
+    }
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+  const end = () => {
+    if (y0 === null) return;
+    sheet.style.transition = '';
+    if (active && base - (h0 - dy) > 90) opts.close();
+    else sheet.style.transform = '';
+    y0 = null; active = false;
+  };
+  sheet.addEventListener('touchend', end, { passive: true });
+  sheet.addEventListener('touchcancel', end, { passive: true });
+}
+
 // Aviso "Vinculá tu cuenta de Discord" dentro de Haven (/app), para quien
 // todavia no la vinculo. Se puede cerrar: vuelve a aparecer a los 3 dias.
 (function () {
@@ -516,23 +567,8 @@
       document.body.appendChild(back);
     }
 
-    // Deslizar hacia abajo para cerrar
-    let y0 = null, dy = 0;
-    menu.addEventListener('touchstart', (e) => {
-      y0 = menu.scrollTop <= 0 ? e.touches[0].clientY : null;
-      dy = 0;
-      menu.style.transition = 'none';
-    }, { passive: true });
-    menu.addEventListener('touchmove', (e) => {
-      if (y0 === null) return;
-      dy = Math.max(0, e.touches[0].clientY - y0);
-      if (dy > 0) menu.style.transform = 'translateY(' + dy + 'px)';
-    }, { passive: true });
-    menu.addEventListener('touchend', () => {
-      menu.style.transition = '';
-      if (dy > 90) hide(app); else menu.style.transform = '';
-      y0 = null;
-    }, { passive: true });
+    // Manija: hacia arriba se agranda, hacia abajo se cierra
+    sheetDrag(menu, { close: () => hide(app) });
   }
 
   let tries = 0;
@@ -702,22 +738,8 @@
     search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => render(search.value), 120); });
     render('');
 
-    // Deslizar la manija hacia abajo para cerrar
-    let y0 = null, dy = 0;
-    sheet.addEventListener('touchstart', (e) => {
-      const onTop = e.target === sheet || e.target.classList.contains('puente-sheet-handle');
-      y0 = onTop ? e.touches[0].clientY : null; dy = 0; sheet.style.transition = 'none';
-    }, { passive: true });
-    sheet.addEventListener('touchmove', (e) => {
-      if (y0 === null) return;
-      dy = Math.max(0, e.touches[0].clientY - y0);
-      sheet.style.transform = 'translateY(' + dy + 'px)';
-    }, { passive: true });
-    sheet.addEventListener('touchend', () => {
-      sheet.style.transition = '';
-      if (y0 !== null && dy > 90) close(); else sheet.style.transform = '';
-      y0 = null;
-    }, { passive: true });
+    // Manija: hacia arriba se agranda, hacia abajo se cierra
+    sheetDrag(sheet, { close, canStart: (e) => e.target === sheet || e.target.classList.contains('puente-sheet-handle') });
 
     document.body.append(back, sheet);
   }
@@ -1008,11 +1030,8 @@
         .catch(() => {});
     }
 
-    // Deslizar hacia abajo para cerrar
-    let y0 = null, dy = 0;
-    sheet.addEventListener('touchstart', (e) => { y0 = list.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; sheet.style.transition = 'none'; }, { passive: true });
-    sheet.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); sheet.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
-    sheet.addEventListener('touchend', () => { sheet.style.transition = ''; if (dy > 90) close(); else sheet.style.transform = ''; y0 = null; }, { passive: true });
+    // Manija: hacia arriba se agranda, hacia abajo se cierra
+    sheetDrag(sheet, { close, scroller: list });
   }
 
   // Al soltar despues de mantener apretado, que no cuente como toque (pondria o sacaria la reaccion)
@@ -1507,28 +1526,7 @@
     }
     // Deslizar hacia arriba agranda el perfil (hasta casi toda la pantalla);
     // hacia abajo lo baja y, si se baja bastante, se cierra
-    let y0 = null, dy = 0, h0 = 0;
-    p.addEventListener('touchstart', (e) => {
-      y0 = p.scrollTop <= 0 ? e.touches[0].clientY : null;
-      dy = 0; h0 = p.getBoundingClientRect().height; p.style.transition = 'none';
-    }, { passive: true });
-    p.addEventListener('touchmove', (e) => {
-      if (y0 === null) return;
-      dy = e.touches[0].clientY - y0;
-      if (dy < 0) {
-        p.style.maxHeight = '95vh';
-        p.style.height = Math.min(window.innerHeight * 0.95, h0 - dy) + 'px';
-        p.style.transform = '';
-        if (e.cancelable) e.preventDefault();
-      } else {
-        p.style.transform = 'translateY(' + dy + 'px)';
-      }
-    }, { passive: false });
-    p.addEventListener('touchend', () => {
-      p.style.transition = '';
-      if (dy > 90) app._closeProfilePopup(); else p.style.transform = '';
-      y0 = null;
-    }, { passive: true });
+    sheetDrag(p, { close: () => app._closeProfilePopup() });
   }
 
   let tries = 0;
@@ -1674,11 +1672,8 @@
       back.addEventListener('click', (e) => { e.stopPropagation(); app._hideUserContextMenu(); });
       document.body.appendChild(back);
     }
-    // Deslizar hacia abajo para cerrar
-    let y0 = null, dy = 0;
-    menu.addEventListener('touchstart', (e) => { y0 = menu.scrollTop <= 0 ? e.touches[0].clientY : null; dy = 0; menu.style.transition = 'none'; }, { passive: true });
-    menu.addEventListener('touchmove', (e) => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); if (dy) menu.style.transform = 'translateY(' + dy + 'px)'; }, { passive: true });
-    menu.addEventListener('touchend', () => { menu.style.transition = ''; if (dy > 90) app._hideUserContextMenu(); else menu.style.transform = ''; y0 = null; }, { passive: true });
+    // Manija: hacia arriba se agranda, hacia abajo se cierra
+    sheetDrag(menu, { close: () => app._hideUserContextMenu() });
   }
 
   let tries = 0;

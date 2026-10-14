@@ -1286,3 +1286,7 @@ html body #channel-functions-panel.puente-ajustes-panel {
 }
 .puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge.cfn-on { background: #248046; }
 .puente-ajustes-panel .cfn-row:is([data-fn="voice"], [data-fn="text"], [data-fn="streams"], [data-fn="music"], [data-fn="soundboard"], [data-fn="media"], [data-fn="reactions"], [data-fn="read-only"], [data-fn="forum"], [data-fn="forum-blog"], [data-fn="nsfw"], [data-fn="private"], [data-fn="cleanup-exempt"], [data-fn="welcome"], [data-fn="announcement"]) .cfn-badge.cfn-on::after { left: 1.1875rem; }
+
+/* Pantallas tactiles: la ventanita de Haven con quienes reaccionaron no aparece
+   (la reemplaza la hoja de quienes reaccionaron, aviso.js) */
+@media (pointer: coarse) { html body #reaction-popout { display: none !important; } }
