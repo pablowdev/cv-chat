@@ -34,6 +34,7 @@ const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
+const vigia = require('./vigia.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
@@ -112,6 +113,7 @@ function start(deps) {
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); } });
   estadisticas.setup({ db, io, log, warn });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
+  vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
   require('./tema-fijo.js').setup({ db, io, log });
   require('./medicion.js').setup({ io, db });
   hookHavenEmits();
@@ -326,10 +328,16 @@ function onDispatch(t, d) {
       case 'CHANNEL_CREATE': case 'CHANNEL_UPDATE': case 'THREAD_CREATE': case 'THREAD_UPDATE':
         if (guildId && d.guild_id && d.guild_id !== guildId) return;
         cacheChannel(d);
-        if (t === 'CHANNEL_UPDATE') { estadisticas.onDiscordChannelUpdate(d); if (isBridged(d.id)) onDiscordTopic(d); }
+        if (t === 'CHANNEL_UPDATE') { estadisticas.onDiscordChannelUpdate(d); if (isBridged(d.id)) onDiscordTopic(d); vigia.onDiscordChange(); }
         break;
       case 'GUILD_ROLE_CREATE': case 'GUILD_ROLE_UPDATE':
-        if (d.guild_id === guildId) adjuntos.rememberRoles([d.role]);
+        if (d.guild_id === guildId) { adjuntos.rememberRoles([d.role]); vigia.onDiscordChange(); }
+        break;
+      case 'GUILD_ROLE_DELETE':
+        if (d.guild_id === guildId) vigia.onDiscordChange();
+        break;
+      case 'GUILD_MEMBER_UPDATE': // cambiaron los roles del bot
+        if (d.guild_id === guildId && d.user && d.user.id === botUserId) vigia.onDiscordChange();
         break;
       case 'MESSAGE_CREATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundCreate(d)); break;
       case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundUpdate(d)); break;
@@ -704,7 +712,7 @@ async function outboundCreate(havenMessageId) {
     // Ya salio mientras esperaba en la fila (por ejemplo, lo mando el reintento): no repetir
     if (sentAlready(m.id)) return;
     const hook = await ensureWebhook(target.channelId);
-    if (!hook) return;
+    if (!hook) { vigia.deliveryFailed(target.channelId, 'el bot no puede crear su webhook en el canal'); return; }
     const key = `${target.channelId}:${target.threadId || ''}:${m.user_id}`;
     const { text, media } = splitMedia(m.content);
     const files = media.length ? readUploads(media) : null;
@@ -762,6 +770,7 @@ async function outboundCreate(havenMessageId) {
     if (sent.__error) {
       if (sent.__error === 404) db.prepare('DELETE FROM puente_webhooks WHERE discord_channel_id = ?').run(target.channelId); // lo borraron: se recrea
       warn(`no pude publicar el mensaje ${m.id} en Discord:`, sent.__error, JSON.stringify(sent.__body || '').slice(0, 200));
+      vigia.deliveryFailed(target.channelId, 'Discord respondió ' + sent.__error);
       return;
     }
     const attachments = (sent.attachments || []).map(a => a.id);
