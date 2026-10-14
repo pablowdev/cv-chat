@@ -1,3 +1,9 @@
+// Vibracion cortita al abrir el perfil o el menu de una persona en el celular,
+// como en la app de Discord (Android; en iPhone el navegador no lo permite)
+function haptic() {
+  try { if (navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(10); } catch { /* sin vibracion */ }
+}
+
 // Manija de las hojas que suben desde abajo (pantallas tactiles), igual en
 // todas, como en Discord: arrastrando hacia arriba la hoja se agranda hasta casi
 // toda la pantalla (y ahi el contenido se desplaza normal); hacia abajo se
@@ -1508,6 +1514,7 @@ function sheetDrag(sheet, opts) {
     const p = document.getElementById('profile-popup');
     if (!p || p.classList.contains('profile-popup-hover') || p.classList.contains('puente-profile-sheet')) return;
     p.classList.add('puente-profile-sheet');
+    haptic();
     // El usuario tecnico que representa a la gente de Discord sin vincular: no se le escribe
     if ((p.querySelector('.profile-popup-username') || {}).textContent === '@discord-historial') p.querySelector('.profile-dm-btn')?.remove();
     ['left', 'top', 'right', 'bottom'].forEach(k => p.style.removeProperty(k));
@@ -1640,6 +1647,7 @@ function sheetDrag(sheet, opts) {
 
   function toSheet(app, menu) {
     menu.classList.add('puente-user-sheet');
+    haptic();
     menu.style.left = ''; menu.style.top = '';
     const kids = [...menu.children];
     menu.textContent = '';
