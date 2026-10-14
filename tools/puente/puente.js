@@ -639,7 +639,13 @@ function signature() {
   const raw = String(process.env.PUENTE_FIRMA || '').replace(/[\r\n<>@]/g, '').trim().slice(0, 80);
   return adjuntos.emojisToDiscord(db, raw || '✅ desde Haven');
 }
-const footerFor = link => (link ? `\n-# ${signature()} · <@${link.discord_user_id}>` : '');
+// PUENTE_FIRMA=no: sin la linea de firma (mas discreto; ver PUENTE_MARCA). Igual
+// nadie puede hacerse pasar por otro: las cuentas sin vincular siempre llevan
+// "(…, sin verificar)" en el nombre, y solo las vinculadas salen con su nombre de Discord.
+const footerFor = link => (link && String(process.env.PUENTE_FIRMA || '').trim().toLowerCase() !== 'no'
+  ? `\n-# ${signature()} · <@${link.discord_user_id}>` : '');
+// Marca junto al nombre de las cuentas vinculadas (PUENTE_MARCA, por ejemplo "✦")
+const nameMark = () => { const m = String(process.env.PUENTE_MARCA || '').replace(/[\r\n<>@#:`]/g, '').trim().slice(0, 8); return m ? ' ' + m : ''; };
 // Nombre de la app en "Nombre (Haven, sin verificar)": PUENTE_TITULO si esta configurado
 const appName = () => String(process.env.PUENTE_TITULO || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 30) || 'Haven';
 // Linea de firma (la actual o una de antes): "-# ... · <@id>"
@@ -704,7 +710,7 @@ async function outboundCreate(havenMessageId) {
 
     const body = {
       content,
-      username: link ? webhookName(link.discord_global_name || link.discord_username) : webhookName(m.uname, ` (${appName()}, sin verificar)`),
+      username: link ? webhookName(link.discord_global_name || link.discord_username, nameMark()) : webhookName(m.uname, ` (${appName()}, sin verificar)`),
       avatar_url: link ? (link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : undefined) : (absolute(m.uavatar) || undefined),
       allowed_mentions: { parse: [] }, // nunca notifica a nadie (ni @everyone, ni @here)
     };
