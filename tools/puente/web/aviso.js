@@ -1785,6 +1785,14 @@ function sheetDrag(sheet, opts) {
     edit.append(el('span', 'puente-yo-icon', '✏️'), el('span', 'puente-yo-label', 'Editar perfil'));
     edit.addEventListener('click', () => { close(); document.getElementById('rename-btn')?.click(); });
     box.appendChild(edit);
+    // Email para recuperar la contraseña (web/email.js, si el servidor lo tiene)
+    if (window.puenteEmail) {
+      const mail = el('button', 'puente-yo-item');
+      mail.type = 'button';
+      mail.append(el('span', 'puente-yo-icon', '✉️'), el('span', 'puente-yo-label', 'Email de recuperación'));
+      mail.addEventListener('click', () => { close(); window.puenteEmail.open(); });
+      box.appendChild(mail);
+    }
     box.appendChild(el('div', 'puente-yo-sep'));
 
     const cur = STATES.find(s => s[0] === status) || STATES[0];

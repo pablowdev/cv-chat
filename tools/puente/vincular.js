@@ -34,6 +34,7 @@ const path = require('path');
 const adjuntos = require('./adjuntos.js');
 const instalable = require('./instalable.js');
 const temaFijo = require('./tema-fijo.js');
+const email = require('./email.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -61,6 +62,7 @@ function setup(ctx) {
   });
   if (!clientSecret) warn('falta DISCORD_CLIENT_SECRET: la vinculacion de cuentas no funcionara hasta guardarlo');
 
+  email.setup({ db, log, warn, publicUrl, appName, setPassword });
   hookHttp();
   log('vinculacion de cuentas lista en /puente/vincular');
 }
@@ -73,6 +75,12 @@ function hookHttp() {
       const url = req.url;
       if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
+      }
+      // Registro con email obligatorio (email.js)
+      if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on()) {
+        const server = this;
+        email.hookRegister(req, res, () => origEmit.call(server, event, req, res, ...rest));
+        return true;
       }
       if (url.startsWith('/puente/')) {
         handle(req, res).catch(err => { warn('error en', url, err.message); send(res, 500, 'text/plain', 'Error interno'); });
@@ -140,7 +148,8 @@ function injectScript(req, res, src) {
           const name = String((row && row.value) || 'Haven').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
           html = html.replace('<div class="logo">⬡</div>', '<img class="puente-login-logo" src="/puente/logo-carga.png" alt="">')
             .replace('<h1>HAVEN</h1>', `<h1>${name}</h1><p class="puente-login-sub">¡Qué bueno verte por acá!</p>`)
-            .replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image"><link rel="stylesheet" href="/puente/login.css"></head>');
+            .replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image"><link rel="stylesheet" href="/puente/login.css">' +
+              (email.on() ? '<meta name="puente-email" content="1">' : '') + '</head>');
         }
         // La pantalla "Bienvenido a Haven" (y el banner del servidor que la
         // acompana) no se muestra ni un instante: aviso.js abre un canal enseguida.
@@ -167,6 +176,10 @@ function injectScript(req, res, src) {
             'html.puente-listo::before,html.puente-listo::after{opacity:0;visibility:hidden;pointer-events:none}' +
             '@keyframes puente-carga-gira{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}' +
             '@keyframes puente-carga-fin{to{opacity:0;visibility:hidden}}</style></head>');
+        }
+        // Cartel para agregar un email de recuperacion (email.js)
+        if (email.on() && html.includes('id="no-channel-msg"') && !html.includes('/puente/email.js')) {
+          html = html.replace('</body>', '<script src="/puente/email.js" defer></script></body>');
         }
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         origSetHeader.call(this, 'Content-Length', body.length);
@@ -252,8 +265,8 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css')) {
-    const file = p === '/puente/vincular' ? 'vincular.html' : p.slice('/puente/'.length);
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide')) {
+    const file = p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));
     // Titulo de la pestana (PUENTE_TITULO): se escribe en aviso.js y login.js al servirlos.
@@ -358,7 +371,7 @@ async function handle(req, res) {
     const now = Date.now();
     for (const [k, v] of states) if (v.exp < now) states.delete(k);
     const state = crypto.randomBytes(24).toString('hex');
-    return json(res, 200, { url: authorizeUrl({ purpose: 'link', userId: user.id }) });
+    return json(res, 200, { url: authorizeUrl({ purpose: 'link', userId: user.id }, email.on() ? 'identify email' : 'identify') });
   }
 
   if (p === '/puente/api/desvincular' && req.method === 'POST') {
@@ -393,21 +406,54 @@ async function handle(req, res) {
     recoveries.delete(token); // un solo uso
     const user = db.prepare('SELECT id, username, is_admin, totp_enabled, password_version FROM users WHERE id = ?').get(r.userId);
     if (!user || user.is_admin || user.totp_enabled) return json(res, 403, { error: 'Esta cuenta no se puede recuperar con Discord.' });
-    const bcrypt = require('/app/node_modules/bcryptjs');
-    const hash = await bcrypt.hash(password, 12);
-    // Lo mismo que hace Haven al usar un codigo de recuperacion.
-    db.prepare(`UPDATE users SET password_hash = ?, password_version = ?, temp_password_hash = NULL, must_change_password = 0,
-                  public_key = NULL, encrypted_private_key = NULL, e2e_key_salt = NULL, e2e_secret = NULL, e2e_passphrase = 0
-                WHERE id = ?`).run(hash, (user.password_version || 1) + 1, user.id);
-    // Cerrar las sesiones abiertas (Haven deja de aceptar sus tokens en unos
-    // segundos, al subir password_version).
-    try {
-      for (const so of io.of('/').sockets.values()) {
-        if (so.user && so.user.id === user.id) { so.emit('force-logout', { reason: 'password_changed' }); so.disconnect(true); }
-      }
-    } catch { /* sin sesiones abiertas */ }
-    log(`recuperacion con Discord: contraseña nueva para "${user.username}" (Haven #${user.id}); sesiones cerradas y claves E2E borradas`);
+    await setPassword(user, password, 'con Discord');
     return json(res, 200, { ok: true, usuario: user.username });
+  }
+
+  // ── Email de recuperacion (email.js) ──
+  if (p.startsWith('/puente/api/email/') || p === '/puente/email/confirmar') {
+    if (!email.on()) return json(res, 404, { error: 'apagado' });
+    if (p === '/puente/email/confirmar' && req.method === 'GET') {
+      const r = email.confirm(u.searchParams.get('t') || '');
+      return send(res, r.ok ? 200 : 400, 'text/html', resultPage(r.ok ? 'Email confirmado' : 'No se pudo confirmar',
+        r.ok ? `Listo: ${r.email} quedó confirmado. Si alguna vez olvidás tu contraseña, la podés recuperar con él.` : r.error));
+    }
+    if (p === '/puente/api/email/olvide' && req.method === 'POST') {
+      const body = await readJson(req);
+      // Detras de Caddy: la ultima direccion de X-Forwarded-For es la de quien pide
+      const ip = String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress || '?';
+      const r = await email.forgot(body && body.email, ip);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (p === '/puente/api/email/restablecer' && req.method === 'GET') {
+      const r = email.resetInfo(u.searchParams.get('t') || '');
+      return r ? json(res, 200, r) : json(res, 404, { error: 'El enlace caducó o ya se usó. Pedí uno nuevo.' });
+    }
+    if (p === '/puente/api/email/restablecer' && req.method === 'POST') {
+      const body = await readJson(req);
+      const r = await email.reset(body && typeof body.t === 'string' ? body.t : '', body && typeof body.password === 'string' ? body.password : '');
+      return json(res, r.ok ? 200 : r.status, r);
+    }
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    if (p === '/puente/api/email/estado' && req.method === 'GET') {
+      const linked = !!db.prepare('SELECT 1 FROM puente_vinculos WHERE haven_user_id = ?').get(user.id);
+      return json(res, 200, { ...email.status(user.id), discord: !!(clientId && clientSecret), vinculado: linked });
+    }
+    if (p === '/puente/api/email/guardar' && req.method === 'POST') {
+      const body = await readJson(req);
+      const r = await email.saveAndVerify(user.id, body && body.email);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (p === '/puente/api/email/reenviar' && req.method === 'POST') {
+      const r = await email.resend(user.id);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (p === '/puente/api/email/discord' && req.method === 'POST') {
+      if (!clientId || !clientSecret) return json(res, 503, { error: 'Discord no está configurado en el servidor.' });
+      return json(res, 200, { url: authorizeUrl({ purpose: 'email', userId: user.id }, 'identify email') });
+    }
+    return send(res, 404, 'text/plain', 'No encontrado');
   }
 
   if (p === '/puente/discord/callback' && req.method === 'GET') {
@@ -437,6 +483,11 @@ async function handle(req, res) {
     }).catch(() => {});
     if (!me.id) return back({ error: 'discord' });
 
+    if (entry.purpose === 'email') {
+      const r = email.on() ? email.fromDiscord(entry.userId, me) : { error: 'sin-email' };
+      return send(res, 302, 'text/plain', '', { Location: `/app?puente_email=${r.ok ? 'ok' : r.error}` });
+    }
+
     if (entry.purpose === 'recover') {
       const l = db.prepare('SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?').get(me.id);
       if (!l) return back({ error: 'sin-vinculo' });
@@ -463,6 +514,7 @@ async function handle(req, res) {
       }
     } catch (err) { warn('avatar de Discord:', err.message); }
     try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
+    email.fromDiscordIfMissing(entry.userId, me);
     log(`vinculado: Haven #${entry.userId} <-> Discord ${me.username} (${me.id}); ${moved} mensajes historicos pasados a su cuenta`);
     return back({ ok: '1', mensajes: String(moved) });
   }
@@ -470,15 +522,47 @@ async function handle(req, res) {
   return send(res, 404, 'text/plain', 'No encontrado');
 }
 
+function appName() {
+  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
+  return String(process.env.PUENTE_TITULO || (row && row.value) || 'Haven').trim() || 'Haven';
+}
+
+// Contraseña nueva, lo mismo que hace Haven al usar un codigo de recuperacion:
+// borra las claves de los mensajes directos cifrados y cierra las sesiones
+// abiertas (Haven deja de aceptar sus tokens al subir password_version).
+async function setPassword(user, password, how) {
+  const bcrypt = require('/app/node_modules/bcryptjs');
+  const hash = await bcrypt.hash(password, 12);
+  db.prepare(`UPDATE users SET password_hash = ?, password_version = ?, temp_password_hash = NULL, must_change_password = 0,
+                public_key = NULL, encrypted_private_key = NULL, e2e_key_salt = NULL, e2e_secret = NULL, e2e_passphrase = 0
+              WHERE id = ?`).run(hash, (user.password_version || 1) + 1, user.id);
+  try {
+    for (const so of io.of('/').sockets.values()) {
+      if (so.user && so.user.id === user.id) { so.emit('force-logout', { reason: 'password_changed' }); so.disconnect(true); }
+    }
+  } catch { /* sin sesiones abiertas */ }
+  log(`recuperacion ${how}: contraseña nueva para "${user.username}" (Haven #${user.id}); sesiones cerradas y claves E2E borradas`);
+}
+
+// Pagina chiquita de resultado (confirmar el email), con el aspecto del ingreso
+function resultPage(title, text) {
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(appName())}</title><link rel="stylesheet" href="/puente/login.css"></head>
+<body class="auth-page"><div class="auth-container"><div class="auth-card"><div class="auth-header">
+<img class="puente-login-logo" src="/puente/logo-carga.png" alt=""><h1>${esc(title)}</h1><p class="puente-login-sub">${esc(text)}</p></div>
+<a class="btn-primary puente-boton" href="/app">Ir a ${esc(appName())}</a></div></div></body></html>`;
+}
+
 function redirectUri() { return `${publicUrl}/puente/discord/callback`; }
 
-function authorizeUrl(entry) {
+function authorizeUrl(entry, scope = 'identify') {
   const now = Date.now();
   for (const [k, v] of states) if (v.exp < now) states.delete(k);
   for (const [k, v] of recoveries) if (v.exp < now) recoveries.delete(k);
   const state = crypto.randomBytes(24).toString('hex');
   states.set(state, { ...entry, exp: now + STATE_TTL_MS });
-  const q = new URLSearchParams({ client_id: clientId, response_type: 'code', scope: 'identify', redirect_uri: redirectUri(), state, prompt: 'consent' });
+  const q = new URLSearchParams({ client_id: clientId, response_type: 'code', scope, redirect_uri: redirectUri(), state, prompt: 'consent' });
   return `https://discord.com/oauth2/authorize?${q}`;
 }
 

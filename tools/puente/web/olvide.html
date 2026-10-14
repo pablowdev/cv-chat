@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Recuperar la contraseña</title>
+<link rel="stylesheet" href="/puente/login.css">
+<script src="/puente/olvide.js" defer></script>
+</head>
+<body class="auth-page">
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <img class="puente-login-logo" src="/puente/logo-carga.png" alt="">
+      <h1 id="titulo">Recuperar la contraseña</h1>
+      <p class="puente-login-sub" id="bajada">Poné el email de tu cuenta y te mandamos un enlace para elegir una contraseña nueva.</p>
+    </div>
+
+    <form id="pedir" class="auth-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="email" maxlength="200" required>
+      </div>
+      <button type="submit" class="btn-primary">Mandarme el enlace</button>
+    </form>
+
+    <form id="cambiar" class="auth-form" hidden>
+      <div class="form-group">
+        <label for="clave">Contraseña nueva</label>
+        <input type="password" id="clave" autocomplete="new-password" minlength="8" maxlength="128" required>
+        <small>Mínimo 8 caracteres.</small>
+      </div>
+      <div class="form-group">
+        <label for="clave2">Repetí la contraseña</label>
+        <input type="password" id="clave2" autocomplete="new-password" minlength="8" maxlength="128" required>
+      </div>
+      <button type="submit" class="btn-primary">Guardar la contraseña nueva</button>
+    </form>
+
+    <p class="puente-nota" id="nota" hidden></p>
+    <a class="btn-primary puente-boton" id="ir" href="/" hidden>Iniciar sesión</a>
+
+    <div class="auth-recovery-links" id="otras">
+      <a href="/puente/vincular" id="con-discord">Recuperar con Discord</a>
+      <a href="/">Volver a iniciar sesión</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

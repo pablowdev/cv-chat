@@ -51,6 +51,50 @@
   document.title = desc.get.call(document);
 })();
 
+// Email de recuperacion (email.js del puente, con la marca puente-email en la
+// pagina): campo obligatorio al registrarse, y "¿Olvidaste tu contraseña?" lleva
+// a pedir un enlace por mail. El de Haven queda como "Usar una clave de recuperación".
+(function () {
+  'use strict';
+  if (!document.querySelector('meta[name="puente-email"]')) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const form = document.getElementById('register-form');
+  const pass = document.getElementById('reg-password');
+  const passGroup = pass && pass.closest('.form-group');
+  if (form && passGroup && !document.getElementById('puente-reg-email')) {
+    const group = el('div', 'form-group');
+    const label = el('label', '', 'Email');
+    label.htmlFor = 'puente-reg-email';
+    const input = el('input');
+    input.type = 'email'; input.id = 'puente-reg-email'; input.autocomplete = 'email'; input.maxLength = 200; input.required = true;
+    group.append(label, input, el('small', '', 'Sirve para recuperar tu contraseña si la olvidás. No se muestra a nadie.'));
+    form.insertBefore(group, passGroup);
+  }
+  // Haven arma el pedido de registro con sus campos: se le suma el email
+  const origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    try {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (/\/api\/auth\/register(\?|$)/.test(url) && init && typeof init.body === 'string') {
+        const box = document.getElementById('puente-reg-email');
+        const body = JSON.parse(init.body);
+        if (box && body && typeof body === 'object' && !body.email) init = Object.assign({}, init, { body: JSON.stringify(Object.assign(body, { email: box.value.trim() })) });
+      }
+    } catch { /* el pedido sale como estaba */ }
+    return origFetch.call(this, input, init);
+  };
+  const links = document.querySelector('#login-form .auth-recovery-links');
+  if (links && !document.getElementById('puente-olvide')) {
+    const a = el('a', 'puente-login-discord', '¿Olvidaste tu contraseña?');
+    a.id = 'puente-olvide'; a.href = '/puente/olvide';
+    links.insertBefore(a, links.firstChild);
+    const discord = document.getElementById('puente-recuperar');
+    if (discord) discord.className = '';
+    const codes = document.getElementById('forgot-password-show');
+    if (codes) { codes.removeAttribute('data-i18n'); codes.textContent = 'Usar una clave de recuperación'; }
+  }
+})();
+
 // El aviso de los terminos sale en ingles (a la traduccion de Haven le falta):
 // en castellano, sin tocar el enlace (Haven le engancha la ventana de los terminos)
 (function () {

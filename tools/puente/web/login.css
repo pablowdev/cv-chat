@@ -60,6 +60,13 @@ html body.auth-page .auth-lang-bar select { background: #121214 !important; bord
 html body.auth-page .auth-version { margin: 0.75rem 0 0; text-align: center; color: #5c5e66 !important; font-family: inherit !important; font-size: 0.6875rem; }
 html body.auth-page .auth-version::before { content: 'by Haven · '; }
 
+/* Email de recuperacion: campo del registro y paginas del puente (olvide.html, confirmar) */
+html body.auth-page [hidden] { display: none !important; }
+html body.auth-page .auth-form small { display: block; margin: -0.625rem 0 1rem; color: #80848e; font-size: 0.75rem; line-height: 1.4; }
+html body.auth-page .puente-boton { display: block; box-sizing: border-box; width: 100%; height: 2.75rem; line-height: 2.75rem; margin-top: 0.5rem; text-align: center; text-decoration: none !important; font-size: 1rem; }
+html body.auth-page .puente-nota { margin: 0 0 1rem; padding: 0.75rem 0.875rem; border-radius: 0.5rem; background: #232428; color: #dbdee1; font-size: 0.875rem; line-height: 1.45; }
+html body.auth-page .puente-nota.mal { background: rgba(218, 55, 60, 0.15); color: #fa777c; }
+
 @media (max-width: 480px) {
   html body.auth-page .auth-container { padding: 1rem 0.75rem 4rem; }
   html body.auth-page .auth-card { padding: 1.5rem 1.25rem 1rem; }
