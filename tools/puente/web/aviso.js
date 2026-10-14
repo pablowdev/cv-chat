@@ -775,6 +775,220 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// PC: elegir una reaccion como en Discord. En vez de la barrita de Haven (8
+// emojis y un "..." que abre un panel chico), un panel grande junto al mensaje:
+// buscador arriba, categorias a la izquierda, "Usados frecuentemente", los
+// emojis del servidor y todas las categorias, y abajo el nombre del emoji que
+// esta debajo del mouse. Un clic reacciona (o saca la reaccion si ya estaba) y
+// cierra; con Shift queda abierto para poner varias, como en Discord.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const tr = (key, fallback) => {
+    try { const v = typeof t === 'function' ? t(key) : null; return v && v !== key ? v : fallback; } catch { return fallback; }
+  };
+  let frequent = null;
+  function loadFrequent() {
+    let token = null;
+    try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!token) return;
+    fetch('/puente/api/reacciones-frecuentes?n=36', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) frequent = d.emojis; }).catch(() => {});
+  }
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+
+  let current = null; // { msgId, msgEl, pop, off }
+  function close() {
+    if (!current) return;
+    current.off();
+    current.pop.remove();
+    current.msgEl.classList.remove('puente-rp-abierto');
+    current = null;
+  }
+
+  function open(app, msgEl, msgId) {
+    if (current && current.msgId === msgId) { close(); return; } // el mismo boton lo cierra
+    close();
+    const root = msgEl && msgEl.closest('#dm-pip-messages, #messages, #thread-messages');
+    const code = root && root.id === 'dm-pip-messages' ? app._activeDMPip : app.currentChannel;
+    if (app._channelAllowsReactions && !app._channelAllowsReactions(code)) {
+      if (app._showToast) app._showToast(tr('channel_functions.reactions_disabled', 'Las reacciones están desactivadas en este canal'), 'info');
+      return;
+    }
+    const tone = (e) => (typeof app._toneEmoji === 'function' ? app._toneEmoji(e) : e);
+    const named = (e) => {
+      const m = typeof e === 'string' && /^:([a-zA-Z0-9_-]+):$/.exec(e);
+      return m && typeof app._findNamedEmoji === 'function' ? app._findNamedEmoji(m[1]) : null;
+    };
+    const nameOf = (raw) => { const n = app.emojiNames && app.emojiNames[raw]; return n ? ':' + String(n).trim().replace(/\s+/g, '_') + ':' : raw; };
+
+    // Secciones: [{ id, title, tab (texto o { url }), items: [{ value, url?, label, raw? }] }]
+    const sections = [];
+    if (frequent && frequent.length) {
+      sections.push({ id: 'freq', title: tr('emoji.frequent', 'Usados frecuentemente'), tab: '🕒',
+        items: frequent.map(f => (f.url ? { value: f.emoji, url: f.url, label: f.emoji } : { value: tone(f.emoji), label: nameOf(f.emoji), raw: f.emoji })) });
+    }
+    if (Array.isArray(app.customEmojis) && app.customEmojis.length) {
+      const server = (app.serverSettings && app.serverSettings.server_name) || tr('emoji.categories.custom', 'Personalizado');
+      sections.push({ id: 'custom', title: server, tab: { url: '/puente/icono-192.png' },
+        items: app.customEmojis.map(ce => ({ value: `:${ce.name}:`, url: ce.url, label: `:${ce.name}:` })) });
+    }
+    for (const [cat, list] of Object.entries(app.emojiCategories || {})) {
+      if (!Array.isArray(list) || !list.length) continue;
+      const items = list.map(e => {
+        const n = named(e);
+        return n ? { value: e, url: n.url, label: e } : { value: tone(e), label: nameOf(e), raw: e };
+      });
+      const first = items[0];
+      sections.push({ id: 'cat-' + cat, title: tr('emoji.categories.' + cat.toLowerCase(), cat), tab: first.url ? { url: first.url } : first.value, items });
+    }
+
+    const pop = el('div', 'puente-rp');
+    pop.id = 'puente-rp';
+    const head = el('div', 'puente-rp-head');
+    const searchBox = el('label', 'puente-rp-search');
+    const search = el('input');
+    search.type = 'text';
+    search.placeholder = 'Buscá la reacción perfecta';
+    search.spellcheck = false;
+    searchBox.append(el('span', 'puente-rp-lupa'), search);
+    head.appendChild(searchBox);
+    const main = el('div', 'puente-rp-main');
+    const side = el('div', 'puente-rp-side');
+    const body = el('div', 'puente-rp-body');
+    main.append(side, body);
+    const foot = el('div', 'puente-rp-foot');
+    const footIcon = el('span', 'puente-rp-foot-icon');
+    const footName = el('span', 'puente-rp-foot-name');
+    foot.append(footIcon, footName);
+    pop.append(head, main, foot);
+
+    const preview = (it) => {
+      footIcon.textContent = '';
+      if (!it) { footName.textContent = ''; return; }
+      if (it.url) { const img = el('img'); img.src = it.url; img.alt = ''; footIcon.appendChild(img); } else footIcon.textContent = it.value;
+      footName.textContent = it.label || it.value;
+    };
+    const react = (it, keep) => {
+      const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === it.value);
+      app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji: it.value });
+      if (!keep) close();
+    };
+    const button = (it) => {
+      const b = el('button', 'puente-rp-btn');
+      b.type = 'button';
+      b.setAttribute('aria-label', it.label || it.value);
+      if (it.url) { const img = el('img'); img.src = it.url; img.alt = it.value; img.loading = 'lazy'; img.draggable = false; b.appendChild(img); }
+      else b.textContent = it.value;
+      b.addEventListener('mouseenter', () => preview(it));
+      b.addEventListener('click', (e) => { e.stopPropagation(); react(it, e.shiftKey); });
+      return b;
+    };
+
+    const tabs = new Map();
+    function render(filter) {
+      body.textContent = '';
+      const q = (filter || '').trim().toLowerCase();
+      let firstItem = null;
+      for (const s of sections) {
+        if (q && s.id === 'freq') continue;
+        const items = q ? s.items.filter(it => {
+          if (it.raw && typeof app._emojiSearchMatch === 'function') return app._emojiSearchMatch(it.raw, app.emojiNames && app.emojiNames[it.raw] || '', q);
+          return String(it.label || it.value).toLowerCase().includes(q);
+        }) : s.items;
+        if (!items.length) continue;
+        if (!firstItem) firstItem = items[0];
+        const h = el('div', 'puente-rp-title', s.title);
+        h.dataset.sec = s.id;
+        const grid = el('div', 'puente-rp-grid');
+        items.forEach(it => grid.appendChild(button(it)));
+        body.append(h, grid);
+      }
+      if (!body.children.length) body.appendChild(el('div', 'puente-rp-empty', tr('emoji.no_results', 'No se encontraron emojis')));
+      body.scrollTop = 0;
+      preview(firstItem);
+      markTab();
+    }
+    // La categoria que se esta viendo queda marcada a la izquierda
+    function markTab() {
+      let id = null;
+      for (const h of body.querySelectorAll('.puente-rp-title')) { if (h.offsetTop - body.offsetTop <= body.scrollTop + 8) id = h.dataset.sec; else break; }
+      if (!id) { const h = body.querySelector('.puente-rp-title'); id = h && h.dataset.sec; }
+      for (const [sid, b] of tabs) b.classList.toggle('actual', sid === id);
+    }
+    for (const s of sections) {
+      const b = el('button', 'puente-rp-tab');
+      b.type = 'button';
+      b.title = s.title;
+      if (s.tab && s.tab.url) { const img = el('img'); img.src = s.tab.url; img.alt = ''; b.appendChild(img); }
+      else b.textContent = s.tab;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (search.value) { search.value = ''; render(''); }
+        const target = body.querySelector(`.puente-rp-title[data-sec="${s.id}"]`);
+        if (target) body.scrollTop = target.offsetTop - body.offsetTop;
+      });
+      tabs.set(s.id, b);
+      side.appendChild(b);
+    }
+    body.addEventListener('scroll', markTab, { passive: true });
+
+    let timer = null;
+    search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => render(search.value), 120); });
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { const first = body.querySelector('.puente-rp-btn'); if (first) first.click(); e.preventDefault(); }
+    });
+
+    document.body.appendChild(pop);
+    render('');
+
+    // Al lado de la barrita del mensaje (a su izquierda, como Discord), sin salirse de la pantalla
+    // (el boton de Haven esta escondido detras de la barrita nueva: se usa el que se ve)
+    const visible = (n) => { if (!n) return null; const r = n.getBoundingClientRect(); return r.width && r.height ? r : null; };
+    const ar = visible(msgEl.querySelector('.puente-tb-row [data-action="react"]')) || visible(msgEl.querySelector('.msg-toolbar')) ||
+      msgEl.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    let left = ar.left - pw - 8;
+    if (left < 8) left = Math.min(innerWidth - pw - 8, ar.right + 8);
+    let top = ar.top;
+    if (top + ph > innerHeight - 8) top = innerHeight - ph - 8;
+    pop.style.left = Math.max(8, left) + 'px';
+    pop.style.top = Math.max(8, top) + 'px';
+    msgEl.classList.add('puente-rp-abierto');
+
+    const outside = (e) => {
+      if (pop.contains(e.target)) return;
+      // El boton de reaccionar de este mensaje lo cierra solo (open)
+      if (msgEl.contains(e.target) && e.target.closest('[data-action="react"]')) return;
+      close();
+    };
+    const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    document.addEventListener('mousedown', outside, true);
+    document.addEventListener('keydown', key, true);
+    addEventListener('resize', close);
+    current = { msgId, msgEl, pop, off() { document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', key, true); removeEventListener('resize', close); } };
+    search.focus();
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showReactionPicker !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    loadFrequent();
+    setInterval(loadFrequent, 10 * 60 * 1000);
+    const orig = app._showReactionPicker;
+    app._showReactionPicker = function (msgEl, msgId, ...rest) {
+      // Dentro de la ventanita flotante de mensajes directos queda el de Haven
+      if (!msgEl || msgEl.closest('.dm-pip-panel, .thread-panel.pip')) return orig.call(this, msgEl, msgId, ...rest);
+      try { open(this, msgEl, msgId); } catch (err) {
+        console.warn('[puente] selector de reacciones (PC):', err);
+        close();
+        return orig.call(this, msgEl, msgId, ...rest); // el de Haven, si algo falla
+      }
+    };
+  })();
+})();
+
 // Pantallas tactiles: el selector de emojis y stickers del cuadro de escribir
 // (tambien al editar un mensaje) como en la app de Discord: una hoja que sube
 // desde abajo a media pantalla, con "Usados frecuentemente" arriba de todo.
