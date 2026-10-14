@@ -1317,15 +1317,22 @@
     new MutationObserver(() => decorate()).observe(list, { childList: true });
     decorate();
     setInterval(decorate, 60000); // "hace cuanto" al dia
-    // Tocar una conversacion en el celular: pantalla completa, como Discord
+    // Tocar una conversacion en el celular: pantalla completa, como Discord.
+    // Haven ya sabe hacerlo con su ajuste "abrir mensajes directos en pantalla
+    // completa": se activa solo durante ese toque y Haven hace el resto (en la PC
+    // queda la ventanita flotante, como siempre).
+    const KEY = 'haven_dm_fullscreen_default';
     list.addEventListener('click', (e) => {
       if (!mobile()) return;
       const item = e.target instanceof Element && e.target.closest('.dm-item');
       if (!item || e.target.closest('.dm-more-btn')) return;
-      e.stopPropagation(); e.preventDefault();
-      if (typeof app._closeDMPiP === 'function') app._closeDMPiP();
-      app.switchChannel(item.dataset.code);
-      if (typeof app._closeMobilePanels === 'function') app._closeMobilePanels();
+      let before = null;
+      try { before = localStorage.getItem(KEY); localStorage.setItem(KEY, 'true'); } catch { return; }
+      setTimeout(() => {
+        try { if (before === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, before); } catch { /* sin almacenamiento */ }
+        // Por las dudas: si quedo abierto el panel, cerrarlo
+        try { if (document.getElementById('app-body')?.classList.contains('mobile-sidebar-open')) app._closeMobilePanels?.(); } catch { /* nada */ }
+      }, 0);
     }, true);
   })();
 })();
