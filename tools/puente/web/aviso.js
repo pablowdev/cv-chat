@@ -200,6 +200,9 @@ function sheetDrag(sheet, opts) {
   // propio <span> para que el tema lo muestre grande y el numero chico, como
   // en Discord. Los emojis del servidor ya son una imagen aparte.
   function splitReaction(badge) {
+    // Sin el cartelito del navegador con los nombres (ya los muestra la ventanita de Haven)
+    if (badge.hasAttribute('title')) { badge.setAttribute('aria-label', badge.getAttribute('title')); badge.removeAttribute('title'); }
+    badge.querySelectorAll('img[title]').forEach(i => i.removeAttribute('title'));
     const first = badge.firstChild;
     if (!first || first.nodeType !== 3) return;
     const m = /^(\s*)(\S+)(\s+\d+\s*)$/.exec(first.nodeValue);
