@@ -88,7 +88,11 @@ function hookHttp() {
       }
       if (url === '/app' || url.startsWith('/app?')) injectScript(req, res, '/puente/aviso.js');
       else if (url === '/' || url.startsWith('/?')) injectScript(req, res, '/puente/login.js');
-      else if (url.startsWith('/api/link-preview?')) req.url = twitterProxyToX(url);
+      else if (url.startsWith('/api/link-preview?')) {
+        req.url = twitterProxyToX(url);
+        const server = this;
+        if (tweetPreview(req, res, () => origEmit.call(server, event, req, res, ...rest))) return true;
+      }
     }
     return origEmit.call(this, event, req, res, ...rest);
   };
@@ -109,6 +113,58 @@ function twitterProxyToX(reqUrl) {
     u.searchParams.set('url', `https://x.com/${m[1]}/status/${m[2]}`);
     return u.pathname + u.search;
   } catch { return reqUrl; }
+}
+
+// Tarjeta de los tuits: Haven la pide a la API publica de fxtwitter una sola vez
+// (6 s) y, si en ese momento falla, se queda 30 minutos con una vista previa
+// vacia: el enlace sale pelado. Aca se pide con un reintento, se guardan solo
+// las que salieron bien y, si igual falla, sigue Haven como siempre. Misma
+// tarjeta que arma Haven (mismos datos), y con su misma regla de dominios.
+const TWEET_RE = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
+const tweetCache = new Map(); // id del tuit -> { at, data }
+const TWEET_TTL_MS = 30 * 60 * 1000;
+function tweetPreview(req, res, next) {
+  if (req.method !== 'GET') return false;
+  let target;
+  try { target = new URL(req.url, 'http://x').searchParams.get('url') || ''; } catch { return false; }
+  const m = TWEET_RE.exec(target.trim());
+  if (!m || !verifyToken) return false;
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ') || !verifyToken(auth.slice(7))) return false; // Haven contesta "sin sesion"
+  try { if (!require('/app/src/automod').previewAllowed(target)) return false; } catch { return false; }
+  const reply = (data) => send(res, 200, 'application/json', JSON.stringify({ ...data, url: target }));
+  const hit = tweetCache.get(m[2]);
+  if (hit && Date.now() - hit.at < TWEET_TTL_MS) { reply(hit.data); return true; }
+  (async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(`https://api.fxtwitter.com/${m[1]}/status/${m[2]}`, {
+          signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HavenBot/2.1; +https://github.com/ancsemi/Haven)' } });
+        const tw = r.ok ? (await r.json())?.tweet : null;
+        if (tw) {
+          const a = tw.author || {};
+          const photos = (tw.media?.photos || []).map(p => p.url).filter(Boolean);
+          const vid = tw.media?.videos?.[0] || null;
+          const text = tw.text || '';
+          const data = {
+            kind: 'twitter', siteName: 'X / Twitter', accentColor: '#1d9bf0',
+            author: a.name || null, handle: a.screen_name ? `@${a.screen_name}` : null, avatar: a.avatar_url || null,
+            title: a.name ? `${a.name} on X` : 'X / Twitter', text: text || null, description: text.slice(0, 280) || null,
+            image: vid?.thumbnail_url || photos[0] || null, images: photos.length >= 2 ? photos.slice(0, 4) : undefined,
+            video: vid?.url || null, videoType: vid?.url ? 'video/mp4' : undefined,
+            stats: { replies: tw.replies ?? -1, reposts: tw.retweets ?? -1, likes: tw.likes ?? -1, views: tw.views ?? -1 },
+          };
+          tweetCache.set(m[2], { at: Date.now(), data });
+          if (tweetCache.size > 2000) tweetCache.delete(tweetCache.keys().next().value);
+          return reply(data);
+        }
+        if (r.status === 404) break; // el tuit no existe (o lo borraron): que siga Haven
+      } catch { /* se vuelve a intentar */ }
+      if (attempt === 0) await new Promise(ok => setTimeout(ok, 1500));
+    }
+    next();
+  })().catch(() => { if (!res.headersSent) next(); });
+  return true;
 }
 
 // Agrega <script src> antes de </body> en una pagina HTML de Haven, tanto si se
