@@ -1468,3 +1468,40 @@
     };
   })();
 })();
+
+// Cuadro de escribir como en Discord: el texto de ayuda dice "Mensaje #canal" o
+// "Mensaje @persona" (Discord: "Message #canal"). Y sin el aviso "Abriendo DM
+// con…" al abrir un mensaje directo (la conversacion se abre al instante).
+(function () {
+  'use strict';
+  const MSG_PERM = 'No tenés permiso para enviar mensajes en este canal.';
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function' || typeof app._showToast !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+
+    const toast = app._showToast;
+    app._showToast = function (message, ...rest) {
+      if (typeof message === 'string' && /^(Abriendo DM con|Opening DM with)\b/i.test(message)) return;
+      return toast.call(this, message, ...rest);
+    };
+
+    const placeholder = () => {
+      const input = document.getElementById('message-input');
+      if (!input || input.disabled || input.placeholder === MSG_PERM) return;
+      const ch = (app.channels || []).find(c => c && c.code === app.currentChannel);
+      if (!ch) return;
+      const label = ch.is_dm && !ch.is_group
+        ? '@' + ((ch.dm_target && (app._getNickname ? app._getNickname(ch.dm_target.id, ch.dm_target.username) : ch.dm_target.username)) || '')
+        : ch.is_group ? (app._groupName ? app._groupName(ch) : ch.name) : '#' + ch.name;
+      input.placeholder = 'Mensaje ' + label;
+    };
+    const orig = app.switchChannel;
+    app.switchChannel = function (...a) {
+      const r = orig.apply(this, a);
+      setTimeout(placeholder, 0); setTimeout(placeholder, 600);
+      return r;
+    };
+    placeholder();
+  })();
+})();
