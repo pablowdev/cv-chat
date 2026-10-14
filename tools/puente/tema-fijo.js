@@ -133,7 +133,11 @@ function pageHead(db, html) {
   if (!on() || !defaultTheme(db)) return html;
   const marker = '<script src="/js/theme-compat.js';
   if (!html.includes(marker) || html.includes('/puente/tema-fijo.js')) return html;
-  return html.replace(marker, `<script src="/puente/tema-fijo.js"></script>${HIDE_CSS}${marker}`);
+  // La letra del tema se pide de entrada: sin esto llegaba un rato despues y el texto se
+  // reacomodaba (se veia moverse apenas el chat al abrir)
+  const fonts = ['inter-latin-wght-normal.woff2', 'inter-latin-ext-wght-normal.woff2']
+    .map(f => `<link rel="preload" href="/themes/${f}" as="font" type="font/woff2" crossorigin>`).join('');
+  return html.replace(marker, `${fonts}<script src="/puente/tema-fijo.js"></script>${HIDE_CSS}${marker}`);
 }
 
 module.exports = { setup, script, pageHead, publish, on };
