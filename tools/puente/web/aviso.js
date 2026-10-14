@@ -500,6 +500,7 @@ function sheetDrag(sheet, opts) {
     if (!menu || menu.classList.contains('puente-sheet')) return;
     const msgId = parseInt(msgEl.dataset.msgId, 10);
     menu.classList.add('puente-sheet');
+    haptic();
     menu.style.left = ''; menu.style.top = '';
 
     const buttons = [...menu.querySelectorAll('button[data-action]')];
@@ -978,6 +979,7 @@ function sheetDrag(sheet, opts) {
     back.addEventListener('click', close);
     const sheet = el('div', 'puente-who-sheet');
     sheet.id = 'puente-who-sheet';
+    haptic();
     sheet.appendChild(el('div', 'puente-sheet-handle'));
     const tabs = el('div', 'puente-who-tabs');
     const list = el('div', 'puente-who-list');
