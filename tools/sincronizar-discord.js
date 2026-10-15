@@ -127,6 +127,7 @@ function buildContent(msg, attLines) {
   }
   const fw = adjuntos.forwarded(msg, attLines); // mensaje reenviado
   if (fw) content += '\n' + fw;
+  for (const line of adjuntos.stickerLines(db, msg)) content += '\n' + line;
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
     if (!fromBot || (e.type && e.type !== 'rich')) continue;

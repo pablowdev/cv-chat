@@ -240,6 +240,23 @@ function mentionsToHaven(db, text, msg) {
     .replace(/<#(\d{5,25})>/g, (full, id) => '#' + (mentionChannel(db, id) || 'canal'));
 }
 
-module.exports = { localize, localizeAll, gifInstead, forwarded, avatar, fallback,
+// ── Stickers de un mensaje de Discord ──
+// El sticker del servidor ya copiado (tabla puente_stickers, ver stickers.js) se
+// muestra como sticker de Haven; otro (de Discord o sin copiar todavia), como
+// imagen de Discord; uno animado Lottie, que no es una imagen, con su nombre.
+function stickerLines(db, msg) {
+  const lines = [];
+  for (const st of msg.sticker_items || []) {
+    if (!st || !/^\d+$/.test(String(st.id))) continue;
+    let row = null;
+    try { row = db.prepare('SELECT filename FROM puente_stickers WHERE discord_id = ?').get(String(st.id)); } catch { /* sin tabla todavia */ }
+    if (row) lines.push(`/uploads/stickers/${row.filename}`);
+    else if (st.format_type === 3) lines.push(`*[sticker: ${String(st.name || '').replace(/[*\]\[]/g, '')}]*`);
+    else lines.push(`https://media.discordapp.net/stickers/${st.id}.${st.format_type === 4 ? 'gif' : 'png'}?size=160`);
+  }
+  return lines;
+}
+
+module.exports = { stickerLines, localize, localizeAll, gifInstead, forwarded, avatar, fallback,
   emojisToHaven, emojisToDiscord, reactionKey, discordReactionParam,
   mentionsToHaven, mentionUser, mentionChannel, rememberRoles, rememberChannel, rememberUser };

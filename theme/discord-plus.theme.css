@@ -508,6 +508,22 @@ html #gif-picker.puente-gif-sheet {
 }
 html #gif-picker.puente-gif-sheet[style*="display: none"], html #gif-picker.puente-gif-sheet[style*="display:none"] { display: none !important; }
 .puente-gif-sheet .gif-picker-tabs, .puente-gif-sheet .gif-picker-header { flex-shrink: 0; touch-action: pan-x; }
+/* Un solo boton (la carita) con pestañas Emoji / GIFs / Stickers, como la app de
+   Discord: el boton GIF aparte no va en pantallas tactiles. */
+@media (pointer: coarse) {
+  html body #message-input-area .input-actions-box > #gif-btn { display: none !important; }
+}
+.puente-emoji-sheet .emoji-section-row, .puente-gif-sheet .puente-hoja-secciones { display: flex; gap: 0.25rem; }
+.puente-gif-sheet .puente-hoja-secciones { flex-shrink: 0; padding: 0.25rem; margin-bottom: 0.5rem; border-radius: 0.75rem; background: #2e2d32; touch-action: pan-x; }
+.puente-emoji-sheet .emoji-section-tab, .puente-gif-sheet .puente-hoja-seccion {
+  flex: 1 1 0; min-height: 2.5rem; border: 0 !important; border-radius: 0.5rem; font-size: 1rem; font-weight: 600;
+  background: transparent !important; color: #949ba4 !important; box-shadow: none !important;
+}
+.puente-emoji-sheet .emoji-section-tab.active, .puente-gif-sheet .puente-hoja-seccion.active { background: #43424a !important; color: #f2f3f5 !important; }
+/* Al pasar de una pestaña a otra, la hoja nueva aparece en el mismo lugar, sin subir */
+html.puente-hoja-cambio #emoji-picker.puente-emoji-sheet, html.puente-hoja-cambio #gif-picker.puente-gif-sheet,
+html.puente-hoja-cambio #puente-emoji-backdrop, html.puente-hoja-cambio #puente-gif-backdrop { animation: none !important; transition: none !important; }
+html #emoji-picker.puente-sin-subir, html #gif-picker.puente-sin-subir, #puente-emoji-backdrop.puente-sin-subir, #puente-gif-backdrop.puente-sin-subir { animation: none !important; }
 .puente-gif-sheet .gif-picker-header input { height: 2.75rem; font-size: 1rem; border-radius: 0.625rem; }
 .puente-gif-sheet .gif-picker-grid { flex: 1 1 auto; min-height: 0; max-height: none !important; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
 .puente-gif-sheet .gif-picker-footer { flex-shrink: 0; }

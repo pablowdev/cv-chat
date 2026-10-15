@@ -2065,6 +2065,7 @@ function sheetDrag(sheet, opts) {
       document.body.appendChild(p);
     }
     p.classList.add('puente-emoji-sheet');
+    if (document.documentElement.classList.contains('puente-hoja-cambio')) p.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
     setHeight(p, height);
     if (!p.querySelector(':scope > .puente-sheet-handle')) {
       const h = document.createElement('div');
@@ -2076,9 +2077,11 @@ function sheetDrag(sheet, opts) {
       for (const top of p.querySelectorAll(':scope > .emoji-section-row, :scope > .emoji-search-row, :scope > .emoji-tab-row')) dragResize(app, p, top, 'zona');
     }
     addFrequent(app, p);
+    addGifTab(app, p);
     if (!document.getElementById('puente-emoji-backdrop')) {
       const back = document.createElement('div');
       back.id = 'puente-emoji-backdrop';
+      if (document.documentElement.classList.contains('puente-hoja-cambio')) back.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
       back.addEventListener('click', () => setTimeout(() => close(app), 0));
       document.body.appendChild(back);
     }
@@ -2090,6 +2093,46 @@ function sheetDrag(sheet, opts) {
     if (isOpen(p) && typeof app._toggleEmojiPicker === 'function') app._toggleEmojiPicker();
     closeBackdrop();
   }
+
+  // Como en la app de Discord, un solo boton (la carita) con tres pestañas:
+  // Emoji, GIFs y Stickers. GIFs abre la ventanita de GIFs en el mismo lugar y
+  // del mismo alto, sin la animacion de abrir (ver la hoja de GIFs, abajo).
+  // Al editar un mensaje no va: un GIF sale como mensaje nuevo.
+  function addGifTab(app, p) {
+    const row = p.querySelector(':scope > .emoji-section-row');
+    const edit = app._activeEditTextarea;
+    if (!row || row.querySelector('.puente-tab-gifs') || !document.getElementById('gif-picker') || (edit && edit.isConnected)) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'emoji-section-tab puente-tab-gifs';
+    b.textContent = 'GIFs';
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const hojas = window.puenteHojas;
+      if (!hojas || !hojas.abrirGifs) return;
+      hojas.sinAnimacion();
+      hojas.abrirGifs(app, height); // la de GIFs esconde esta
+    });
+    row.insertBefore(b, row.children[1] || null);
+  }
+  window.puenteHojas = Object.assign(window.puenteHojas || {}, {
+    // Desde la hoja de GIFs: abrir esta en la seccion pedida ('emoji' o 'sticker') y del mismo alto
+    abrirEmojis(app, vh, section) {
+      const p = picker();
+      if (!p || typeof app._toggleEmojiPicker !== 'function') return;
+      height = vh;
+      app._emojiPickerSection = section;
+      if (isOpen(p)) p.style.display = 'none'; // asi se arma de nuevo en esa seccion
+      app._toggleEmojiPicker();
+    },
+    // Las dos hojas se reemplazan una a otra sin bajar y volver a subir
+    sinAnimacion() {
+      const root = document.documentElement;
+      root.classList.add('puente-hoja-cambio');
+      clearTimeout(root._puenteHojaCambio);
+      root._puenteHojaCambio = setTimeout(() => root.classList.remove('puente-hoja-cambio'), 600);
+    },
+  });
 
   let tries = 0;
   (function wait() {
@@ -2106,6 +2149,10 @@ function sheetDrag(sheet, opts) {
     };
     // Despues de tocar un emoji, Haven vuelve a enfocar el cuadro de escribir (y
     // aparece el teclado): mientras la hoja esta abierta, se vuelve a esconder.
+    // Pasar de Emoji a Stickers: Haven la cierra y la vuelve a abrir; que no se note
+    p.addEventListener('click', (e) => {
+      if (e.target instanceof Element && e.target.closest('.emoji-section-tab') && window.puenteHojas) window.puenteHojas.sinAnimacion();
+    }, true);
     p.addEventListener('click', (e) => {
       if (!(e.target instanceof Element) || !e.target.closest('.emoji-item')) return;
       setTimeout(() => { if (isOpen(p) && p.classList.contains('puente-emoji-sheet')) hideKeyboard(p); }, 0);
@@ -2113,7 +2160,7 @@ function sheetDrag(sheet, opts) {
     // Haven lo cierra solo (tocar afuera, enviar, cambiar de canal): sacar el fondo oscuro
     new MutationObserver(() => {
       const el = picker();
-      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; }
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); }
       else if (!el.querySelector(':scope > .puente-sheet-handle')) { try { decorate(app); } catch { /* se reintenta en el proximo cambio */ } }
     }).observe(p, { attributes: true, attributeFilter: ['style'], childList: true });
   })();
@@ -2169,6 +2216,7 @@ function sheetDrag(sheet, opts) {
     if (!isOpen(p)) { closeBackdrop(); return; }
     if (p.parentElement !== document.body) document.body.appendChild(p);
     p.classList.add('puente-gif-sheet');
+    if (document.documentElement.classList.contains('puente-hoja-cambio')) p.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
     setHeight(p, height);
     if (!p.querySelector(':scope > .puente-gif-handle')) {
       const h = document.createElement('div');
@@ -2179,22 +2227,61 @@ function sheetDrag(sheet, opts) {
       if (grid) drag(app, p, grid, 'lista');
       for (const top of p.querySelectorAll(':scope > .gif-picker-tabs, :scope > .gif-picker-header')) drag(app, p, top, 'zona');
     }
+    // Las mismas pestañas que la hoja de emojis: Emoji, GIFs (esta) y Stickers
+    if (!p.querySelector(':scope > .puente-hoja-secciones')) {
+      const row = document.createElement('div');
+      row.className = 'puente-hoja-secciones';
+      for (const [key, label] of [['emoji', 'Emoji'], ['gifs', 'GIFs'], ['sticker', 'Stickers']]) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'puente-hoja-seccion' + (key === 'gifs' ? ' active' : '');
+        b.textContent = label;
+        if (key !== 'gifs') {
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const hojas = window.puenteHojas;
+            if (!hojas || !hojas.abrirEmojis) return;
+            hojas.sinAnimacion();
+            hojas.abrirEmojis(app, height, key);
+            close(app);
+          });
+        }
+        row.appendChild(b);
+      }
+      p.querySelector(':scope > .puente-gif-handle').after(row);
+      drag(app, p, row, 'zona');
+    }
+    // Como en Discord, el teclado no aparece solo al abrir (Haven pone el cursor en el buscador)
+    const search = document.getElementById('gif-search-input');
+    if (search && document.activeElement === search && !search.value) search.blur();
     if (!document.getElementById('puente-gif-backdrop')) {
       const back = document.createElement('div');
       back.id = 'puente-gif-backdrop';
+      if (document.documentElement.classList.contains('puente-hoja-cambio')) back.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
       back.addEventListener('click', () => setTimeout(() => close(app), 0));
       document.body.appendChild(back);
     }
   }
+  window.puenteHojas = Object.assign(window.puenteHojas || {}, {
+    // Desde la hoja de emojis (pestaña GIFs): abrir esta del mismo alto
+    abrirGifs(app, vh) {
+      const p = picker();
+      if (!p || typeof app._toggleGifPicker !== 'function') return;
+      height = vh;
+      setHeight(p, height);
+      if (!isOpen(p)) app._toggleGifPicker('main', document.getElementById('gif-btn'));
+    },
+  });
   let tries = 0;
   (function wait() {
     const app = window.app;
     const p = picker();
-    if (!app || !p) { if (++tries < 120) setTimeout(wait, 500); return; }
+    // Antes de que arranque Haven, window.app es el <div id="app"> de la pagina
+    if (!app || typeof app._toggleGifPicker !== 'function' || !p) { if (++tries < 120) setTimeout(wait, 500); return; }
     // Haven la abre y la cierra cambiando su display: se acomoda cada vez que se abre
     new MutationObserver(() => {
       const el = picker();
-      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; }
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); }
       else { try { decorate(app); } catch (err) { console.warn('[puente] selector de GIFs:', err); } }
     }).observe(p, { attributes: true, attributeFilter: ['style'] });
   })();

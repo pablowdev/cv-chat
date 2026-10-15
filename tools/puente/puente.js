@@ -35,6 +35,7 @@ const accesos = require('./accesos.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
+const stickers = require('./stickers.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
@@ -117,6 +118,7 @@ function start(deps) {
   require('./tema-fijo.js').setup({ db, io, log });
   require('./medicion.js').setup({ io, db });
   require('./buscar.js').setup({ db, io, log, warn });
+  stickers.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   hookHavenEmits();
   connectGateway();
   // Mensajes que no llegaron a Discord: se reintentan (el primero, cuando ya se conecto)
@@ -211,6 +213,7 @@ function buildContent(msg, attLines) {
   }
   const fw = adjuntos.forwarded(msg, attLines); // mensaje reenviado
   if (fw) content += '\n' + fw;
+  for (const line of adjuntos.stickerLines(db, msg)) content += '\n' + line;
   const fromBot = !!(msg.webhook_id || (msg.author && msg.author.bot));
   for (const e of msg.embeds || []) {
     if (!fromBot || (e.type && e.type !== 'rich')) continue;
@@ -261,7 +264,8 @@ async function connectGateway(resume = false) {
   let url = resume && resumeUrl;
   if (!url) {
     const g = await api('GET', '/gateway/bot');
-    if (g.__error) { warn('no pude pedir el gateway:', g.__error); setTimeout(() => connectGateway(), 15000); return; }
+    // __error es 0 cuando no hubo respuesta (sin red): tambien se reintenta
+    if (g.__error !== undefined || !g.url) { warn('no pude pedir el gateway:', g.__error); setTimeout(() => connectGateway(), 15000); return; }
     url = g.url;
   }
   ws = new WebSocket(`${url}/?v=10&encoding=json`);
@@ -324,6 +328,7 @@ function onDispatch(t, d) {
         adjuntos.rememberRoles(d.roles); // para convertir menciones de roles
         // Nombres renombrados en Discord mientras el puente estaba apagado
         (d.channels || []).forEach(c => estadisticas.onDiscordChannelUpdate(c));
+        stickers.onGuild(d); // copia los stickers del servidor (y despues cada 6 horas)
         break;
       }
       case 'CHANNEL_CREATE': case 'CHANNEL_UPDATE': case 'THREAD_CREATE': case 'THREAD_UPDATE':
