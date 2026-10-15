@@ -2308,6 +2308,32 @@ function sheetDrag(sheet, opts) {
   }, true);
 })();
 
+// El buscador de GIFs decia siempre "Buscar en GIPHY..." (texto fijo de Haven),
+// aunque los GIFs salgan de KLIPY. Ahora dice el mismo que la linea de abajo
+// ("Powered by KLIPY"), que Haven actualiza con cada busqueda. (puente-gif-texto)
+(function () {
+  'use strict';
+  const LABELS = { klipy: 'KLIPY', giphy: 'GIPHY', tenor: 'Tenor' };
+  function setPlaceholder(text) {
+    const input = document.getElementById('gif-search-input');
+    if (!input) return;
+    input.removeAttribute('data-i18n-placeholder'); // si no, Haven le vuelve a poner el texto fijo
+    input.placeholder = text;
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._setGifFooter !== 'function' || !document.getElementById('gif-search-input')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    setPlaceholder('Buscar GIFs...');
+    const orig = app._setGifFooter;
+    app._setGifFooter = function (provider) {
+      const r = orig.apply(this, arguments);
+      try { if (LABELS[provider]) setPlaceholder('Buscar en ' + LABELS[provider] + '...'); } catch { /* queda el texto anterior */ }
+      return r;
+    };
+  })();
+})();
+
 // Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
 // como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
 // su cantidad) y la lista de personas, con avatar. Incluye a quienes
