@@ -2287,6 +2287,27 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Pantallas tactiles: Enter del teclado del celular hace un salto de linea, como
+// en la app de Discord; el mensaje se manda con el boton de enviar. Vale para el
+// cuadro de escribir, los hilos, los mensajes directos y al editar un mensaje.
+// Si esta abierta una lista de sugerencias (@, #, :, /) con una marcada, Enter la elige.
+// (puente-enter-salto)
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const BOXES = '#message-input, #thread-input, #dm-pip-input, textarea.edit-textarea';
+  const LISTS = ['mention-dropdown', 'channel-dropdown', 'emoji-dropdown', 'slash-dropdown', 'persona-dropdown', 'ferry-dropdown'];
+  const listOpen = () => LISTS.some(id => { const d = document.getElementById(id); return d && d.style.display !== 'none' && d.getClientRects().length > 0 && !!d.querySelector('.active'); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    const t = e.target;
+    if (!(t instanceof HTMLTextAreaElement) || !t.matches(BOXES)) return;
+    if (listOpen()) return;
+    // Que no lo vea Haven (que lo manda): el navegador escribe el salto de linea solo
+    e.stopImmediatePropagation();
+  }, true);
+})();
+
 // Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
 // como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
 // su cantidad) y la lista de personas, con avatar. Incluye a quienes
