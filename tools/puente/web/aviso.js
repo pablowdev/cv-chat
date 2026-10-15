@@ -2021,14 +2021,21 @@ function sheetDrag(sheet, opts) {
   }
 
   // Arrastrar para cambiar el alto: con la manija siempre; con la lista, hacia
-  // arriba mientras no este a pantalla completa, y hacia abajo si esta arriba de todo.
+  // arriba mientras no este a pantalla completa, y hacia abajo si esta arriba de todo;
+  // con la parte de arriba (pestañas, buscador), cuando el dedo va para arriba o para
+  // abajo (no de costado, que es para desplazar las pestañas).
   function dragResize(app, p, el, fromList) {
-    let y0 = null, h0 = height, active = false;
-    el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; h0 = height; active = !fromList; if (!fromList) p.style.transition = 'none'; }, { passive: true });
+    let y0 = null, x0 = 0, h0 = height, active = false;
+    const zone = fromList === 'zona';
+    el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; h0 = height; active = !fromList; if (!fromList) p.style.transition = 'none'; }, { passive: true });
     el.addEventListener('touchmove', (e) => {
       if (y0 === null) return;
       const dy = y0 - e.touches[0].clientY; // > 0 hacia arriba
-      if (fromList && !active) {
+      if (zone && !active) {
+        if (Math.abs(dy) < 8) return;
+        if (Math.abs(e.touches[0].clientX - x0) > Math.abs(dy)) { y0 = null; return; } // de costado: no es para la hoja
+        active = true; y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none';
+      } else if (fromList && !active) {
         const grid = el;
         if ((dy > 6 && height < MAX_VH - 0.5) || (dy < -6 && grid.scrollTop <= 0)) { active = true; y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none'; }
         else return;
@@ -2066,6 +2073,7 @@ function sheetDrag(sheet, opts) {
       dragResize(app, p, h, false);
       const grid = p.querySelector('.emoji-grid, .sticker-grid');
       if (grid) dragResize(app, p, grid, true);
+      for (const top of p.querySelectorAll(':scope > .emoji-section-row, :scope > .emoji-search-row, :scope > .emoji-tab-row')) dragResize(app, p, top, 'zona');
     }
     addFrequent(app, p);
     if (!document.getElementById('puente-emoji-backdrop')) {
@@ -2108,6 +2116,87 @@ function sheetDrag(sheet, opts) {
       if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; }
       else if (!el.querySelector(':scope > .puente-sheet-handle')) { try { decorate(app); } catch { /* se reintenta en el proximo cambio */ } }
     }).observe(p, { attributes: true, attributeFilter: ['style'], childList: true });
+  })();
+})();
+
+// Pantallas tactiles: la ventanita de GIFs como hoja desde abajo, igual que la de
+// los emojis: abre a media pantalla y con la manija (o la parte de arriba, o la
+// lista estando arriba de todo) se agranda hasta casi toda la pantalla o se
+// achica; muy abajo se cierra. Tocar afuera tambien la cierra. Es el mismo
+// selector de GIFs de Haven; solo cambia donde y como se muestra.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const MIN_VH = 30, MAX_VH = 92, DEFAULT_VH = 50;
+  let height = DEFAULT_VH;
+  const picker = () => document.getElementById('gif-picker');
+  const isOpen = (p) => !!p && p.style.display !== 'none' && p.style.display !== '';
+  const setHeight = (p, vh) => p.style.setProperty('--puente-gifs-alto', vh + 'vh');
+  function closeBackdrop() { document.getElementById('puente-gif-backdrop')?.remove(); }
+  function close(app) {
+    const p = picker();
+    if (isOpen(p)) { if (typeof app._closeGifPicker === 'function') app._closeGifPicker(); else p.style.display = 'none'; }
+    closeBackdrop();
+  }
+  function drag(app, p, el, mode) { // mode: 'manija' | 'lista' | 'zona'
+    let y0 = null, x0 = 0, h0 = height, active = false;
+    el.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; h0 = height; active = mode === 'manija'; if (active) p.style.transition = 'none'; }, { passive: true });
+    el.addEventListener('touchmove', (e) => {
+      if (y0 === null) return;
+      const dy = y0 - e.touches[0].clientY;
+      if (!active) {
+        if (mode === 'zona') {
+          if (Math.abs(dy) < 8) return;
+          if (Math.abs(e.touches[0].clientX - x0) > Math.abs(dy)) { y0 = null; return; }
+        } else if (!((dy > 6 && height < MAX_VH - 0.5) || (dy < -6 && el.scrollTop <= 0))) return;
+        active = true; y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none';
+      }
+      height = Math.max(10, Math.min(MAX_VH, h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100));
+      setHeight(p, height);
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    el.addEventListener('touchend', () => {
+      p.style.transition = '';
+      const was = active; y0 = null; active = false;
+      if (!was) return;
+      if (height < MIN_VH - 5) { height = DEFAULT_VH; close(app); return; }
+      height = Math.max(MIN_VH, height);
+      setHeight(p, height);
+    }, { passive: true });
+  }
+  function decorate(app) {
+    const p = picker();
+    if (!isOpen(p)) { closeBackdrop(); return; }
+    if (p.parentElement !== document.body) document.body.appendChild(p);
+    p.classList.add('puente-gif-sheet');
+    setHeight(p, height);
+    if (!p.querySelector(':scope > .puente-gif-handle')) {
+      const h = document.createElement('div');
+      h.className = 'puente-sheet-handle puente-gif-handle';
+      p.insertBefore(h, p.firstChild);
+      drag(app, p, h, 'manija');
+      const grid = p.querySelector('.gif-picker-grid');
+      if (grid) drag(app, p, grid, 'lista');
+      for (const top of p.querySelectorAll(':scope > .gif-picker-tabs, :scope > .gif-picker-header')) drag(app, p, top, 'zona');
+    }
+    if (!document.getElementById('puente-gif-backdrop')) {
+      const back = document.createElement('div');
+      back.id = 'puente-gif-backdrop';
+      back.addEventListener('click', () => setTimeout(() => close(app), 0));
+      document.body.appendChild(back);
+    }
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const p = picker();
+    if (!app || !p) { if (++tries < 120) setTimeout(wait, 500); return; }
+    // Haven la abre y la cierra cambiando su display: se acomoda cada vez que se abre
+    new MutationObserver(() => {
+      const el = picker();
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; }
+      else { try { decorate(app); } catch (err) { console.warn('[puente] selector de GIFs:', err); } }
+    }).observe(p, { attributes: true, attributeFilter: ['style'] });
   })();
 })();
 
