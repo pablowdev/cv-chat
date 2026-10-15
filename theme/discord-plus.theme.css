@@ -1817,3 +1817,27 @@ html body .channel-item.puente-cerrado .channel-hash::after {
   .puente-sr-num:disabled:not(.actual) { opacity: 0.4; cursor: default; }
   .puente-sr-puntos { padding: 0 0.25rem; color: #96969e; }
 }
+
+/* ── Pantallas tactiles medianas (por ejemplo un Galaxy Z Fold abierto, ~600-768px) ──
+   Haven solo acomoda el menu de canales y la barra de escribir para celulares
+   de hasta 480px; entre 481 y 768 el menu quedaba de 280px (el nombre del
+   servidor partido en dos y el propio cortado) y la barra se partia en tres
+   filas. Se extiende lo mismo que en el celular. En celulares comunes no cambia
+   nada (85% de la pantalla sigue siendo menos que el tope). */
+@media (max-width: 768px) {
+  html body .sidebar { width: min(85vw, 25rem) !important; min-width: min(85vw, 25rem) !important; }
+  html body .right-sidebar { width: min(85vw, 25rem); min-width: min(85vw, 25rem); }
+  html body .mobile-server-dropdown { display: none !important; }
+  html body #message-input-area { flex-wrap: nowrap !important; }
+  html body #message-input { width: auto !important; flex: 1 1 0 !important; min-width: 0 !important; }
+  html body #message-input-area .input-actions-box:not(.open) { flex: 0 0 auto; }
+  /* El boton GIF con el icono de Discord, como en la PC */
+  html body #message-input-area .input-actions-box:not(.open) > #gif-btn {
+    order: -1; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 0 !important;
+    width: 2.75rem !important; min-width: 2.75rem; height: 2.75rem !important; color: #b5bac1; display: inline-flex; align-items: center; justify-content: center;
+  }
+  html body #message-input-area .input-actions-box:not(.open) > #gif-btn > span {
+    display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.625rem; box-sizing: border-box;
+    border-radius: 0.3125rem; background: #b5bac1; color: #1a191e; font-size: 0.75rem; font-weight: 800; line-height: 1; letter-spacing: 0;
+  }
+}
