@@ -143,9 +143,9 @@ function search(socket, data) {
   let total, rows;
   try {
     total = db.prepare(`SELECT count(*) AS n FROM ${from} WHERE ${where}`).get(...params).n;
-    rows = db.prepare(`SELECT m.id, m.content, m.created_at, m.imported_from, m.webhook_username,
-                         COALESCE(u.display_name, u.username, '[Deleted User]') AS uname, u.id AS uid,
-                         c.name AS channel_name, c.code AS channel_code
+    rows = db.prepare(`SELECT m.id, m.content, m.created_at, m.imported_from, m.webhook_username, m.webhook_avatar,
+                         COALESCE(u.display_name, u.username, '[Deleted User]') AS uname, u.id AS uid, u.avatar AS uavatar,
+                         c.name AS channel_name, c.code AS channel_code, c.category AS channel_category
                        FROM ${from} WHERE ${where} ORDER BY ${order} LIMIT ${PAGE} OFFSET ?`).all(...params, (page - 1) * PAGE);
   } catch (err) {
     warn('buscador: la busqueda fallo:', err.message);
@@ -158,7 +158,9 @@ function search(socket, data) {
       // Los de Discord: con el nombre de quien lo escribio (y sin la cuenta interna)
       username: discord ? (r.webhook_username || 'Discord') : r.uname,
       user_id: discord ? null : r.uid,
-      channel_name: r.channel_name, channel_code: r.channel_code,
+      // Para mostrar los resultados como Discord (aviso.js): la foto y la categoria del canal
+      avatar: (discord ? r.webhook_avatar : r.uavatar) || null,
+      channel_name: r.channel_name, channel_code: r.channel_code, channel_category: r.channel_category || null,
     };
   });
   if (results.length) {

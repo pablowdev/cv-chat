@@ -1226,6 +1226,31 @@ function sheetDrag(sheet, opts) {
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
 
   let app = null, input = null, drop = null, items = [], active = -1, timer = null, seq = 0;
+  // Filtros ya elegidos: van como fichas en la caja, como Discord ("from: astro")
+  const TOKEN = /^(from|in|has|mentions|before|after|during|pinned):("[^"]+"|[^\s"]+)$/i;
+  let chips = [], chipBox = null, box = null;
+  function drawChips() {
+    if (!chipBox) return;
+    chipBox.textContent = '';
+    chips.forEach((tk, i) => {
+      const m = TOKEN.exec(tk);
+      const c = el('button', 'puente-busca-ficha'); c.type = 'button'; c.title = 'Quitar este filtro';
+      c.append(el('b', '', (m ? m[1] : tk) + ':'), document.createTextNode(' ' + (m ? m[2].replace(/^"|"$/g, '') : '')));
+      c.addEventListener('mousedown', (e) => e.preventDefault());
+      c.addEventListener('click', (e) => { e.stopPropagation(); chips.splice(i, 1); drawChips(); input.focus(); render(); });
+      chipBox.appendChild(c);
+    });
+    if (box) box.classList.toggle('con-texto', !!(chips.length || input.value));
+  }
+  function addChip(tk) { if (!chips.includes(tk)) chips.push(tk); drawChips(); }
+  const fullQuery = () => [...chips, input.value.trim()].filter(Boolean).join(' ');
+  // Una busqueda guardada (historial) vuelve a la caja con sus fichas
+  function setQuery(q) {
+    chips = [];
+    const rest = String(q || '').replace(/(?:^|\s)((?:from|in|has|mentions|before|after|during|pinned):(?:"[^"]+"|[^\s"]+))/gi, (_, tk) => { chips.push(tk); return ' '; });
+    input.value = rest.replace(/\s+/g, ' ').trim();
+    drawChips();
+  }
   const isDm = () => { const ch = (app.channels || []).find(c => c.code === app.currentChannel); return !!(ch && ch.is_dm); };
 
   function hide() { if (drop) drop.style.display = 'none'; items = []; active = -1; }
@@ -1267,13 +1292,14 @@ function sheetDrag(sheet, opts) {
     const v = input.value;
     const m = /(?:^|\s)(\w+:(?:"[^"]*"?|\S*))$/.exec(v);
     const base = m && !/\s$/.test(v) ? v.slice(0, v.length - m[1].length) : v.replace(/\s*$/, v.trim() ? ' ' : '');
-    input.value = base + text + (run ? ' ' : '');
+    if (run && TOKEN.test(text)) { input.value = base.replace(/\s+$/, ''); addChip(text); }
+    else input.value = base + text + (run ? ' ' : '');
     input.focus();
     input.setSelectionRange(input.value.length, input.value.length);
     if (run) { hide(); go(); } else render();
   }
   function go() {
-    const q = input.value.trim();
+    const q = fullQuery();
     if (!q) return;
     hide();
     try { app._searchSaveRecent(q); app._searchRun(q); } catch (err) { console.warn('[puente] buscador:', err); }
@@ -1295,7 +1321,7 @@ function sheetDrag(sheet, opts) {
       clear.addEventListener('mousedown', (e) => e.preventDefault());
       clear.addEventListener('click', (e) => { e.stopPropagation(); try { localStorage.removeItem('haven_recent_searches'); } catch { /* nada */ } render(); });
       section('Historial', clear);
-      for (const q of recent) drop.appendChild(row(IC.hist, q, null, () => { input.value = q; go(); }, 'historial'));
+      for (const q of recent) drop.appendChild(row(IC.hist, q, null, () => { setQuery(q); go(); }, 'historial'));
     }
   }
   function exampleSub(key, what) {
@@ -1376,8 +1402,10 @@ function sheetDrag(sheet, opts) {
 
   function setup() {
     input = document.getElementById('search-input');
-    const box = input && input.closest('.search-container');
+    box = input && input.closest('.search-container');
     if (!box) return false;
+    chipBox = el('span', 'puente-busca-fichas');
+    box.insertBefore(chipBox, input);
     // A la derecha de todo en el encabezado, siempre visible
     if (box.parentElement && box.parentElement.lastElementChild !== box) box.parentElement.appendChild(box);
     box.classList.add('puente-busca-caja');
@@ -1393,7 +1421,12 @@ function sheetDrag(sheet, opts) {
     const x = el('button', 'puente-busca-x'); x.type = 'button'; x.title = 'Borrar la búsqueda';
     x.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
     x.addEventListener('mousedown', (e) => e.preventDefault());
-    x.addEventListener('click', (e) => { e.stopPropagation(); hide(); try { app._searchClose(); } catch { /* nada */ } input.value = ''; box.classList.remove('con-texto'); });
+    x.addEventListener('click', (e) => { e.stopPropagation(); hide(); try { app._searchClose(); } catch { /* nada */ } input.value = ''; chips = []; drawChips(); });
+    // Al cerrar la busqueda desde el panel, tambien se van las fichas
+    if (typeof app._searchClose === 'function') {
+      const origClose = app._searchClose;
+      app._searchClose = function (...a) { const r = origClose.apply(this, a); chips = []; drawChips(); return r; };
+    }
     box.append(lupa, x);
     // Con resultados, la columna de la derecha se ensancha (como el panel de Discord)
     const panel = document.getElementById('search-panel');
@@ -1412,7 +1445,10 @@ function sheetDrag(sheet, opts) {
     document.addEventListener('input', (e) => {
       if (e.target !== input) return;
       e.stopPropagation();
-      box.classList.toggle('con-texto', !!input.value);
+      // Un filtro escrito a mano y seguido de un espacio pasa a ser ficha
+      const done = /(?:^|\s)((?:from|in|has|mentions|before|after|during|pinned):(?:"[^"]+"|[^\s"]+))\s$/i.exec(input.value);
+      if (done) { input.value = input.value.slice(0, input.value.length - done[0].length).replace(/\s+$/, '') + (input.value.slice(0, input.value.length - done[0].length).trim() ? ' ' : ''); addChip(done[1]); }
+      box.classList.toggle('con-texto', !!(input.value || chips.length));
       render();
     }, true);
     document.addEventListener('keydown', (e) => {
@@ -1427,6 +1463,10 @@ function sheetDrag(sheet, opts) {
         if (open && active >= 0 && (typing || !v.trim())) items[active].click();
         else go();
         return;
+      }
+      // Borrar con la caja vacia saca la ultima ficha
+      if (e.key === 'Backspace' && chips.length && input.selectionStart === 0 && input.selectionEnd === 0) {
+        e.preventDefault(); e.stopPropagation(); chips.pop(); drawChips(); render(); return;
       }
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -1686,6 +1726,131 @@ function sheetDrag(sheet, opts) {
       app.switchChannel = function (...args) { close(); return orig.apply(this, args); };
     }
     addEventListener('resize', () => { if (page) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
+  })();
+})();
+
+// PC: los resultados de la busqueda como los de Discord. Arriba "N resultados"
+// con los botones Filtros y Ordenar; los mensajes agrupados por canal (con su
+// categoria a la derecha), cada uno con la foto de quien lo escribio y las
+// vistas previas de los enlaces ya abiertas; abajo las paginas numeradas con
+// Anterior y Siguiente. Es el mismo panel de Haven (la busqueda, saltar al
+// mensaje y las paginas son las suyas); solo cambia como se ve.
+(function () {
+  'use strict';
+  if (matchMedia('(pointer: coarse)').matches) return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const PAGE = 25;
+  const SORTS = [['newest', 'Más nuevos'], ['oldest', 'Más viejos'], ['relevant', 'Más relevantes']];
+  const svg = d => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const IC_FILTER = svg('M3 5h18v2H3V5Zm3 6h12v2H6v-2Zm4 6h4v2h-4v-2Z');
+  const IC_SORT = svg('M8 3 4 7h3v10h2V7h3L8 3Zm8 18 4-4h-3V7h-2v10h-3l4 4Z');
+
+  function closeSortMenu() { document.getElementById('puente-sr-orden')?.remove(); }
+  function sortMenu(app, anchor, current) {
+    closeSortMenu();
+    const m = el('div', 'puente-sr-orden');
+    m.id = 'puente-sr-orden';
+    for (const [k, label] of SORTS) {
+      const b = el('button', 'puente-sr-orden-item' + (k === current ? ' actual' : ''), label); b.type = 'button';
+      b.addEventListener('click', (e) => { e.stopPropagation(); closeSortMenu(); try { app._searchSetSort(k); } catch { /* nada */ } });
+      m.appendChild(b);
+    }
+    document.body.appendChild(m);
+    const r = anchor.getBoundingClientRect();
+    m.style.top = (r.bottom + 6) + 'px';
+    m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+    setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!m.contains(e.target)) { closeSortMenu(); document.removeEventListener('mousedown', off, true); } }, true), 0);
+  }
+
+  function decorate(app) {
+    const panel = document.getElementById('search-panel');
+    if (!panel || panel.style.display === 'none') return;
+    const st = app._searchGetState && app._searchGetState(app._searchContextKey());
+    if (!st || st.stale) return;
+    const total = st.serverPaged ? (st.total || 0) : (st.results || []).length;
+
+    // Encabezado
+    const count = document.getElementById('search-panel-count');
+    if (count) {
+      count.textContent = '';
+      count.classList.add('puente-sr-cabeza');
+      count.appendChild(el('span', 'puente-sr-total', total.toLocaleString('es-AR') + (total === 1 ? ' resultado' : ' resultados')));
+      const tools = el('span', 'puente-sr-botones');
+      const nf = (st.filters ? Object.values(st.filters).filter(v => v && v !== 'false').length : 0);
+      const fb = el('button', 'puente-sr-boton'); fb.type = 'button'; fb.innerHTML = IC_FILTER;
+      fb.appendChild(el('span', '', 'Filtros' + (nf ? ' (' + nf + ')' : '')));
+      fb.addEventListener('click', (e) => { e.stopPropagation(); const i = document.getElementById('search-input'); if (i) i.focus(); });
+      const sb = el('button', 'puente-sr-boton'); sb.type = 'button'; sb.innerHTML = IC_SORT;
+      sb.appendChild(el('span', '', 'Ordenar'));
+      if (!st.isDM) { sb.addEventListener('click', (e) => { e.stopPropagation(); sortMenu(app, sb, st.sort || 'newest'); }); tools.append(fb, sb); }
+      count.appendChild(tools);
+    }
+
+    // Mensajes: agrupados por canal, con la foto
+    const list = document.getElementById('search-panel-list');
+    if (list) {
+      const byId = new Map((st.results || []).map(r => [String(r.id), r]));
+      const cats = new Map((app.channels || []).map(c => [c.code, c.category || '']));
+      let prev = null;
+      for (const item of list.querySelectorAll('.search-result-item')) {
+        const r = byId.get(String(item.dataset.msgId)) || {};
+        const code = item.dataset.channelCode || '';
+        const old = item.querySelector('.search-result-channel');
+        if (old) old.remove();
+        if (code && code !== prev) {
+          const h = el('div', 'puente-sr-canal');
+          h.append(el('span', 'puente-sr-canal-nombre', '# ' + (r.channel_name || code)));
+          const cat = r.channel_category || cats.get(code);
+          if (cat) h.append(el('span', 'puente-sr-canal-cat', cat));
+          item.before(h);
+        }
+        prev = code || prev;
+        if (!item.querySelector('.puente-sr-avatar')) {
+          const av = el('div', 'puente-sr-avatar');
+          if (r.avatar) { const img = el('img'); img.src = r.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+          else av.textContent = String(r.username || (item.querySelector('.search-result-author') || {}).textContent || '?').trim().charAt(0).toUpperCase();
+          item.prepend(av);
+          item.classList.add('puente-sr');
+        }
+      }
+      // Las vistas previas abiertas, como Discord (Haven las deja detras de un boton)
+      list.querySelectorAll('.search-load-embed').forEach((b, i) => setTimeout(() => { if (b.isConnected) b.click(); }, 50 * i));
+    }
+
+    // Paginas numeradas
+    const pager = document.getElementById('search-panel-pager');
+    if (pager) {
+      pager.classList.add('puente-sr-paginas');
+      pager.querySelector('.puente-sr-nums')?.remove();
+      const pages = Math.max(1, Math.ceil(total / PAGE));
+      const cur = Math.min(st.page || 1, pages);
+      const nums = el('div', 'puente-sr-nums');
+      const go = (n) => { if (n !== cur) try { app._searchGoToPageAbsolute(String(n)); } catch { /* nada */ } };
+      const btn = (label, n, cls) => { const b = el('button', 'puente-sr-num' + (cls ? ' ' + cls : ''), label); b.type = 'button'; if (n) b.addEventListener('click', () => go(n)); else b.disabled = true; return b; };
+      nums.appendChild(btn('‹ Anterior', cur > 1 ? cur - 1 : 0, 'puente-sr-flecha'));
+      const want = new Set([1, pages, cur - 1, cur, cur + 1].filter(n => n >= 1 && n <= pages));
+      if (cur <= 3) [2, 3].forEach(n => n <= pages && want.add(n));
+      let last = 0;
+      for (const n of [...want].sort((a, b) => a - b)) {
+        if (n - last > 1) nums.appendChild(el('span', 'puente-sr-puntos', '…'));
+        nums.appendChild(btn(String(n), n === cur ? 0 : n, n === cur ? 'actual' : ''));
+        last = n;
+      }
+      nums.appendChild(btn('Siguiente ›', cur < pages ? cur + 1 : 0, 'puente-sr-flecha'));
+      pager.appendChild(nums);
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._searchRenderPanel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._searchRenderPanel;
+    app._searchRenderPanel = function (...args) {
+      const r = orig.apply(this, args);
+      try { decorate(this); } catch (err) { console.warn('[puente] resultados de la busqueda:', err); }
+      return r;
+    };
   })();
 })();
 
