@@ -395,6 +395,18 @@ async function handle(req, res) {
     return json(res, 200, out);
   }
 
+  // Canales con candadito en la lista (accesos.js): solo de los canales que la persona ya ve
+  if (p === '/puente/api/canales-cerrados' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const locked = require('./accesos.js').lockedChannelIds();
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    const rows = admin && admin.is_admin
+      ? db.prepare('SELECT id, code FROM channels WHERE is_dm = 0').all()
+      : db.prepare('SELECT c.id, c.code FROM channel_members m JOIN channels c ON c.id = m.channel_id WHERE m.user_id = ? AND c.is_dm = 0').all(user.id);
+    return json(res, 200, { codigos: rows.filter(r => locked.has(r.id)).map(r => r.code) });
+  }
+
   if (p === '/puente/api/permisos' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

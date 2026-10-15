@@ -279,4 +279,25 @@ function onDispatch(t, d) {
   }
 }
 
-module.exports = { setup, onDispatch, recomputeUser, revokeAll, channelPermissions, isEnabled: () => enabled };
+// Canales "cerrados", con candadito en la lista como en Discord: los de Discord
+// que @everyone no puede ver, y los privados propios de Haven. Se calcula con
+// los mismos permisos de Discord que el resto del modulo.
+let lockedCache = null;
+function lockedChannelIds() {
+  if (lockedCache && Date.now() - lockedCache.at < 60 * 1000) return lockedCache.ids;
+  const ids = new Set();
+  const guildId = getGuildId ? getGuildId() : null;
+  const everyone = { user: { id: '0' }, roles: [] };
+  for (const c of db.prepare('SELECT id, discord_channel_id, is_private FROM channels WHERE is_dm = 0').all()) {
+    if (!c.discord_channel_id) { if (c.is_private) ids.add(c.id); continue; }
+    if (!guildId || !roles.has(guildId)) continue; // todavia sin los roles de Discord
+    const info = channelInfo && channelInfo(c.discord_channel_id);
+    if (!info || THREAD_TYPES.has(info.type)) continue;
+    if (!(permissions(everyone, info) & VIEW)) ids.add(c.id);
+  }
+  if (!lockedCache || lockedCache.ids.size !== ids.size) log(`accesos: ${ids.size} canales con candadito`);
+  lockedCache = { at: Date.now(), ids };
+  return ids;
+}
+
+module.exports = { setup, onDispatch, recomputeUser, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled };

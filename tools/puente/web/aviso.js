@@ -1449,6 +1449,38 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Candadito en el # de los canales cerrados, como en Discord: los de Discord que
+// @everyone no ve y los privados propios de Haven (el puente sabe cuales,
+// /puente/api/canales-cerrados). Se vuelve a poner cada vez que Haven redibuja
+// la lista de canales.
+(function () {
+  'use strict';
+  let locked = new Set();
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  function paint() {
+    for (const item of document.querySelectorAll('#channel-list .channel-item[data-code]')) {
+      const on = locked.has(item.dataset.code);
+      if (item.classList.contains('puente-cerrado') !== on) item.classList.toggle('puente-cerrado', on);
+    }
+  }
+  function load() {
+    const tk = token();
+    if (!tk) return;
+    fetch('/puente/api/canales-cerrados', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.codigos)) { locked = new Set(d.codigos); paint(); } }).catch(() => {});
+  }
+  let tries = 0;
+  (function wait() {
+    const list = document.getElementById('channel-list');
+    if (!list || !token()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    let pending = false;
+    new MutationObserver(() => { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; paint(); }); } })
+      .observe(list, { childList: true, subtree: true });
+    load();
+    setInterval(load, 5 * 60 * 1000);
+  })();
+})();
+
 // PC: pagina "Miembros" como la de Discord (solo administradores): arriba de
 // los canales, "Miembros" abre una tabla con todos los usuarios, desde cuando
 // estan, su cuenta de Discord y su antiguedad, con que invitacion entraron,
