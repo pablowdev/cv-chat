@@ -3835,7 +3835,8 @@ function sheetDrag(sheet, opts) {
     ta.style.height = prevH;
     if (hidden) ta.classList.add('puente-ta-oculto');
     ed.style.setProperty('--puente-ed-ph', getComputedStyle(ta, '::placeholder').color || '#80848e');
-    ed.style.maxHeight = (window.innerWidth <= 480 ? 90 : 120) + 'px';
+    // Como Discord: en la PC el cuadro crece hasta la mitad de la ventana antes de desplazarse
+    ed.style.maxHeight = window.innerWidth <= 480 ? '90px' : '50vh';
   }
   function syncAttrs() {
     ed.dataset.placeholder = ta.placeholder || '';
