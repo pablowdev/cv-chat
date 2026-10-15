@@ -237,6 +237,7 @@ function injectScript(req, res, src) {
         if (email.on() && html.includes('id="no-channel-msg"') && !html.includes('/puente/email.js')) {
           html = html.replace('</body>', '<script src="/puente/email.js" defer></script></body>');
         }
+        html = shareTags(html);
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         origSetHeader.call(this, 'Content-Length', body.length);
       }
@@ -592,6 +593,26 @@ async function handle(req, res) {
   }
 
   return send(res, 404, 'text/plain', 'No encontrado');
+}
+
+// Titulo y vista previa al compartir el enlace (WhatsApp, Telegram, X, Discord):
+// esos sitios leen la pagina sin ejecutarla, asi que va escrito en el HTML. En
+// lugar de "Haven | Login", el nombre de la app (PUENTE_TITULO) con el logo y
+// una descripcion corta.
+function shareTags(html) {
+  if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
+  const title = appName();
+  const server = String((row && row.value) || '').trim();
+  const desc = server ? `El chat de ${server}. Entrá, creá tu cuenta y vinculá tu Discord.` : 'Entrá, creá tu cuenta y vinculá tu Discord.';
+  const image = publicUrl ? `${publicUrl}/puente/logo-carga.png` : '/puente/logo-carga.png';
+  const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +
+    `<meta property="og:site_name" content="${esc(server || title)}"><meta property="og:description" content="${esc(desc)}">` +
+    `<meta name="description" content="${esc(desc)}"><meta property="og:image" content="${esc(image)}">` +
+    (publicUrl ? `<meta property="og:url" content="${esc(publicUrl + '/')}">` : '') +
+    `<meta name="twitter:card" content="summary"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">`;
+  return html.replace(/<title[^>]*>[^<]*<\/title>/i, `<title>${esc(title)}</title>`).replace('</head>', tags + '</head>');
 }
 
 function appName() {
