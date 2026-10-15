@@ -1449,6 +1449,41 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Cuando la barra de escribir crece (varias lineas, la barra de "respondiendo
+// a", archivos adjuntos) o se achica, los mensajes se corren para arriba en vez
+// de quedar tapados, como en Discord: lo que esta al final de la conversacion
+// queda en el mismo lugar arriba de la barra.
+(function () {
+  'use strict';
+  let tries = 0;
+  (function wait() {
+    const msgs = document.getElementById('messages');
+    const area = document.getElementById('message-input-area');
+    if (!msgs || !area || typeof ResizeObserver !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    // Lo que crecio la barra es lo que se achico la lista: se corre exactamente eso
+    // Solo mientras se usa la barra (escribir, Enter, pegar, adjuntar, responder): al
+    // cargar la pagina o cambiar de canal la barra tambien cambia y ahi manda Haven
+    let height = area.offsetHeight, used = 0;
+    const mark = () => { used = Date.now(); };
+    for (const t of ['input', 'keydown', 'paste', 'drop', 'click']) area.addEventListener(t, mark, true);
+    msgs.addEventListener('click', (e) => { if (e.target instanceof Element && e.target.closest('[data-action="reply"], [data-action="quote"], [data-action="edit"]')) mark(); }, true);
+    // Al achicarse, el navegador ya corre la lista si estaba al final: ahi se vuelve a la
+    // distancia al final que habia (al crecer, se corre lo que crecio)
+    const gapNow = () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
+    let gap = gapNow();
+    msgs.addEventListener('scroll', () => { gap = gapNow(); }, { passive: true });
+    new ResizeObserver(() => {
+      const h = area.offsetHeight;
+      const d = h - height;
+      height = h;
+      if (!d || Date.now() - used > 3000) { gap = gapNow(); return; }
+      if (d > 0) msgs.scrollTop = Math.max(0, msgs.scrollTop + d);
+      else msgs.scrollTop = Math.max(0, msgs.scrollHeight - msgs.clientHeight - Math.max(0, gap));
+      gap = gapNow();
+    }).observe(area);
+  })();
+})();
+
 // Candadito en el # de los canales cerrados, como en Discord: los de Discord que
 // @everyone no ve y los privados propios de Haven (el puente sabe cuales,
 // /puente/api/canales-cerrados). Se vuelve a poner cada vez que Haven redibuja
