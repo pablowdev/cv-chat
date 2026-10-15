@@ -523,7 +523,10 @@ async function handle(req, res) {
     if (!user) return json(res, 401, { error: 'sin sesion' });
     if (p === '/puente/api/email/estado' && req.method === 'GET') {
       const linked = !!db.prepare('SELECT 1 FROM puente_vinculos WHERE haven_user_id = ?').get(user.id);
-      return json(res, 200, { ...email.status(user.id), discord: !!(clientId && clientSecret), vinculado: linked });
+      // Con PUENTE_EMAIL_OBLIGATORIO=1, quien no tiene email (salvo los invitados) no puede cerrar el cartel sin poner uno
+      const guest = (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(user.id) || {}).is_guest;
+      const obligatorio = process.env.PUENTE_EMAIL_OBLIGATORIO === '1' && !guest;
+      return json(res, 200, { ...email.status(user.id), discord: !!(clientId && clientSecret), vinculado: linked, obligatorio });
     }
     if (p === '/puente/api/email/guardar' && req.method === 'POST') {
       const body = await readJson(req);

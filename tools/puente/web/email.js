@@ -33,6 +33,16 @@
 
   let overlay = null;
   function close() { if (overlay) { overlay.remove(); overlay = null; } }
+  // Mientras es obligatorio, Escape no lo cierra, y si algo lo esconde vuelve a aparecer
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay && overlay.classList.contains('puente-email-obligatorio')) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  setInterval(() => {
+    if (overlay && overlay.classList.contains('puente-email-obligatorio')) {
+      if (!overlay.isConnected) document.body.appendChild(overlay);
+      if (overlay.style.display !== 'flex') overlay.style.display = 'flex';
+    }
+  }, 1000);
   function snooze() { store(s => s.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS))); close(); }
 
   // state: { email, confirmado, discord } ; msg: texto de resultado opcional
@@ -49,12 +59,17 @@
     const badge = el('span', 'android-beta-promo-badge', 'TU CUENTA');
     badge.style.background = 'var(--accent-bright,#5865f2)';
     const pending = state.email && !state.confirmado;
-    const title = el('h3', 'android-beta-promo-title', state.confirmado ? 'Tu email de recuperación' : pending ? 'Confirmá tu email' : 'Agregá un email');
+    // Obligatorio (PUENTE_EMAIL_OBLIGATORIO): sin email no se puede cerrar
+    const forced = !!state.obligatorio && !state.email;
+    overlay.classList.toggle('puente-email-obligatorio', forced);
+    const title = el('h3', 'android-beta-promo-title', state.confirmado ? 'Tu email de recuperación' : pending ? 'Confirmá tu email' : forced ? 'Agregá tu email para seguir' : 'Agregá un email');
     const sub = el('p', 'android-beta-promo-subtitle', state.confirmado
       ? 'Tu email confirmado es ' + state.email + '. Si olvidás tu contraseña, te mandamos ahí un enlace para recuperarla.'
       : pending
         ? 'Te mandamos un mail a ' + state.email + '. Tocá el enlace del mail para confirmarlo; fijate también en la carpeta de spam.'
-        : 'Si alguna vez perdés tu contraseña, te mandamos un enlace a este email para recuperarla. No se muestra a nadie.');
+        : forced
+          ? 'Ahora todas las cuentas necesitan un email: si alguna vez perdés tu contraseña, te mandamos ahí un enlace para recuperarla. No se muestra a nadie.'
+          : 'Si alguna vez perdés tu contraseña, te mandamos un enlace a este email para recuperarla. No se muestra a nadie.');
 
     const status = el('p', 'puente-email-msg', msg || '');
     status.style.cssText = 'margin:0 0 .75rem;font-size:.875rem;min-height:1.2em;color:var(--text-secondary,#b5bac1)';
@@ -96,16 +111,18 @@
       parts.push(or, dc);
     }
 
-    const actions = el('div', 'android-beta-promo-actions');
-    const later = el('button', 'btn android-beta-promo-later', state.confirmado ? 'Cerrar' : 'Ahora no');
-    later.type = 'button';
-    later.addEventListener('click', () => (state.confirmado ? close() : snooze()));
-    actions.appendChild(later);
-    parts.push(actions);
+    if (!forced) {
+      const actions = el('div', 'android-beta-promo-actions');
+      const later = el('button', 'btn android-beta-promo-later', state.confirmado ? 'Cerrar' : 'Ahora no');
+      later.type = 'button';
+      later.addEventListener('click', () => (state.confirmado ? close() : snooze()));
+      actions.appendChild(later);
+      parts.push(actions);
+    }
 
     card.append(...parts);
     overlay.appendChild(card);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) (state.confirmado ? close() : snooze()); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay && !forced) (state.confirmado ? close() : snooze()); });
     document.body.appendChild(overlay);
     if (!state.confirmado && !pending) setTimeout(() => input.focus(), 50);
   }
@@ -139,6 +156,9 @@
     if (busy) { setTimeout(maybeShow, 5000); return; }
     call('GET', '/puente/api/email/estado').then(({ ok, d }) => {
       if (!ok || d.confirmado) return;
+      const forced = d.obligatorio && !d.email;
+      const until = parseInt(store(s => s.getItem(SNOOZE_KEY)) || '0', 10);
+      if (!forced && until > Date.now()) return; // "Ahora no" vale solo si ya puso uno o no es obligatorio
       build(d);
     }).catch(() => {});
   }
@@ -149,9 +169,7 @@
     (function wait() {
       if (!token()) { if (++tries < 120) setTimeout(wait, 5000); return; }
       if (msg) { setTimeout(() => open(msg), 1500); return; }
-      const until = parseInt(store(s => s.getItem(SNOOZE_KEY)) || '0', 10);
-      if (until > Date.now()) return;
-      setTimeout(maybeShow, 6000);
+      setTimeout(maybeShow, 4000);
     })();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
