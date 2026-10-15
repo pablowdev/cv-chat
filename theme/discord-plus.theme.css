@@ -1475,7 +1475,9 @@ html body .pip-input-resizer { display: none !important; }
     content: ''; position: absolute; left: 1rem; right: 1rem; top: 0; bottom: 1.5rem; z-index: 0;
     background: #252429; border-radius: 0.5rem; pointer-events: none;
   }
-  html body #message-input-area > * { position: relative; z-index: 1; }
+  /* (solo las piezas de la barra: los selectores y las listas de sugerencias de @, #, :, / flotan arriba como siempre) */
+  html body #message-input-area > #composer-plus-btn, html body #message-input-area > .input-actions-box:not(.open),
+  html body #message-input-area > .puente-editor, html body #message-input-area > #message-input:not(.puente-ta-oculto) { position: relative; z-index: 1; }
   html body #message-input-area > #message-input.puente-ta-oculto { position: absolute !important; }
   html body #message-input-area #composer-plus-btn {
     flex: 0 0 2.75rem; width: 2.75rem !important; height: 2.75rem !important; margin: 0 0 0 0.25rem; padding: 0;
