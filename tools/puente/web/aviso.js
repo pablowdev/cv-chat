@@ -6296,6 +6296,7 @@ function sheetDrag(sheet, opts) {
     [() => shown(byId('profile-popup')), (app) => app._closeProfilePopup && app._closeProfilePopup()],
     [() => shown(byId('gif-picker')), (app) => app._closeGifPicker ? app._closeGifPicker() : (byId('gif-picker').style.display = 'none')],
     [() => shown(byId('emoji-picker')), (app) => (app._toggleEmojiPicker ? app._toggleEmojiPicker() : (byId('emoji-picker').style.display = 'none'))],
+    [() => window.puenteAjustes && window.puenteAjustes.enDetalle(), () => window.puenteAjustes.volver()], // configuracion: de una categoria a la lista
     [() => [...document.querySelectorAll('.modal-overlay')].find(shown), () => { const m = [...document.querySelectorAll('.modal-overlay')].find(shown); if (m) m.style.display = 'none'; }],
     [() => shown(byId('search-panel')), () => { byId('search-panel').style.display = 'none'; }],
     [() => byId('puente-miembros'), () => byId('puente-miembros').querySelector('.pm-cerrar')?.click()],
@@ -6429,4 +6430,204 @@ function sheetDrag(sheet, opts) {
       setTimeout(() => { p.style.transition = ''; }, 200);
     }
   }, { passive: true });
+})();
+
+// Configuracion como la de Discord: a la izquierda las categorias (Ajustes de
+// usuario y, para quien administra, Administracion) y a la derecha solo la
+// elegida, con su titulo. En el celular, primero la lista de categorias y al
+// tocar una su pantalla, con flecha (y el boton atras) para volver.
+// Son las mismas secciones de Haven (se guardan como siempre); las que no se
+// usan en CV Chat o chocan con su diseño no se muestran.
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const USER = [
+    { id: 'cuenta', icon: '👤', name: 'Mi cuenta', extra: 'vinculos', ids: ['section-password', 'section-2fa', 'section-sessions', 'section-recovery', 'section-e2e-passphrase', 'section-delete-account'] },
+    { id: 'perfil', icon: '✨', name: 'Perfil', extra: 'perfil', ids: [] },
+    { id: 'notif', icon: '🔔', name: 'Notificaciones', ids: ['section-push', 'section-sounds'] },
+    { id: 'idioma', icon: '🌐', name: 'Idioma y hora', ids: ['section-language'] },
+    { id: 'acces', icon: '♿', name: 'Accesibilidad y chat', ids: ['section-zoom', 'section-chat-behavior'] },
+  ];
+  const ADMIN = [
+    { id: 'servidor', icon: '🏠', name: 'Servidor', ids: ['section-update', 'section-branding', 'section-presence', 'section-custom-tos', 'section-connectivity'] },
+    { id: 'personas', icon: '🛡️', name: 'Miembros y moderación', ids: ['section-members', 'section-roles', 'section-moderation', 'section-security', 'section-automod', 'section-invite'] },
+    { id: 'contenido', icon: '😀', name: 'Emojis, stickers y archivos', ids: ['section-emojis', 'section-stickers', 'section-uploads'] },
+    { id: 'manten', icon: '🧰', name: 'Mantenimiento', ids: ['section-backup', 'section-cleanup', 'section-modmode', 'section-audit-log'] },
+  ];
+  // Lo que no se usa en CV Chat (o choca con su diseño): no se muestra
+  const REMOVED = ['section-layout', 'section-reaction-size', 'section-role-display', 'section-toolbar-icons', 'section-image-display', 'section-embed-size',
+    'section-banner-display', 'section-toggle-style', 'section-statusbar', 'section-soundboard-mode', 'section-activity', 'section-score-badges', 'section-plugins',
+    'section-debug', 'section-desktop-shortcuts', 'section-desktop-app',
+    'section-ferry', 'section-import', 'section-tunnel', 'section-guests', 'section-whitelist', 'section-template', 'section-extension-updates',
+    'section-large-server', 'section-sounds-admin', 'section-bots', 'section-tags-admin'];
+  const ALL = [...USER, ...ADMIN].flatMap(c => c.ids).concat(REMOVED);
+  let built = false, current = null, refs = {};
+
+  const navItemFor = id => document.querySelector(`#settings-nav .settings-nav-item[data-target="${id}"]`);
+  // Haven esconde algunas secciones segun los permisos (su item del menu queda oculto)
+  const allowed = id => { const n = navItemFor(id); return !n || n.style.display !== 'none'; };
+  const isAdminCat = c => ADMIN.includes(c);
+
+  function show(cat) {
+    const app = window.app;
+    current = cat;
+    if (app && typeof app._switchSettingsTab === 'function') app._switchSettingsTab(isAdminCat(cat) ? 'admin' : 'user');
+    for (const id of ALL) document.getElementById(id)?.classList.toggle('pas-oculto', !cat.ids.includes(id) || !allowed(id));
+    for (const x of refs.extras) x.hidden = x.dataset.cat !== cat.id;
+    refs.title.textContent = cat.name;
+    refs.nav.querySelectorAll('.pas-item').forEach(b => b.classList.toggle('activo', b.dataset.cat === cat.id));
+    refs.modal.classList.add('pas-detalle');
+    const body = refs.modal.querySelector(isAdminCat(cat) ? '#settings-body-admin' : '#settings-body-user');
+    if (body) body.scrollTop = 0;
+    refs.content.scrollTop = 0;
+    if (cat.extra === 'vinculos') fillLinks();
+  }
+  function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
+
+  // "Mi cuenta": email de recuperacion y Discord vinculado
+  async function fillLinks() {
+    const box = refs.links;
+    box.textContent = '';
+    const token = (() => { try { return localStorage.getItem('haven_token'); } catch { return null; } })();
+    const st = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const row = (icon, title, sub, label, fn) => {
+      const r = el('div', 'pas-fila');
+      const t = el('div', 'pas-fila-texto'); t.append(el('b', null, icon + ' ' + title), el('span', null, sub));
+      const b = el('button', 'pas-boton', label); b.type = 'button'; b.addEventListener('click', fn);
+      r.append(t, b); box.appendChild(r);
+    };
+    if (st && st.disponible) {
+      row('🔗', 'Discord', st.vinculado ? `Vinculada con @${st.discord && st.discord.usuario}` : 'Sin vincular: vinculala para recuperar tu historial y verificar tu nombre.',
+        st.vinculado ? 'Administrar' : 'Vincular', () => { location.href = '/puente/vincular'; });
+    }
+    if (window.puenteEmail) row('✉️', 'Email de recuperación', 'Para recuperar la contraseña si te la olvidás.', 'Cambiar', () => window.puenteEmail.open());
+  }
+
+  function build(modal) {
+    if (built) return;
+    const box = modal.querySelector('.modal');
+    if (!box) return;
+    built = true;
+    box.classList.add('pas');
+    const h3 = box.querySelector('h3');
+    if (h3) h3.textContent = 'Configuración';
+    // El menu propio (las categorias) en lugar del de Haven y sus pestañas
+    const nav = el('nav', 'pas-nav');
+    const group = (title, cats) => {
+      nav.appendChild(el('div', 'pas-grupo', title));
+      for (const c of cats) {
+        const b = el('button', 'pas-item'); b.type = 'button'; b.dataset.cat = c.id;
+        b.append(el('span', 'pas-ico', c.icon), el('span', 'pas-nombre', c.name), el('span', 'pas-flecha', '›'));
+        b.addEventListener('click', () => show(c));
+        nav.appendChild(b);
+      }
+    };
+    group('Ajustes de usuario', USER);
+    const app = window.app;
+    if (app && typeof app._hasAnyAdminSettingsAccess === 'function' && app._hasAnyAdminSettingsAccess()) group('Administración', ADMIN);
+    // Encabezado del contenido (en el celular, con la flecha para volver)
+    const head = el('div', 'pas-cabeza');
+    const back = el('button', 'pas-volver', '‹'); back.type = 'button'; back.setAttribute('aria-label', 'Volver');
+    back.addEventListener('click', backToList);
+    const title = el('h2', 'pas-titulo', '');
+    head.append(back, title);
+    // Lo propio de CV Chat en cada categoria
+    const links = el('div', 'pas-extra'); links.dataset.cat = 'cuenta';
+    const perfil = el('div', 'pas-extra'); perfil.dataset.cat = 'perfil';
+    const pr = el('div', 'pas-fila');
+    const pt = el('div', 'pas-fila-texto'); pt.append(el('b', null, '✨ Tu perfil'), el('span', null, 'Nombre, avatar, estilo del nombre, banner, tema y más.'));
+    const pb = el('button', 'pas-boton', 'Editar perfil'); pb.type = 'button';
+    pb.addEventListener('click', () => { document.getElementById('close-settings-btn')?.click(); setTimeout(() => window.app && window.app._openRenameModal && window.app._openRenameModal(), 50); });
+    pr.append(pt, pb); perfil.appendChild(pr);
+    const content = el('div', 'pas-contenido');
+    const bodyUser = box.querySelector('#settings-body-user'), bodyAdmin = box.querySelector('#settings-body-admin');
+    const navOld = box.querySelector('#settings-nav');
+    const wrap = (bodyUser || bodyAdmin) && (bodyUser || bodyAdmin).parentElement;
+    if (!wrap) return;
+    wrap.classList.add('pas-cuerpo');
+    wrap.insertBefore(nav, wrap.firstChild);
+    content.append(head, links, perfil);
+    // Los cuerpos de Haven van dentro del contenido
+    wrap.insertBefore(content, nav.nextSibling);
+    if (bodyUser) content.appendChild(bodyUser);
+    if (bodyAdmin) content.appendChild(bodyAdmin);
+    const save = box.querySelector('.admin-save-bar'); if (save) content.appendChild(save);
+    if (navOld) navOld.classList.add('pas-fuera');
+    box.querySelector('#settings-tab-bar')?.classList.add('pas-fuera');
+    for (const id of REMOVED) { document.getElementById(id)?.classList.add('pas-fuera'); navItemFor(id)?.classList.add('pas-fuera'); }
+    refs = { modal: box, nav, content, title, links, extras: [links, perfil] };
+  }
+
+  function opened() {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+    build(modal);
+    if (!built) return;
+    // En la computadora se abre en "Mi cuenta"; en el celular, en la lista
+    if (mobile()) { backToList(); for (const x of refs.extras) x.hidden = true; }
+    else show(current || USER[0]);
+  }
+  window.puenteAjustes = {
+    enDetalle: () => !!(refs.modal && refs.modal.classList.contains('pas-detalle') && mobile() && document.getElementById('settings-modal')?.style.display === 'flex'),
+    volver: () => backToList(),
+  };
+
+  const css = el('style');
+  css.textContent = `
+    .pas-fuera, .pas-oculto { display: none !important; }
+    #settings-modal .modal.pas { width: min(64rem, calc(100vw - 32px)); max-width: none; height: min(46rem, calc(100vh - 32px)); max-height: none; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: #1a1a1e; border: 1px solid #2a2a30; border-radius: 1rem; }
+    #settings-modal { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0, 0, 0, .78) !important; }
+    #settings-modal .modal.pas .settings-header { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: 1rem 1.25rem 1rem 1.5rem; border-bottom: 1px solid #26262b; }
+    #settings-modal .modal.pas .settings-header h3 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+    #settings-modal .pas-cuerpo { flex: 1 1 auto; min-height: 0; display: flex !important; flex-direction: row; overflow: hidden; gap: 0; }
+    #settings-modal .pas-nav { flex: 0 0 15rem; overflow-y: auto; padding: 1rem .75rem; background: #141417; border-right: 1px solid #26262b; }
+    #settings-modal .pas-grupo { padding: .75rem .625rem .375rem; font-size: .6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #80848e; }
+    #settings-modal .pas-item { display: flex; align-items: center; gap: .625rem; width: 100%; padding: .5rem .625rem; border: 0; border-radius: .375rem; background: transparent; color: #b5bac1; font: inherit; font-size: .9375rem; font-weight: 500; text-align: left; cursor: pointer; }
+    #settings-modal .pas-item:hover { background: #232228; color: #dbdee1; }
+    #settings-modal .pas-item.activo { background: #2e2d33; color: #fff; }
+    #settings-modal .pas-ico { width: 1.25rem; text-align: center; }
+    #settings-modal .pas-nombre { flex: 1 1 auto; }
+    #settings-modal .pas-flecha { display: none; color: #80848e; font-size: 1.25rem; }
+    #settings-modal .pas-contenido { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 1.25rem 2rem 2rem; overscroll-behavior: contain; }
+    #settings-modal .pas-cabeza { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+    #settings-modal .pas-volver { display: none; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: #2b2a30; color: #dbdee1; font-size: 1.5rem; line-height: 1; cursor: pointer; }
+    #settings-modal .pas-titulo { margin: 0; font-size: 1.375rem; font-weight: 800; color: #f2f3f5; }
+    #settings-modal .pas-contenido #settings-body-user, #settings-modal .pas-contenido #settings-body-admin { overflow: visible !important; height: auto !important; max-height: none !important; padding: 0 !important; flex: none !important; }
+    #settings-modal .pas-contenido .settings-section { border-top: 0 !important; margin: 0 0 1rem !important; padding: 1rem 1.125rem !important; background: #202024; border-radius: .75rem; }
+    #settings-modal .pas-contenido .settings-section-title { margin: 0 0 .75rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #b5bac1; }
+    #settings-modal .pas-contenido input[type="text"], #settings-modal .pas-contenido input[type="password"], #settings-modal .pas-contenido input[type="email"], #settings-modal .pas-contenido select, #settings-modal .pas-contenido textarea { background: #121214; border: 1px solid #2e2d32; border-radius: .5rem; color: #dbdee1; padding: .5rem .75rem; font: inherit; }
+    #settings-modal .pas-contenido .btn-sm { min-height: 2.25rem; padding: 0 .875rem; border-radius: .5rem; font-weight: 600; }
+    #settings-modal .pas-extra[hidden] { display: none; }
+    #settings-modal .pas-fila { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 .75rem; padding: 1rem 1.125rem; background: #202024; border-radius: .75rem; }
+    #settings-modal .pas-fila-texto { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+    #settings-modal .pas-fila-texto b { color: #f2f3f5; font-size: 1rem; }
+    #settings-modal .pas-fila-texto span { color: #949ba4; font-size: .875rem; }
+    #settings-modal .pas-boton { flex: 0 0 auto; min-height: 2.25rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    #settings-modal .pas-boton:hover { background: #4752c4; }
+    @media (max-width: 768px) {
+      #settings-modal .modal.pas { width: 100vw; height: 100%; border-radius: 0; border: 0; }
+      #settings-modal .pas-nav { flex: 1 1 auto; border-right: 0; background: #1a1a1e; padding: .5rem 1rem 1rem; }
+      #settings-modal .pas-item { padding: .875rem .75rem; font-size: 1rem; background: #202024; border-radius: 0; border-bottom: 1px solid #1a1a1e; }
+      #settings-modal .pas-flecha { display: inline; }
+      #settings-modal .pas-contenido { display: none; padding: 1rem; }
+      #settings-modal .pas.pas-detalle .pas-nav { display: none; }
+      #settings-modal .pas.pas-detalle .pas-contenido { display: block; }
+      #settings-modal .pas-volver { display: inline-flex; align-items: center; justify-content: center; }
+      #settings-modal .pas-fila { flex-direction: column; align-items: stretch; }
+    }`;
+  document.head.appendChild(css);
+
+  // Cada vez que se abre la ventana de Haven
+  let tries = 0;
+  (function wait() {
+    const m = document.getElementById('settings-modal');
+    if (!m || !window.app) { if (++tries < 120) setTimeout(wait, 500); return; }
+    let was = m.style.display === 'flex';
+    new MutationObserver(() => {
+      const now = m.style.display === 'flex';
+      if (now && !was) { try { opened(); } catch (err) { console.warn('[puente] configuracion:', err); } }
+      was = now;
+    }).observe(m, { attributes: true, attributeFilter: ['style'] });
+  })();
 })();
