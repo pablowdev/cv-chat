@@ -15,7 +15,7 @@
 //    y una linea "-# ✅ desde Haven · <@id>" (texto: PUENTE_FIRMA) con una mencion real (que no
 //    notifica). Las menciones escritas a mano se convierten en texto, asi que
 //    esa linea no se puede falsificar. Las cuentas sin vincular salen como
-//    "Nombre (Haven, sin verificar)", o no salen (PUENTE_SIN_VINCULAR=bloquear).
+//    "Nombre ᶜᵛ · sin verificar" (con la marca PUENTE_MARCA), o no salen (PUENTE_SIN_VINCULAR=bloquear).
 //
 // Configuracion (variables de entorno, en /opt/haven/.env):
 //   PUENTE_CANALES       nombres o IDs de canales de Discord separados por comas,
@@ -36,6 +36,7 @@ const baneos = require('./baneos.js');
 const rol = require('./rol.js');
 const logros = require('./logros.js');
 const avisos = require('./avisos.js');
+const identidad = require('./identidad.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
@@ -123,10 +124,15 @@ function start(deps) {
   // El nombre de la comunidad en los textos: PUENTE_COMUNIDAD, o el del servidor de Discord
   const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
   avisos.setup({ db, io, log, warn });
+  identidad.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
     lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
-    onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId); },
+    onLinked: async discordUserId => {
+      await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId);
+      const l = db.prepare('SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?').get(String(discordUserId));
+      if (l) identidad.onLinked(l.haven_user_id); // gana el verdadero
+    },
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); rol.onUnlinked(); } });
   estadisticas.setup({ db, io, log, warn });
   require('./invitaciones.js').setup({ db, log, warn, publicUrl });
@@ -348,6 +354,7 @@ function onDispatch(t, d) {
         const ours = (d.channels || []).some(c => db.prepare('SELECT 1 FROM channels WHERE discord_channel_id = ?').get(c.id));
         if (!ours || (guildId && guildId !== d.id)) return;
         guildId = d.id;
+        setTimeout(() => identidad.onGuildReady(), 15000);
         guildName = d.name || guildName;
         (d.channels || []).forEach(cacheChannel);
         (d.threads || []).forEach(cacheChannel);
@@ -706,12 +713,12 @@ function signature() {
 }
 // PUENTE_FIRMA=no: sin la linea de firma (mas discreto; ver PUENTE_MARCA). Igual
 // nadie puede hacerse pasar por otro: las cuentas sin vincular siempre llevan
-// "(…, sin verificar)" en el nombre, y solo las vinculadas salen con su nombre de Discord.
+// "· sin verificar" en el nombre, y solo las vinculadas salen con su nombre de Discord.
 const footerFor = link => (link && String(process.env.PUENTE_FIRMA || '').trim().toLowerCase() !== 'no'
   ? `\n-# ${signature()} · <@${link.discord_user_id}>` : '');
 // Marca junto al nombre de las cuentas vinculadas (PUENTE_MARCA, por ejemplo "✦")
 const nameMark = () => { const m = String(process.env.PUENTE_MARCA || '').replace(/[\r\n<>@#:`]/g, '').trim().slice(0, 8); return m ? ' ' + m : ''; };
-// Nombre de la app en "Nombre (Haven, sin verificar)": PUENTE_TITULO si esta configurado
+// Nombre de la app (PUENTE_TITULO si esta configurado)
 const appName = () => String(process.env.PUENTE_TITULO || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 30) || 'Haven';
 // Linea de firma (la actual o una de antes): "-# ... · <@id>"
 const isFooterLine = l => /^-# .* · <@\d+>$/.test(l);
@@ -806,7 +813,7 @@ async function outboundCreate(havenMessageId) {
 
     const body = {
       content,
-      username: link ? webhookName(link.discord_global_name || link.discord_username, nameMark()) : webhookName(m.uname, ` (${appName()}, sin verificar)`),
+      username: link ? webhookName(link.discord_global_name || link.discord_username, nameMark()) : webhookName(m.uname, `${nameMark()} · sin verificar`),
       avatar_url: link ? (link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : undefined) : (absolute(m.uavatar) || undefined),
       allowed_mentions: { parse: [] }, // nunca notifica a nadie (ni @everyone, ni @here)
     };

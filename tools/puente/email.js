@@ -234,7 +234,7 @@ async function reset(token, password) {
 // Registro de Haven (POST /api/auth/register): sin un email valido no se crea la
 // cuenta. Se lee el cuerpo antes que Haven (que entonces no lo vuelve a leer) y,
 // si la cuenta se crea, se guarda el email y se manda el mail de confirmacion.
-function hookRegister(req, res, next) {
+function hookRegister(req, res, next, validate) {
   const parts = []; let size = 0, over = false;
   req.on('data', c => { size += c.length; if (size > 128 * 1024) over = true; else parts.push(c); });
   req.on('error', () => {});
@@ -243,6 +243,8 @@ function hookRegister(req, res, next) {
     try { body = over ? null : JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { body = null; }
     const reply = (status, error) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ error })); };
     if (!body || typeof body !== 'object') return reply(400, 'Solicitud inválida.');
+    const other = typeof validate === 'function' ? validate(body) : null;
+    if (other) return reply(400, other);
     const email = norm(body.email);
     if (!email) return reply(400, 'Poné tu email: sirve para recuperar la contraseña si la olvidás.');
     if (!valid(email)) return reply(400, 'Ese email no parece válido.');

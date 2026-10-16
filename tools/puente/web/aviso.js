@@ -103,16 +103,20 @@ function sheetDrag(sheet, opts) {
     const box = el('div', 'pv-tarjeta');
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'pv-titulo');
     const icon = el('div', 'pv-icono'); icon.innerHTML = DISCORD_SVG;
-    const title = el('h2', 'pv-titulo', 'Te falta un paso'); title.id = 'pv-titulo';
+    const title = el('h2', 'pv-titulo', hidden ? 'Te falta un paso' : '¿Estabas en Discord?'); title.id = 'pv-titulo';
     const text = el('p', 'pv-texto', hidden
       ? `Vinculá tu cuenta de Discord para ver ${canales(hidden)} y todo tu historial de mensajes. Es un clic.`
-      : 'Vinculá tu cuenta de Discord para ver todos los canales y tu historial de mensajes. Es un clic.');
+      : 'Vinculá tu cuenta y recuperá todos tus mensajes de Discord. Es un clic.');
     const list = el('ul', 'pv-lista');
-    for (const t of ['Todos los canales del servidor, con su historial', 'Tus mensajes de Discord pasan a tu cuenta', 'Lo que escribas acá sale en Discord con tu nombre y tu foto']) list.appendChild(el('li', null, t));
+    const items = hidden
+      ? ['Todos los canales del servidor, con su historial', 'Tus mensajes de Discord pasan a tu cuenta', 'Lo que escribas acá sale en Discord con tu nombre y tu foto']
+      : ['Tu historial de mensajes de Discord pasa a tu cuenta', 'Lo que escribas sale en Discord verificado, sin "sin verificar"', 'Ves también los canales de tus roles de Discord'];
+    for (const t of items) list.appendChild(el('li', null, t));
     const go = el('button', 'pv-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
     go.addEventListener('click', () => start(go));
     const later = el('button', 'pv-luego', 'Ahora no'); later.type = 'button';
-    const close = () => { storage(() => localStorage.setItem(HIDE_KEY, String(Date.now() + HIDE_MS))); back.remove(); document.removeEventListener('keydown', onKey, true); };
+    // Si ya ve los canales, el recordatorio vuelve en una semana (no al otro dia)
+    const close = () => { storage(() => localStorage.setItem(HIDE_KEY, String(Date.now() + (hidden ? HIDE_MS : 7 * 24 * 3600 * 1000)))); back.remove(); document.removeEventListener('keydown', onKey, true); };
     const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     later.addEventListener('click', close);
     back.addEventListener('click', (e) => { if (e.target === back) close(); });
@@ -130,8 +134,8 @@ function sheetDrag(sheet, opts) {
       if (!list) { if (++tries < 60) setTimeout(put, 500); return; }
       if (document.getElementById('puente-vincular-caja')) return;
       const box = el('div'); box.id = 'puente-vincular-caja';
-      box.appendChild(el('div', 'pvc-titulo', hidden ? `🔒 Hay ${canales(hidden)}` : '🔒 Te faltan canales'));
-      box.appendChild(el('div', 'pvc-texto', 'Vinculá tu Discord para verlos y recuperar tu historial.'));
+      box.appendChild(el('div', 'pvc-titulo', hidden ? `🔒 Hay ${canales(hidden)}` : '🔗 ¿Estabas en Discord?'));
+      box.appendChild(el('div', 'pvc-texto', hidden ? 'Vinculá tu Discord para verlos y recuperar tu historial.' : 'Vinculá tu cuenta para recuperar tu historial y verificar tu nombre.'));
       const go = el('button', 'pvc-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
       go.addEventListener('click', () => start(go));
       box.appendChild(go);
@@ -3110,7 +3114,7 @@ function sheetDrag(sheet, opts) {
     if (blocked) {
       if (!input.dataset.puentePlaceholder) input.dataset.puentePlaceholder = input.placeholder;
       input.value = '';
-      input.placeholder = MSG;
+      input.placeholder = (perms && perms.motivo) || MSG;
       input.disabled = true;
     } else if (input.disabled && input.dataset.puentePlaceholder !== undefined) {
       input.disabled = false;

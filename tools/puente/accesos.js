@@ -6,7 +6,9 @@
 //    su cuenta de Discord puede ver (roles + permisos por canal, con las mismas
 //    reglas que usa Discord). Si cambian sus roles, los permisos de un canal o
 //    sale/la expulsan/la banean del servidor, se actualiza al momento.
-//  - Las cuentas sin vincular solo ven los canales propios de Haven (p. ej. #bienvenida).
+//  - Las cuentas sin vincular solo ven los canales propios de Haven (p. ej. #bienvenida);
+//    con PUENTE_SIN_VINCULAR_VEN=publicos, tambien los de Discord que ve @everyone, con
+//    sus permisos, y para escribir ahi necesitan el email confirmado y 10 minutos de cuenta.
 //  - Los administradores de Haven siguen viendo todo.
 //  - Tambien se copian los permisos de escribir, escribir en hilos, reaccionar y
 //    adjuntar archivos de cada canal (tabla puente_permisos): Haven rechaza lo que
@@ -16,6 +18,9 @@
 // membresias que un admin agrego a mano no se tocan.
 
 const VIEW = 1n << 10n;
+// PUENTE_SIN_VINCULAR_VEN=publicos: las cuentas sin vincular ven lo que ve @everyone en Discord
+const OPEN_UNLINKED = String(process.env.PUENTE_SIN_VINCULAR_VEN || '').trim().toLowerCase() === 'publicos';
+const EVERYONE = { user: { id: '0' }, roles: [] };
 const ADMINISTRATOR = 1n << 3n;
 // Permisos de Discord que se copian, y su bit en puente_permisos.flags
 const P = {
@@ -54,6 +59,12 @@ function setup(ctx) {
   const n = db.prepare('UPDATE channels SET is_private = 1 WHERE discord_channel_id IS NOT NULL AND is_private = 0').run().changes;
   guardJoinByCode();
   guardPosting();
+  // Sin vincular, con los canales publicos: al conectarse (p. ej. una cuenta recien creada) ya los ve
+  if (OPEN_UNLINKED) {
+    io.on('connection', socket => {
+      if (socket.user && !socket.user.isAdmin) setTimeout(() => { try { recomputeUnlinked(socket.user.id); } catch (err) { warn('accesos: sin vincular:', err.message); } }, 1000);
+    });
+  }
   log(`accesos: modo vinculados${n ? ` (${n} canales pasaron a privados)` : ''}`);
   // Los canales nuevos los crea la sincronizacion (otro proceso): cuando aparecen, se reparten los accesos
   const bridged = () => { const r = db.prepare('SELECT COUNT(*) n, MAX(id) m FROM channels WHERE discord_channel_id IS NOT NULL').get(); return r.n + ':' + r.m; };
@@ -138,12 +149,18 @@ function guardPosting() {
         if (channelId && need.length) {
           const flags = flagsFor(socket.user.id, channelId);
           if (flags !== null) deny = need.find(k => !(flags & P[k].bit)) || null;
+          // Sin Discord vinculado: escribir pide el email confirmado y unos minutos de cuenta
+          if (!deny && flags !== null && (need.includes('send') || need.includes('thread'))) {
+            const why = unlinkedWriteProblem(socket.user.id);
+            if (why) deny = { text: why };
+          }
         }
       } catch (err) { warn('accesos: guardia de permisos:', err.message); }
       if (!deny) return next();
+      const text = typeof deny === 'object' ? deny.text : NO[deny];
       const cb = packet[packet.length - 1];
-      if (typeof cb === 'function') cb({ error: NO[deny] });
-      socket.emit('error-msg', NO[deny]);
+      if (typeof cb === 'function') cb({ error: text });
+      socket.emit('error-msg', text);
       // no se pasa a Haven
     });
   });
@@ -155,7 +172,13 @@ function channelPermissions(havenUserId, isAdmin, code) {
   if (!ch) return null;
   const flags = isAdmin ? ALL_FLAGS : flagsFor(havenUserId, ch.id);
   const f = flags === null ? ALL_FLAGS : flags;
-  return { enviar: !!(f & P.send.bit), hilos: !!(f & P.thread.bit), reaccionar: !!(f & P.react.bit), adjuntar: !!(f & P.attach.bit) };
+  const out = { enviar: !!(f & P.send.bit), hilos: !!(f & P.thread.bit), reaccionar: !!(f & P.react.bit), adjuntar: !!(f & P.attach.bit) };
+  // Sin Discord vinculado y sin email confirmado (o cuenta recien hecha): no escribe, y se dice por que
+  if (!isAdmin && flags !== null && out.enviar) {
+    const why = unlinkedWriteProblem(havenUserId);
+    if (why) { out.enviar = false; out.hilos = false; out.motivo = why; }
+  }
+  return out;
 }
 
 // ── Datos del servidor de Discord ─────────────────────────────────────────
@@ -259,7 +282,34 @@ async function recomputeUser(discordUserId, memberFromEvent = undefined) {
   return apply(link.haven_user_id, member);
 }
 
-function revokeAll(havenUserId) { return apply(havenUserId, null); }
+// Al desvincular: con PUENTE_SIN_VINCULAR_VEN=publicos queda con lo de @everyone; si no, sin canales de Discord
+function revokeAll(havenUserId) { return apply(havenUserId, OPEN_UNLINKED ? EVERYONE : null); }
+
+// Cuentas sin vincular (PUENTE_SIN_VINCULAR_VEN=publicos): los canales y permisos de
+// @everyone en Discord, como cualquiera que entra al servidor.
+const isGhost = db_ => db_.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get();
+function recomputeUnlinked(havenUserId) {
+  if (!enabled || !OPEN_UNLINKED || !roles.size) return;
+  if (db.prepare('SELECT 1 FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId)) return;
+  const g = isGhost(db);
+  if (g && g.id === havenUserId) return;
+  return apply(havenUserId, EVERYONE);
+}
+
+// Para escribir en los canales de Discord sin tener Discord vinculado: email
+// confirmado y la cuenta con unos minutos (frena cuentas hechas al voleo)
+const NEW_ACCOUNT_MIN = 10;
+function unlinkedWriteProblem(havenUserId) {
+  if (!OPEN_UNLINKED) return null;
+  if (db.prepare('SELECT 1 FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId)) return null;
+  let ok = false;
+  try { ok = !!db.prepare('SELECT 1 FROM puente_emails WHERE haven_user_id = ? AND confirmado = 1').get(havenUserId); } catch { ok = true; /* sin email en este servidor */ }
+  if (!ok) return 'Para escribir en este canal confirmá tu email (te mandamos un enlace) o vinculá tu Discord.';
+  const u = db.prepare('SELECT created_at FROM users WHERE id = ?').get(havenUserId);
+  const age = u ? Date.now() - Date.parse(String(u.created_at).replace(' ', 'T') + 'Z') : 0;
+  if (age < NEW_ACCOUNT_MIN * 60 * 1000) return `Tu cuenta es nueva: vas a poder escribir en este canal en ${Math.max(1, Math.ceil(NEW_ACCOUNT_MIN - age / 60000))} minuto${Math.ceil(NEW_ACCOUNT_MIN - age / 60000) === 1 ? '' : 's'}.`;
+  return null;
+}
 
 function scheduleAll() {
   if (!enabled) return;
@@ -267,6 +317,9 @@ function scheduleAll() {
   recomputeTimer = setTimeout(async () => {
     const links = db.prepare('SELECT discord_user_id FROM puente_vinculos').all();
     for (const l of links) { await recomputeUser(l.discord_user_id); }
+    if (OPEN_UNLINKED) {
+      for (const u of db.prepare("SELECT id FROM users WHERE username != 'discord-historial' AND id NOT IN (SELECT haven_user_id FROM puente_vinculos)").all()) recomputeUnlinked(u.id);
+    }
   }, 3000);
 }
 
@@ -304,4 +357,4 @@ function lockedChannelIds() {
   return ids;
 }
 
-module.exports = { setup, onDispatch, recomputeUser, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled };
+module.exports = { setup, onDispatch, recomputeUser, recomputeUnlinked, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled, openToUnlinked: () => OPEN_UNLINKED };

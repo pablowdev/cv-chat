@@ -91,7 +91,8 @@ function hookHttp() {
       // Registro con email obligatorio (email.js)
       if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on() && req.headers['x-puente-interno'] !== INTERNAL) {
         const server = this;
-        email.hookRegister(req, res, () => origEmit.call(server, event, req, res, ...rest));
+        // Nombres reservados (identidad.js): no crearse la cuenta con el nombre de otra persona
+        email.hookRegister(req, res, () => origEmit.call(server, event, req, res, ...rest), (body) => require('./identidad.js').problem(0, String(body.username || '')));
         return true;
       }
       if (url.startsWith('/puente/')) {
@@ -652,7 +653,7 @@ async function handle(req, res) {
     if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
     if (!body.acepto) return json(res, 400, { error: 'Tenés que aceptar las condiciones y confirmar que tenés 18 años o más.' });
     const username = String(body.usuario || '').trim();
-    const problem = usernameProblem(username);
+    const problem = usernameProblem(username) || require('./identidad.js').problem(0, username, sg.me.id);
     if (problem) return json(res, 400, { error: problem });
     if (db.prepare('SELECT 1 FROM puente_vinculos WHERE discord_user_id = ?').get(sg.me.id)) { signups.delete(code); return json(res, 409, { error: 'Ese Discord ya tiene una cuenta. Volvé a tocar "Entrar con Discord".' }); }
     const r = await registerThroughHaven(req, username);
