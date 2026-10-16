@@ -3362,6 +3362,25 @@ function sheetDrag(sheet, opts) {
     if (mr.left < pr.right) menu.style.left = Math.max(8, pr.left - mr.width - 8) + 'px';
   }
 
+  // Que la tarjeta nunca quede cortada: Haven la ubica y la mide antes de que le
+  // agreguemos la cajita de mensaje (y antes de que carguen las imagenes), asi que
+  // despues puede pasarse del borde de abajo. Se sube lo que haga falta; si es mas
+  // alta que la ventana, se desplaza por dentro.
+  const watched = new WeakSet();
+  function keepInView(popup) {
+    if (!popup || !popup.isConnected || popup.classList.contains('puente-profile-sheet')) return;
+    const M = 8, max = window.innerHeight - 2 * M;
+    if (popup.scrollHeight > max) { popup.style.maxHeight = max + 'px'; popup.style.overflowY = 'auto'; }
+    // Medidas sin la animacion de abrir (empieza al 95% y crece): offsetTop/offsetHeight
+    const top = popup.offsetTop, h = popup.offsetHeight;
+    if (top + h > window.innerHeight - M) popup.style.top = Math.max(M, window.innerHeight - M - h) + 'px';
+    else if (top < M) popup.style.top = M + 'px';
+    if (!watched.has(popup) && typeof ResizeObserver === 'function') {
+      watched.add(popup);
+      new ResizeObserver(() => keepInView(popup)).observe(popup);
+    }
+  }
+
   function decorate(app, popup, profile) {
     if (!popup || popup.classList.contains('profile-popup-hover') || popup.classList.contains('puente-pc-card')) return;
     popup.classList.add('puente-pc-card');
@@ -3412,6 +3431,7 @@ function sheetDrag(sheet, opts) {
     app._showProfilePopup = function (profile, ...rest) {
       const r = show.call(this, profile, ...rest);
       try { if (pc() && profile) decorate(this, document.getElementById('profile-popup'), profile); } catch (err) { console.warn('[puente] tarjeta:', err); }
+      try { if (pc()) keepInView(document.getElementById('profile-popup')); } catch { /* queda donde la puso Haven */ }
       return r;
     };
     // Una tarjeta de vista previa (pasando el mouse) que pasa a ser la de verdad
@@ -3425,6 +3445,7 @@ function sheetDrag(sheet, opts) {
             const name = ((popup.querySelector('.profile-popup-username') || {}).textContent || '').replace(/^@/, '');
             const display = ((popup.querySelector('.profile-popup-displayname') || {}).textContent || '').trim();
             decorate(this, popup, { id, username: name, displayName: display });
+            keepInView(popup);
           }
         } catch (err) { console.warn('[puente] tarjeta:', err); }
         return r;
