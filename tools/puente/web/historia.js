@@ -7,6 +7,30 @@
   const main = document.getElementById('historia');
   const token = (() => { try { return localStorage.getItem('haven_token'); } catch { return null; } })();
   if (!token) { location.replace('/'); return; }
+  // Abierta en una ventana sobre la app (aviso.js): "Cerrar" y los enlaces a
+  // mensajes los maneja la app, sin volver a cargarla
+  const EMBED = new URLSearchParams(location.search).has('embebida') && window.parent !== window;
+  const tell = (msg) => window.parent.postMessage({ puente: 'historia', ...msg }, location.origin);
+  if (EMBED) {
+    document.documentElement.classList.add('embebida');
+    const back = document.querySelector('.volver');
+    if (back) {
+      back.querySelector('span').textContent = 'Cerrar';
+      back.setAttribute('aria-label', 'Cerrar');
+      back.addEventListener('click', (e) => { e.preventDefault(); tell({ accion: 'cerrar' }); });
+    }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tell({ accion: 'cerrar' }); });
+    document.addEventListener('click', (e) => {
+      const a = e.target instanceof Element && e.target.closest('a[href]');
+      if (!a || a.classList.contains('volver') || a.hasAttribute('download')) return;
+      const u = new URL(a.href, location.href);
+      // Un mensaje de la app (aunque el enlace tenga la direccion publica): se abre en la app
+      const msg = /^\/app(?:\.html)?$/.test(u.pathname) && u.searchParams.has('message');
+      if (u.origin !== location.origin && !msg) return; // enlaces de afuera: como siempre
+      e.preventDefault();
+      tell({ accion: 'abrir', url: location.origin + u.pathname + u.search });
+    });
+  }
 
   const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   const DIAS = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
@@ -138,64 +162,121 @@
 
   function buttons(d) {
     const box = el('div', 'botones');
-    const share = el('button', 'boton', 'Compartir mi tarjeta');
-    share.type = 'button';
-    const back = el('a', 'boton gris', `Volver a ${APP}`); back.href = '/app';
-    box.append(share, back);
-    main.appendChild(box);
-    const preview = el('img', 'vista-tarjeta'); preview.alt = 'Tu tarjeta'; preview.hidden = true;
-    main.appendChild(preview);
-    share.addEventListener('click', async () => {
-      share.disabled = true;
-      try {
-        const blob = await drawCard(d);
-        const file = new File([blob], 'mi-historia-cv.png', { type: 'image/png' });
-        preview.src = URL.createObjectURL(blob); preview.hidden = false;
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: `Mi historia en ${d.comunidad}`, text: `Mi historia en ${d.comunidad} · ${location.origin}` }).catch(() => {});
-        } else {
-          const a = el('a'); a.href = preview.src; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
-        }
-      } finally { share.disabled = false; }
+    const note = el('p', 'meta nota-tarjeta');
+    const preview = el('img', 'vista-tarjeta'); preview.alt = 'Tu tarjeta para compartir'; preview.hidden = true;
+    // La tarjeta se arma enseguida: asi "Compartir" y "Copiar" responden al toque
+    // (si se arma recien al tocar, el celular cancela el compartir por la demora)
+    const ready = drawCard(d);
+    let file = null;
+    ready.then(blob => {
+      file = new File([blob], 'mi-historia-cv.png', { type: 'image/png' });
+      preview.src = URL.createObjectURL(blob); preview.hidden = false;
     });
+    const say = (t) => { note.textContent = t; };
+    const add = (label, cls, fn) => { const b = el('button', 'boton' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.addEventListener('click', fn); box.appendChild(b); return b; };
+    if (navigator.share && navigator.canShare) {
+      add('Compartir', '', async () => {
+        if (!file) { say('Un segundo, se está armando la tarjeta…'); await ready; }
+        if (!navigator.canShare({ files: [file] })) { say('Este navegador no comparte imágenes: usá "Descargar".'); return; }
+        try { await navigator.share({ files: [file], title: `Mi historia en ${d.comunidad}` }); say(''); }
+        catch (err) { if (err && err.name !== 'AbortError') say('No se pudo compartir: usá "Copiar imagen" o "Descargar".'); }
+      });
+    }
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+      add('Copiar imagen', navigator.share ? 'gris' : '', async () => {
+        try {
+          // Con la promesa adentro, el permiso del clic no se pierde mientras se arma
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': ready })]);
+          say('¡Copiada! Pegala donde quieras (Ctrl+V).');
+        } catch { say('Este navegador no deja copiar imágenes: usá "Descargar".'); }
+      });
+    }
+    add('Descargar', 'gris', async () => {
+      const blob = await ready;
+      const a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'mi-historia-cv.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      say('Listo, quedó en tus descargas.');
+    });
+    if (!EMBED) { const back = el('a', 'boton gris', `Volver a ${APP}`); back.href = '/app'; box.appendChild(back); }
+    main.append(el('h2', 'titulo-tarjeta', 'Tu tarjeta para compartir'), box, note, preview);
   }
 
-  // La tarjeta: 1080 x 1350 (la de Instagram), con lo mas lindo de la historia
-  function drawCard(d) {
-    return new Promise(async (resolve) => {
-      const W = 1080, H = 1350, cv = document.createElement('canvas');
-      cv.width = W; cv.height = H;
-      const x = cv.getContext('2d');
-      const g = x.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, '#5865f2'); g.addColorStop(1, '#eb459e');
-      x.fillStyle = g; x.fillRect(0, 0, W, H);
-      x.fillStyle = 'rgba(30,31,34,.88)'; roundRect(x, 60, 60, W - 120, H - 120, 40); x.fill();
-      const font = (w, s) => `normal ${w} ${s}px "gg sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif`;
-      x.textAlign = 'center'; x.fillStyle = '#b5bac1'; x.font = font(600, 34);
-      fitText(x, `MI HISTORIA EN ${String(d.comunidad).toUpperCase()}`, W / 2, 150, W - 200);
-      // Foto
-      const img = d.avatar ? await load(d.avatar) : null;
-      x.save(); x.beginPath(); x.arc(W / 2, 300, 110, 0, Math.PI * 2); x.closePath(); x.clip();
-      if (img) x.drawImage(img, W / 2 - 110, 190, 220, 220); else { x.fillStyle = '#5865f2'; x.fillRect(W / 2 - 110, 190, 220, 220); x.fillStyle = '#fff'; x.font = font(800, 110); x.fillText((d.nombre || '?')[0].toUpperCase(), W / 2, 340); }
-      x.restore();
-      x.fillStyle = '#f2f3f5'; x.font = font(800, 64); fitText(x, d.nombre, W / 2, 490, W - 200);
-      x.fillStyle = '#b5bac1'; x.font = font(500, 34);
-      if (d.desde) x.fillText(`Desde el ${fecha(d.desde)}`, W / 2, 545);
-      // Cifras
-      const cells = [[num(d.mensajes), 'mensajes'], [`#${num(d.puesto)}`, `de ${num(d.de)}`], [num(d.reacciones), 'reacciones'], [d.racha.mejor + ' días', 'mejor racha']];
-      cells.forEach(([big, small], i) => {
-        const cx = i % 2 ? W * 0.72 : W * 0.28, cy = 680 + Math.floor(i / 2) * 190;
-        x.fillStyle = 'rgba(255,255,255,.06)'; roundRect(x, cx - 220, cy - 95, 440, 165, 24); x.fill();
-        x.fillStyle = '#f2f3f5'; x.font = font(800, 66); fitText(x, big, cx, cy, 400);
-        x.fillStyle = '#b5bac1'; x.font = font(500, 32); x.fillText(small, cx, cy + 48);
-      });
-      x.fillStyle = '#f2f3f5'; x.font = font(600, 36);
-      const canal = d.canales[0] ? `Mi canal: #${d.canales[0].nombre}` : '';
-      if (canal) fitText(x, canal, W / 2, 1090, W - 200);
-      if (d.medallas.length) { x.font = font(500, 54); x.fillText(d.medallas.map(m => m.emoji).join('  '), W / 2, 1175); }
-      x.fillStyle = '#80848e'; x.font = font(500, 30); x.fillText(location.host, W / 2, 1250);
-      cv.toBlob(resolve, 'image/png');
+  // La tarjeta, en formato de historia (1080 x 1920), con lo mas lindo de todo
+  async function drawCard(d) {
+    const W = 1080, H = 1920, cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    const font = (w, s) => `normal ${w} ${s}px "gg sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif`;
+    const g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#5865f2'); g.addColorStop(0.55, '#9b51e0'); g.addColorStop(1, '#eb459e');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(24,25,28,.9)'; roundRect(x, 50, 50, W - 100, H - 100, 44); x.fill();
+    x.textAlign = 'center';
+    x.fillStyle = '#b5bac1'; x.font = font(700, 32);
+    fitText(x, `MI HISTORIA EN ${String(d.comunidad).toUpperCase()}`, W / 2, 135, W - 200);
+    // Foto y nombre
+    const img = d.avatar ? await load(d.avatar) : null;
+    x.save(); x.beginPath(); x.arc(W / 2, 320, 125, 0, Math.PI * 2); x.closePath(); x.clip();
+    if (img) x.drawImage(img, W / 2 - 125, 195, 250, 250);
+    else { x.fillStyle = '#5865f2'; x.fillRect(W / 2 - 125, 195, 250, 250); x.fillStyle = '#fff'; x.font = font(800, 120); x.fillText((d.nombre || '?')[0].toUpperCase(), W / 2, 363); }
+    x.restore();
+    x.fillStyle = '#f2f3f5'; x.font = font(800, 70); fitText(x, d.nombre, W / 2, 530, W - 180);
+    x.fillStyle = '#b5bac1'; x.font = font(500, 34);
+    if (d.desde) x.fillText(`Desde el ${fecha(d.desde)}`, W / 2, 585);
+    // Medallas, en una o dos filas
+    let y = 650;
+    if (d.medallas.length) {
+      x.font = font(700, 30);
+      const pills = d.medallas.map(m => ({ t: m.emoji + ' ' + m.nombre, w: x.measureText(m.emoji + ' ' + m.nombre).width + 44 }));
+      const rows = []; let row = [], rw = 0;
+      for (const p of pills) { if (rw + p.w > W - 180 && row.length) { rows.push(row); row = []; rw = 0; } row.push(p); rw += p.w + 14; }
+      if (row.length) rows.push(row);
+      for (const r of rows.slice(0, 2)) {
+        const total = r.reduce((a, p) => a + p.w, 0) + 14 * (r.length - 1);
+        let px = (W - total) / 2;
+        for (const p of r) {
+          x.fillStyle = 'rgba(255,255,255,.09)'; roundRect(x, px, y, p.w, 56, 28); x.fill();
+          x.fillStyle = '#f2f3f5'; x.textAlign = 'left'; x.fillText(p.t, px + 22, y + 39); x.textAlign = 'center';
+          px += p.w + 14;
+        }
+        y += 70;
+      }
+    }
+    // Cifras: 3 filas de 2
+    const best = d.anios.length ? d.anios.reduce((a, b) => (b.n > a.n ? b : a)) : null;
+    const cells = [
+      [num(d.mensajes), 'mensajes'], [`#${num(d.puesto)}`, `de ${num(d.de)} personas`],
+      [num(d.palabras), 'palabras'], [num(d.reacciones), 'reacciones recibidas'],
+      [`${d.racha.mejor} ${d.racha.mejor === 1 ? 'día' : 'días'}`, 'mejor racha'], [best ? String(best.anio) : '-', best ? `mi año: ${num(best.n)} mensajes` : 'mi año'],
+    ];
+    const top = Math.max(y + 20, 800);
+    cells.forEach(([big, small], i) => {
+      const cx = i % 2 ? W * 0.735 : W * 0.265, cy = top + Math.floor(i / 2) * 185;
+      x.fillStyle = 'rgba(255,255,255,.07)'; roundRect(x, cx - 225, cy, 450, 165, 26); x.fill();
+      x.fillStyle = '#f2f3f5'; x.font = font(800, 62); fitText(x, big, cx, cy + 82, 410);
+      x.fillStyle = '#b5bac1'; x.font = font(500, 29); fitText(x, small, cx, cy + 128, 410);
     });
+    // Lista
+    const dmax = Math.max(...d.dias);
+    const lines = [
+      ['Mi canal', d.canales[0] ? `#${d.canales[0].nombre}` : null],
+      ['Escribo', `${momento(d.horas)}, los ${DIAS[d.dias.indexOf(dmax)]}`],
+      ['Le respondo más a', d.respuestas[0] ? d.respuestas[0].nombre : null],
+      ['Mis emojis', d.emojis.length ? d.emojis.map(e => e.e).join(' ') : null],
+    ].filter(l => l[1]);
+    let ly = top + 3 * 185 + 30;
+    x.fillStyle = 'rgba(255,255,255,.07)'; roundRect(x, 90, ly, W - 180, lines.length * 82 + 26, 26); x.fill();
+    ly += 68;
+    for (const [k, v] of lines) {
+      x.textAlign = 'left'; x.fillStyle = '#b5bac1'; x.font = font(600, 32); x.fillText(k, 130, ly);
+      x.textAlign = 'right'; x.fillStyle = '#f2f3f5'; x.font = font(700, 36);
+      let s = String(v); while (x.measureText(s).width > 500 && s.length > 1) s = s.slice(0, -2) + '…';
+      x.fillText(s, W - 130, ly);
+      ly += 82;
+    }
+    x.textAlign = 'center';
+    x.fillStyle = '#80848e'; x.font = font(600, 32); x.fillText(location.host, W / 2, H - 82);
+    return await new Promise(r => cv.toBlob(r, 'image/png'));
   }
   function load(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; }); }
   function fitText(x, t, cx, y, max) { let s = String(t); while (x.measureText(s).width > max && s.length > 1) s = s.slice(0, -2) + '…'; x.fillText(s, cx, y); }

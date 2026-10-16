@@ -2427,7 +2427,9 @@ function sheetDrag(sheet, opts) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => { if (app._copyTextFallback) app._copyTextFallback(url, done); });
     else if (app._copyTextFallback) app._copyTextFallback(url, done);
   }
-  window.puenteEnlaces = { copiar: copyLink };
+  // abrir(url): ir a un mensaje de la app sin recargar (lo usa la ventana de "Tu historia")
+  function openUrl(href) { const p = parse(href); if (!p) return false; resolve(p).then(res => { if (res.data && window.app) open(window.app, res.data); }); return true; }
+  window.puenteEnlaces = { copiar: copyLink, abrir: openUrl };
 
   // El enlace pasa a ser el de CV Chat (asi tampoco lleva a Discord al abrirlo en
   // otra pestaña) y, si se veia la direccion tal cual, dice "#canal › mensaje"
@@ -5249,8 +5251,44 @@ function sheetDrag(sheet, opts) {
     .puente-medallas { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 2px; }
     .puente-medalla { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-tertiary, rgba(0,0,0,.25)); border-radius: 6px; padding: 2px 7px; font-size: 12px; font-weight: 600; color: var(--text-primary, #f2f3f5); cursor: default; }
     .puente-historia-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0 2px; padding: 8px 10px; border-radius: 6px; background: #5865f2; color: #fff !important; font-weight: 600; font-size: 14px; text-decoration: none !important; }
-    .puente-historia-btn:hover { background: #4752c4; }`;
+    .puente-historia-btn:hover { background: #4752c4; }
+    #puente-historia-capa { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; animation: puente-fade .18s ease-out; }
+    #puente-historia-capa iframe { width: min(720px, 100vw - 32px); height: min(92vh, 100%); border: 0; border-radius: 12px; background: #1e1f22; box-shadow: 0 12px 48px rgba(0,0,0,.55); }
+    @media (max-width: 768px) { #puente-historia-capa iframe { width: 100vw; height: 100%; border-radius: 0; } }`;
   document.head.appendChild(style);
+
+  // "Tu historia" en una ventana encima de la app: al cerrarla se sigue donde se estaba
+  function closeHistoria() {
+    const c = document.getElementById('puente-historia-capa');
+    if (!c) return;
+    c.remove();
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeHistoria(); } }
+  function openHistoria() {
+    closeHistoria();
+    const app = window.app;
+    try { if (app && typeof app._closeProfilePopup === 'function') app._closeProfilePopup(); else document.getElementById('profile-popup')?.remove(); } catch { /* sigue */ }
+    const capa = document.createElement('div');
+    capa.id = 'puente-historia-capa';
+    capa.addEventListener('click', (e) => { if (e.target === capa) closeHistoria(); });
+    const frame = document.createElement('iframe');
+    frame.src = '/puente/historia?embebida=1';
+    frame.title = 'Tu historia';
+    frame.allow = 'clipboard-write; web-share';
+    capa.appendChild(frame);
+    document.body.appendChild(capa);
+    document.addEventListener('keydown', onKey, true);
+    frame.addEventListener('load', () => { try { frame.contentWindow.focus(); } catch { /* sigue */ } });
+  }
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin || !e.data || e.data.puente !== 'historia') return;
+    if (e.data.accion === 'cerrar') closeHistoria();
+    else if (e.data.accion === 'abrir' && typeof e.data.url === 'string') {
+      closeHistoria();
+      if (!(window.puenteEnlaces && window.puenteEnlaces.abrir && window.puenteEnlaces.abrir(e.data.url))) location.href = e.data.url;
+    }
+  });
 
   async function load(id) {
     const hit = cache.get(id);
@@ -5288,6 +5326,7 @@ function sheetDrag(sheet, opts) {
       a.className = 'puente-historia-btn';
       a.href = '/puente/historia';
       a.textContent = '📖 Tu historia';
+      a.addEventListener('click', (e) => { e.preventDefault(); openHistoria(); });
       (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', a);
     }
   }

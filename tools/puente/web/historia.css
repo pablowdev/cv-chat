@@ -49,3 +49,10 @@ main { max-width: 640px; margin: 0 auto; padding: 20px 16px 64px; }
 .vista-tarjeta[hidden] { display: none; }
 .vista-tarjeta { display: block; width: 100%; max-width: 360px; margin: 14px auto 0; border-radius: 12px; }
 @media (max-width: 420px) { .grande { font-size: 36px; } .portada h1 { font-size: 24px; } }
+
+.titulo-tarjeta { margin: 28px 0 0; text-align: center; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--suave); }
+.nota-tarjeta { text-align: center; min-height: 1.2em; margin: 4px 0 0; }
+.vista-tarjeta { max-width: 300px; box-shadow: 0 8px 30px rgba(0, 0, 0, .4); }
+/* Dentro de la ventana sobre la app */
+html.embebida .barra { padding: 8px 12px; }
+html.embebida .volver { font-size: 15px; }

@@ -120,7 +120,7 @@ function start(deps) {
   baneos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   rol.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName });
   // El nombre de la comunidad en los textos: PUENTE_COMUNIDAD, o el del servidor de Discord
-  const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^p{L}p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
+  const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
   logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
     lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
