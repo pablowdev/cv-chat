@@ -6073,3 +6073,56 @@ function sheetDrag(sheet, opts) {
     arm();
   })();
 })();
+
+// Celular: en un hilo, deslizar hacia la derecha vuelve al canal (como en la app
+// de Discord para iPhone, donde no hay boton atras). El hilo sigue al dedo; al
+// soltar se cierra si se deslizo bastante o rapido, y si no vuelve a su lugar.
+(function () {
+  'use strict';
+  const SKIP = 'input, textarea, select, [contenteditable="true"], video, audio, pre, table, .gif-picker, .emoji-picker, [role="slider"]';
+  const LOCK_PX = 10, CLOSE_PX = 90, FLICK = 0.45;
+  let g = null;
+  const panel = () => document.getElementById('thread-panel');
+  const sideways = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) { if (n.scrollWidth > n.clientWidth + 2) { const o = getComputedStyle(n).overflowX; if (o === 'auto' || o === 'scroll') return true; } } return false; };
+
+  document.addEventListener('touchstart', (e) => {
+    g = null;
+    const p = panel();
+    if (e.touches.length !== 1 || window.innerWidth > 768 || !p || getComputedStyle(p).display === 'none') return;
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t || !p.contains(t) || t.closest(SKIP) || sideways(t)) return;
+    g = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now(), locked: false, dx: 0 };
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!g) return;
+    const dx = e.touches[0].clientX - g.x, dy = e.touches[0].clientY - g.y;
+    if (!g.locked) {
+      if (Math.abs(dx) < LOCK_PX && Math.abs(dy) < LOCK_PX) return;
+      if (Math.abs(dy) > Math.abs(dx) || dx < 0) { g = null; return; } // vertical o hacia la izquierda: no es esto
+      g.locked = true;
+      panel().style.transition = 'none';
+    }
+    g.dx = Math.max(0, dx);
+    panel().style.transform = `translateX(${g.dx}px)`;
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', () => {
+    if (!g || !g.locked) { g = null; return; }
+    const p = panel(), speed = g.dx / Math.max(1, Date.now() - g.t);
+    const close = g.dx > CLOSE_PX || speed > FLICK;
+    g = null;
+    p.style.transition = 'transform .18s ease-out';
+    if (close) {
+      p.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        try { window.app && window.app._closeThread && window.app._closeThread(); } catch { /* nada */ }
+        p.style.transition = ''; p.style.transform = '';
+      }, 180);
+    } else {
+      p.style.transform = '';
+      setTimeout(() => { p.style.transition = ''; }, 200);
+    }
+  }, { passive: true });
+})();
