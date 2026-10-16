@@ -131,6 +131,17 @@ function ranking() {
 }
 const placeOf = n => { const r = ranking(); let lo = 0; while (lo < r.sorted.length && r.sorted[lo] > n) lo++; return { puesto: lo + 1, de: r.total }; };
 
+// Emojis personalizados de Haven: nombre -> imagen, y el id de Discord de los importados -> nombre
+let customCache = null;
+function customEmojis() {
+  if (customCache && Date.now() - customCache.at < CACHE_MS) return customCache;
+  const url = new Map(db.prepare('SELECT name, filename FROM custom_emojis').all().map(r => [r.name, '/uploads/' + r.filename]));
+  let byDiscord = new Map();
+  try { byDiscord = new Map(db.prepare('SELECT discord_id, name FROM puente_emojis').all().map(r => [String(r.discord_id), r.name])); } catch { /* sin la tabla */ }
+  customCache = { at: Date.now(), url, byDiscord };
+  return customCache;
+}
+
 function excerpt(s, n = 140) {
   let t = String(s || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼️').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/<a?:(\w+):\d+>/g, ':$1:').replace(/\s+/g, ' ').trim();
   if (t.length > n) t = t.slice(0, n - 1).trimEnd() + '…';
@@ -154,6 +165,7 @@ function historia(havenId) {
   const pub = rows.filter(m => publicChannel(channels.get(m.channel_id), lockedIds)).sort((a, b) => a.id - b.id);
   const byTime = pub.slice().sort((a, b) => parseTs(a.created_at) - parseTs(b.created_at));
   const perChannel = new Map(), perYear = new Map(), hours = new Array(24).fill(0), weekdays = new Array(7).fill(0), emojis = new Map();
+  const custom = customEmojis();
   let words = 0, fromHaven = 0;
   for (const m of pub) {
     const ms = parseTs(m.created_at);
@@ -168,6 +180,11 @@ function historia(havenId) {
     const text = String(m.content || '');
     words += (text.replace(/!?\[[^\]]*\]\([^)]*\)/g, '').match(/[\p{L}\p{N}]+/gu) || []).length;
     for (const e of text.match(/\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu) || []) emojis.set(e, (emojis.get(e) || 0) + 1);
+    // Los personalizados (:nombre:, o <:nombre:id> en mensajes viejos de Discord)
+    for (const m of text.matchAll(/<a?:\w+:(\d+)>|:([\w~-]+):/g)) {
+      const name = m[1] ? custom.byDiscord.get(m[1]) : m[2];
+      if (name && custom.url.has(name)) emojis.set(':' + name, (emojis.get(':' + name) || 0) + 1);
+    }
   }
   const top = (map, n) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
   const first = byTime[0];
@@ -203,13 +220,18 @@ function historia(havenId) {
     canales: top(perChannel, 3).map(([id, n]) => ({ nombre: channels.get(id).name, n })),
     anios: [...perYear.entries()].sort((a, b) => a[0] - b[0]).map(([anio, n]) => ({ anio, n })),
     horas: hours, dias: weekdays,
-    emojis: top(emojis, 3).map(([e, n]) => ({ e, n })),
+    emojis: top(emojis, 3).map(([e, n]) => (e.startsWith(':') ? { nombre: e.slice(1), url: custom.url.get(e.slice(1)), n } : { e, n })),
     respuestas: top(repliedTo, 3).map(([nombre, n]) => ({ nombre, n })),
     reacciones: reactions,
     masReaccionado: bestMsg ? { texto: excerpt(bestMsg.content, 160), n: best.n, canal: (channels.get(bestMsg.channel_id) || {}).name, url: messageUrl(bestMsg, channels) } : null,
     racha: streaks(havenId),
     medallas: medallas(havenId, { total, first, hours }),
   };
+  // Las imagenes de los emojis personalizados que aparecen en las citas
+  data.personalizados = {};
+  for (const t of [data.primero && data.primero.texto, data.masReaccionado && data.masReaccionado.texto]) {
+    for (const m of String(t || '').matchAll(/:([\w~-]+):/g)) if (custom.url.has(m[1])) data.personalizados[m[1]] = custom.url.get(m[1]);
+  }
   cache.set('h' + havenId, { at: Date.now(), data });
   return data;
 }

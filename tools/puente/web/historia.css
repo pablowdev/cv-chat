@@ -62,3 +62,7 @@ main { max-width: 640px; margin: 0 auto; padding: 20px 16px 64px; }
 /* Dentro de la ventana sobre la app */
 html.embebida .barra { padding: 8px 12px; }
 html.embebida .volver { font-size: 15px; }
+/* Emojis personalizados como imagen, del tamaño del texto (como en el chat) */
+.emoji-img { height: 1.375em; width: auto; max-width: 3em; vertical-align: -0.3em; object-fit: contain; }
+.emojis-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.emojis-fila .emoji-img { height: 48px; max-width: 96px; vertical-align: middle; }
