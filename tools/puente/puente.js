@@ -34,6 +34,7 @@ const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
 const baneos = require('./baneos.js');
 const rol = require('./rol.js');
+const logros = require('./logros.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
@@ -117,6 +118,8 @@ function start(deps) {
   accesos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, channelInfo: id => discordChannels.get(id) });
   baneos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   rol.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName });
+  logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, publicUrl,
+    lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
     onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId); },
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); rol.onUnlinked(); } });
@@ -403,10 +406,11 @@ async function havenTarget(discordChannelId, createRoot = true) {
   return { channel: parent, root: r.lastInsertRowid };
 }
 
-async function inboundCreate(msg) {
+// ownBot: un mensaje del propio bot que si va a Haven (el resumen de logros.js)
+async function inboundCreate(msg, ownBot = false) {
   if (!msg.guild_id) return;
   if (msg.webhook_id && ourWebhookIds.has(msg.webhook_id)) return; // eco de lo que publicamos
-  if (botUserId && msg.author && msg.author.id === botUserId) return;
+  if (!ownBot && botUserId && msg.author && msg.author.id === botUserId) return;
   if (msg.type !== 0 && msg.type !== 19) return;
   const content = buildContent(msg, await adjuntos.localizeAll(msg));
   if (!content) return;

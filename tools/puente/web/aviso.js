@@ -5237,3 +5237,76 @@ function sheetDrag(sheet, opts) {
     };
   })();
 })();
+// Medallas en la tarjeta de perfil (logros.js): una fila debajo del nombre, como
+// las insignias de Discord, con la racha si esta encendida. En la tarjeta propia,
+// ademas, el acceso a "Tu historia".
+(function () {
+  'use strict';
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const cache = new Map(); // id -> { at, data }
+  const style = document.createElement('style');
+  style.textContent = `
+    .puente-medallas { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 2px; }
+    .puente-medalla { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-tertiary, rgba(0,0,0,.25)); border-radius: 6px; padding: 2px 7px; font-size: 12px; font-weight: 600; color: var(--text-primary, #f2f3f5); cursor: default; }
+    .puente-historia-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0 2px; padding: 8px 10px; border-radius: 6px; background: #5865f2; color: #fff !important; font-weight: 600; font-size: 14px; text-decoration: none !important; }
+    .puente-historia-btn:hover { background: #4752c4; }`;
+  document.head.appendChild(style);
+
+  async function load(id) {
+    const hit = cache.get(id);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.data;
+    const tk = token();
+    if (!tk) return null;
+    const r = await fetch('/puente/api/logros/medallas?u=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tk } });
+    if (!r.ok) return null;
+    const data = await r.json();
+    cache.set(id, { at: Date.now(), data });
+    return data;
+  }
+
+  function paint(popup, profile, data, isSelf) {
+    if (!popup.isConnected || popup.dataset.puenteMedallas === String(profile.id)) return;
+    const names = popup.querySelector('.profile-popup-names');
+    if (!names) return;
+    popup.dataset.puenteMedallas = String(profile.id);
+    const items = (data && data.medallas || []).slice();
+    if (data && data.racha) items.push({ emoji: '🔥', nombre: data.racha + (data.racha === 1 ? ' día' : ' días'), detalle: `Racha: ${data.racha} días seguidos escribiendo en CV Chat` });
+    if (items.length) {
+      const row = document.createElement('div');
+      row.className = 'puente-medallas';
+      for (const m of items) {
+        const b = document.createElement('span');
+        b.className = 'puente-medalla';
+        b.title = m.detalle || m.nombre;
+        b.textContent = m.emoji + ' ' + m.nombre;
+        row.appendChild(b);
+      }
+      names.insertAdjacentElement('afterend', row);
+    }
+    if (isSelf) {
+      const a = document.createElement('a');
+      a.className = 'puente-historia-btn';
+      a.href = '/puente/historia';
+      a.textContent = '📖 Tu historia en Círculo Vicioso';
+      (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', a);
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showProfilePopup !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const show = app._showProfilePopup;
+    app._showProfilePopup = function (profile, ...rest) {
+      const r = show.call(this, profile, ...rest);
+      try {
+        const popup = document.getElementById('profile-popup');
+        if (popup && profile && profile.id != null && profile.username !== 'discord-historial') {
+          const isSelf = !!(this.user && profile.id === this.user.id);
+          load(profile.id).then(data => paint(popup, profile, data, isSelf)).catch(() => paint(popup, profile, null, isSelf));
+        }
+      } catch (err) { console.warn('[puente] medallas:', err); }
+      return r;
+    };
+  })();
+})();
