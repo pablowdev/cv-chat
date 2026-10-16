@@ -227,8 +227,9 @@ const insertPage = db.transaction((msgs, channelId, threadRoot, attByMsg) => {
     const author = msg.author?.global_name || msg.author?.username || 'Unknown';
     const avatar = msg.author?.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png?size=64` : null;
     const link = !msg.webhook_id && msg.author && q.linkOf ? q.linkOf.get(msg.author.id) : null;
+    // Cuenta vinculada: sin el nombre de Discord en el mensaje, asi se ve con el de la cuenta (puente/nombres.js)
     const r = link
-      ? q.insertLinked.run(channelId, link.haven_user_id, content, toSqlTs(msg.timestamp, msg.id), author, avatar, replyTo, msg.id, threadRoot)
+      ? q.insertLinked.run(channelId, link.haven_user_id, content, toSqlTs(msg.timestamp, msg.id), null, avatar, replyTo, msg.id, threadRoot)
       : q.insertMsg.run(channelId, ghost.id, content, toSqlTs(msg.timestamp, msg.id), author, avatar, replyTo, msg.id, threadRoot, null);
     if (!r.changes) {
       if (REBUILD && q.rowForRebuild) {

@@ -35,6 +35,7 @@ const adjuntos = require('./adjuntos.js');
 const instalable = require('./instalable.js');
 const temaFijo = require('./tema-fijo.js');
 const email = require('./email.js');
+const nombres = require('./nombres.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -47,6 +48,7 @@ function setup(ctx) {
   ({ db, io, api, log, warn, publicUrl, onLinked = () => {}, onUnlinked = () => {} } = ctx);
   clientSecret = process.env.DISCORD_CLIENT_SECRET || '';
   try { verifyToken = require('/app/src/auth').verifyToken; } catch (err) { warn('no encuentro verifyToken de Haven:', err.message); return; }
+  try { nombres.ensureColumn(db); } catch (err) { warn('nombres:', err.message); }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_autores (
@@ -739,17 +741,22 @@ function link(havenUserId, me) {
                 ON CONFLICT(discord_user_id) DO UPDATE SET discord_username = excluded.discord_username,
                   discord_global_name = excluded.discord_global_name, discord_avatar = excluded.discord_avatar`)
       .run(me.id, havenUserId, me.username, me.global_name || null, me.avatar || null);
-    return db.prepare(`UPDATE messages SET user_id = ?, imported_from = NULL
+    // Sin el nombre de Discord guardado en cada mensaje: se ven con el de la cuenta (nombres.js)
+    const moved = db.prepare(`UPDATE messages SET user_id = ?, imported_from = NULL, webhook_username = NULL
                        WHERE id IN (SELECT message_id FROM puente_autores WHERE discord_user_id = ?) AND imported_from = 'discord'`)
       .run(havenUserId, me.id).changes;
+    nombres.applyName(db, havenUserId, me.global_name || me.username);
+    return moved;
   })();
 }
 
 function unlink(havenUserId, discordUserId) {
   return db.transaction(() => {
-    const restored = db.prepare(`UPDATE messages SET user_id = ?, imported_from = 'discord'
+    const l = db.prepare('SELECT discord_username, discord_global_name FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId);
+    const restored = db.prepare(`UPDATE messages SET user_id = ?, imported_from = 'discord', webhook_username = COALESCE(webhook_username, ?)
                                  WHERE id IN (SELECT message_id FROM puente_autores WHERE discord_user_id = ?) AND user_id = ?`)
-      .run(ghostId(), discordUserId, havenUserId).changes;
+      .run(ghostId(), (l && (l.discord_global_name || l.discord_username)) || 'Discord', discordUserId, havenUserId).changes;
+    nombres.releaseName(db, havenUserId);
     db.prepare('DELETE FROM puente_vinculos WHERE haven_user_id = ?').run(havenUserId);
     return restored;
   })();

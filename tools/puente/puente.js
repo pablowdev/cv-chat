@@ -36,6 +36,7 @@ const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
 const stickers = require('./stickers.js');
+const nombres = require('./nombres.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
@@ -410,11 +411,20 @@ async function inboundCreate(msg) {
 
   let r;
   if (link) {
-    // Se guarda tambien el nombre y avatar de Discord: si un dia desvincula, el
-    // mensaje vuelve a mostrarse como importado con esos datos.
+    // Sin el nombre de Discord en el mensaje: se ve con el de la cuenta, que es el
+    // de Discord salvo que la persona se haya puesto otro (nombres.js). Si cambio
+    // su nombre en Discord, se actualiza. Se guarda el avatar de Discord: si un
+    // dia desvincula, el mensaje vuelve a mostrarse como importado con el.
+    try {
+      if (msg.author && (msg.author.username !== link.discord_username || (msg.author.global_name || null) !== link.discord_global_name)) {
+        db.prepare('UPDATE puente_vinculos SET discord_username = ?, discord_global_name = ? WHERE discord_user_id = ?')
+          .run(msg.author.username, msg.author.global_name || null, msg.author.id);
+        nombres.applyName(db, link.haven_user_id, author);
+      }
+    } catch (err) { warn('nombre:', err.message); }
     r = db.prepare(`INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, reply_to, discord_message_id, thread_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(target.channel.id, link.haven_user_id, content, toSqlTs(msg.timestamp), author, discordAvatar(msg.author), replyTo, msg.id, target.root);
+                    VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`)
+      .run(target.channel.id, link.haven_user_id, content, toSqlTs(msg.timestamp), discordAvatar(msg.author), replyTo, msg.id, target.root);
   } else {
     r = db.prepare(`INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to, discord_message_id, thread_id)
                     VALUES (?, ?, ?, ?, ?, ?, 0, 'discord', ?, ?, ?)`)
