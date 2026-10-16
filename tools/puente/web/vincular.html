@@ -3,28 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Vincular Discord · Haven</title>
+  <title>Vincular Discord · __PUENTE_APP__</title>
   <link rel="stylesheet" href="/puente/vincular.css">
 </head>
 <body>
   <main class="card">
     <h1>Vincular tu cuenta de Discord</h1>
-    <p class="lead">Así tus mensajes de Haven salen en Discord con tu nombre y una marca de verificación, lo que escribas en Discord aparece en Haven con tu cuenta, y tu historial de Discord pasa a ser tuyo.</p>
+    <p class="lead">Así tus mensajes de __PUENTE_APP__ salen en Discord con tu nombre y una marca de verificación, lo que escribas en Discord aparece en __PUENTE_APP__ con tu cuenta, y tu historial de Discord pasa a ser tuyo.</p>
 
     <div id="cargando" class="estado">Cargando…</div>
 
     <section id="sin-sesion" hidden>
-      <p>Primero tenés que iniciar sesión en Haven.</p>
+      <p>Primero tenés que iniciar sesión en __PUENTE_APP__.</p>
       <div class="acciones">
-        <a class="btn" href="/app">Ir a Haven</a>
+        <a class="btn" href="/app">Ir a __PUENTE_APP__</a>
         <button id="btn-recuperar" class="btn secundario">¿Olvidaste tu contraseña?</button>
       </div>
-      <p class="nota">Si tu cuenta de Haven ya está vinculada con Discord, podés poner una contraseña nueva iniciando sesión con Discord.</p>
+      <p class="nota">Si tu cuenta de __PUENTE_APP__ ya está vinculada con Discord, podés poner una contraseña nueva iniciando sesión con Discord.</p>
     </section>
 
     <section id="recuperar" hidden>
       <h2>Nueva contraseña</h2>
-      <p>Discord confirmó que sos el dueño de la cuenta de Haven <b id="recuperar-usuario"></b>.</p>
+      <p>Discord confirmó que sos el dueño de la cuenta de __PUENTE_APP__ <b id="recuperar-usuario"></b>.</p>
       <div class="aviso">Al cambiar la contraseña así se cierran tus sesiones abiertas y <b>se pierden tus mensajes directos cifrados</b> (los mensajes de los canales no se tocan).</div>
       <form id="form-recuperar">
         <label>Contraseña nueva <input type="password" id="pass1" autocomplete="new-password" minlength="8" maxlength="128" required></label>
@@ -34,20 +34,19 @@
     </section>
 
     <section id="recuperado" hidden>
-      <p>Listo: ya podés entrar a Haven como <b id="recuperado-usuario"></b> con tu contraseña nueva.</p>
+      <p>Listo: ya podés entrar a __PUENTE_APP__ como <b id="recuperado-usuario"></b> con tu contraseña nueva.</p>
       <a class="btn" href="/">Iniciar sesión</a>
     </section>
 
     <section id="no-disponible" hidden>
       <p>La vinculación todavía no está configurada en el servidor. Probá más tarde.</p>
-      <a class="btn secundario" href="/app">Volver a Haven</a>
+      <a class="btn secundario" href="/app">Volver a __PUENTE_APP__</a>
     </section>
 
     <section id="sin-vincular" hidden>
-      <p>Tu cuenta de Haven <b id="haven-nombre"></b> no está vinculada.</p>
+      <p>Tu cuenta de __PUENTE_APP__ <b id="haven-nombre"></b> no está vinculada.</p>
       <ul class="detalle">
-        <li>Discord solo nos dice tu nombre de usuario y tu avatar. No vemos tus mensajes, servidores ni contraseña.</li>
-        <li>Una cuenta de Discord solo se puede vincular a una cuenta de Haven.</li>
+        <li>Una cuenta de Discord solo se puede vincular a una cuenta de __PUENTE_APP__.</li>
         <li>Podés desvincularla cuando quieras.</li>
       </ul>
       <button id="btn-vincular" class="btn discord">Conectar con Discord</button>
@@ -61,9 +60,9 @@
           <div class="usuario" id="discord-usuario"></div>
         </div>
       </div>
-      <p>Vinculada con tu cuenta de Haven <b id="haven-nombre-2"></b>.</p>
+      <p>Vinculada con tu cuenta de __PUENTE_APP__ <b id="haven-nombre-2"></b>.</p>
       <div class="acciones">
-        <a class="btn" href="/app">Volver a Haven</a>
+        <a class="btn" href="/app">Volver a __PUENTE_APP__</a>
         <button id="btn-desvincular" class="btn peligro">Desvincular</button>
       </div>
     </section>

@@ -1930,3 +1930,6 @@ html body a.puente-enlace-msj {
   font-weight: 500; text-decoration: none !important; cursor: pointer; transition: background 0.1s ease;
 }
 html body a.puente-enlace-msj:hover { background: #5865f2; color: #fff !important; }
+
+/* Sin el cartel de Haven de "Codigos de recuperacion de cuenta" (aviso.js; esto por si acaso) */
+html body .recovery-notice-overlay { display: none !important; }

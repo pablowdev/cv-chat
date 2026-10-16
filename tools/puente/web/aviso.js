@@ -2523,6 +2523,21 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Sin el cartel de Haven sobre los "Codigos de recuperacion de cuenta": sale al
+// entrar a quien nunca los genero, habla de "claves de cifrado E2E" y tapa la
+// bienvenida. Aca se recupera la cuenta por email o con Discord; los codigos
+// siguen en Configuracion para quien los quiera.
+(function () {
+  'use strict';
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._showRecoveryNotice !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    app._recoveryNoticeShown = true;
+    app._showRecoveryNotice = function () {};
+  })();
+})();
+
 // Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
 // como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
 // su cantidad) y la lista de personas, con avatar. Incluye a quienes

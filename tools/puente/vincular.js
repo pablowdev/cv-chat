@@ -349,6 +349,13 @@ async function handle(req, res) {
       const start = String(process.env.PUENTE_CANAL_INICIO || '').replace(/[^\p{L}\p{N}_,-]/gu, '').slice(0, 200);
       body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title).replace(/__PUENTE_CANAL_INICIO__/g, start);
     }
+    // Nombre de la app ("CV Chat") en las paginas y sus textos, en vez de "Haven"
+    if (file.endsWith('.html') || file.endsWith('.js')) {
+      const app = file.endsWith('.html')
+        ? appName().replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+        : appName().replace(/[\\'"`\r\n<>]/g, ''); // va dentro de un string de JS
+      body = body.toString('utf8').replace(/__PUENTE_APP__/g, app);
+    }
     return send(res, 200, type, body);
   }
 

@@ -8,8 +8,8 @@
     cancelado: 'Cancelaste la vinculación en Discord.',
     caducado: 'El enlace caducó. Volvé a intentarlo.',
     discord: 'Discord no confirmó tu cuenta. Volvé a intentarlo.',
-    ocupada: 'Esa cuenta de Discord ya está vinculada a otra cuenta de Haven. Si es tuya, desvinculala primero desde esa cuenta.',
-    'sin-vinculo': 'Esa cuenta de Discord no está vinculada a ninguna cuenta de Haven, así que no se puede recuperar por acá. Pedile ayuda a un administrador.',
+    ocupada: 'Esa cuenta de Discord ya está vinculada a otra cuenta de __PUENTE_APP__. Si es tuya, desvinculala primero desde esa cuenta.',
+    'sin-vinculo': 'Esa cuenta de Discord no está vinculada a ninguna cuenta de __PUENTE_APP__, así que no se puede recuperar por acá. Pedile ayuda a un administrador.',
     'recuperar-admin': 'Las cuentas de administrador no se pueden recuperar con Discord, por seguridad. Usá un código de recuperación.',
     'recuperar-2fa': 'Tu cuenta tiene la verificación en dos pasos activada, así que no se puede recuperar con Discord. Usá un código de recuperación o pedile ayuda a un administrador.',
   };
