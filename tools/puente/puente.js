@@ -32,6 +32,8 @@ const WebSocket = require('/app/node_modules/ws');
 const vincular = require('./vincular.js');
 const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
+const baneos = require('./baneos.js');
+const rol = require('./rol.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
@@ -113,9 +115,11 @@ function start(deps) {
   for (const w of db.prepare('SELECT webhook_id FROM puente_webhooks').all()) ourWebhookIds.add(w.webhook_id);
 
   accesos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, channelInfo: id => discordChannels.get(id) });
+  baneos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
+  rol.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
-    onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); },
-    onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); } });
+    onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId); },
+    onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); rol.onUnlinked(); } });
   estadisticas.setup({ db, io, log, warn });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
@@ -139,9 +143,12 @@ function start(deps) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function api(method, endpoint, body, attempt = 0) {
+  // body.__reason: el motivo para el registro de auditoria de Discord
+  const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'HavenPuente (local, 1.0)' };
+  if (body && body.__reason) { headers['X-Audit-Log-Reason'] = encodeURIComponent(body.__reason); const { __reason, ...rest } = body; body = Object.keys(rest).length ? rest : undefined; }
   const res = await fetch(API + endpoint, {
     method,
-    headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'HavenPuente (local, 1.0)' },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(20000),
   }).catch(err => ({ ok: false, status: 0, err }));
@@ -362,7 +369,7 @@ function onDispatch(t, d) {
         break;
       case 'MESSAGE_DELETE_BULK': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => { for (const id of d.ids) await inboundDelete(id); }); break;
     }
-    if (d && (t === 'GUILD_CREATE' ? d.id === guildId : d.guild_id === guildId)) accesos.onDispatch(t, d);
+    if (d && (t === 'GUILD_CREATE' ? d.id === guildId : d.guild_id === guildId)) { accesos.onDispatch(t, d); baneos.onDispatch(t, d); rol.onDispatch(t, d); }
   } catch (err) { warn(`error procesando ${t}:`, err.message); }
 }
 

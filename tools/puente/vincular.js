@@ -857,7 +857,10 @@ function loginWithDiscord(me) {
   for (const m of [handoffs, signups]) for (const [k, v] of m) if (v.exp < now) m.delete(k);
   const code = crypto.randomBytes(24).toString('hex');
   const l = db.prepare('SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?').get(String(me.id));
-  if (!l) { signups.set(code, { me, exp: now + SIGNUP_TTL_MS }); return { nuevo: code }; }
+  if (!l) {
+    if (require('./baneos.js').isDiscordBanned(me.id)) return { error: 'ban' };
+    signups.set(code, { me, exp: now + SIGNUP_TTL_MS }); return { nuevo: code };
+  }
   const user = db.prepare('SELECT id, username, is_admin, totp_enabled FROM users WHERE id = ?').get(l.haven_user_id);
   if (!user) return { error: 'discord' };
   // Como en la recuperacion: los admins y las cuentas con verificacion en dos pasos, con contraseña
