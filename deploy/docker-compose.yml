@@ -4,10 +4,10 @@
 # Para migrar: copiar /opt/haven entero a otro servidor y `docker compose up -d`.
 services:
   haven:
-    # Version fijada (4.23.0): el puente, el tema y patches/ se revisaron para esta version. Revisarlos antes de actualizar.
+    # Version fijada (4.24.0): el puente, el tema y patches/ se revisaron para esta version. Revisarlos antes de actualizar.
     # Antes de pasar a 4.23.0 se marco import_authors_cleared=1 en server_settings: esa migracion de
     # Haven le saca el dueño a los mensajes importados, y aca son del usuario discord-historial a proposito.
-    image: ghcr.io/ancsemi/haven@sha256:f17925ccfef01fb4140b74f5114ce4de62b9c3f22d95edb7b3b488d698e2d8ea
+    image: ghcr.io/ancsemi/haven@sha256:a935a79431b965972bebc2bdbb803dbee6e49fc584e373e063d10a39918f780c
     container_name: haven
     volumes:
       - ./haven-data:/data

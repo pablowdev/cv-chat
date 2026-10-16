@@ -149,7 +149,8 @@ async function api(method, endpoint, body, attempt = 0) {
   if (res.status === 204) return {};
   let data = null;
   try { data = await res.json(); } catch { /* sin cuerpo */ }
-  if (!res.ok) return { __error: res.status, __body: data };
+  // Sin respuesta (sin red) el estado es 0, que en un if no cuenta como error: 'sin respuesta' si cuenta
+  if (!res.ok) return { __error: res.status || 'sin respuesta', __body: data };
   return data;
 }
 
@@ -173,7 +174,8 @@ async function apiFiles(method, endpoint, payload, files, attempt = 0) {
   if ((res.status === 0 || res.status >= 500) && attempt < 2) { await sleep(2000 * (attempt + 1)); return apiFiles(method, endpoint, payload, files, attempt + 1); }
   let data = null;
   try { data = await res.json(); } catch { /* sin cuerpo */ }
-  if (!res.ok) return { __error: res.status, __body: data };
+  // Sin respuesta (sin red) el estado es 0, que en un if no cuenta como error: 'sin respuesta' si cuenta
+  if (!res.ok) return { __error: res.status || 'sin respuesta', __body: data };
   return data;
 }
 

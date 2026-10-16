@@ -1,6 +1,6 @@
 # Puente Discord ↔ Haven
 
-Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com/ancsemi/Haven)** sin cortar con Discord: las dos plataformas funcionan a la vez, en tiempo real y con la identidad de cada persona verificada. Funcionan sobre Haven 4.23 **sin modificar sus archivos** (salvo un parche pequeño, explicado abajo).
+Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com/ancsemi/Haven)** sin cortar con Discord: las dos plataformas funcionan a la vez, en tiempo real y con la identidad de cada persona verificada. Funcionan sobre Haven 4.24 **sin modificar sus archivos** (salvo un parche pequeño, explicado abajo).
 
 > **English summary for Haven developers:** a Discord ↔ Haven bridge that runs inside the Haven process. It hooks `initFerry` through a `--require` preload to reach the same `db` and `io`, so no core files are touched. It adds live two-way relay (including threads, edits and deletes), Discord account linking via OAuth2 `identify`, unforgeable verified identity on relayed messages, channel access mirrored from Discord permissions, Discord-based password recovery, full-history sync and member counter channels. See the issues on ancsemi/Haven for the bugs and proposals that came out of this work.
 
