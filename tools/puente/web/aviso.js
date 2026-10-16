@@ -1573,9 +1573,11 @@ function sheetDrag(sheet, opts) {
 // roles, cuantos mensajes escribieron y cuando fue el ultimo, y señales
 // (administrador, sin vincular, sin email...). Se busca por nombre y se ordena
 // tocando las columnas. Tocar a alguien abre su perfil.
+// En el celular: pantalla completa con una lista (como la app de Discord), un
+// menu para ordenar, y el boton "atras" del telefono la cierra.
 (function () {
   'use strict';
-  if (matchMedia('(pointer: coarse)').matches) return;
+  const mobile = () => matchMedia('(max-width: 768px), (pointer: coarse)').matches;
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
   const ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-7 1.7-7 4.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.5C16 15.7 12.3 14 9 14Zm8-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm.5 2c-.6 0-1.2.1-1.7.2 1.3 1 2.2 2.4 2.2 4.3V20a3 3 0 0 1-.2 1H21a1 1 0 0 0 1-1v-1.2c0-2.6-2.4-4.8-4.5-4.8Z"/></svg>';
@@ -1607,7 +1609,13 @@ function sheetDrag(sheet, opts) {
     return out;
   }
 
-  function close() { if (page) { page.remove(); page = null; document.removeEventListener('keydown', onKey, true); } }
+  let pushed = false;
+  function close(fromBack) {
+    if (!page) return;
+    page.remove(); page = null; document.removeEventListener('keydown', onKey, true);
+    if (pushed) { pushed = false; if (fromBack !== true && history.state && history.state.puenteMiembros) history.back(); }
+  }
+  addEventListener('popstate', () => { if (page && pushed) { pushed = false; close(true); } });
   // Escape cierra la pagina (si hay un perfil abierto, primero ese, como siempre)
   function onKey(e) {
     if (e.key !== 'Escape' || !page) return;
@@ -1629,6 +1637,7 @@ function sheetDrag(sheet, opts) {
       th.classList.toggle('actual', th.dataset.k === sortKey);
       th.dataset.dir = th.dataset.k === sortKey ? (sortDir > 0 ? '▲' : '▼') : '';
     });
+    if (mobile()) { renderList(body, list); if (!list.length) body.appendChild(el('div', 'pm-sin', 'No hay nadie con ese nombre.')); return; }
     for (const m of list) {
       const tr = el('div', 'pm-fila');
       const who = el('div', 'pm-c pm-nombre');
@@ -1670,12 +1679,54 @@ function sheetDrag(sheet, opts) {
     if (!list.length) body.appendChild(el('div', 'pm-sin', 'No hay nadie con ese nombre.'));
   }
 
+  // Lista del celular: foto, nombre, @usuario, una linea con los datos y las señales
+  function avatarOf(m) {
+    const av = el('div', 'pm-avatar');
+    if (m.avatar) { const img = el('img'); img.src = m.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+    else av.textContent = String(m.nombre).charAt(0).toUpperCase();
+    if (m.enLinea) av.appendChild(el('span', 'pm-punto'));
+    return av;
+  }
+  function renderList(body, list) {
+    for (const m of list) {
+      const row = el('div', 'pm-item');
+      const av = avatarOf(m);
+      const info = el('div', 'pm-item-info');
+      const names = el('div', 'pm-item-nombres');
+      names.append(el('span', 'pm-n1', m.nombre), el('span', 'pm-n2', m.usuario));
+      const bits = ['Desde ' + ago(m.desde).replace(/^hace /, 'hace '), m.mensajes.toLocaleString('es-AR') + (m.mensajes === 1 ? ' mensaje' : ' mensajes')];
+      if (m.ultimo) bits.push('último ' + ago(m.ultimo));
+      const meta = el('div', 'pm-item-meta', bits.join(' · '));
+      const chips = el('div', 'pm-roles');
+      for (const r of m.roles.slice(0, 2)) {
+        const chip = el('span', 'pm-chip');
+        const dot = el('span', 'pm-rol-punto'); dot.style.background = r.color || '#80848e';
+        chip.append(dot, document.createTextNode(r.nombre));
+        chips.appendChild(chip);
+      }
+      if (m.invitacion) chips.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
+      for (const [label, kind] of signals(m)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
+      info.append(names, meta);
+      if (chips.childNodes.length) info.appendChild(chips);
+      row.append(av, info);
+      row.addEventListener('click', () => {
+        const app = window.app;
+        if (!app || !app.socket) return;
+        app._isHoverPopup = false; app._hoverTarget = null; app._profilePopupAnchor = av;
+        app.socket.emit('get-user-profile', { userId: m.id });
+      });
+      body.appendChild(row);
+    }
+  }
+
   function open() {
     close();
     const side = document.querySelector('aside.sidebar');
     page = el('div', 'puente-miembros');
     page.id = 'puente-miembros';
-    const left = side ? side.getBoundingClientRect().right : 0;
+    const small = mobile();
+    if (small) page.classList.add('pm-celular');
+    const left = small ? 0 : side ? side.getBoundingClientRect().right : 0;
     page.style.left = left + 'px';
     const head = el('div', 'pm-head');
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON; title.appendChild(el('span', '', 'Miembros'));
@@ -1689,6 +1740,17 @@ function sheetDrag(sheet, opts) {
     const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre o usuario';
     search.addEventListener('input', () => { term = search.value; renderRows(); });
     bar.append(h, search);
+    if (small) {
+      const order = el('select', 'pm-orden');
+      order.setAttribute('aria-label', 'Ordenar');
+      for (const [v, label] of [['desde:-1', 'Más nuevos primero'], ['desde:1', 'Más viejos primero'], ['nombre:1', 'Por nombre'], ['mensajes:-1', 'Más mensajes'], ['ultimo:-1', 'Escribieron hace poco']]) {
+        const o = el('option', null, label); o.value = v; order.appendChild(o);
+      }
+      order.value = sortKey + ':' + sortDir;
+      if (order.value !== sortKey + ':' + sortDir) order.value = 'desde:-1';
+      order.addEventListener('change', () => { const [k, dir] = order.value.split(':'); sortKey = k; sortDir = Number(dir); renderRows(); });
+      bar.appendChild(order);
+    }
     const table = el('div', 'pm-tabla');
     const thead = el('div', 'pm-fila pm-encabezado');
     for (const [k, label] of COLS) {
@@ -1703,7 +1765,8 @@ function sheetDrag(sheet, opts) {
     page.append(head, card);
     document.body.appendChild(page);
     document.addEventListener('keydown', onKey, true);
-    search.focus();
+    if (small) { try { history.pushState({ puenteMiembros: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
+    else search.focus(); // en el celular no: abriria el teclado
     fetch('/puente/api/miembros', { headers: { Authorization: 'Bearer ' + token() } })
       .then(r => (r.ok ? r.json() : null)).then(d => {
         if (!page) return;
@@ -1736,7 +1799,7 @@ function sheetDrag(sheet, opts) {
       const orig = app.switchChannel;
       app.switchChannel = function (...args) { close(); return orig.apply(this, args); };
     }
-    addEventListener('resize', () => { if (page) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
+    addEventListener('resize', () => { if (page && !page.classList.contains('pm-celular')) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
   })();
 })();
 
