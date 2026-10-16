@@ -41,6 +41,15 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
 const recoveries = new Map(); // token -> { userId, username, exp } (un solo uso)
 const RECOVERY_TTL_MS = 10 * 60 * 1000;
+// "Entrar con Discord" (/puente/entrar): la sesion pasa por un codigo de un solo
+// uso (nunca por la URL), y la cuenta nueva espera a que acepte las condiciones.
+const handoffs = new Map(); // codigo -> { token, user, exp }
+const signups = new Map();  // codigo -> { me, exp }
+const HANDOFF_TTL_MS = 2 * 60 * 1000, SIGNUP_TTL_MS = 15 * 60 * 1000;
+// El registro que hace el puente al crear la cuenta con Discord no pasa por el
+// control del email del formulario (el email lo pone despues, ya confirmado por Discord)
+const INTERNAL = crypto.randomBytes(16).toString('hex');
+let generateToken = null;
 
 let db, io, api, log, warn, publicUrl, clientId = null, clientSecret, verifyToken, onLinked, onUnlinked;
 
@@ -48,6 +57,7 @@ function setup(ctx) {
   ({ db, io, api, log, warn, publicUrl, onLinked = () => {}, onUnlinked = () => {} } = ctx);
   clientSecret = process.env.DISCORD_CLIENT_SECRET || '';
   try { verifyToken = require('/app/src/auth').verifyToken; } catch (err) { warn('no encuentro verifyToken de Haven:', err.message); return; }
+  try { generateToken = require('/app/src/auth').generateToken; } catch (err) { warn('no encuentro generateToken de Haven (sin "Entrar con Discord"):', err.message); }
   try { nombres.ensureColumn(db); } catch (err) { warn('nombres:', err.message); }
 
   db.exec(`
@@ -79,7 +89,7 @@ function hookHttp() {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
       // Registro con email obligatorio (email.js)
-      if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on()) {
+      if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on() && req.headers['x-puente-interno'] !== INTERNAL) {
         const server = this;
         email.hookRegister(req, res, () => origEmit.call(server, event, req, res, ...rest));
         return true;
@@ -337,8 +347,8 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide')) {
-    const file = p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p.slice('/puente/'.length);
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js')) {
+    const file = p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));
     // Titulo de la pestana (PUENTE_TITULO): se escribe en aviso.js y login.js al servirlos.
@@ -606,11 +616,62 @@ async function handle(req, res) {
     return send(res, 404, 'text/plain', 'No encontrado');
   }
 
+  // ── Entrar con Discord ──
+  if (p === '/puente/api/entrar/iniciar' && req.method === 'POST') {
+    if (!clientId || !clientSecret || !generateToken) return json(res, 503, { error: 'Entrar con Discord todavía no está configurado en el servidor.' });
+    return json(res, 200, { url: authorizeUrl({ purpose: 'login' }, 'identify email') });
+  }
+  if (p === '/puente/api/entrar/sesion' && req.method === 'POST') {
+    const body = await readJson(req);
+    const code = body && typeof body.codigo === 'string' ? body.codigo : '';
+    const h = handoffs.get(code);
+    handoffs.delete(code); // un solo uso
+    if (!h || h.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
+    return json(res, 200, { token: h.token, user: h.user });
+  }
+  if (p === '/puente/api/entrar/nuevo' && req.method === 'GET') {
+    const sg = signups.get(u.searchParams.get('codigo') || '');
+    if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
+    return json(res, 200, { nombre: sg.me.global_name || sg.me.username, discord: sg.me.username, avatar: discordAvatarUrl(sg.me), usuario: proposeUsername(sg.me), app: appName() });
+  }
+  if (p === '/puente/api/entrar/crear' && req.method === 'POST') {
+    const body = await readJson(req);
+    const code = body && typeof body.codigo === 'string' ? body.codigo : '';
+    const sg = signups.get(code);
+    if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
+    if (!body.acepto) return json(res, 400, { error: 'Tenés que aceptar las condiciones y confirmar que tenés 18 años o más.' });
+    const username = String(body.usuario || '').trim();
+    const problem = usernameProblem(username);
+    if (problem) return json(res, 400, { error: problem });
+    if (db.prepare('SELECT 1 FROM puente_vinculos WHERE discord_user_id = ?').get(sg.me.id)) { signups.delete(code); return json(res, 409, { error: 'Ese Discord ya tiene una cuenta. Volvé a tocar "Entrar con Discord".' }); }
+    const r = await registerThroughHaven(req, username);
+    if (!r.ok) return json(res, 400, { error: r.error });
+    signups.delete(code);
+    const me = sg.me;
+    const moved = link(r.user.id, me);
+    try {
+      const av = me.avatar ? await adjuntos.avatar(me.id, me.avatar) : null;
+      if (av) db.prepare('UPDATE users SET avatar = ? WHERE id = ? AND avatar IS NULL').run(av, r.user.id);
+    } catch (err) { warn('avatar de Discord:', err.message); }
+    try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
+    try { email.fromDiscordIfMissing(r.user.id, me); } catch (err) { warn('email de Discord:', err.message); }
+    log(`cuenta nueva con Discord: ${username} (Haven #${r.user.id}) <-> Discord ${me.username} (${me.id}); ${moved} mensajes historicos pasados a su cuenta`);
+    return json(res, 200, sessionFor(r.user.id));
+  }
+
+  // Solo en la copia de prueba (PUENTE_PRUEBA_ENTRAR=1): la vuelta de Discord, simulada
+  if (p === '/puente/api/entrar/prueba' && req.method === 'POST' && process.env.PUENTE_PRUEBA_ENTRAR === '1') {
+    const body = await readJson(req);
+    if (!body || !body.me || !body.me.id) return json(res, 400, { error: 'falta me' });
+    return json(res, 200, loginWithDiscord(body.me));
+  }
+
   if (p === '/puente/discord/callback' && req.method === 'GET') {
-    const back = (params) => send(res, 302, 'text/plain', '', { Location: `/puente/vincular?${new URLSearchParams(params)}` });
     const state = u.searchParams.get('state') || '';
     const entry = states.get(state);
     states.delete(state);
+    // Al entrar con Discord, los avisos van a /puente/entrar; el resto, a /puente/vincular
+    const back = (params) => send(res, 302, 'text/plain', '', { Location: `${entry && entry.purpose === 'login' ? '/puente/entrar' : '/puente/vincular'}?${new URLSearchParams(params)}` });
     if (u.searchParams.get('error')) return back({ error: 'cancelado' });
     if (!entry || entry.exp < Date.now()) return back({ error: 'caducado' });
     const code = u.searchParams.get('code');
@@ -632,6 +693,8 @@ async function handle(req, res) {
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, token: tok.access_token }),
     }).catch(() => {});
     if (!me.id) return back({ error: 'discord' });
+
+    if (entry.purpose === 'login') return back(loginWithDiscord(me));
 
     if (entry.purpose === 'email') {
       const r = email.on() ? email.fromDiscord(entry.userId, me) : { error: 'sin-email' };
@@ -786,6 +849,77 @@ function readJson(req, limit = 10000) {
   });
 }
 
+
+// ── Entrar con Discord: ayudas ──
+// Que hacer con quien volvio de Discord: { listo } (entra), { nuevo } (crear la cuenta) o { error }
+function loginWithDiscord(me) {
+  const now = Date.now();
+  for (const m of [handoffs, signups]) for (const [k, v] of m) if (v.exp < now) m.delete(k);
+  const code = crypto.randomBytes(24).toString('hex');
+  const l = db.prepare('SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?').get(String(me.id));
+  if (!l) { signups.set(code, { me, exp: now + SIGNUP_TTL_MS }); return { nuevo: code }; }
+  const user = db.prepare('SELECT id, username, is_admin, totp_enabled FROM users WHERE id = ?').get(l.haven_user_id);
+  if (!user) return { error: 'discord' };
+  // Como en la recuperacion: los admins y las cuentas con verificacion en dos pasos, con contraseña
+  if (user.is_admin) return { error: 'admin' };
+  if (user.totp_enabled) return { error: '2fa' };
+  if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) return { error: 'ban' };
+  handoffs.set(code, { ...sessionFor(user.id), exp: now + HANDOFF_TTL_MS });
+  log(`entro con Discord: ${user.username} (Haven #${user.id})`);
+  return { listo: code };
+}
+// La sesion de Haven para una cuenta (como la da su inicio de sesion)
+function sessionFor(userId) {
+  const u = db.prepare('SELECT id, username, display_name, is_admin FROM users WHERE id = ?').get(userId);
+  const user = { id: u.id, username: u.username, isAdmin: !!u.is_admin, displayName: u.display_name || u.username };
+  return { token: generateToken({ id: user.id, username: user.username, isAdmin: user.isAdmin, displayName: user.displayName }), user };
+}
+function discordAvatarUrl(me) {
+  if (me.avatar) return `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=128`;
+  return `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(me.id) >> 22n) % 6}.png`;
+}
+const RESERVED = () => String(process.env.ADMIN_USERNAME || '').toLowerCase();
+const usernameTaken = name => !!db.prepare('SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)').get(name) || name.toLowerCase() === RESERVED() || name.toLowerCase() === 'discord-historial';
+// Las reglas de usuario de Haven: 3 a 20 caracteres, letras, numeros y "_"
+function usernameProblem(name) {
+  if (name.length < 3 || name.length > 20) return 'El nombre de usuario tiene que tener entre 3 y 20 caracteres.';
+  if (!/^[a-zA-Z0-9_]+$/.test(name)) return 'El nombre de usuario solo puede tener letras, números y "_".';
+  if (usernameTaken(name)) return 'Ese nombre de usuario ya existe: elegí otro.';
+  return null;
+}
+// El de Discord, adaptado a esas reglas y libre
+function proposeUsername(me) {
+  let base = String(me.username || '').replace(/[^a-zA-Z0-9_]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
+  if (base.length < 3) base = (base + '_cv').replace(/^_+/, '').padEnd(3, '0').slice(0, 20);
+  if (!usernameTaken(base)) return base;
+  for (let i = 2; i < 1000; i++) { const c = base.slice(0, 20 - String(i).length) + i; if (!usernameTaken(c)) return c; }
+  return base.slice(0, 14) + crypto.randomBytes(3).toString('hex');
+}
+// Crear la cuenta con el registro de Haven (sus reglas, roles y canales de entrada),
+// con una contraseña al azar: se entra con Discord, y si quiere una contraseña, la
+// pone con "¿Olvidaste tu contraseña?"
+async function registerThroughHaven(req, username) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress || '';
+  const password = crypto.randomBytes(24).toString('base64url');
+  try {
+    const r = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip, 'X-Puente-Interno': INTERNAL },
+      body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.user && data.user.id) return { ok: true, user: data.user };
+    if (data.code === 'username_unavailable') return { ok: false, error: 'Ese nombre de usuario ya existe: elegí otro.' };
+    if (r.status === 429) return { ok: false, error: 'Hubo demasiados intentos. Esperá un rato y probá de nuevo.' };
+    if (r.status === 403) return { ok: false, error: 'El registro de cuentas nuevas está cerrado ahora. Pedile ayuda a un administrador.' };
+    warn('entrar con Discord: Haven no creo la cuenta:', r.status, data.error || '');
+    return { ok: false, error: 'No se pudo crear la cuenta. Probá de nuevo en un momento.' };
+  } catch (err) {
+    warn('entrar con Discord:', err.message);
+    return { ok: false, error: 'No se pudo crear la cuenta. Probá de nuevo en un momento.' };
+  }
+}
 
 function ghostId() {
   const g = db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get();

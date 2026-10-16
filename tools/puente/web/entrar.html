@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Entrar con Discord · __PUENTE_APP__</title>
+<link rel="stylesheet" href="/puente/login.css">
+<script src="/puente/entrar.js" defer></script>
+</head>
+<body class="auth-page">
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <img class="puente-login-logo" src="/puente/logo-carga.png" alt="">
+      <h1 id="titulo">Entrando…</h1>
+      <p class="puente-login-sub" id="bajada"></p>
+    </div>
+
+    <form id="crear" class="auth-form" hidden>
+      <div class="puente-discord-perfil">
+        <img id="avatar" alt="">
+        <div>
+          <div class="nombre" id="nombre"></div>
+          <div class="usuario" id="discord"></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="usuario">Tu nombre de usuario en __PUENTE_APP__</label>
+        <input type="text" id="usuario" autocomplete="username" minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" required>
+        <small>Con este te mencionan (@usuario). 3 a 20 caracteres: letras, números y "_".</small>
+      </div>
+      <label class="puente-acepto">
+        <input type="checkbox" id="acepto" required>
+        <span>Acepto las <a href="/" id="terminos" target="_blank" rel="noopener">condiciones de uso</a> y tengo 18 años o más.</span>
+      </label>
+      <button type="submit" class="btn-primary puente-btn-discord">Crear mi cuenta</button>
+      <p class="puente-nota-chica">Tu nombre y tu foto de Discord se usan en __PUENTE_APP__, y tu historial de mensajes de Discord pasa a tu cuenta.</p>
+    </form>
+
+    <p class="puente-nota" id="nota" hidden></p>
+    <a class="btn-primary puente-boton" id="ir" href="/" hidden>Volver a iniciar sesión</a>
+
+    <div class="auth-recovery-links" id="otras" hidden>
+      <a href="/">¿Ya tenés cuenta en __PUENTE_APP__? Entrá con tu usuario y vinculá Discord desde ahí</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
