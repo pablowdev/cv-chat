@@ -15,6 +15,28 @@ let db, io, log, warn, webpush = null;
 function setup(ctx) {
   ({ db, io, log, warn } = ctx);
   try { webpush = require('/app/node_modules/web-push'); } catch { warn('avisos: sin web-push, no hay notificaciones de Discord'); }
+  brand();
+}
+
+// Todas las notificaciones (las de Haven tambien: usan este mismo modulo) salen
+// con el icono del servidor (el de la app instalada) en vez de la "H" de Haven,
+// y en castellano: "Fulano en #canal" en vez de "Fulano in #canal".
+const ICON = '/puente/icono-192.png';
+function brand() {
+  if (!webpush || webpush.__puenteMarca) return;
+  const send = webpush.sendNotification.bind(webpush);
+  webpush.sendNotification = function (sub, payload, ...rest) {
+    try {
+      if (typeof payload === 'string' && payload.startsWith('{')) {
+        const p = JSON.parse(payload);
+        if (typeof p.title === 'string') p.title = p.title.replace(/^(.+) in #(.+)$/, '$1 en #$2');
+        if (!p.icon) p.icon = ICON;
+        payload = JSON.stringify(p);
+      }
+    } catch { /* se manda como venia */ }
+    return send(sub, payload, ...rest);
+  };
+  webpush.__puenteMarca = true;
 }
 
 function strip(text) {

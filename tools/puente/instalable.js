@@ -131,6 +131,15 @@ function handle(db, req, res) {
     res.end(req.method === 'HEAD' ? undefined : body);
     return true;
   }
+  // El icono de Haven ("H"): lo usan sus notificaciones (badge e icono por defecto) y algunas
+  // pantallas. Con el icono del servidor configurado, va ese.
+  if (p === '/icon-192.svg' || p === '/icon-512.svg') {
+    const png = icon(db, p.includes('512') ? 512 : 192, false);
+    if (!png) return false; // sin icono propio: el de Haven
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=3600' });
+    res.end(req.method === 'HEAD' ? undefined : png);
+    return true;
+  }
   const m = p.match(/^\/puente\/icono-(maskable-)?(192|512)\.png$/);
   if (m) {
     const png = icon(db, Number(m[2]), !!m[1]);

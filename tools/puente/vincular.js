@@ -85,7 +85,7 @@ function hookHttp() {
   http.Server.prototype.emit = function (event, req, res, ...rest) {
     if (event === 'request' && req && typeof req.url === 'string') {
       const url = req.url;
-      if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-')) {
+      if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
       // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
