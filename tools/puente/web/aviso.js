@@ -5898,6 +5898,8 @@ function sheetDrag(sheet, opts) {
     refs.card.classList.toggle('con-tema', themed);
     refs.pBanner.style.background = okUrl(st.banner) ? `#202024 center / cover no-repeat url("${st.banner}")` : themed ? st.tema1 : '';
     // Foto: la misma que muestra el editor de Haven
+    const shape = (document.querySelector('#avatar-shape-picker .avatar-shape-btn.active') || {}).dataset?.shape || 'circle';
+    refs.pAvatar.className = 'pep-t-avatar avatar-' + (/^[a-z]+$/.test(shape) ? shape : 'circle');
     const src = avatarSrc();
     refs.pAvatar.textContent = '';
     if (src) { const i = el('img'); i.src = src; i.alt = ''; refs.pAvatar.appendChild(i); }
@@ -5984,7 +5986,10 @@ function sheetDrag(sheet, opts) {
       notes.filter(n => n.id !== 'avatar-edit-note').forEach(n => n.remove());
     }
     const shape = $('avatar-shape-picker');
-    if (shape) { s.appendChild(el('h5', 'pep-sub', 'Forma')); s.appendChild(shape); }
+    if (shape) {
+      s.appendChild(el('h5', 'pep-sub', 'Forma')); s.appendChild(shape);
+      shape.addEventListener('click', () => setTimeout(preview, 0)); // Haven marca la elegida y despues se ve en la vista previa
+    }
     left.appendChild(s);
 
     s = section('Decoración del avatar', 'Una imagen (PNG con transparencia o GIF) que rodea tu foto.');
@@ -6159,7 +6164,9 @@ function sheetDrag(sheet, opts) {
     html body #profile-popup.puente-tema.puente-tema .profile-popup-avatar { border-color: transparent !important; }
     html body #profile-popup.puente-tema.puente-tema .profile-popup-status-dot { border-color: transparent !important; }
 
-    #rename-modal.pep-overlay { align-items: center; justify-content: center; }
+    #rename-modal.pep-overlay { align-items: center; justify-content: center; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0, 0, 0, .78) !important; }
+    #rename-modal .pep-modal { contain: layout paint; }
+    #rename-modal .pep-opciones, #rename-modal .pep-beneficios, #rename-modal .pep-medio { overscroll-behavior: contain; }
     #rename-modal .pep-modal { position: relative; width: min(72rem, calc(100vw - 32px)); max-width: none; height: min(52rem, calc(100vh - 32px)); max-height: none; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: #1a1a1e; border: 1px solid #2a2a30; border-radius: 1rem; }
     #rename-modal .pep-modal > h3 { margin: 0; padding: 1.125rem 1.5rem; font-size: 1.25rem; border-bottom: 1px solid #26262b; }
     #rename-modal .pep-cerrar { position: absolute; top: .75rem; right: 1rem; z-index: 2; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: #2b2a30; color: #dbdee1; font-size: 1.5rem; line-height: 1; cursor: pointer; }
