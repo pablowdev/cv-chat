@@ -5376,6 +5376,12 @@ function sheetDrag(sheet, opts) {
     .puente-medalla { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-tertiary, rgba(0,0,0,.25)); border-radius: 6px; padding: 2px 7px; font-size: 12px; font-weight: 600; color: var(--text-primary, #f2f3f5); cursor: default; }
     .puente-historia-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0 2px; padding: 8px 10px; border-radius: 6px; background: #5865f2; color: #fff !important; font-weight: 600; font-size: 14px; text-decoration: none !important; }
     .puente-historia-btn:hover { background: #4752c4; }
+    .puente-medalla { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    #puente-medalla-globo { position: fixed; z-index: 100020; max-width: min(17rem, calc(100vw - 16px)); padding: .5rem .75rem; border-radius: .5rem; background: #111214; color: #dbdee1; box-shadow: 0 8px 24px rgba(0,0,0,.45); font-size: .875rem; line-height: 1.35; pointer-events: none; animation: puente-fade .12s ease-out; }
+    #puente-medalla-globo b { display: block; color: #f2f3f5; font-size: .9375rem; margin-bottom: .125rem; }
+    #puente-medalla-globo::after { content: ''; position: absolute; left: var(--flecha, 50%); width: .625rem; height: .625rem; background: #111214; transform: translateX(-50%) rotate(45deg); }
+    #puente-medalla-globo.abajo::after { top: -.3125rem; }
+    #puente-medalla-globo:not(.abajo)::after { bottom: -.3125rem; }
     #puente-historia-capa { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; animation: puente-fade .18s ease-out; }
     #puente-historia-capa iframe { width: min(720px, 100vw - 32px); height: min(92vh, 100%); border: 0; border-radius: 12px; background: #1e1f22; box-shadow: 0 12px 48px rgba(0,0,0,.55); }
     @media (max-width: 768px) { #puente-historia-capa iframe { width: 100vw; height: 100%; border-radius: 0; } }`;
@@ -5414,6 +5420,29 @@ function sheetDrag(sheet, opts) {
     }
   });
 
+  let tipTimer = null;
+  function hideTip() { clearTimeout(tipTimer); document.getElementById('puente-medalla-globo')?.remove(); }
+  function showTip(anchor, m) {
+    const prev = document.getElementById('puente-medalla-globo');
+    if (prev && prev.dataset.para === m.nombre) { hideTip(); return; } // segundo toque: se cierra
+    hideTip();
+    const tip = document.createElement('div');
+    tip.id = 'puente-medalla-globo'; tip.dataset.para = m.nombre; tip.setAttribute('role', 'tooltip');
+    const t = document.createElement('b'); t.textContent = m.emoji + ' ' + m.nombre;
+    tip.append(t, document.createTextNode(m.detalle || ''));
+    document.body.appendChild(tip);
+    const r = anchor.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight, M = 8;
+    let left = Math.min(Math.max(M, r.left + r.width / 2 - w / 2), innerWidth - w - M);
+    let top = r.top - h - 10;
+    if (top < M) { top = r.bottom + 10; tip.classList.add('abajo'); }
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+    tip.style.setProperty('--flecha', Math.min(Math.max(12, r.left + r.width / 2 - left), w - 12) + 'px');
+    tipTimer = setTimeout(hideTip, 4000);
+  }
+  // Tocar en otro lado, desplazar o cerrar la tarjeta lo saca
+  document.addEventListener('pointerdown', (e) => { if (!(e.target instanceof Element && e.target.closest('.puente-medalla'))) hideTip(); }, true);
+  addEventListener('scroll', hideTip, true);
+
   async function load(id) {
     const hit = cache.get(id);
     if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.data;
@@ -5440,6 +5469,9 @@ function sheetDrag(sheet, opts) {
         const b = document.createElement('span');
         b.className = 'puente-medalla';
         b.title = m.detalle || m.nombre;
+        b.setAttribute('role', 'button');
+        b.tabIndex = 0;
+        b.addEventListener('click', (e) => { e.stopPropagation(); showTip(b, m); });
         b.textContent = m.emoji + ' ' + m.nombre;
         row.appendChild(b);
       }
