@@ -89,3 +89,8 @@ html body.auth-page .puente-acepto { text-transform: none; letter-spacing: norma
 html body.auth-page .puente-acepto input { margin-top: 0.15rem; flex: 0 0 auto; }
 html body.auth-page .puente-acepto a { color: #00a8fc; }
 html body.auth-page .puente-nota-chica { margin: 0.75rem 0 0; font-size: 0.8125rem; color: #80848e; text-align: center; }
+
+/* "<nombre> te invitó" arriba del inicio (login.js) */
+.puente-invito { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 18px; padding: 10px 14px; border-radius: 10px; background: rgba(88, 101, 242, .15); border: 1px solid rgba(88, 101, 242, .45); font-size: 15px; color: #dbdee1; }
+.puente-invito img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.puente-invito b { color: #fff; }

@@ -743,6 +743,14 @@ async function handle(req, res) {
     return back({ ok: '1', mensajes: String(moved) });
   }
 
+  if (p.startsWith('/puente/api/perfil/')) {
+    const r = await require('./perfil.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
+  if (p.startsWith('/puente/api/invitacion/')) {
+    const r = await require('./invitaciones.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p.startsWith('/puente/api/logros/')) {
     const r = await require('./logros.js').handle(req, res, p, u, { sessionUser, json });
     if (r !== false) return;

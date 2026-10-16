@@ -30,6 +30,13 @@ function setup(ctx) {
       n INTEGER NOT NULL,
       PRIMARY KEY (haven_user_id, dia)
     );
+    CREATE TABLE IF NOT EXISTS puente_recuerdos (
+      dia TEXT PRIMARY KEY,
+      message_id INTEGER,
+      discord_message_id TEXT,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_puente_recuerdos_msg ON puente_recuerdos(message_id);
     CREATE TABLE IF NOT EXISTS puente_semanas (
       semana TEXT PRIMARY KEY,
       datos TEXT NOT NULL,
@@ -41,9 +48,14 @@ function setup(ctx) {
   if (!db.prepare('SELECT 1 FROM puente_semanas LIMIT 1').get()) {
     db.prepare('INSERT OR IGNORE INTO puente_semanas (semana, datos, at) VALUES (?, ?, ?)').run(weekStartArt(Date.now() - 7 * 864e5).day, '{"omitida":true}', Date.now());
   }
+  // "Un día como hoy" arranca al dia siguiente de instalarlo (no de golpe al encender)
+  if (!db.prepare('SELECT 1 FROM puente_recuerdos LIMIT 1').get()) {
+    db.prepare('INSERT OR IGNORE INTO puente_recuerdos (dia, message_id, at) VALUES (?, NULL, ?)').run(dayOf(Date.now()), Date.now());
+  }
   setTimeout(() => { try { updateDays(); } catch (err) { warn('logros: dias:', err.message); } }, 30 * 1000);
   setInterval(() => { try { updateDays(); } catch (err) { warn('logros: dias:', err.message); } }, 2 * 60 * 1000);
   setInterval(() => { maybePostSummary().catch(err => warn('logros: resumen:', err.message)); }, 10 * 60 * 1000);
+  setInterval(() => { maybePostMemory().catch(err => warn('logros: recuerdo:', err.message)); }, 10 * 60 * 1000);
 }
 
 // ── Fechas ───────────────────────────────────────────────────────────────
@@ -143,7 +155,7 @@ function customEmojis() {
 }
 
 function excerpt(s, n = 140) {
-  let t = String(s || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼️').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/<a?:(\w+):\d+>/g, ':$1:').replace(/\s+/g, ' ').trim();
+  let t = String(s || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼️').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/(^|\s)\/uploads\/\S+/g, '$1🖼️').replace(/<a?:(\w+):\d+>/g, ':$1:').replace(/\s+/g, ' ').trim();
   if (t.length > n) t = t.slice(0, n - 1).trimEnd() + '…';
   return t.replace(/@(everyone|here)/gi, '@​$1'); // citado, nunca avisa a todos
 }
@@ -285,6 +297,10 @@ function medallas(havenId, pre) {
   if (night >= 200) add('buho', '🦉', 'Búho', `${num(night)} mensajes entre las 3 y las 6 de la mañana`);
   const weeks = destacado(havenId);
   if (weeks) add('destacado', '⭐', 'Destacado de la semana', weeks === 1 ? `Estuvo en el podio de #${SUMMARY_CHANNEL}` : `Estuvo ${weeks} veces en el podio de #${SUMMARY_CHANNEL}`);
+  let inv = 0;
+  try { inv = require('./invitaciones.js').count(havenId).invitados; } catch { /* sin invitaciones */ }
+  if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',
+    `Trajo ${inv === 1 ? 'a 1 persona' : `a ${inv} personas`} a ${appName()}`);
   if (!pre) cache.set(key, { at: Date.now(), data: list });
   return list;
 }
@@ -353,8 +369,10 @@ function weekSummary(startMs) {
     .map(r => ({ nombre: (userRow(r.h) || {}).nombre, dias: r.s.actual }));
   const nuevos = db.prepare(`SELECT COALESCE(u.display_name, u.username) n FROM puente_vinculos v JOIN users u ON u.id = v.haven_user_id
     WHERE v.linked_at >= ? AND v.linked_at < ? ORDER BY v.linked_at`).all(sqlTs(startMs), sqlTs(endMs)).map(r => r.n);
+  let reclutadores = [];
+  try { reclutadores = require('./invitaciones.js').weekTop(sqlTs(startMs), sqlTs(endMs)); } catch { /* sin invitaciones */ }
   return {
-    desde: startMs, total, fromHaven,
+    desde: startMs, total, fromHaven, reclutadores,
     canales: top(perChannel, 3).map(([id, n]) => ({ c: channels.get(id), n })),
     podio: podium, destacado: destacadoMsg, rachas, nuevos,
   };
@@ -376,9 +394,10 @@ function summaryText(s) {
     const g = getGuildId();
     const linkTxt = d.discordId && d.canal.discord_channel_id && g ? ` · [ver mensaje](https://discord.com/channels/${g}/${d.canal.discord_channel_id}/${d.discordId})` : '';
     lines.push(`⭐ **El mensaje con más reacciones** (${d.n}), de ${d.nombre} en ${ch(d.canal)}${linkTxt}`);
-    if (d.texto) lines.push('> ' + d.texto.replace(/\n/g, ' '));
+    if (d.texto) lines.push('> ' + toDiscordEmojis(d.texto).replace(/\n/g, ' '));
   }
   if (s.rachas.length) lines.push(`🔥 **Rachas en ${appName()}:** ${s.rachas.map(r => `${r.nombre} (${r.dias} días seguidos)`).join(' · ')}`);
+  if (s.reclutadores && s.reclutadores.length) lines.push(`🤝 **Reclutadores de la semana:** ${s.reclutadores.map(r => `${r.nombre} (${r.n})`).join(' · ')}`);
   if (s.nuevos.length) lines.push(`🆕 **Se sumaron a ${appName()}:** ${s.nuevos.slice(0, 12).join(', ')}${s.nuevos.length > 12 ? ` y ${s.nuevos.length - 12} más` : ''}. ¡Bienvenidos!`);
   const base = (publicUrl || '').replace(/\/+$/, '');
   if (base) {
@@ -398,6 +417,99 @@ async function summaryChannelId() {
   if (!Array.isArray(all)) return null;
   const c = all.find(x => x.type === 0 && x.name === SUMMARY_CHANNEL);
   return c ? c.id : null;
+}
+
+// ── Un día como hoy ──────────────────────────────────────────────────────
+// Todos los dias a las RECUERDO_HOUR, en el canal del resumen: el mensaje con
+// mas reacciones de esta fecha en años anteriores (de canales que ve
+// cualquiera, ni +18), con el enlace a la conversacion en la app. Nunca se
+// repite un mensaje (tabla puente_recuerdos).
+const RECUERDO_HOUR = 12;
+const RECUERDO_YEARS = 8;
+
+function memoryPick(nowMs) {
+  const channels = channelMap(), lockedIds = locked();
+  const nsfw = new Set(db.prepare('SELECT id FROM channels WHERE COALESCE(is_nsfw, 0) = 1').all().map(r => r.id));
+  const pub = [...channels.values()].filter(c => publicChannel(c, lockedIds) && !nsfw.has(c.id) && !(c.parent_channel_id && nsfw.has(c.parent_channel_id)));
+  const used = db.prepare('SELECT 1 FROM puente_recuerdos WHERE message_id = ?');
+  const today = local(nowMs);
+  const q = db.prepare(`SELECT m.id, m.channel_id, m.user_id, m.webhook_username, m.content, m.created_at, pa.discord_user_id d
+    FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id WHERE m.channel_id = ? AND m.created_at >= ? AND m.created_at < ?`);
+  const g = ghost();
+  let best = null;
+  for (let k = 1; k <= RECUERDO_YEARS; k++) {
+    const startLocal = Date.UTC(today.getUTCFullYear() - k, today.getUTCMonth(), today.getUTCDate());
+    const from = sqlTs(startLocal - ZONE_H * 3600e3), to = sqlTs(startLocal - ZONE_H * 3600e3 + 864e5);
+    const rows = [];
+    for (const c of pub) rows.push(...q.all(c.id, from, to));
+    const ok = rows.filter(m => {
+      const t = excerpt(m.content, 400);
+      // Charla de verdad: ni anuncios a todos, ni solo un enlace o una imagen, ni muy corto
+      if (/@(everyone|here)/i.test(m.content || '')) return false;
+      if (t.split('🖼️').join('').replace(/https?:\/\/\S+/g, '').trim().length < 15) return false;
+      if (/^🧵 \*\*/.test(m.content || '') && m.user_id === g) return false; // inicio de hilo armado por el puente
+      return !used.get(m.id);
+    });
+    for (let i = 0; i < ok.length; i += 900) {
+      const chunk = ok.slice(i, i + 900).map(m => m.id);
+      const r = db.prepare(`SELECT message_id id, COUNT(*) n FROM reactions WHERE message_id IN (${chunk.map(() => '?').join(',')}) GROUP BY 1 ORDER BY n DESC LIMIT 1`).get(...chunk);
+      if (r && (!best || r.n > best.n)) best = { n: r.n, years: k, m: ok.find(x => x.id === r.id) };
+    }
+  }
+  if (!best || best.n < 2) return null; // un recuerdo que nadie reacciono no vale la pena
+  const m = best.m, c = channels.get(m.channel_id);
+  // El canal de un hilo es su canal padre en la app
+  const base = (publicUrl || '').replace(/\/+$/, '');
+  return {
+    id: m.id, years: best.years, n: best.n, canal: c, nombre: nameOf(m) || 'Alguien',
+    texto: excerpt(m.content, 300), fecha: m.created_at,
+    url: `${base}/app?channel=${encodeURIComponent(c.code)}&message=${m.id}`,
+  };
+}
+
+// :nombre: de Haven -> el emoji de Discord (<:nombre:id>) si vino de Discord, para que alla se vea la imagen
+function toDiscordEmojis(text) {
+  let map = new Map();
+  try { map = new Map(db.prepare('SELECT name, discord_name, discord_id, animated FROM puente_emojis').all().map(r => [r.name, r])); } catch { return text; }
+  return String(text).replace(/:([\w~-]+):/g, (all, n) => { const e = map.get(n); return e ? `<${e.animated ? 'a' : ''}:${e.discord_name}:${e.discord_id}>` : all; });
+}
+
+function memoryText(r) {
+  const d = local(parseTs(r.fecha));
+  const ch = r.canal.discord_channel_id ? `<#${r.canal.discord_channel_id}>` : '#' + r.canal.name;
+  const hace = r.years === 1 ? 'hace 1 año' : `hace ${r.years} años`;
+  const lines = [
+    `📅 **Un día como hoy, ${hace}** (${d.getUTCDate()} de ${MESES[d.getUTCMonth()]} de ${d.getUTCFullYear()}), en ${ch}:`,
+    '',
+    `**${r.nombre}:**`,
+    ...toDiscordEmojis(r.texto).split('\n').map(l => '> ' + l),
+    '',
+    `⭐ ${r.n} reacciones · 💬 Mirá la conversación completa en ${appName()}: <${r.url}>`,
+  ];
+  let text = lines.join('\n');
+  if (text.length > 2000) text = text.slice(0, 1999) + '…';
+  return text;
+}
+
+let remembering = false;
+async function maybePostMemory(force) {
+  if (remembering || !getGuildId()) return;
+  const now = Date.now();
+  const day = dayOf(now);
+  if (!force && local(now).getUTCHours() < RECUERDO_HOUR) return;
+  if (!force && db.prepare('SELECT 1 FROM puente_recuerdos WHERE dia = ?').get(day)) return;
+  remembering = true;
+  try {
+    const r = memoryPick(now);
+    if (!r) { db.prepare('INSERT OR IGNORE INTO puente_recuerdos (dia, message_id, at) VALUES (?, NULL, ?)').run(day, now); return; }
+    const channelId = await summaryChannelId();
+    if (!channelId) { warn(`logros: no hay un canal #${SUMMARY_CHANNEL} en Discord: el recuerdo no se publica`); return; }
+    const sent = await api('POST', `/channels/${channelId}/messages`, { content: memoryText(r), allowed_mentions: { parse: [] }, flags: 4 });
+    if (!sent || sent.__error) { warn('logros: Discord no dejo publicar el recuerdo:', sent && sent.__error); return; }
+    db.prepare('INSERT OR REPLACE INTO puente_recuerdos (dia, message_id, discord_message_id, at) VALUES (?, ?, ?, ?)').run(day, r.id, sent.id, now);
+    try { await postInHaven(sent); } catch (err) { warn('logros: recuerdo en Haven:', err.message); }
+    log(`logros: "Un día como hoy" publicado (mensaje de hace ${r.years} años, ${r.n} reacciones)`);
+  } finally { remembering = false; }
 }
 
 let posting = false;
@@ -445,4 +557,4 @@ async function handle(req, res, p, u, h) {
   return false;
 }
 
-module.exports = { setup, handle, _test: { updateDays, streaks, historia, medallas, weekSummary, summaryText, weekStartArt, maybePostSummary } };
+module.exports = { setup, handle, _test: { updateDays, streaks, historia, medallas, weekSummary, summaryText, weekStartArt, maybePostSummary, memoryPick, memoryText, maybePostMemory } };

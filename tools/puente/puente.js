@@ -35,6 +35,7 @@ const accesos = require('./accesos.js');
 const baneos = require('./baneos.js');
 const rol = require('./rol.js');
 const logros = require('./logros.js');
+const avisos = require('./avisos.js');
 const estadisticas = require('./estadisticas.js');
 const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
@@ -121,12 +122,15 @@ function start(deps) {
   rol.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName });
   // El nombre de la comunidad en los textos: PUENTE_COMUNIDAD, o el del servidor de Discord
   const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
+  avisos.setup({ db, io, log, warn });
   logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
     lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
     onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId); },
     onUnlinked: havenUserId => { accesos.revokeAll(havenUserId); estadisticas.update(); rol.onUnlinked(); } });
   estadisticas.setup({ db, io, log, warn });
+  require('./invitaciones.js').setup({ db, log, warn, publicUrl });
+  require('./perfil.js').setup({ db, io, log, warn });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
   require('./tema-fijo.js').setup({ db, io, log });
@@ -455,6 +459,8 @@ async function inboundCreate(msg, ownBot = false) {
   markInserted(r.lastInsertRowid);
   if (!msg.webhook_id && msg.author) vincular.recordAuthor(r.lastInsertRowid, msg.author.id);
   emitNew(target.channel, r.lastInsertRowid, target.root);
+  // Notificaciones de menciones, respuestas y @everyone (Haven solo avisa de lo escrito en Haven)
+  if (!ownBot) avisos.onInbound({ channel: target.channel, content, msg, replyToId: replyTo, author });
   if (Array.isArray(msg.embeds) && msg.embeds.length) embeds.capture(r.lastInsertRowid, msg.embeds);
   miniaturas.warmFromContent(content);
 }

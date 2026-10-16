@@ -148,3 +148,33 @@
     if (document.readyState === 'complete') open(); else window.addEventListener('load', open);
   }
 })();
+
+// Invitaciones (invitaciones.js): quien entra por el enlace de alguien
+// (/?invita=<usuario>) ve "<nombre> te invitó" arriba, y se recuerda en el
+// navegador hasta que se crea la cuenta (aviso.js lo anota al entrar).
+(function () {
+  'use strict';
+  const u = new URLSearchParams(location.search).get('invita');
+  let saved = null;
+  try {
+    if (u && /^[\w.-]{1,40}$/.test(u)) localStorage.setItem('puente_invita', JSON.stringify({ u, at: Date.now() }));
+    saved = JSON.parse(localStorage.getItem('puente_invita') || 'null');
+  } catch { /* sin almacenamiento: no se anota */ }
+  if (!saved || Date.now() - saved.at > 7 * 24 * 3600 * 1000) return;
+  fetch('/puente/api/invitacion/quien?u=' + encodeURIComponent(saved.u)).then(r => (r.ok ? r.json() : null)).then(d => {
+    if (!d) return;
+    // La tarjeta que se ve (la pagina tiene otras escondidas)
+    const card = [...document.querySelectorAll('.auth-card')].find(c => c.offsetParent !== null) || document.querySelector('.auth-card');
+    if (!card || document.getElementById('puente-invito')) return;
+    const form = card.querySelector('.auth-tabs, form');
+    const box = document.createElement('div');
+    box.id = 'puente-invito';
+    box.className = 'puente-invito';
+    if (d.avatar) { const img = document.createElement('img'); img.src = d.avatar; img.alt = ''; box.appendChild(img); }
+    const t = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = d.nombre;
+    t.append(b, document.createTextNode(' te invitó a __PUENTE_APP__'));
+    box.appendChild(t);
+    if (form) form.parentElement.insertBefore(box, form); else card.insertBefore(box, card.firstChild);
+  }).catch(() => {});
+})();

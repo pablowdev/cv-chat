@@ -5484,6 +5484,14 @@ function sheetDrag(sheet, opts) {
       a.textContent = '📖 Tu historia';
       a.addEventListener('click', (e) => { e.preventDefault(); openHistoria(); });
       (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', a);
+      const inv = document.createElement('button');
+      inv.type = 'button'; inv.className = 'puente-invitar-btn'; inv.textContent = '🤝 Invitar gente';
+      inv.addEventListener('click', () => { try { window.app._closeProfilePopup(); } catch { /* sigue */ } if (window.puenteInvitar) window.puenteInvitar(); });
+      a.insertAdjacentElement('afterend', inv);
+      const per = document.createElement('button');
+      per.type = 'button'; per.className = 'puente-perfil-btn'; per.textContent = '✨ Personalizar perfil';
+      per.addEventListener('click', () => { try { window.app._closeProfilePopup(); } catch { /* sigue */ } if (window.puentePerfil) window.puentePerfil.open(); });
+      inv.insertAdjacentElement('afterend', per);
     }
   }
 
@@ -5498,6 +5506,7 @@ function sheetDrag(sheet, opts) {
         const popup = document.getElementById('profile-popup');
         if (popup && profile && profile.id != null && profile.username !== 'discord-historial') {
           const isSelf = !!(this.user && profile.id === this.user.id);
+          if (window.puentePerfil) window.puentePerfil.paintPopup(popup, profile.id);
           load(profile.id).then(data => paint(popup, profile, data, isSelf)).catch(() => paint(popup, profile, null, isSelf));
         }
       } catch (err) { console.warn('[puente] medallas:', err); }
@@ -5623,5 +5632,351 @@ function sheetDrag(sheet, opts) {
     // Cuando alguien cambia la descripcion, Haven actualiza la lista de canales
     if (app.socket) app.socket.on('channel-topic-changed', () => setTimeout(() => refresh(app), 0));
     refresh(app);
+  })();
+})();
+
+// "Activá las notificaciones": casi nadie las tenia prendidas (estan escondidas
+// en los ajustes) y sin ellas la gente vuelve a Discord para enterarse. A quien
+// tiene la cuenta vinculada y todavia no eligio, un cartel abajo (como los de
+// Haven) con "Activar", que usa el mismo alta de Haven. "Ahora no" lo esconde una
+// semana. En iPhone/iPad las notificaciones solo andan con la app instalada, asi
+// que ahi solo aparece dentro de la app.
+(function () {
+  'use strict';
+  const LATER_KEY = 'puente_notif_luego';
+  const LATER_MS = 7 * 24 * 3600 * 1000;
+  const storage = (fn) => { try { return fn(); } catch { return null; } };
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (ios && !standalone) return;
+
+  async function check() {
+    if (Notification.permission !== 'default') return;
+    if (Number(storage(() => localStorage.getItem(LATER_KEY)) || 0) > Date.now()) return;
+    const app = window.app;
+    if (!app || typeof app._subscribePush !== 'function' || !app._swRegistration) return;
+    try { if (await app._swRegistration.pushManager.getSubscription()) return; } catch { /* sigue */ }
+    const token = storage(() => localStorage.getItem('haven_token'));
+    const st = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!st || !st.vinculado) return; // a los sin vincular primero se les pide eso
+    if (document.getElementById('puente-vincular-capa') || document.getElementById('puente-notif')) return;
+    show(app);
+  }
+
+  function show(app) {
+    const box = document.createElement('div');
+    box.id = 'puente-notif';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Activar notificaciones');
+    const icon = document.createElement('div'); icon.className = 'pn-icono'; icon.textContent = '🔔';
+    const txt = document.createElement('div'); txt.className = 'pn-texto';
+    const t1 = document.createElement('b'); t1.textContent = 'Activá las notificaciones';
+    const t2 = document.createElement('span'); t2.textContent = 'Enterate cuando te mencionan o te responden, también desde Discord.';
+    txt.append(t1, t2);
+    const btns = document.createElement('div'); btns.className = 'pn-botones';
+    const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'pn-si'; yes.textContent = 'Activar';
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'pn-no'; no.textContent = 'Ahora no';
+    btns.append(yes, no);
+    box.append(icon, txt, btns);
+    document.body.appendChild(box);
+    no.addEventListener('click', () => { storage(() => localStorage.setItem(LATER_KEY, String(Date.now() + LATER_MS))); box.remove(); });
+    yes.addEventListener('click', async () => {
+      yes.disabled = true;
+      try { await app._subscribePush(); } catch { /* Haven ya muestra el error */ }
+      box.remove();
+      if (Notification.permission === 'granted' && app._showToast) app._showToast('Listo: te vamos a avisar cuando te mencionen', 'success');
+      else if (Notification.permission === 'default') storage(() => localStorage.setItem(LATER_KEY, String(Date.now() + LATER_MS)));
+    });
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #puente-notif { position: fixed; left: 50%; bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 100002;
+      width: min(26rem, calc(100vw - 24px)); box-sizing: border-box; display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; align-items: center;
+      padding: .875rem 1rem; border-radius: .875rem; background: #2b2a30; color: #dbdee1; box-shadow: 0 10px 32px rgba(0,0,0,.5); animation: puente-fade .2s ease-out; }
+    #puente-notif .pn-icono { grid-row: span 2; font-size: 1.75rem; }
+    #puente-notif .pn-texto { display: flex; flex-direction: column; gap: .125rem; font-size: .875rem; line-height: 1.35; color: #b5bac1; }
+    #puente-notif .pn-texto b { color: #f2f3f5; font-size: .9375rem; }
+    #puente-notif .pn-botones { display: flex; gap: .5rem; justify-content: flex-end; }
+    #puente-notif button { min-height: 2.25rem; padding: 0 1rem; border: 0; border-radius: .5rem; font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    #puente-notif .pn-si { background: #5865f2; color: #fff; }
+    #puente-notif .pn-si:hover { background: #4752c4; }
+    #puente-notif .pn-no { background: transparent; color: #b5bac1; }
+    #puente-notif .pn-no:hover { color: #f2f3f5; }`;
+  document.head.appendChild(style);
+
+  // Un rato despues de entrar (que no sea lo primero que se ve)
+  setTimeout(function loop(n) {
+    if (window.app && window.app._swRegistration) { check(); return; }
+    if ((n || 0) < 30) setTimeout(() => loop((n || 0) + 1), 2000);
+  }, 20000);
+})();
+
+// Invitaciones (invitaciones.js):
+//  - Al entrar con una cuenta nueva que llego por un enlace de invitacion, se
+//    anota quien la invito (el enlace lo guardo login.js).
+//  - "🤝 Invitar gente" en la tarjeta de perfil propia: tu enlace para copiar o
+//    compartir, y cuantas personas trajiste.
+(function () {
+  'use strict';
+  const storage = (fn) => { try { return fn(); } catch { return null; } };
+  const token = () => storage(() => localStorage.getItem('haven_token'));
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+  // Anotar quien invito (una sola vez)
+  let tries = 0;
+  (function claim() {
+    const saved = storage(() => JSON.parse(localStorage.getItem('puente_invita') || 'null'));
+    if (!saved) return;
+    if (!token()) { if (++tries < 60) setTimeout(claim, 5000); return; }
+    fetch('/puente/api/invitacion/reclamar', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ u: saved.u }) })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!d) return;
+        storage(() => localStorage.removeItem('puente_invita'));
+        if (d.ok && window.app && window.app._showToast) window.app._showToast(`¡Bienvenido! Te invitó ${d.nombre}`, 'success');
+      }).catch(() => { /* se vuelve a probar la proxima vez */ });
+  })();
+
+  // Ventana con el enlace propio
+  function close() { document.getElementById('puente-invitar-capa')?.remove(); }
+  async function open() {
+    close();
+    const back = el('div'); back.id = 'puente-invitar-capa';
+    const box = el('div', 'pi-tarjeta');
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    const x = el('button', 'pi-cerrar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.addEventListener('click', close);
+    box.append(x, el('div', 'pi-icono', '🤝'), el('h2', 'pi-titulo', 'Invitá a alguien a __PUENTE_APP__'));
+    box.appendChild(el('p', 'pi-texto', 'Mandale tu enlace. Cuando se cree la cuenta y vincule su Discord, cuenta para tu medalla 🤝 Reclutador (sube con 3, 10 y 25), y los que más traen salen cada semana en #que-paso.'));
+    const row = el('div', 'pi-fila');
+    const input = el('input', 'pi-enlace'); input.readOnly = true; input.value = 'Cargando…';
+    const copy = el('button', 'pi-copiar', 'Copiar'); copy.type = 'button';
+    row.append(input, copy);
+    box.appendChild(row);
+    const share = el('button', 'pi-compartir', 'Compartir'); share.type = 'button';
+    if (navigator.share) box.appendChild(share);
+    const stats = el('p', 'pi-cuenta', '');
+    box.appendChild(stats);
+    back.appendChild(box);
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+    document.body.appendChild(back);
+    const d = await fetch('/puente/api/invitacion/mia', { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!d) { input.value = 'No se pudo cargar. Probá de nuevo.'; return; }
+    input.value = d.enlace;
+    stats.textContent = d.invitados
+      ? `Ya trajiste ${d.invitados === 1 ? 'a 1 persona' : `a ${d.invitados} personas`}` + (d.pendientes ? ` (y ${d.pendientes} más que todavía no vincularon su Discord).` : '.')
+      : d.pendientes ? `${d.pendientes === 1 ? 'Una persona entró' : `${d.pendientes} personas entraron`} con tu enlace y todavía no vinculó su Discord.` : 'Todavía no trajiste a nadie: ¡estrená tu enlace!';
+    const text = `Pasate a __PUENTE_APP__, entrás con tu Discord en un clic: ${d.enlace}`;
+    copy.addEventListener('click', () => {
+      const done = () => { copy.textContent = '¡Copiado!'; setTimeout(() => { copy.textContent = 'Copiar'; }, 1800); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(d.enlace).then(done, () => { input.select(); document.execCommand('copy'); done(); });
+      else { input.select(); document.execCommand('copy'); done(); }
+    });
+    share.addEventListener('click', () => { navigator.share({ title: '__PUENTE_APP__', text }).catch(() => {}); });
+  }
+  window.puenteInvitar = open;
+
+  const style = el('style');
+  style.textContent = `
+    #puente-invitar-capa { position: fixed; inset: 0; z-index: 100012; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.7); animation: puente-fade .18s ease-out; }
+    #puente-invitar-capa .pi-tarjeta { position: relative; width: 100%; max-width: 26rem; box-sizing: border-box; padding: 1.75rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+    #puente-invitar-capa .pi-cerrar { position: absolute; top: .5rem; right: .75rem; border: 0; background: transparent; color: #b5bac1; font-size: 1.75rem; line-height: 1; cursor: pointer; }
+    #puente-invitar-capa .pi-icono { font-size: 2.75rem; }
+    #puente-invitar-capa .pi-titulo { margin: .5rem 0; font-size: 1.375rem; font-weight: 800; color: #f2f3f5; }
+    #puente-invitar-capa .pi-texto { margin: 0 0 1rem; font-size: .9375rem; line-height: 1.45; color: #b5bac1; }
+    #puente-invitar-capa .pi-fila { display: flex; gap: .5rem; }
+    #puente-invitar-capa .pi-enlace { flex: 1 1 auto; min-width: 0; height: 2.75rem; padding: 0 .75rem; border: 1px solid #3a3940; border-radius: .5rem; background: #121214; color: #dbdee1; font: inherit; font-size: .875rem; }
+    #puente-invitar-capa .pi-copiar, #puente-invitar-capa .pi-compartir { min-height: 2.75rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    #puente-invitar-capa .pi-copiar:hover, #puente-invitar-capa .pi-compartir:hover { background: #4752c4; }
+    #puente-invitar-capa .pi-compartir { width: 100%; margin-top: .5rem; background: #4e5058; }
+    #puente-invitar-capa .pi-cuenta { margin: 1rem 0 0; font-size: .9375rem; color: #f2f3f5; font-weight: 600; }
+    .puente-invitar-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border-radius: 6px; background: #4e5058; color: #fff !important; font-weight: 600; font-size: 14px; text-decoration: none !important; border: 0; width: 100%; cursor: pointer; font-family: inherit; }
+    .puente-invitar-btn:hover { background: #6d6f78; }
+    .puente-profile-sheet .puente-invitar-btn { order: 1; }`;
+  document.head.appendChild(style);
+})();
+
+// "Nitro gratis" (perfil.js): el color del nombre de cada uno (en los mensajes,
+// la lista de miembros y la tarjeta de perfil) y su banner en la tarjeta. La
+// ventana "Personalizar perfil" (desde la tarjeta propia) los elige, y cuenta lo
+// demas que en Discord es de Nitro y aca viene gratis.
+(function () {
+  'use strict';
+  const storage = (fn) => { try { return fn(); } catch { return null; } };
+  const token = () => storage(() => localStorage.getItem('haven_token'));
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  let map = {};
+  const style = el('style'); style.id = 'puente-colores';
+  document.head.appendChild(style);
+  const okColor = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+  const okUrl = b => typeof b === 'string' && /^\/uploads\/puente-banners\/[\w.-]+$/.test(b);
+
+  function paintColors() {
+    const rules = [];
+    for (const [id, v] of Object.entries(map)) {
+      if (!/^\d+$/.test(id) || !okColor(v.c)) continue;
+      rules.push(`.message[data-user-id="${id}"] .message-author, .user-item[data-user-id="${id}"] .user-item-name, #profile-popup[data-puente-uid="${id}"] .profile-popup-displayname { color: ${v.c} !important; }`);
+    }
+    style.textContent = rules.join('\n');
+  }
+  function paintPopup(popup, id) {
+    if (!popup) return;
+    popup.dataset.puenteUid = String(id);
+    const v = map[id] || {};
+    const banner = popup.querySelector('.profile-popup-banner');
+    if (banner && okUrl(v.b)) { banner.style.background = `#202024 center / cover no-repeat url("${v.b}")`; banner.classList.add('puente-con-banner'); }
+  }
+  async function load() {
+    const d = await fetch('/puente/api/perfil/todos', { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (d) { map = d; paintColors(); }
+  }
+
+  // ── La ventana ──
+  const PALETTE = ['#f23f43', '#f47b67', '#f0b232', '#fee75c', '#57f287', '#23a55a', '#1abc9c', '#00a8fc', '#5865f2', '#9b59b6', '#eb459e', '#ff73fa', '#e67e22', '#c27c0e', '#99aab5', '#ffffff'];
+  function close() { document.getElementById('puente-perfil-capa')?.remove(); }
+  function open() {
+    close();
+    const app = window.app;
+    const me = app && app.user;
+    if (!me) return;
+    const mine = map[me.id] || {};
+    let color = mine.c || null;
+    const back = el('div'); back.id = 'puente-perfil-capa';
+    const box = el('div', 'pp-tarjeta');
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+    const x = el('button', 'pp-cerrar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.addEventListener('click', close);
+    box.append(x, el('h2', 'pp-titulo', '✨ Personalizá tu perfil'), el('p', 'pp-sub', 'Como con Nitro, pero gratis y solo en __PUENTE_APP__.'));
+
+    // Vista previa: banner + nombre con el color
+    const prev = el('div', 'pp-vista');
+    const pBanner = el('div', 'pp-vista-banner');
+    const pName = el('div', 'pp-vista-nombre', me.displayName || me.username);
+    prev.append(pBanner, pName);
+    box.appendChild(prev);
+    const showBanner = (b) => { pBanner.style.background = okUrl(b) ? `#202024 center / cover no-repeat url("${b}")` : ''; };
+    const showColor = () => { pName.style.color = color || ''; };
+    showBanner(mine.b); showColor();
+
+    // Color
+    box.appendChild(el('h3', 'pp-h3', 'Color de tu nombre'));
+    const sw = el('div', 'pp-colores');
+    const mark = () => sw.querySelectorAll('button').forEach(b => b.classList.toggle('activo', (b.dataset.c || null) === color));
+    const none = el('button', 'pp-color pp-sin', 'Sin color'); none.type = 'button';
+    none.addEventListener('click', () => { color = null; mark(); showColor(); });
+    sw.appendChild(none);
+    for (const c of PALETTE) {
+      const b = el('button', 'pp-color'); b.type = 'button'; b.dataset.c = c; b.style.background = c; b.title = c;
+      b.addEventListener('click', () => { color = c; mark(); showColor(); });
+      sw.appendChild(b);
+    }
+    const custom = el('input', 'pp-elegir'); custom.type = 'color'; custom.title = 'Otro color'; custom.value = color || '#5865f2';
+    custom.addEventListener('input', () => { color = custom.value.toLowerCase(); mark(); showColor(); });
+    sw.appendChild(custom);
+    box.appendChild(sw);
+    mark();
+
+    // Banner
+    box.appendChild(el('h3', 'pp-h3', 'Banner de tu perfil'));
+    const brow = el('div', 'pp-fila');
+    const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp,image/gif'; file.hidden = true;
+    const up = el('button', 'pp-boton', 'Subir imagen o GIF'); up.type = 'button';
+    const rm = el('button', 'pp-boton gris', 'Quitar'); rm.type = 'button'; rm.hidden = !okUrl(mine.b);
+    brow.append(up, rm, file);
+    box.appendChild(brow);
+    const note = el('p', 'pp-nota', ''); box.appendChild(note);
+    const say = (t, bad) => { note.textContent = t; note.classList.toggle('mal', !!bad); };
+    up.addEventListener('click', () => file.click());
+    file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 6 * 1024 * 1024) { say('La imagen es muy pesada (hasta 6 MB).', true); return; }
+      const rd = new FileReader();
+      rd.onload = async () => {
+        up.disabled = true; say('Subiendo…');
+        const r = await fetch('/puente/api/perfil/banner', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ imagen: rd.result }) }).catch(() => null);
+        const d = r ? await r.json().catch(() => ({})) : {};
+        up.disabled = false;
+        if (!r || !r.ok) { say(d.error || 'No se pudo subir. Probá de nuevo.', true); return; }
+        map[me.id] = { ...(map[me.id] || {}), b: d.banner }; showBanner(d.banner); rm.hidden = false; say('¡Listo! Ya se ve en tu perfil.');
+      };
+      rd.readAsDataURL(f);
+      file.value = '';
+    });
+    rm.addEventListener('click', async () => {
+      const r = await fetch('/puente/api/perfil/banner', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ quitar: true }) }).catch(() => null);
+      if (r && r.ok) { if (map[me.id]) delete map[me.id].b; showBanner(null); rm.hidden = true; say('Banner quitado.'); }
+    });
+
+    // Lo demas que ya es gratis
+    box.appendChild(el('h3', 'pp-h3', 'También gratis en __PUENTE_APP__'));
+    const ul = el('ul', 'pp-lista');
+    for (const [e, t] of [['🎞️', 'Foto de perfil animada (GIF): cambiala con "Editar perfil"'], ['📎', 'Archivos de hasta 25 MB (en Discord, 10 MB sin Nitro)'], ['😎', 'Emojis personalizados y animados en todos los canales'], ['🎨', 'Color de nombre y banner, como acá arriba']]) {
+      const li = el('li'); li.append(el('span', 'pp-e', e), el('span', null, t)); ul.appendChild(li);
+    }
+    box.appendChild(ul);
+
+    const save = el('button', 'pp-guardar', 'Guardar color'); save.type = 'button';
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      const r = await fetch('/puente/api/perfil/color', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ color }) }).catch(() => null);
+      const d = r ? await r.json().catch(() => ({})) : {};
+      save.disabled = false;
+      if (!r || !r.ok) { say(d.error || 'No se pudo guardar.', true); return; }
+      map[me.id] = { ...(map[me.id] || {}), c: color || undefined }; if (!color) delete map[me.id].c; paintColors();
+      if (app._showToast) app._showToast(color ? 'Listo: ese es tu color' : 'Listo: sin color', 'success');
+      close();
+    });
+    box.appendChild(save);
+    back.appendChild(box);
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+    document.addEventListener('keydown', function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey, true); } }, true);
+    document.body.appendChild(back);
+  }
+  window.puentePerfil = { open, paintPopup };
+
+  const css = el('style');
+  css.textContent = `
+    #puente-perfil-capa { position: fixed; inset: 0; z-index: 100012; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.7); animation: puente-fade .18s ease-out; }
+    #puente-perfil-capa .pp-tarjeta { position: relative; width: 100%; max-width: 28rem; max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 1.5rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+    #puente-perfil-capa .pp-cerrar { position: absolute; top: .5rem; right: .75rem; border: 0; background: transparent; color: #b5bac1; font-size: 1.75rem; line-height: 1; cursor: pointer; }
+    #puente-perfil-capa .pp-titulo { margin: 0; font-size: 1.375rem; font-weight: 800; color: #f2f3f5; }
+    #puente-perfil-capa .pp-sub { margin: .25rem 0 1rem; color: #b5bac1; font-size: .9375rem; }
+    #puente-perfil-capa .pp-vista { border-radius: .75rem; overflow: hidden; background: #111214; margin-bottom: .5rem; }
+    #puente-perfil-capa .pp-vista-banner { height: 6rem; background: linear-gradient(135deg, #5865f244, #5865f222); }
+    #puente-perfil-capa .pp-vista-nombre { padding: .625rem .875rem .75rem; font-size: 1.25rem; font-weight: 800; color: #f2f3f5; }
+    #puente-perfil-capa .pp-h3 { margin: 1rem 0 .5rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #b5bac1; }
+    #puente-perfil-capa .pp-colores { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+    #puente-perfil-capa .pp-color { width: 2rem; height: 2rem; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+    #puente-perfil-capa .pp-color.activo { border-color: #fff; box-shadow: 0 0 0 2px #5865f2; }
+    #puente-perfil-capa .pp-sin { width: auto; padding: 0 .75rem; border-radius: 1rem; background: #3a3940; color: #dbdee1; font: inherit; font-size: .8125rem; }
+    #puente-perfil-capa .pp-elegir { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; background: transparent; cursor: pointer; }
+    #puente-perfil-capa .pp-fila { display: flex; gap: .5rem; }
+    #puente-perfil-capa .pp-boton, #puente-perfil-capa .pp-guardar { min-height: 2.5rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    #puente-perfil-capa .pp-boton.gris { background: #4e5058; }
+    #puente-perfil-capa .pp-guardar { width: 100%; min-height: 2.75rem; margin-top: 1rem; }
+    #puente-perfil-capa button:disabled { opacity: .6; cursor: default; }
+    #puente-perfil-capa .pp-nota { min-height: 1.2em; margin: .5rem 0 0; font-size: .875rem; color: #7fd6a2; }
+    #puente-perfil-capa .pp-nota.mal { color: #f0c36a; }
+    #puente-perfil-capa .pp-lista { margin: 0; padding: 0; list-style: none; }
+    #puente-perfil-capa .pp-lista li { display: flex; gap: .625rem; padding: .375rem 0; font-size: .9375rem; }
+    .puente-perfil-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border-radius: 6px; background: linear-gradient(90deg, #5865f2, #eb459e); color: #fff !important; font-weight: 600; font-size: 14px; border: 0; width: 100%; cursor: pointer; font-family: inherit; }
+    .puente-perfil-btn:hover { filter: brightness(1.1); }
+    .puente-profile-sheet .puente-perfil-btn { order: 1; }`;
+  document.head.appendChild(css);
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.socket || !token()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    load();
+    setInterval(load, 10 * 60 * 1000);
+    app.socket.on('puente-perfil', (d) => {
+      if (!d || !Number.isInteger(d.id)) return;
+      const v = {};
+      if (okColor(d.c)) v.c = d.c;
+      if (okUrl(d.b)) v.b = d.b;
+      if (v.c || v.b) map[d.id] = v; else delete map[d.id];
+      paintColors();
+    });
   })();
 })();
