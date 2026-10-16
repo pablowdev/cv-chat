@@ -55,6 +55,10 @@ function setup(ctx) {
   guardJoinByCode();
   guardPosting();
   log(`accesos: modo vinculados${n ? ` (${n} canales pasaron a privados)` : ''}`);
+  // Los canales nuevos los crea la sincronizacion (otro proceso): cuando aparecen, se reparten los accesos
+  const bridged = () => { const r = db.prepare('SELECT COUNT(*) n, MAX(id) m FROM channels WHERE discord_channel_id IS NOT NULL').get(); return r.n + ':' + r.m; };
+  let known = bridged();
+  setInterval(() => { try { const now = bridged(); if (now !== known) { known = now; scheduleAll(); } } catch (err) { warn('accesos: canales nuevos:', err.message); } }, 60 * 1000);
 }
 
 // En Haven un canal privado se puede abrir con su codigo (cuadro "Unirse a un

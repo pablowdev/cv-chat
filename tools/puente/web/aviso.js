@@ -5287,7 +5287,7 @@ function sheetDrag(sheet, opts) {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
       a.href = '/puente/historia';
-      a.textContent = '📖 Tu historia en Círculo Vicioso';
+      a.textContent = '📖 Tu historia';
       (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', a);
     }
   }

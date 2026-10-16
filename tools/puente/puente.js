@@ -59,6 +59,7 @@ const warn = (...a) => console.warn('[puente]', ...a);
 let db, io, token, publicUrl, allow, unlinkedPolicy;
 let botUserId = null;
 let guildId = null;
+let guildName = null;
 const discordChannels = new Map(); // id -> { id, name, type, parent_id }
 const ourWebhookIds = new Set();
 const insertedByBridge = new Set();  // ids de Haven que creo el puente (no reenviar)
@@ -118,7 +119,9 @@ function start(deps) {
   accesos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, channelInfo: id => discordChannels.get(id) });
   baneos.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   rol.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName });
-  logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, publicUrl,
+  // El nombre de la comunidad en los textos: PUENTE_COMUNIDAD, o el del servidor de Discord
+  const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^p{L}p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
+  logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
     lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
     onLinked: async discordUserId => { await accesos.recomputeUser(discordUserId); estadisticas.update(); rol.onLinked(discordUserId); },
@@ -341,6 +344,7 @@ function onDispatch(t, d) {
         const ours = (d.channels || []).some(c => db.prepare('SELECT 1 FROM channels WHERE discord_channel_id = ?').get(c.id));
         if (!ours || (guildId && guildId !== d.id)) return;
         guildId = d.id;
+        guildName = d.name || guildName;
         (d.channels || []).forEach(cacheChannel);
         (d.threads || []).forEach(cacheChannel);
         adjuntos.rememberRoles(d.roles); // para convertir menciones de roles

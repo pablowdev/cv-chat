@@ -1,4 +1,4 @@
-// "Tu historia en Círculo Vicioso" (/puente/historia): los datos vienen de
+// "Tu historia" (/puente/historia): los datos vienen de
 // logros.js (/puente/api/logros/historia) y la tarjeta para compartir se dibuja
 // aca, en un canvas, como imagen.
 (function () {
@@ -34,7 +34,7 @@
     if (d.avatar) { const img = el('img'); img.src = d.avatar; img.alt = ''; top.appendChild(img); }
     else top.appendChild(el('div', 'inicial', (d.nombre || '?').slice(0, 1).toUpperCase()));
     top.appendChild(el('h1', null, d.nombre));
-    top.appendChild(el('p', 'sub', d.desde ? `En Círculo Vicioso desde el ${fecha(d.desde)}` : `Tu historia en ${APP} recién empieza`));
+    top.appendChild(el('p', 'sub', d.desde ? `En ${d.comunidad} desde el ${fecha(d.desde)}` : `Tu historia en ${APP} recién empieza`));
     if (d.medallas && d.medallas.length) {
       const ul = el('ul', 'medallas');
       for (const m of d.medallas) { const li = el('li', 'medalla'); li.title = m.detalle; li.append(el('span', null, m.emoji), el('span', null, m.nombre)); ul.appendChild(li); }
@@ -45,7 +45,7 @@
     if (!d.vinculado) {
       const c = card('Te falta tu historia de Discord');
       c.classList.add('aviso');
-      c.appendChild(el('p', null, 'Vinculá tu cuenta de Discord y acá aparecen todos tus mensajes de Círculo Vicioso, desde el primero.'));
+      c.appendChild(el('p', null, `Vinculá tu cuenta de Discord y acá aparecen todos tus mensajes de ${d.comunidad}, desde el primero.`));
       const a = el('a', 'boton', 'Vincular Discord'); a.href = '/puente/vincular'; c.appendChild(a);
     }
 
@@ -152,7 +152,7 @@
         const file = new File([blob], 'mi-historia-cv.png', { type: 'image/png' });
         preview.src = URL.createObjectURL(blob); preview.hidden = false;
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: `Mi historia en Círculo Vicioso`, text: `Mi historia en Círculo Vicioso · ${location.origin}` }).catch(() => {});
+          await navigator.share({ files: [file], title: `Mi historia en ${d.comunidad}`, text: `Mi historia en ${d.comunidad} · ${location.origin}` }).catch(() => {});
         } else {
           const a = el('a'); a.href = preview.src; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
         }
@@ -172,7 +172,7 @@
       x.fillStyle = 'rgba(30,31,34,.88)'; roundRect(x, 60, 60, W - 120, H - 120, 40); x.fill();
       const font = (w, s) => `normal ${w} ${s}px "gg sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif`;
       x.textAlign = 'center'; x.fillStyle = '#b5bac1'; x.font = font(600, 34);
-      x.fillText('MI HISTORIA EN CÍRCULO VICIOSO', W / 2, 150);
+      fitText(x, `MI HISTORIA EN ${String(d.comunidad).toUpperCase()}`, W / 2, 150, W - 200);
       // Foto
       const img = d.avatar ? await load(d.avatar) : null;
       x.save(); x.beginPath(); x.arc(W / 2, 300, 110, 0, Math.PI * 2); x.closePath(); x.clip();

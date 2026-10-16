@@ -12,7 +12,7 @@
 //  - Resumen: los lunes a las 10, de la semana anterior, en el canal de Discord
 //    PUENTE_RESUMEN_CANAL ("que-paso"); llega a Haven como cualquier mensaje.
 
-let db, api, log, warn, getGuildId, appName, publicUrl, postInHaven, locked;
+let db, api, log, warn, getGuildId, appName, community, publicUrl, postInHaven, locked;
 const ZONE_H = Number(process.env.PUENTE_ZONA_HORAS || -3);   // Argentina
 const SUMMARY_CHANNEL = String(process.env.PUENTE_RESUMEN_CANAL || 'que-paso');
 const SUMMARY_DAY = 1, SUMMARY_HOUR = 10;                      // lunes 10:00
@@ -21,7 +21,7 @@ const CACHE_MS = 10 * 60 * 1000;
 const cache = new Map();
 
 function setup(ctx) {
-  ({ db, api, log, warn, getGuildId, appName, publicUrl, postInHaven } = ctx);
+  ({ db, api, log, warn, getGuildId, appName, community, publicUrl, postInHaven } = ctx);
   locked = ctx.lockedChannelIds || (() => new Set());
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_dias (
@@ -194,7 +194,7 @@ function historia(havenId) {
   const bestMsg = best ? pub.find(m => m.id === best.id) : null;
   const total = pub.length;
   const data = {
-    nombre: u.nombre, usuario: u.username, avatar: u.avatar || null, app: appName(),
+    nombre: u.nombre, usuario: u.username, avatar: u.avatar || null, app: appName(), comunidad: community(),
     vinculado: !!link,
     desde: first ? first.created_at : null,
     primero: first ? { texto: excerpt(first.content, 200), canal: (channels.get(first.channel_id) || {}).name, url: messageUrl(first, channels), fecha: first.created_at } : null,
@@ -257,12 +257,12 @@ function medallas(havenId, pre) {
   else if (total >= 1000) add('mil', '💬', 'Mil mensajes', `${num(total)} mensajes`);
   if (first) {
     const y = local(parseTs(first.created_at)).getUTCFullYear();
-    if (Date.now() - parseTs(first.created_at) > 2 * 365 * 864e5) add('veterano', '🏛️', `Desde ${y}`, `Escribe en Círculo Vicioso desde ${y}`);
+    if (Date.now() - parseTs(first.created_at) > 2 * 365 * 864e5) add('veterano', '🏛️', `Desde ${y}`, `Escribe en ${community()} desde ${y}`);
   }
   const night = hours[3] + hours[4] + hours[5];
   if (night >= 200) add('buho', '🦉', 'Búho', `${num(night)} mensajes entre las 3 y las 6 de la mañana`);
   const weeks = destacado(havenId);
-  if (weeks) add('destacado', '⭐', 'Destacado de la semana', weeks === 1 ? 'Estuvo en el podio de #que-paso' : `Estuvo ${weeks} veces en el podio de #que-paso`);
+  if (weeks) add('destacado', '⭐', 'Destacado de la semana', weeks === 1 ? `Estuvo en el podio de #${SUMMARY_CHANNEL}` : `Estuvo ${weeks} veces en el podio de #${SUMMARY_CHANNEL}`);
   if (!pre) cache.set(key, { at: Date.now(), data: list });
   return list;
 }
@@ -345,7 +345,7 @@ function summaryText(s) {
     : `del ${a.getUTCDate()} de ${MESES[a.getUTCMonth()]} al ${b.getUTCDate()} de ${MESES[b.getUTCMonth()]}`;
   const ch = c => (c.discord_channel_id ? `<#${c.discord_channel_id}>` : '#' + c.name);
   const medal = ['🥇', '🥈', '🥉', '4.', '5.'];
-  const lines = [`📰 **Qué pasó en Círculo Vicioso** · semana ${range}`, ''];
+  const lines = [`📰 **Qué pasó en ${community()}** · semana ${range}`, ''];
   lines.push(`💬 **${num(s.total)} mensajes**` + (s.total ? ` · ${Math.round(100 * s.fromHaven / s.total)} % desde ${appName()}` : ''));
   if (s.canales.length) lines.push(`📈 **Los canales que más se movieron:** ${s.canales.map(x => `${ch(x.c)} (${num(x.n)})`).join(' · ')}`);
   if (s.podio.length) lines.push(`🗣️ **Los que más hablaron:** ${s.podio.map((p, i) => `${medal[i]} ${p.nombre} (${num(p.n)})`).join(' · ')}`);
@@ -362,7 +362,7 @@ function summaryText(s) {
   if (base) {
     lines.push('');
     lines.push(`👉 ¿Todavía no estás en ${appName()}? Entrá con tu Discord en un clic: <${base}>`);
-    lines.push(`📖 Mirá tu historia en Círculo Vicioso: <${base}/puente/historia>`);
+    lines.push(`📖 Mirá tu historia en ${community()}: <${base}/puente/historia>`);
   }
   let text = lines.join('\n');
   if (text.length > 2000) text = text.slice(0, 1999) + '…';
