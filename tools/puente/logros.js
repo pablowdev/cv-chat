@@ -250,7 +250,7 @@ function medallas(havenId, pre) {
   const add = (id, emoji, nombre, detalle) => list.push({ id, emoji, nombre, detalle });
   const pioneerUntil = PIONEER_UNTIL || firstMonthEnd();
   if (pioneerUntil && String(u.created_at).slice(0, 10) <= pioneerUntil) add('pionero', '🌱', 'Pionero', `Se sumó a ${appName()} en su primer mes`);
-  if (linkOf(havenId)) add('puente', '🔗', 'Con Discord', 'Vinculó su cuenta de Discord');
+  if (linkOf(havenId)) add('puente', '🔗', 'Discord', 'Vinculó su cuenta de Discord');
   if (s.mejor >= 30) add('racha30', '⚡', 'Racha de 30 días', `${s.mejor} días seguidos escribiendo en ${appName()}`);
   else if (s.mejor >= 7) add('racha7', '🔥', 'Racha de 7 días', `${s.mejor} días seguidos escribiendo en ${appName()}`);
   if (total >= 10000) add('leyenda', '🗿', 'Leyenda', `${num(total)} mensajes`);
