@@ -1923,3 +1923,10 @@ html body .channel-item.puente-cerrado .channel-hash::after {
   html body #search-container.puente-busca-caja { min-width: 6.5rem; margin-left: 0.5rem; }
   html body header.channel-header > .channel-info { min-width: 3rem; }
 }
+
+/* Enlaces a mensajes y canales ("#canal › mensaje"), como las menciones de Discord (aviso.js) */
+html body a.puente-enlace-msj {
+  display: inline; padding: 0 0.125rem; border-radius: 0.1875rem; background: rgba(88, 101, 242, 0.3); color: #c9cdfb !important;
+  font-weight: 500; text-decoration: none !important; cursor: pointer; transition: background 0.1s ease;
+}
+html body a.puente-enlace-msj:hover { background: #5865f2; color: #fff !important; }

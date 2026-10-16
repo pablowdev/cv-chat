@@ -91,6 +91,9 @@ function hookHttp() {
       if (url === '/app' || url.startsWith('/app?')) injectScript(req, res, '/puente/aviso.js');
       else if (url === '/' || url.startsWith('/?')) injectScript(req, res, '/puente/login.js');
       else if (url.startsWith('/api/link-preview?')) {
+        // Un enlace a un mensaje (de CV Chat o de Discord) se ve como "#canal › mensaje"
+        // (web/aviso.js): sin tarjeta de vista previa
+        if (isMessageLink(url)) { json(res, 400, { error: 'enlace a un mensaje' }); return true; }
         req.url = twitterProxyToX(url);
         const server = this;
         if (tweetPreview(req, res, () => origEmit.call(server, event, req, res, ...rest))) return true;
@@ -255,6 +258,16 @@ function send(res, status, type, body, headers = {}) {
 }
 const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
 
+// /api/link-preview?url=... de un enlace a un mensaje o canal de Discord, o a CV Chat mismo
+function isMessageLink(previewUrl) {
+  let target;
+  try { target = new URL(new URL(previewUrl, 'http://x').searchParams.get('url') || ''); } catch { return false; }
+  if (/^(?:(?:ptb|canary)\.)?discord(?:app)?\.com$/i.test(target.hostname) && target.pathname.startsWith('/channels/')) return true;
+  let own = null;
+  try { own = publicUrl ? new URL(publicUrl).hostname : null; } catch { /* sin PUBLIC_URL */ }
+  return !!own && target.hostname === own && /^\/app(?:\.html)?$/.test(target.pathname);
+}
+
 function sessionUser(req) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -395,6 +408,35 @@ async function handle(req, res) {
     const q = db.prepare('SELECT id, avatar, COALESCE(display_name, username) name FROM users WHERE id = ?');
     for (const id of ids) { const r = q.get(id); if (r) out[id] = { avatar: r.avatar || null, nombre: r.name }; }
     return json(res, 200, out);
+  }
+
+  // A donde lleva un enlace a un mensaje o a un canal, de CV Chat (?id= o ?codigo=)
+  // o de Discord (?discord=<mensaje>&canal=<canal o hilo>), para abrirlo aca mismo
+  // (web/aviso.js). Solo si la persona puede ver ese canal; si no, la misma
+  // respuesta que si no existiera.
+  if (p === '/puente/api/mensaje' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const sp = u.searchParams, snow = v => /^\d{5,25}$/.test(v || '');
+    const byMsg = db.prepare('SELECT id, channel_id, thread_id FROM messages WHERE id = ?');
+    const didQ = db.prepare('SELECT id, channel_id, thread_id FROM messages WHERE discord_message_id = ?');
+    const byDid = did => didQ.get(did) || didQ.get('thread-' + did) || null; // dos busquedas por el indice (con OR recorre todo)
+    let m = null, chId = null;
+    const id = parseInt(sp.get('id'), 10);
+    if (id > 0) m = byMsg.get(id) || null;
+    else if (snow(sp.get('discord'))) m = byDid(sp.get('discord'));
+    if (m) chId = m.channel_id;
+    else if (/^[a-f0-9]{8}$/i.test(sp.get('codigo') || '')) chId = (db.prepare('SELECT id FROM channels WHERE code = ?').get(sp.get('codigo')) || {}).id || null;
+    if (!chId && snow(sp.get('canal'))) {
+      const c = db.prepare('SELECT id FROM channels WHERE discord_channel_id = ?').get(sp.get('canal'));
+      if (c) chId = c.id;
+      else { m = byDid(sp.get('canal')); if (m) chId = m.channel_id; } // un hilo: su mensaje de origen
+    }
+    const ch = chId ? db.prepare('SELECT id, code, name, is_dm FROM channels WHERE id = ?').get(chId) : null;
+    const admin = (db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id) || {}).is_admin;
+    const member = ch && db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, user.id);
+    if (!ch || !(member || (admin && !ch.is_dm))) return json(res, 404, { error: 'no esta' });
+    return json(res, 200, { codigo: ch.code, canal: ch.is_dm ? null : ch.name, mensaje: m ? m.id : null, hilo: m && m.thread_id ? m.thread_id : null });
   }
 
   // Canales con candadito en la lista (accesos.js): solo de los canales que la persona ya ve

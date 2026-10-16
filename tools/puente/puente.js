@@ -37,6 +37,7 @@ const reacciones = require('./reacciones.js');
 const vigia = require('./vigia.js');
 const stickers = require('./stickers.js');
 const nombres = require('./nombres.js');
+const enlaces = require('./enlaces.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
@@ -586,7 +587,7 @@ async function ensureWebhook(discordChannelId) {
 
 // Texto de Haven -> texto seguro para Discord.
 function sanitizeOut(text) {
-  return adjuntos.emojisToDiscord(db, String(text || ''))
+  return adjuntos.emojisToDiscord(db, enlaces.messageLinksToDiscord(db, publicUrl, guildId, String(text || '')))
     // Nada de menciones escritas a mano: solo el puente pone la de verificacion.
     .replace(/<(@[!&]?|#)(\d+)>/g, (_, k, id) => (k.startsWith('@') ? '@' : '#') + id)
     // Archivos de Haven "[file:nombre](/uploads/x|tamaño)" -> "📎 [nombre](enlace)"

@@ -636,6 +636,17 @@ function sheetDrag(sheet, opts) {
       buttons.push(copy);
     }
 
+    // "Copiar enlace del mensaje", en todos los canales (el de Haven, solo en los publicos)
+    if (window.puenteEnlaces) {
+      for (let i = buttons.length - 1; i >= 0; i--) if (buttons[i].dataset.action === 'copy-link') buttons.splice(i, 1);
+      const lk = el('button', 'channel-ctx-item');
+      lk.type = 'button';
+      lk.dataset.puenteAction = 'copy-link';
+      lk.append(el('span', 'puente-sheet-icon', '🔗'), el('span', '', 'Copiar enlace del mensaje'));
+      lk.addEventListener('click', (ev) => { ev.stopPropagation(); window.puenteEnlaces.copiar(app, msgEl); hide(app); });
+      buttons.push(lk);
+    }
+
     const actionOf = (b) => b.dataset.action || b.dataset.puenteAction;
     const groupOf = (b) => {
       const i = GROUPS.findIndex(g => g.includes(actionOf(b)));
@@ -2331,6 +2342,142 @@ function sheetDrag(sheet, opts) {
       try { if (LABELS[provider]) setPlaceholder('Buscar en ' + LABELS[provider] + '...'); } catch { /* queda el texto anterior */ }
       return r;
     };
+  })();
+})();
+
+// Enlaces a mensajes, como en Discord (puente-enlaces-mensajes):
+//  - "Copiar enlace del mensaje" en el menu del mensaje (PC y celular), en todos
+//    los canales (el de Haven solo aparece en los publicos). Es el enlace de
+//    Haven (/app?channel=...&message=...), mas &thread= si esta en un hilo.
+//  - Tocar un enlace a un mensaje o canal, de CV Chat o de Discord, lo abre aca
+//    mismo, en el mensaje (tambien dentro de un hilo), sin recargar. Si es de
+//    Discord y no esta en CV Chat (o no lo podes ver), se abre Discord.
+//  - Esos enlaces se ven como "#canal › mensaje", como en Discord.
+//  - Al entrar con un enlace de un mensaje de un hilo, se abre el hilo.
+//  Al pasar a Discord, el puente cambia los enlaces de CV Chat por los de alla.
+(function () {
+  'use strict';
+  const DISCORD = /^https?:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/channels\/(\d+|@me)\/(\d+)(?:\/(\d+))?\/?$/i;
+  const cache = new Map();
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+
+  // Que enlace es: { key, q } para preguntarle al servidor, o null
+  function parse(href) {
+    let u;
+    try { u = new URL(href, location.href); } catch { return null; }
+    const d = DISCORD.exec(u.origin + u.pathname);
+    if (d) return d[3] ? { key: 'd' + d[3], q: 'discord=' + d[3] + '&canal=' + d[2], discord: true } : { key: 'c' + d[2], q: 'canal=' + d[2], discord: true };
+    if (u.origin === location.origin && /^\/app(?:\.html)?$/.test(u.pathname)) {
+      const m = u.searchParams.get('message'), c = u.searchParams.get('channel');
+      if (m && /^\d+$/.test(m)) return { key: 'm' + m, q: 'id=' + m };
+      if (c && /^[a-f0-9]{8}$/i.test(c)) return { key: 'k' + c, q: 'codigo=' + c };
+    }
+    return null;
+  }
+
+  function resolve(p) {
+    if (!cache.has(p.key)) {
+      const tk = token();
+      cache.set(p.key, !tk ? Promise.resolve(null) : fetch('/puente/api/mensaje?' + p.q, { headers: { Authorization: 'Bearer ' + tk } })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null));
+    }
+    return cache.get(p.key);
+  }
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function flash(el) {
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('highlight-flash');
+    setTimeout(() => el.classList.remove('highlight-flash'), 2000);
+  }
+
+  // Ir al canal y al mensaje (o al hilo y a su mensaje)
+  async function open(app, r) {
+    if (!r || !r.codigo) return;
+    if (app.currentChannel !== r.codigo) { app.switchChannel(r.codigo); await sleep(650); }
+    if (r.hilo) {
+      app._jumpToMessage(r.hilo);
+      if (typeof app._openThread === 'function') app._openThread(r.hilo);
+      for (let i = 0; i < 40; i++) {
+        const el = document.querySelector('#thread-panel [data-msg-id="' + r.mensaje + '"]');
+        if (el) { flash(el); return; }
+        await sleep(100);
+      }
+    } else if (r.mensaje) app._jumpToMessage(r.mensaje);
+  }
+
+  function messageLink(app, msgEl) {
+    const id = msgEl && msgEl.dataset.msgId;
+    if (!id || !app.currentChannel) return null;
+    const inThread = msgEl.closest('#thread-panel');
+    const root = inThread && app._activeThreadParent && String(app._activeThreadParent) !== String(id) ? app._activeThreadParent : null;
+    return location.origin + '/app?channel=' + app.currentChannel + '&message=' + id + (root ? '&thread=' + root : '');
+  }
+  function copyLink(app, msgEl) {
+    const url = messageLink(app, msgEl);
+    if (!url) return;
+    const done = () => { if (app._showToast) app._showToast('Enlace del mensaje copiado', 'success'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => { if (app._copyTextFallback) app._copyTextFallback(url, done); });
+    else if (app._copyTextFallback) app._copyTextFallback(url, done);
+  }
+  window.puenteEnlaces = { copiar: copyLink };
+
+  // "#canal › mensaje" en vez de la direccion entera (solo si se ve la direccion tal cual)
+  function label(a) {
+    if (a.dataset.puenteEnlace) return;
+    const text = a.textContent.trim();
+    if (!text || (text !== a.href && text !== a.getAttribute('href') && !/^https?:\/\//.test(text))) return;
+    const p = parse(a.href);
+    if (!p) return;
+    a.dataset.puenteEnlace = '1';
+    resolve(p).then(r => {
+      if (!r || !a.isConnected) return;
+      a.title = a.href;
+      a.classList.add('puente-enlace-msj');
+      a.textContent = (r.canal ? '#' + r.canal : 'Mensaje directo') + (r.mensaje ? ' › mensaje' : '');
+    });
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const box = document.getElementById('messages');
+    if (!app || typeof app._jumpToMessage !== 'function' || typeof app.switchChannel !== 'function' || !box) { if (++tries < 120) setTimeout(wait, 500); return; }
+
+    // Clic en un enlace a un mensaje: abrirlo aca mismo
+    document.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element && e.target.closest('a[href]');
+      if (!a || !a.closest('#messages, #thread-panel, #search-panel, #pinned-panel, .puente-sr, .message-content')) return;
+      const p = parse(a.href);
+      if (!p) return;
+      e.preventDefault();
+      e.stopPropagation();
+      resolve(p).then(r => {
+        if (r) open(app, r);
+        else if (p.discord) window.open(a.href, '_blank', 'noopener');
+        else if (app._showToast) app._showToast('Ese mensaje no existe o no tenés acceso a ese canal', 'error');
+      });
+    }, true);
+
+    // Las etiquetas "#canal › mensaje", en lo que se va mostrando
+    const scan = (root) => { for (const a of root.querySelectorAll('.message-content a[href], .thread-msg-content a[href], a.chat-link[href]')) label(a); };
+    scan(document);
+    new MutationObserver(muts => {
+      for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches && n.matches('a[href]')) label(n); else scan(n); }
+    }).observe(document.body, { childList: true, subtree: true });
+
+    // Entrar con el enlace de un mensaje de un hilo: Haven abre el canal; aca, el hilo
+    const sp = new URLSearchParams(location.search);
+    const th = sp.get('thread'), msg = sp.get('message');
+    if (th && msg && /^\d+$/.test(th) && /^\d+$/.test(msg)) {
+      resolve({ key: 'm' + msg, q: 'id=' + msg }).then(async r => {
+        if (!r) return;
+        for (let i = 0; i < 60 && app.currentChannel !== r.codigo; i++) await sleep(250); // que Haven cambie de canal
+        await sleep(700);
+        open(app, r);
+      });
+    }
   })();
 })();
 
@@ -4643,6 +4790,13 @@ function sheetDrag(sheet, opts) {
     copyBtn.dataset.action = 'puente-copiar';
     copyBtn.addEventListener('click', () => copy(rawText(app, msgEl)));
     by.set('puente-copiar', copyBtn);
+    // Copiar enlace del mensaje (el de Haven solo aparece en canales publicos)
+    if (window.puenteEnlaces) {
+      const linkBtn = el('button', 'channel-ctx-item');
+      linkBtn.dataset.action = 'puente-enlace'; // con 'copy-link' Haven hace lo suyo (y avisa que el canal no es publico)
+      linkBtn.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); window.puenteEnlaces.copiar(app, msgEl); });
+      by.set('copy-link', linkBtn);
+    }
     // El nombre de Haven esta en su <span>; sin <span>, se le saca el emoji del principio
     const label = (b, a) => {
       const it = ITEMS[a];
