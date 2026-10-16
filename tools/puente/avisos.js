@@ -19,9 +19,10 @@ function setup(ctx) {
 }
 
 // Todas las notificaciones (las de Haven tambien: usan este mismo modulo) salen
-// con el icono del servidor (el de la app instalada) en vez de la "H" de Haven,
-// y en castellano: "Fulano en #canal" en vez de "Fulano in #canal".
-const ICON = '/puente/icono-192.png';
+// con la imagen propia del servidor a la derecha (web/icono-notificacion.png; si
+// no hay, el icono de la app) en vez de la "H" de Haven, y en castellano:
+// "Fulano en #canal" en vez de "Fulano in #canal".
+const ICON = '/puente/icono-notificacion.png';
 function brand() {
   if (!webpush || webpush.__puenteMarca) return;
   const send = webpush.sendNotification.bind(webpush);

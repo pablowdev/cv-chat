@@ -387,6 +387,14 @@ async function handle(req, res) {
 
   // Logo de la pantalla de carga: tools/puente/web/logo-carga.png (propio de cada servidor,
   // no va al repositorio); si no esta, el icono de la app
+  // Imagen grande de las notificaciones (avisos.js): tools/puente/web/icono-notificacion.png,
+  // propia de cada servidor (no va al repositorio); si no esta, el icono de la app
+  if (p === '/puente/icono-notificacion.png' && req.method === 'GET') {
+    const file = path.join(STATIC, 'icono-notificacion.png');
+    if (!fs.existsSync(file)) { res.writeHead(302, { Location: '/puente/icono-192.png' }); return res.end(); }
+    return send(res, 200, 'image/png', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
   if (p === '/puente/logo-carga.png' && req.method === 'GET') {
     const file = path.join(STATIC, 'logo-carga.png');
     if (!fs.existsSync(file)) { res.writeHead(302, { Location: '/puente/icono-512.png' }); return res.end(); }
