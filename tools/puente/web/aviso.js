@@ -6298,6 +6298,7 @@ function sheetDrag(sheet, opts) {
     [() => shown(byId('emoji-picker')), (app) => (app._toggleEmojiPicker ? app._toggleEmojiPicker() : (byId('emoji-picker').style.display = 'none'))],
     [() => [...document.querySelectorAll('.modal-overlay')].find(shown), () => { const m = [...document.querySelectorAll('.modal-overlay')].find(shown); if (m) m.style.display = 'none'; }],
     [() => shown(byId('search-panel')), () => { byId('search-panel').style.display = 'none'; }],
+    [() => byId('puente-miembros'), () => byId('puente-miembros').querySelector('.pm-cerrar')?.click()],
     [() => rightOpen(), (app) => app._closeMobilePanels && app._closeMobilePanels()],
     [() => shown(byId('thread-panel')) && !drawerOpen(), (app) => app._closeThread && app._closeThread()],
   ];
@@ -6314,22 +6315,45 @@ function sheetDrag(sheet, opts) {
     return false; // en la lista de canales: salir
   }
 
-  // ── App instalada y navegador: el historial ──
+  // Hay algo que deshacer con atras (en la lista de canales, sin nada abierto, atras sale)
+  const shouldArm = () => mobile() && (!!topLayer() || !drawerOpen());
+  const onBack = () => { const app = window.app; if (app && mobile()) step(app); setTimeout(arm, 0); };
+
+  // ── Android (Chrome y la app instalada): CloseWatcher ──
+  // Es la forma de Chrome para el boton atras. Con el historial no alcanza: Chrome
+  // saltea las entradas que una pagina agrega sin que la persona haya tocado nada,
+  // asi que al abrir la app (con un chat ya abierto) atras la cerraba de una.
+  // Un CloseWatcher si recibe ese primer atras; los siguientes se arman con cada
+  // toque, como pide Chrome.
+  const hasWatcher = typeof window.CloseWatcher === 'function';
+  let watcher = null;
+  function armWatcher() {
+    if (!shouldArm()) { if (watcher) { const w = watcher; watcher = null; w.onclose = null; try { w.destroy(); } catch { /* ya no estaba */ } } return; }
+    if (watcher) return;
+    try {
+      const w = new CloseWatcher();
+      w.onclose = () => { if (watcher === w) watcher = null; onBack(); };
+      watcher = w;
+    } catch { /* sin permiso para otro todavia: se arma con el proximo toque */ }
+  }
+
+  // ── Otros navegadores (y Safari con el gesto de volver): el historial ──
   let armed = false;
-  const shouldArm = () => mobile() && !membersPage() && (!!topLayer() || !drawerOpen());
-  function arm() {
-    if (armed || !shouldArm()) return;
+  function armHistory() {
+    if (armed || !shouldArm() || membersPage()) return;
+    // Sin un toque antes, Chrome ignora la entrada: se espera al primero
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     try { history.pushState({ puenteAtras: 1 }, ''); armed = true; } catch { /* sin historial */ }
   }
-  addEventListener('popstate', (e) => {
-    if (e.state && e.state.puenteAtras) return; // se cerro algo de mas arriba (p. ej. "Miembros"): seguimos armados
-    if (!armed) return;
-    armed = false;
-    const app = window.app;
-    if (!app || !mobile()) return;
-    step(app);
-    setTimeout(arm, 0); // si queda algo que deshacer (o seguimos en un chat), se vuelve a armar
-  });
+  if (!hasWatcher) {
+    addEventListener('popstate', (e) => {
+      if (e.state && e.state.puenteAtras) return; // se cerro algo de mas arriba (p. ej. "Miembros"): seguimos armados
+      if (!armed) return;
+      armed = false;
+      onBack();
+    });
+  }
+  const arm = () => (hasWatcher ? armWatcher() : armHistory());
 
   let tries = 0;
   (function wait() {
@@ -6349,6 +6373,7 @@ function sheetDrag(sheet, opts) {
     new MutationObserver(later).observe(body(), { attributes: true, attributeFilter: ['class'] });
     new MutationObserver(later).observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ['style', 'class'] });
     document.addEventListener('click', () => setTimeout(arm, 50), true);
+    document.addEventListener('pointerdown', () => setTimeout(arm, 50), true);
     arm();
   })();
 })();
