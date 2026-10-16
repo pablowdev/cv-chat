@@ -2350,8 +2350,8 @@ function sheetDrag(sheet, opts) {
 //    los canales (el de Haven solo aparece en los publicos). Es el enlace de
 //    Haven (/app?channel=...&message=...), mas &thread= si esta en un hilo.
 //  - Tocar un enlace a un mensaje o canal, de CV Chat o de Discord, lo abre aca
-//    mismo, en el mensaje (tambien dentro de un hilo), sin recargar. Si es de
-//    Discord y no esta en CV Chat (o no lo podes ver), se abre Discord.
+//    mismo, en el mensaje (tambien dentro de un hilo), sin recargar. Nunca abre
+//    Discord: si el mensaje no esta en CV Chat (o no lo podes ver), lo avisa.
 //  - Esos enlaces se ven como "#canal › mensaje", como en Discord.
 //  - Al entrar con un enlace de un mensaje de un hilo, se abre el hilo.
 //  Al pasar a Discord, el puente cambia los enlaces de CV Chat por los de alla.
@@ -2375,13 +2375,20 @@ function sheetDrag(sheet, opts) {
     return null;
   }
 
+  // A donde lleva: { data } si esta, { missing: true } si no esta (o no lo podes
+  // ver), { failed: true } si el servidor no contesto. Solo se recuerdan las dos
+  // primeras: un fallo (por ejemplo, mientras se reinicia el servidor) se vuelve a
+  // intentar la proxima vez.
   function resolve(p) {
-    if (!cache.has(p.key)) {
-      const tk = token();
-      cache.set(p.key, !tk ? Promise.resolve(null) : fetch('/puente/api/mensaje?' + p.q, { headers: { Authorization: 'Bearer ' + tk } })
-        .then(r => (r.ok ? r.json() : null)).catch(() => null));
-    }
-    return cache.get(p.key);
+    if (cache.has(p.key)) return cache.get(p.key);
+    const tk = token();
+    if (!tk) return Promise.resolve({ failed: true });
+    const pr = fetch('/puente/api/mensaje?' + p.q, { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json().then(data => ({ data })) : r.status === 404 ? { missing: true } : { failed: true }))
+      .catch(() => ({ failed: true }))
+      .then(res => { if (res.failed) cache.delete(p.key); return res; });
+    cache.set(p.key, pr);
+    return pr;
   }
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2422,17 +2429,24 @@ function sheetDrag(sheet, opts) {
   }
   window.puenteEnlaces = { copiar: copyLink };
 
-  // "#canal › mensaje" en vez de la direccion entera (solo si se ve la direccion tal cual)
+  // El enlace pasa a ser el de CV Chat (asi tampoco lleva a Discord al abrirlo en
+  // otra pestaña) y, si se veia la direccion tal cual, dice "#canal › mensaje"
   function label(a) {
     if (a.dataset.puenteEnlace) return;
-    const text = a.textContent.trim();
-    if (!text || (text !== a.href && text !== a.getAttribute('href') && !/^https?:\/\//.test(text))) return;
     const p = parse(a.href);
     if (!p) return;
+    const text = a.textContent.trim();
+    const showsUrl = !!text && (text === a.href || text === a.getAttribute('href') || /^https?:\/\//.test(text));
     a.dataset.puenteEnlace = '1';
-    resolve(p).then(r => {
-      if (!r || !a.isConnected) return;
-      a.title = a.href;
+    resolve(p).then(res => {
+      const r = res.data;
+      if (!r || !a.isConnected) { if (res.failed) delete a.dataset.puenteEnlace; return; }
+      if (p.discord) {
+        a.dataset.discord = a.href;
+        a.href = location.origin + '/app?channel=' + r.codigo + (r.mensaje ? '&message=' + r.mensaje : '') + (r.hilo ? '&thread=' + r.hilo : '');
+      }
+      if (!showsUrl) return;
+      a.title = 'Abrir en CV Chat';
       a.classList.add('puente-enlace-msj');
       a.textContent = (r.canal ? '#' + r.canal : 'Mensaje directo') + (r.mensaje ? ' › mensaje' : '');
     });
@@ -2453,10 +2467,11 @@ function sheetDrag(sheet, opts) {
       if (!p) return;
       e.preventDefault();
       e.stopPropagation();
-      resolve(p).then(r => {
-        if (r) open(app, r);
-        else if (p.discord) window.open(a.href, '_blank', 'noopener');
-        else if (app._showToast) app._showToast('Ese mensaje no existe o no tenés acceso a ese canal', 'error');
+      resolve(p).then(res => {
+        if (res.data) { open(app, res.data); return; }
+        if (!app._showToast) return;
+        if (res.failed) app._showToast('No se pudo abrir el enlace. Probá de nuevo en un momento.', 'error');
+        else app._showToast(p.discord ? 'Ese mensaje no está en CV Chat, o no tenés acceso a ese canal' : 'Ese mensaje no existe, o no tenés acceso a ese canal', 'error');
       });
     }, true);
 
@@ -2471,7 +2486,8 @@ function sheetDrag(sheet, opts) {
     const sp = new URLSearchParams(location.search);
     const th = sp.get('thread'), msg = sp.get('message');
     if (th && msg && /^\d+$/.test(th) && /^\d+$/.test(msg)) {
-      resolve({ key: 'm' + msg, q: 'id=' + msg }).then(async r => {
+      resolve({ key: 'm' + msg, q: 'id=' + msg }).then(async res => {
+        const r = res.data;
         if (!r) return;
         for (let i = 0; i < 60 && app.currentChannel !== r.codigo; i++) await sleep(250); // que Haven cambie de canal
         await sleep(700);
