@@ -206,7 +206,9 @@
     const W = 1080, H = 1920, cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const x = cv.getContext('2d');
-    const font = (w, s) => `normal ${w} ${s}px "gg sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif`;
+    const font = (w, s) => `normal ${w} ${s}px "gg sans",system-ui,"Haven Emoji","Segoe UI",Roboto,Arial,sans-serif`;
+    // Los emojis de la tarjeta con Twemoji: la fuente tiene que estar cargada antes de dibujar
+    try { await document.fonts.load('60px "Haven Emoji"', [d.medallas.map(m => m.emoji).join(''), d.emojis.map(e => e.e).join(''), d.nombre, (d.respuestas[0] || {}).nombre || ''].join('')); } catch { /* sin la fuente: los del sistema */ }
     const g = x.createLinearGradient(0, 0, W, H);
     g.addColorStop(0, '#5865f2'); g.addColorStop(0.55, '#9b51e0'); g.addColorStop(1, '#eb459e');
     x.fillStyle = g; x.fillRect(0, 0, W, H);

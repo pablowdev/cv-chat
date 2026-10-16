@@ -1,10 +1,16 @@
 /* "Tu historia" (/puente/historia), con los colores de Discord */
+/* Los emojis con Twemoji, como en la app (la fuente la trae Haven) */
+@font-face {
+  font-family: 'Haven Emoji'; font-display: swap;
+  src: url('/fonts/twemoji-15.0.3.woff2') format('woff2');
+  unicode-range: U+200D, U+2194-21AA, U+231A-23FF, U+25AA-27BF, U+2934-2935, U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+1F000-1FAFF, U+E0020-E007F;
+}
 :root {
   --fondo: #1e1f22; --tarjeta: #2b2d31; --tarjeta2: #313338; --texto: #f2f3f5; --suave: #b5bac1; --tenue: #80848e;
   --marca: #5865f2; --verde: #3ba55c; --rosa: #eb459e; --amarillo: #fee75c;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--fondo); color: var(--texto); font: normal 16px/1.45 "gg sans", system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+html, body { margin: 0; background: var(--fondo); color: var(--texto); font: normal 16px/1.45 "gg sans", system-ui, "Haven Emoji", "Segoe UI", Roboto, Arial, sans-serif; }
 a { color: #00a8fc; }
 .barra { position: sticky; top: 0; z-index: 2; background: rgba(30, 31, 34, .92); backdrop-filter: blur(6px); padding: 10px 16px; border-bottom: 1px solid #111214; }
 .volver { display: inline-flex; align-items: center; gap: 6px; color: var(--suave); text-decoration: none; font-weight: 600; }

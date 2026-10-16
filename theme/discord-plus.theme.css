@@ -71,8 +71,11 @@
   --led-off:       #81828a;
   --led-glow:      rgba(35, 165, 90, 0.35);
 
-  --font-main:     'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-heading:  'Inter', 'Segoe UI', system-ui, sans-serif;
+  /* Emojis como en Discord: Twemoji (la trae Haven, 'Haven Emoji') antes que los
+     del sistema, en todos los dispositivos y sin cuadraditos en los nuevos */
+  --font-main:     'Inter', 'Haven Emoji', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-heading:  'Inter', 'Haven Emoji', 'Segoe UI', system-ui, sans-serif;
+  --font-emoji:    'Haven Emoji', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
 
   --radius:        8px;
   --radius-sm:     4px;
