@@ -5492,10 +5492,6 @@ function sheetDrag(sheet, opts) {
       inv.type = 'button'; inv.className = 'puente-invitar-btn'; inv.textContent = '🤝 Invitar gente';
       inv.addEventListener('click', () => { try { window.app._closeProfilePopup(); } catch { /* sigue */ } if (window.puenteInvitar) window.puenteInvitar(); });
       a.insertAdjacentElement('afterend', inv);
-      const per = document.createElement('button');
-      per.type = 'button'; per.className = 'puente-perfil-btn'; per.textContent = '✨ Personalizar perfil';
-      per.addEventListener('click', () => { try { window.app._closeProfilePopup(); } catch { /* sigue */ } if (window.puentePerfil) window.puentePerfil.open(); });
-      inv.insertAdjacentElement('afterend', per);
     }
   }
 
@@ -5800,98 +5796,217 @@ function sheetDrag(sheet, opts) {
   document.head.appendChild(style);
 })();
 
-// "Nitro gratis" (perfil.js): el color del nombre de cada uno (en los mensajes,
-// la lista de miembros y la tarjeta de perfil) y su banner en la tarjeta. La
-// ventana "Personalizar perfil" (desde la tarjeta propia) los elige, y cuenta lo
-// demas que en Discord es de Nitro y aca viene gratis.
+// Perfil como en Discord con Nitro, pero gratis (perfil.js):
+//  - Se ve en todos lados: el estilo del nombre (color, degradé y fuente) en los
+//    mensajes, la lista de miembros y la tarjeta; el tema (degradé de dos colores)
+//    y el banner en la tarjeta de perfil.
+//  - "Editar perfil" es uno solo, se abra desde donde se abra (el menu de abajo a
+//    la izquierda, la tarjeta, la lista): el de Haven rearmado como el de Discord,
+//    con las opciones a la izquierda, la vista previa en vivo al medio y lo que en
+//    CV Chat es gratis a la derecha. Usa las mismas piezas de Haven (foto, marco,
+//    forma, biografia, cumpleaños, animaciones, grupos) para guardarlas como
+//    siempre; el estilo, el tema y el banner los guarda perfil.js.
+//  - Las "Personas" de Haven quedan solo para los administradores.
 (function () {
   'use strict';
   const storage = (fn) => { try { return fn(); } catch { return null; } };
   const token = () => storage(() => localStorage.getItem('haven_token'));
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
-  let map = {};
-  const style = el('style'); style.id = 'puente-colores';
-  document.head.appendChild(style);
   const okColor = c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
   const okUrl = b => typeof b === 'string' && /^\/uploads\/puente-banners\/[\w.-]+$/.test(b);
+  const FONTS = [
+    ['normal', 'Normal', "inherit"],
+    ['redondeada', 'Redondeada', "'PuenteRedondeada', sans-serif"],
+    ['manuscrita', 'Manuscrita', "'PuenteManuscrita', cursive"],
+    ['moderna', 'Moderna', "'PuenteModerna', sans-serif"],
+    ['medieval', 'Medieval', "'PuenteMedieval', serif"],
+    ['pixel', 'Pixel', "'VT323', monospace"],
+    ['terror', 'Terror', "'PuenteTerror', cursive"],
+    ['angosta', 'Angosta', "'PuenteAngosta', sans-serif"],
+  ];
+  const fontCss = k => (FONTS.find(f => f[0] === k) || FONTS[0])[2];
+  let map = {};
 
+  // ── Como se ve en todos lados ──
+  const style = el('style'); style.id = 'puente-colores';
+  document.head.appendChild(style);
+  function nameRules(sel, v) {
+    const r = [];
+    if (v.f && v.f !== 'normal') r.push(`font-family: ${fontCss(v.f)} !important;` + (v.f === 'pixel' ? ' font-size: 1.12em;' : '') + (v.f === 'angosta' ? ' letter-spacing: .02em;' : ''));
+    if (okColor(v.c) && okColor(v.c2)) r.push(`background: linear-gradient(90deg, ${v.c}, ${v.c2}) !important; -webkit-background-clip: text !important; background-clip: text !important; color: transparent !important; -webkit-text-fill-color: transparent !important;`);
+    else if (okColor(v.c)) r.push(`color: ${v.c} !important;`);
+    return r.length ? `${sel} { ${r.join(' ')} }` : '';
+  }
   function paintColors() {
     const rules = [];
     for (const [id, v] of Object.entries(map)) {
-      if (!/^\d+$/.test(id) || !okColor(v.c)) continue;
-      rules.push(`.message[data-user-id="${id}"] .message-author, .user-item[data-user-id="${id}"] .user-item-name, #profile-popup[data-puente-uid="${id}"] .profile-popup-displayname { color: ${v.c} !important; }`);
+      if (!/^\d+$/.test(id)) continue;
+      rules.push(nameRules(`.message[data-user-id="${id}"] .message-author, .user-item[data-user-id="${id}"] .user-item-name, #profile-popup[data-puente-uid="${id}"] .profile-popup-displayname`, v));
     }
-    style.textContent = rules.join('\n');
+    style.textContent = rules.filter(Boolean).join('\n');
   }
   function paintPopup(popup, id) {
     if (!popup) return;
     popup.dataset.puenteUid = String(id);
     const v = map[id] || {};
     const banner = popup.querySelector('.profile-popup-banner');
-    if (banner && okUrl(v.b)) { banner.style.background = `#202024 center / cover no-repeat url("${v.b}")`; banner.classList.add('puente-con-banner'); }
+    const themed = okColor(v.t1) && okColor(v.t2);
+    popup.classList.toggle('puente-tema', themed);
+    if (themed) popup.style.setProperty('--pt', `linear-gradient(180deg, ${v.t1}, ${v.t2})`);
+    if (banner) {
+      if (okUrl(v.b)) { banner.style.background = `#202024 center / cover no-repeat url("${v.b}")`; banner.classList.add('puente-con-banner'); }
+      else if (themed) banner.style.background = v.t1;
+    }
   }
   async function load() {
     const d = await fetch('/puente/api/perfil/todos', { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (d) { map = d; paintColors(); }
   }
 
-  // ── La ventana ──
-  const PALETTE = ['#f23f43', '#f47b67', '#f0b232', '#fee75c', '#57f287', '#23a55a', '#1abc9c', '#00a8fc', '#5865f2', '#9b59b6', '#eb459e', '#ff73fa', '#e67e22', '#c27c0e', '#99aab5', '#ffffff'];
-  function close() { document.getElementById('puente-perfil-capa')?.remove(); }
-  function open() {
-    close();
+  // ── El editor ──
+  const PALETTE = ['#f23f43', '#f47b67', '#f0b232', '#fee75c', '#57f287', '#23a55a', '#1abc9c', '#00a8fc', '#5865f2', '#9b59b6', '#eb459e', '#ff73fa', '#e67e22', '#99aab5', '#ffffff'];
+  const THEMES = [['#5865f2', '#eb459e'], ['#1abc9c', '#2c3e50'], ['#f0b232', '#e74c3c'], ['#0b1d3a', '#3a7bd5'], ['#3b0a45', '#ff4f9a'], ['#2d3436', '#636e72'], ['#00a8fc', '#57f287'], ['#7b2ff7', '#f107a3']];
+  let st = null, built = false, refs = {};
+
+  function section(title, hint) {
+    const s = el('section', 'pep-sec');
+    s.appendChild(el('h4', 'pep-titulo', title));
+    if (hint) s.appendChild(el('p', 'pep-ayuda', hint));
+    return s;
+  }
+  function relabel(btnId, text) { const b = document.getElementById(btnId); if (b) b.textContent = text; }
+
+  function preview() {
+    const app = window.app, me = app && app.user;
+    if (!me || !refs.card) return;
+    const name = (document.getElementById('rename-input') || {}).value || me.displayName || me.username;
+    refs.pName.textContent = name;
+    refs.pUser.textContent = '@' + me.username;
+    const bio = ((document.getElementById('edit-profile-bio') || {}).value || '').trim();
+    refs.pBio.textContent = bio || 'Contá algo de vos en "Sobre mí".';
+    refs.pBio.classList.toggle('vacio', !bio);
+    // Nombre con su estilo
+    refs.pName.removeAttribute('style');
+    const v = { c: st.color, c2: st.mode === 'degrade' ? st.color2 : null, f: st.fuente };
+    if (st.mode === 'sin') { v.c = null; v.c2 = null; }
+    if (v.f && v.f !== 'normal') refs.pName.style.fontFamily = fontCss(v.f).replace(/ !important/, '');
+    if (okColor(v.c) && okColor(v.c2)) Object.assign(refs.pName.style, { background: `linear-gradient(90deg, ${v.c}, ${v.c2})`, webkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', webkitTextFillColor: 'transparent' });
+    else if (okColor(v.c)) refs.pName.style.color = v.c;
+    // Tema y banner
+    const themed = okColor(st.tema1) && okColor(st.tema2);
+    refs.card.style.background = themed ? `linear-gradient(180deg, ${st.tema1}, ${st.tema2})` : '';
+    refs.card.classList.toggle('con-tema', themed);
+    refs.pBanner.style.background = okUrl(st.banner) ? `#202024 center / cover no-repeat url("${st.banner}")` : themed ? st.tema1 : '';
+    // Foto: la misma que muestra el editor de Haven
+    const src = avatarSrc();
+    refs.pAvatar.textContent = '';
+    if (src) { const i = el('img'); i.src = src; i.alt = ''; refs.pAvatar.appendChild(i); }
+    else refs.pAvatar.textContent = (name || '?').trim().charAt(0).toUpperCase();
+    // Botones elegidos
+    refs.fonts.querySelectorAll('button').forEach(b => b.classList.toggle('activo', b.dataset.f === (st.fuente || 'normal')));
+    refs.modes.querySelectorAll('button').forEach(b => b.classList.toggle('activo', b.dataset.m === st.mode));
+    refs.colorRow.hidden = st.mode === 'sin';
+    refs.c2.hidden = st.mode !== 'degrade';
+    refs.c1.value = st.color || '#5865f2'; refs.c2.value = st.color2 || '#eb459e';
+    refs.t1.value = st.tema1 || '#5865f2'; refs.t2.value = st.tema2 || '#eb459e';
+    refs.themeNone.classList.toggle('activo', !themed);
+    refs.bannerRm.hidden = !okUrl(st.banner);
+    refs.fonts.querySelectorAll('button span').forEach(s => { s.textContent = name; });
+  }
+  function avatarSrc() {
+    const p = document.getElementById('avatar-upload-preview');
+    const img = p && p.querySelector('img');
+    if (img && img.src) return img.src;
+    const bg = p ? getComputedStyle(p).backgroundImage : '';
+    const m = /url\("?(.*?)"?\)/.exec(bg || '');
+    if (m) return m[1];
     const app = window.app;
-    const me = app && app.user;
-    if (!me) return;
-    const mine = map[me.id] || {};
-    let color = mine.c || null;
-    const back = el('div'); back.id = 'puente-perfil-capa';
-    const box = el('div', 'pp-tarjeta');
-    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
-    const x = el('button', 'pp-cerrar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.addEventListener('click', close);
-    box.append(x, el('h2', 'pp-titulo', '✨ Personalizá tu perfil'), el('p', 'pp-sub', 'Como con Nitro, pero gratis y solo en __PUENTE_APP__.'));
+    return app && app.user && app.user.avatar ? app.user.avatar : null;
+  }
 
-    // Vista previa: banner + nombre con el color
-    const prev = el('div', 'pp-vista');
-    const pBanner = el('div', 'pp-vista-banner');
-    const pName = el('div', 'pp-vista-nombre', me.displayName || me.username);
-    prev.append(pBanner, pName);
-    box.appendChild(prev);
-    const showBanner = (b) => { pBanner.style.background = okUrl(b) ? `#202024 center / cover no-repeat url("${b}")` : ''; };
-    const showColor = () => { pName.style.color = color || ''; };
-    showBanner(mine.b); showColor();
+  function build(modal) {
+    const box = modal.querySelector('.modal');
+    if (!box || built) return;
+    built = true;
+    const app = window.app;
+    const $ = (id) => document.getElementById(id);
+    box.classList.add('pep-modal');
+    modal.classList.add('pep-overlay');
+    const h3 = box.querySelector('h3'); if (h3) h3.textContent = 'Editar perfil';
 
-    // Color
-    box.appendChild(el('h3', 'pp-h3', 'Color de tu nombre'));
-    const sw = el('div', 'pp-colores');
-    const mark = () => sw.querySelectorAll('button').forEach(b => b.classList.toggle('activo', (b.dataset.c || null) === color));
-    const none = el('button', 'pp-color pp-sin', 'Sin color'); none.type = 'button';
-    none.addEventListener('click', () => { color = null; mark(); showColor(); });
-    sw.appendChild(none);
+    const grid = el('div', 'pep-grid');
+    const left = el('div', 'pep-opciones'), mid = el('div', 'pep-medio'), right = el('aside', 'pep-beneficios');
+    grid.append(left, mid, right);
+
+    // Nombre
+    const nameGroup = $('rename-input')?.closest('.form-group');
+    box.querySelector('.modal-desc')?.remove();
+    let s = section('Nombre para mostrar', 'Cualquier nombre de hasta 32 caracteres, como en Discord.');
+    if (nameGroup) { nameGroup.querySelector('label')?.remove(); s.appendChild(nameGroup); }
+    left.appendChild(s);
+
+    // Estilo del nombre
+    s = section('Estilo del nombre', 'Fuente y color, como el de Nitro.');
+    const fonts = el('div', 'pep-fuentes');
+    for (const [k, label, css] of FONTS) {
+      const b = el('button', 'pep-fuente'); b.type = 'button'; b.dataset.f = k; b.title = label;
+      const sample = el('span'); sample.style.fontFamily = css; b.append(sample, el('small', null, label));
+      b.addEventListener('click', () => { st.fuente = k === 'normal' ? null : k; preview(); });
+      fonts.appendChild(b);
+    }
+    const modes = el('div', 'pep-modos');
+    for (const [m, label] of [['sin', 'Sin color'], ['solido', 'Color'], ['degrade', 'Degradé']]) {
+      const b = el('button', null, label); b.type = 'button'; b.dataset.m = m;
+      b.addEventListener('click', () => { st.mode = m; if (m !== 'sin' && !st.color) st.color = '#5865f2'; if (m === 'degrade' && !st.color2) st.color2 = '#eb459e'; preview(); });
+      modes.appendChild(b);
+    }
+    const colorRow = el('div', 'pep-colores');
+    const c1 = el('input'); c1.type = 'color'; c1.title = 'Color'; c1.addEventListener('input', () => { st.color = c1.value.toLowerCase(); preview(); });
+    const c2 = el('input'); c2.type = 'color'; c2.title = 'Segundo color'; c2.addEventListener('input', () => { st.color2 = c2.value.toLowerCase(); preview(); });
+    const sw = el('div', 'pep-muestras');
     for (const c of PALETTE) {
-      const b = el('button', 'pp-color'); b.type = 'button'; b.dataset.c = c; b.style.background = c; b.title = c;
-      b.addEventListener('click', () => { color = c; mark(); showColor(); });
+      const b = el('button', 'pep-muestra'); b.type = 'button'; b.style.background = c; b.title = c;
+      b.addEventListener('click', () => { st.color = c; preview(); });
       sw.appendChild(b);
     }
-    const custom = el('input', 'pp-elegir'); custom.type = 'color'; custom.title = 'Otro color'; custom.value = color || '#5865f2';
-    custom.addEventListener('input', () => { color = custom.value.toLowerCase(); mark(); showColor(); });
-    sw.appendChild(custom);
-    box.appendChild(sw);
-    mark();
+    colorRow.append(c1, c2, sw);
+    s.append(fonts, modes, colorRow);
+    left.appendChild(s);
+
+    // Avatar, forma y decoracion
+    s = section('Avatar', 'JPG, PNG, WebP o GIF animado.');
+    const avatarRow = $('avatar-upload-btn')?.closest('.avatar-upload-row');
+    if (avatarRow) {
+      const notes = [];
+      for (let n = avatarRow.nextElementSibling; n && n.tagName === 'SMALL'; n = n.nextElementSibling) notes.push(n);
+      s.appendChild(avatarRow);
+      notes.filter(n => n.id === 'avatar-edit-note').forEach(n => s.appendChild(n));
+      notes.filter(n => n.id !== 'avatar-edit-note').forEach(n => n.remove());
+    }
+    const shape = $('avatar-shape-picker');
+    if (shape) { s.appendChild(el('h5', 'pep-sub', 'Forma')); s.appendChild(shape); }
+    left.appendChild(s);
+
+    s = section('Decoración del avatar', 'Una imagen (PNG con transparencia o GIF) que rodea tu foto.');
+    const borderRow = $('border-upload-btn')?.closest('.avatar-upload-row');
+    if (borderRow) {
+      for (let n = borderRow.nextElementSibling; n && n.tagName === 'SMALL'; n = borderRow.nextElementSibling) n.remove();
+      s.appendChild(borderRow);
+    }
+    left.appendChild(s);
 
     // Banner
-    box.appendChild(el('h3', 'pp-h3', 'Banner de tu perfil'));
-    const brow = el('div', 'pp-fila');
+    s = section('Banner del perfil', 'Una imagen o un GIF arriba de tu tarjeta.');
+    const brow = el('div', 'pep-fila');
     const file = el('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp,image/gif'; file.hidden = true;
-    const up = el('button', 'pp-boton', 'Subir imagen o GIF'); up.type = 'button';
-    const rm = el('button', 'pp-boton gris', 'Quitar'); rm.type = 'button'; rm.hidden = !okUrl(mine.b);
-    brow.append(up, rm, file);
-    box.appendChild(brow);
-    const note = el('p', 'pp-nota', ''); box.appendChild(note);
+    const up = el('button', 'pep-boton', 'Cambiar banner'); up.type = 'button';
+    const rm = el('button', 'pep-boton gris', 'Quitar'); rm.type = 'button';
+    const note = el('p', 'pep-nota', '');
     const say = (t, bad) => { note.textContent = t; note.classList.toggle('mal', !!bad); };
     up.addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
       const f = file.files && file.files[0];
+      file.value = '';
       if (!f) return;
       if (f.size > 6 * 1024 * 1024) { say('La imagen es muy pesada (hasta 6 MB).', true); return; }
       const rd = new FileReader();
@@ -5901,87 +6016,244 @@ function sheetDrag(sheet, opts) {
         const d = r ? await r.json().catch(() => ({})) : {};
         up.disabled = false;
         if (!r || !r.ok) { say(d.error || 'No se pudo subir. Probá de nuevo.', true); return; }
-        map[me.id] = { ...(map[me.id] || {}), b: d.banner }; showBanner(d.banner); rm.hidden = false; say('¡Listo! Ya se ve en tu perfil.');
+        st.banner = d.banner; map[app.user.id] = { ...(map[app.user.id] || {}), b: d.banner }; say(''); preview();
       };
       rd.readAsDataURL(f);
-      file.value = '';
     });
     rm.addEventListener('click', async () => {
       const r = await fetch('/puente/api/perfil/banner', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ quitar: true }) }).catch(() => null);
-      if (r && r.ok) { if (map[me.id]) delete map[me.id].b; showBanner(null); rm.hidden = true; say('Banner quitado.'); }
+      if (r && r.ok) { st.banner = null; if (map[app.user.id]) delete map[app.user.id].b; preview(); }
     });
+    brow.append(up, rm, file);
+    s.append(brow, note);
+    left.appendChild(s);
 
-    // Lo demas que ya es gratis
-    box.appendChild(el('h3', 'pp-h3', 'También gratis en __PUENTE_APP__'));
-    const ul = el('ul', 'pp-lista');
-    for (const [e, t] of [['🎞️', 'Foto de perfil animada (GIF): cambiala con "Editar perfil"'], ['📎', 'Archivos de hasta 25 MB (en Discord, 10 MB sin Nitro)'], ['😎', 'Emojis personalizados y animados en todos los canales'], ['🎨', 'Color de nombre y banner, como acá arriba']]) {
-      const li = el('li'); li.append(el('span', 'pp-e', e), el('span', null, t)); ul.appendChild(li);
+    // Tema del perfil
+    s = section('Tema del perfil', 'Un degradé de dos colores en toda tu tarjeta.');
+    const trow = el('div', 'pep-colores');
+    const t1 = el('input'); t1.type = 'color'; t1.title = 'Principal';
+    const t2 = el('input'); t2.type = 'color'; t2.title = 'Acento';
+    t1.addEventListener('input', () => { st.tema1 = t1.value.toLowerCase(); if (!st.tema2) st.tema2 = t2.value.toLowerCase(); preview(); });
+    t2.addEventListener('input', () => { st.tema2 = t2.value.toLowerCase(); if (!st.tema1) st.tema1 = t1.value.toLowerCase(); preview(); });
+    const tl = el('div', 'pep-etiquetas'); tl.append(el('span', null, 'Principal'), el('span', null, 'Acento'));
+    const presets = el('div', 'pep-muestras');
+    const themeNone = el('button', 'pep-sin-tema', 'Sin tema'); themeNone.type = 'button';
+    themeNone.addEventListener('click', () => { st.tema1 = null; st.tema2 = null; preview(); });
+    presets.appendChild(themeNone);
+    for (const [a, b] of THEMES) {
+      const bt = el('button', 'pep-muestra'); bt.type = 'button'; bt.style.background = `linear-gradient(180deg, ${a}, ${b})`;
+      bt.addEventListener('click', () => { st.tema1 = a; st.tema2 = b; preview(); });
+      presets.appendChild(bt);
     }
-    box.appendChild(ul);
+    trow.append(t1, t2);
+    s.append(trow, tl, presets);
+    left.appendChild(s);
 
-    const save = el('button', 'pp-guardar', 'Guardar color'); save.type = 'button';
-    save.addEventListener('click', async () => {
-      save.disabled = true;
-      const r = await fetch('/puente/api/perfil/color', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ color }) }).catch(() => null);
-      const d = r ? await r.json().catch(() => ({})) : {};
-      save.disabled = false;
-      if (!r || !r.ok) { say(d.error || 'No se pudo guardar.', true); return; }
-      map[me.id] = { ...(map[me.id] || {}), c: color || undefined }; if (!color) delete map[me.id].c; paintColors();
-      if (app._showToast) app._showToast(color ? 'Listo: ese es tu color' : 'Listo: sin color', 'success');
-      close();
-    });
-    box.appendChild(save);
-    back.appendChild(box);
-    back.addEventListener('click', (e) => { if (e.target === back) close(); });
-    document.addEventListener('keydown', function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey, true); } }, true);
-    document.body.appendChild(back);
+    // Sobre mi, cumpleaños, animaciones
+    const bioGroup = $('edit-profile-bio')?.closest('.form-group');
+    if (bioGroup) { s = section('Sobre mí'); bioGroup.querySelector('label')?.remove(); bioGroup.querySelector('.muted-text')?.remove(); s.appendChild(bioGroup); left.appendChild(s); }
+    const bday = $('edit-profile-birthday')?.closest('.form-group');
+    if (bday) { s = section('Cumpleaños', 'Se elige una sola vez.'); bday.querySelector('label[for="edit-profile-birthday"]')?.remove(); s.appendChild(bday); left.appendChild(s); }
+    const anim = $('animate-profile-select');
+    if (anim) {
+      s = section('Animaciones', 'Cuándo se mueven tu foto y tu decoración si son GIF.');
+      const t = $('animate-learn-more-toggle'), b = $('animate-learn-more-body');
+      s.appendChild(anim);
+      if (t) s.appendChild(t);
+      if (b) s.appendChild(b);
+      left.appendChild(s);
+    }
+    // Lo que sobra del editor viejo (titulos sueltos) se va
+    box.querySelector('.avatar-settings')?.remove();
+
+    // Mas opciones: grupos (y personas, solo admins)
+    const more = el('details', 'pep-mas');
+    more.appendChild(el('summary', null, 'Más opciones'));
+    const groups = $('rename-modal-groups-section'); if (groups) more.appendChild(groups);
+    const personas = box.querySelector('.personas-section');
+    if (personas) { if (app && app.user && app.user.isAdmin) more.appendChild(personas); else personas.remove(); }
+    left.appendChild(more);
+
+    // Vista previa (al medio)
+    const card = el('div', 'pep-tarjeta');
+    const pBanner = el('div', 'pep-t-banner');
+    const pAvatar = el('div', 'pep-t-avatar');
+    const body = el('div', 'pep-t-cuerpo');
+    const pName = el('div', 'pep-t-nombre'), pUser = el('div', 'pep-t-usuario');
+    const pBioT = el('div', 'pep-t-titulo', 'Sobre mí'), pBio = el('div', 'pep-t-bio');
+    body.append(pName, pUser, pBioT, pBio);
+    card.append(pBanner, pAvatar, body);
+    mid.append(el('div', 'pep-vista-titulo', 'Vista previa'), card);
+
+    // Gratis en CV Chat (a la derecha)
+    right.appendChild(el('h4', 'pep-titulo', 'Gratis en __PUENTE_APP__'));
+    right.appendChild(el('p', 'pep-ayuda', 'Lo que en Discord se paga con Nitro, acá viene incluido.'));
+    const tbl = el('div', 'pep-tabla');
+    const row = (cells, head) => { const r = el('div', 'pep-tfila' + (head ? ' cabeza' : '')); cells.forEach((c, i) => r.appendChild(el('span', i ? 'pep-tcel' : 'pep-tnom', c))); tbl.appendChild(r); };
+    row(['', 'Discord', 'Nitro', '__PUENTE_APP__'], true);
+    for (const r of [
+      ['Banner del perfil', '✕', '✓', '✓'], ['Tema del perfil', '✕', '✓', '✓'], ['Estilo del nombre', '✕', '✓', '✓'],
+      ['Avatar animado (GIF)', '✕', '✓', '✓'], ['Decoración propia', '✕', '✕', '✓'], ['Archivos', '10 MB', '500 MB', '25 MB'],
+      ['Emojis en todos lados', '✕', '✓', '✓'], ['Tu historia y medallas', '✕', '✕', '✓'],
+    ]) row(r);
+    right.appendChild(tbl);
+    right.appendChild(el('p', 'pep-precio', 'Nitro cuesta unos US$ 10 por mes. Acá, nada.'));
+
+    const actions = box.querySelector('.modal-actions');
+    box.insertBefore(grid, actions);
+    refs = { card, pBanner, pAvatar, pName, pUser, pBio, fonts, modes, colorRow, c1, c2, t1, t2, themeNone, bannerRm: rm };
+
+    // Vista previa en vivo
+    for (const id of ['rename-input', 'edit-profile-bio']) $(id)?.addEventListener('input', preview);
+    const ap = $('avatar-upload-preview');
+    if (ap) new MutationObserver(preview).observe(ap, { attributes: true, childList: true, subtree: true });
+
+    // Guardar: el estilo y el tema van a perfil.js; lo demas lo guarda Haven
+    $('save-rename-btn')?.addEventListener('click', () => saveStyle(), true);
   }
-  window.puentePerfil = { open, paintPopup };
+
+  async function saveStyle() {
+    if (!st) return;
+    const app = window.app;
+    const body = {
+      color: st.mode === 'sin' ? null : st.color, color2: st.mode === 'degrade' ? st.color2 : null,
+      fuente: st.fuente || null, tema1: st.tema1 || null, tema2: st.tema2 || null,
+    };
+    const cur = map[app.user.id] || {};
+    if (body.color === (cur.c || null) && body.color2 === (cur.c2 || null) && body.fuente === (cur.f || null) && body.tema1 === (cur.t1 || null) && body.tema2 === (cur.t2 || null)) return;
+    const r = await fetch('/puente/api/perfil/estilo', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (!r || !r.ok) { if (app._showToast) app._showToast(d.error || 'No se pudo guardar el estilo', 'error'); return; }
+    map[app.user.id] = d.perfil || {};
+    paintColors();
+  }
+
+  // Haven les vuelve a poner su texto al abrir: los nombres de los botones van cada vez
+  function labels() {
+    for (const [id, t] of [['avatar-upload-btn', 'Cambiar avatar'], ['avatar-crop-btn', 'Recortar'], ['avatar-remove-btn', 'Quitar'], ['border-upload-btn', 'Subir decoración'], ['border-crop-btn', 'Ajustar'], ['border-remove-btn', 'Quitar'], ['cancel-rename-btn', 'Cancelar'], ['save-rename-btn', 'Guardar cambios']]) relabel(id, t);
+    const h = document.querySelector('#rename-modal .pep-modal > h3'); if (h) h.textContent = 'Editar perfil';
+  }
+  function openEditor(app) {
+    const modal = document.getElementById('rename-modal');
+    if (!modal) return;
+    build(modal);
+    labels();
+    setTimeout(labels, 0);
+    const v = map[app.user.id] || {};
+    st = { color: v.c || null, color2: v.c2 || null, mode: v.c && v.c2 ? 'degrade' : v.c ? 'solido' : 'sin', fuente: v.f || null, tema1: v.t1 || null, tema2: v.t2 || null, banner: v.b || null };
+    preview();
+    const box = modal.querySelector('.pep-opciones'); if (box) box.scrollTop = 0;
+  }
+  window.puentePerfil = { open: () => { const app = window.app; if (app && app._openRenameModal) app._openRenameModal(); }, paintPopup };
 
   const css = el('style');
   css.textContent = `
-    #puente-perfil-capa { position: fixed; inset: 0; z-index: 100012; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.7); animation: puente-fade .18s ease-out; }
-    #puente-perfil-capa .pp-tarjeta { position: relative; width: 100%; max-width: 28rem; max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; padding: 1.5rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
-    #puente-perfil-capa .pp-cerrar { position: absolute; top: .5rem; right: .75rem; border: 0; background: transparent; color: #b5bac1; font-size: 1.75rem; line-height: 1; cursor: pointer; }
-    #puente-perfil-capa .pp-titulo { margin: 0; font-size: 1.375rem; font-weight: 800; color: #f2f3f5; }
-    #puente-perfil-capa .pp-sub { margin: .25rem 0 1rem; color: #b5bac1; font-size: .9375rem; }
-    #puente-perfil-capa .pp-vista { border-radius: .75rem; overflow: hidden; background: #111214; margin-bottom: .5rem; }
-    #puente-perfil-capa .pp-vista-banner { height: 6rem; background: linear-gradient(135deg, #5865f244, #5865f222); }
-    #puente-perfil-capa .pp-vista-nombre { padding: .625rem .875rem .75rem; font-size: 1.25rem; font-weight: 800; color: #f2f3f5; }
-    #puente-perfil-capa .pp-h3 { margin: 1rem 0 .5rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #b5bac1; }
-    #puente-perfil-capa .pp-colores { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-    #puente-perfil-capa .pp-color { width: 2rem; height: 2rem; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
-    #puente-perfil-capa .pp-color.activo { border-color: #fff; box-shadow: 0 0 0 2px #5865f2; }
-    #puente-perfil-capa .pp-sin { width: auto; padding: 0 .75rem; border-radius: 1rem; background: #3a3940; color: #dbdee1; font: inherit; font-size: .8125rem; }
-    #puente-perfil-capa .pp-elegir { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; background: transparent; cursor: pointer; }
-    #puente-perfil-capa .pp-fila { display: flex; gap: .5rem; }
-    #puente-perfil-capa .pp-boton, #puente-perfil-capa .pp-guardar { min-height: 2.5rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-    #puente-perfil-capa .pp-boton.gris { background: #4e5058; }
-    #puente-perfil-capa .pp-guardar { width: 100%; min-height: 2.75rem; margin-top: 1rem; }
-    #puente-perfil-capa button:disabled { opacity: .6; cursor: default; }
-    #puente-perfil-capa .pp-nota { min-height: 1.2em; margin: .5rem 0 0; font-size: .875rem; color: #7fd6a2; }
-    #puente-perfil-capa .pp-nota.mal { color: #f0c36a; }
-    #puente-perfil-capa .pp-lista { margin: 0; padding: 0; list-style: none; }
-    #puente-perfil-capa .pp-lista li { display: flex; gap: .625rem; padding: .375rem 0; font-size: .9375rem; }
-    .puente-perfil-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border-radius: 6px; background: linear-gradient(90deg, #5865f2, #eb459e); color: #fff !important; font-weight: 600; font-size: 14px; border: 0; width: 100%; cursor: pointer; font-family: inherit; }
-    .puente-perfil-btn:hover { filter: brightness(1.1); }
-    .puente-profile-sheet .puente-perfil-btn { order: 1; }`;
+    @font-face { font-family: 'PuenteRedondeada'; src: url('/puente/fuentes/fredoka.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'PuenteManuscrita'; src: url('/puente/fuentes/pacifico.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'PuenteModerna'; src: url('/puente/fuentes/orbitron.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'PuenteMedieval'; src: url('/puente/fuentes/medievalsharp.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'PuenteTerror'; src: url('/puente/fuentes/creepster.woff2') format('woff2'); font-display: swap; }
+    @font-face { font-family: 'PuenteAngosta'; src: url('/puente/fuentes/bebas-neue.woff2') format('woff2'); font-display: swap; }
+    html body #profile-popup.puente-tema.puente-tema { background: var(--pt) !important; border-color: transparent !important; }
+    html body #profile-popup.puente-tema.puente-tema .profile-popup-body { background: rgba(17, 18, 20, .55); margin: 0 .5rem .5rem; border-radius: .5rem; }
+    html body #profile-popup.puente-tema.puente-tema .profile-popup-avatar { border-color: transparent !important; }
+    html body #profile-popup.puente-tema.puente-tema .profile-popup-status-dot { border-color: transparent !important; }
+
+    #rename-modal.pep-overlay { align-items: center; justify-content: center; }
+    #rename-modal .pep-modal { position: relative; width: min(72rem, calc(100vw - 32px)); max-width: none; height: min(52rem, calc(100vh - 32px)); max-height: none; display: flex; flex-direction: column; padding: 0; overflow: hidden; background: #1a1a1e; border: 1px solid #2a2a30; border-radius: 1rem; }
+    #rename-modal .pep-modal > h3 { margin: 0; padding: 1.125rem 1.5rem; font-size: 1.25rem; border-bottom: 1px solid #26262b; }
+    #rename-modal .pep-cerrar { position: absolute; top: .75rem; right: 1rem; z-index: 2; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: #2b2a30; color: #dbdee1; font-size: 1.5rem; line-height: 1; cursor: pointer; }
+    #rename-modal .pep-cerrar:hover { background: #3a3940; color: #fff; }
+    #rename-modal .pep-grid { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(19rem, 22rem) minmax(18rem, 21rem); }
+    #rename-modal .pep-opciones { overflow-y: auto; padding: .5rem 1.5rem 1.5rem; border-right: 1px solid #26262b; scrollbar-width: thin; }
+    #rename-modal .pep-medio { overflow-y: auto; padding: 1.5rem; background: #141417; display: flex; flex-direction: column; align-items: center; }
+    #rename-modal .pep-beneficios { overflow-y: auto; padding: 1.25rem; border-left: 1px solid #26262b; }
+    #rename-modal .pep-sec { padding: 1rem 0; border-bottom: 1px solid #26262b; }
+    #rename-modal .pep-titulo { margin: 0 0 .25rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: #b5bac1; }
+    #rename-modal .pep-ayuda { margin: 0 0 .625rem; font-size: .8125rem; color: #80848e; }
+    #rename-modal .pep-sub { margin: .75rem 0 .375rem; font-size: .75rem; color: #b5bac1; font-weight: 600; }
+    #rename-modal .pep-sec .form-group { margin: 0 !important; }
+    #rename-modal .pep-sec input[type="text"], #rename-modal .pep-sec textarea, #rename-modal .pep-sec input[type="date"], #rename-modal .pep-sec select { width: 100%; box-sizing: border-box; background: #121214; border: 1px solid #2e2d32; border-radius: .5rem; color: #dbdee1; padding: .625rem .75rem; font: inherit; }
+    #rename-modal .pep-fuentes { display: grid; grid-template-columns: repeat(4, 1fr); gap: .375rem; margin-bottom: .625rem; }
+    #rename-modal .pep-fuente { display: flex; flex-direction: column; align-items: center; gap: .125rem; min-width: 0; padding: .5rem .25rem; border: 2px solid transparent; border-radius: .5rem; background: #232228; color: #f2f3f5; cursor: pointer; }
+    #rename-modal .pep-fuente span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; }
+    #rename-modal .pep-fuente small { font-size: .6875rem; color: #949ba4; }
+    #rename-modal .pep-fuente.activo, #rename-modal .pep-modos button.activo, #rename-modal .pep-sin-tema.activo { border-color: #5865f2; background: #2c2d4a; }
+    #rename-modal .pep-modos { display: flex; gap: .375rem; margin-bottom: .625rem; }
+    #rename-modal .pep-modos button, #rename-modal .pep-sin-tema { flex: 1 1 0; min-height: 2.25rem; border: 2px solid transparent; border-radius: .5rem; background: #232228; color: #dbdee1; font: inherit; font-size: .875rem; cursor: pointer; }
+    #rename-modal .pep-sin-tema { flex: 0 0 auto; padding: 0 .75rem; }
+    #rename-modal .pep-colores { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    #rename-modal .pep-colores[hidden] { display: none; }
+    #rename-modal .pep-colores input[type="color"] { width: 3rem; height: 2.25rem; padding: 0; border: 1px solid #2e2d32; border-radius: .5rem; background: none; cursor: pointer; }
+    #rename-modal .pep-colores input[hidden] { display: none; }
+    #rename-modal .pep-muestras { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: .5rem; width: 100%; }
+    #rename-modal .pep-muestra { width: 1.75rem; height: 1.75rem; padding: 0; border: 2px solid #1a1a1e; border-radius: 50%; cursor: pointer; box-shadow: 0 0 0 1px #3a3940; }
+    #rename-modal .pep-etiquetas { display: flex; gap: .5rem; margin-top: .25rem; font-size: .6875rem; color: #949ba4; }
+    #rename-modal .pep-etiquetas span { width: 3rem; text-align: center; }
+    #rename-modal .pep-fila { display: flex; gap: .5rem; flex-wrap: wrap; }
+    #rename-modal .pep-boton, #rename-modal .avatar-upload-row .btn-sm { min-height: 2.25rem; padding: 0 .875rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    #rename-modal .pep-boton.gris, #rename-modal .avatar-upload-row .btn-sm:not(:first-of-type) { background: #3a3940; }
+    #rename-modal .pep-boton[hidden] { display: none; }
+    #rename-modal .pep-nota { min-height: 1em; margin: .375rem 0 0; font-size: .8125rem; color: #7fd6a2; }
+    #rename-modal .pep-nota.mal { color: #f0c36a; }
+    #rename-modal .avatar-upload-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    #rename-modal .pep-mas { margin-top: 1rem; }
+    #rename-modal .pep-mas summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: #b5bac1; padding: .5rem 0; }
+    #rename-modal .pep-vista-titulo { align-self: stretch; font-size: .75rem; font-weight: 700; text-transform: uppercase; color: #b5bac1; margin-bottom: .75rem; }
+    #rename-modal .pep-tarjeta { width: 100%; max-width: 21rem; border-radius: .875rem; overflow: hidden; background: #232428; box-shadow: 0 8px 24px rgba(0,0,0,.35); position: relative; }
+    #rename-modal .pep-t-banner { height: 7.5rem; background: #5865f2; }
+    #rename-modal .pep-t-avatar { position: absolute; top: 4.5rem; left: 1rem; width: 5.5rem; height: 5.5rem; border-radius: 50%; border: .375rem solid #232428; background: #5865f2; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; overflow: hidden; }
+    #rename-modal .pep-tarjeta.con-tema .pep-t-avatar { border-color: transparent; }
+    #rename-modal .pep-t-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    #rename-modal .pep-t-cuerpo { margin: 3.25rem .5rem .5rem; padding: .875rem 1rem 1rem; border-radius: .625rem; background: rgba(17,18,20,.55); }
+    #rename-modal .pep-t-nombre { font-size: 1.375rem; font-weight: 800; color: #f2f3f5; overflow-wrap: anywhere; display: inline-block; }
+    #rename-modal .pep-t-usuario { font-size: .875rem; color: #b5bac1; margin-bottom: .75rem; }
+    #rename-modal .pep-t-titulo { font-size: .75rem; font-weight: 700; color: #dbdee1; margin-bottom: .25rem; }
+    #rename-modal .pep-t-bio { font-size: .875rem; color: #dbdee1; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #rename-modal .pep-t-bio.vacio { color: #80848e; font-style: italic; }
+    #rename-modal .pep-tabla { display: flex; flex-direction: column; border-radius: .625rem; overflow: hidden; border: 1px solid #2a2a30; margin-top: .5rem; }
+    #rename-modal .pep-tfila { display: grid; grid-template-columns: minmax(0, 1fr) 2.75rem 2.75rem 3.5rem; align-items: center; gap: .25rem; padding: .5rem .625rem; font-size: .8125rem; border-top: 1px solid #26262b; }
+    #rename-modal .pep-tfila.cabeza { border-top: 0; background: #232228; font-weight: 700; color: #b5bac1; font-size: .6875rem; text-transform: uppercase; }
+    #rename-modal .pep-tcel { text-align: center; color: #949ba4; }
+    #rename-modal .pep-tfila:not(.cabeza) .pep-tcel:last-child { color: #57f287; font-weight: 700; }
+    #rename-modal .pep-tfila.cabeza .pep-tcel:last-child { color: #c9cdfb; }
+    #rename-modal .pep-precio { margin: .875rem 0 0; font-size: .8125rem; color: #b5bac1; }
+    #rename-modal .pep-modal > .modal-actions { flex: 0 0 auto; margin: 0; padding: .875rem 1.5rem; border-top: 1px solid #26262b; background: #1a1a1e; display: flex; gap: .5rem; align-items: center; }
+    #rename-modal .pep-modal > .modal-actions .btn-sm { min-height: 2.5rem; padding: 0 1.25rem; border-radius: .5rem; font-weight: 600; }
+    @media (max-width: 1100px) { #rename-modal .pep-grid { grid-template-columns: 1fr minmax(18rem, 21rem); } #rename-modal .pep-beneficios { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #26262b; } }
+    @media (max-width: 768px) {
+      #rename-modal .pep-modal { width: 100vw; height: 100%; border-radius: 0; border: 0; }
+      #rename-modal .pep-grid { display: flex; flex-direction: column; overflow-y: auto; }
+      #rename-modal .pep-medio { order: -1; flex: 0 0 auto; padding: 1rem; overflow: visible; }
+      #rename-modal .pep-opciones { overflow: visible; border-right: 0; padding: 0 1rem 1rem; }
+      #rename-modal .pep-beneficios { overflow: visible; border-left: 0; border-top: 1px solid #26262b; padding: 1rem; }
+      #rename-modal .pep-fuentes { grid-template-columns: repeat(4, 1fr); }
+      #rename-modal .pep-modal > .modal-actions { padding-bottom: calc(.875rem + env(safe-area-inset-bottom, 0px)); }
+    }`;
   document.head.appendChild(css);
 
   let tries = 0;
   (function wait() {
     const app = window.app;
-    if (!app || !app.socket || !token()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    if (!app || !app.socket || !token() || typeof app._openRenameModal !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
     load();
     setInterval(load, 10 * 60 * 1000);
     app.socket.on('puente-perfil', (d) => {
       if (!d || !Number.isInteger(d.id)) return;
       const v = {};
-      if (okColor(d.c)) v.c = d.c;
+      for (const k of ['c', 'c2', 't1', 't2']) if (okColor(d[k])) v[k] = d[k];
+      if (typeof d.f === 'string') v.f = d.f;
       if (okUrl(d.b)) v.b = d.b;
-      if (v.c || v.b) map[d.id] = v; else delete map[d.id];
+      if (Object.keys(v).length) map[d.id] = v; else delete map[d.id];
       paintColors();
     });
+    // Un solo "Editar perfil", se abra desde donde se abra
+    const open = app._openRenameModal;
+    app._openRenameModal = function (...a) {
+      const r = open.apply(this, a);
+      try { openEditor(this); } catch (err) { console.warn('[puente] editor de perfil:', err); }
+      return r;
+    };
   })();
 })();
 

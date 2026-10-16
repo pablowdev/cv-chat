@@ -88,6 +88,12 @@ function hookHttp() {
       if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
+      // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
+      if (req.method === 'POST' && (url === '/api/personas' || url.startsWith('/api/personas?'))) {
+        const who = sessionUser(req);
+        const admin = who && db.prepare('SELECT is_admin FROM users WHERE id = ?').get(who.id);
+        if (!admin || !admin.is_admin) { send(res, 403, 'application/json', JSON.stringify({ error: 'Las personas son solo para administradores.' })); return true; }
+      }
       // Registro con email obligatorio (email.js)
       if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on() && req.headers['x-puente-interno'] !== INTERNAL) {
         const server = this;
@@ -744,7 +750,7 @@ async function handle(req, res) {
     return back({ ok: '1', mensajes: String(moved) });
   }
 
-  if (p.startsWith('/puente/api/perfil/')) {
+  if (p.startsWith('/puente/api/perfil/') || p.startsWith('/puente/fuentes/')) {
     const r = await require('./perfil.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
