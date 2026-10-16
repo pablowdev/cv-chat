@@ -56,51 +56,112 @@ function sheetDrag(sheet, opts) {
 }
 
 // Aviso "Vinculá tu cuenta de Discord" dentro de Haven (/app), para quien
-// todavia no la vinculo. Se puede cerrar: vuelve a aparecer a los 3 dias.
+// todavia no la vinculo. Sin vincular solo se ven los canales propios de Haven,
+// asi que el aviso lo dice claro:
+//  - Al entrar, una tarjeta en el medio ("Te falta un paso") con el boton de
+//    Discord, que lleva directo a Discord. "Ahora no" la esconde hasta el otro dia.
+//  - Arriba de los canales, siempre, un recuadro con cuantos canales mas se ven
+//    al vincular (asi el chat vacio no queda sin explicacion).
 (function () {
   'use strict';
   const HIDE_KEY = 'puente_aviso_oculto_hasta';
-  const HIDE_MS = 3 * 24 * 3600 * 1000;
+  const HIDE_MS = 20 * 3600 * 1000; // hasta el otro dia
+  const DISCORD_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.44.87-.61 1.25a18.27 18.27 0 0 0-5.49 0 12.64 12.64 0 0 0-.62-1.25.08.08 0 0 0-.08-.04 19.74 19.74 0 0 0-4.89 1.52.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-1.99a.08.08 0 0 0-.04-.11 13.1 13.1 0 0 1-1.87-.89.08.08 0 0 1-.01-.13l.37-.29a.07.07 0 0 1 .08-.01c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08.01l.37.29a.08.08 0 0 1-.01.13c-.6.35-1.22.65-1.87.89a.08.08 0 0 0-.04.11c.36.7.77 1.36 1.22 1.99a.08.08 0 0 0 .09.03 19.84 19.84 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42Z"/></svg>';
 
   function storage(fn) { try { return fn(); } catch { return null; } }
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const canales = (n) => n === 1 ? '1 canal más' : n + ' canales más';
+
+  // Directo a Discord (sin pasar por la pagina de vincular)
+  async function start(btn) {
+    const token = storage(() => localStorage.getItem('haven_token'));
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/puente/api/iniciar', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.url) { location.href = d.url; return; }
+    } catch { /* abajo */ }
+    location.href = '/puente/vincular';
+  }
 
   async function check() {
     const token = storage(() => localStorage.getItem('haven_token'));
     if (!token) return false; // todavia en el login: volver a probar
-    const until = Number(storage(() => localStorage.getItem(HIDE_KEY)) || 0);
-    if (until > Date.now()) return true;
     const res = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + token } }).catch(() => null);
     if (!res || !res.ok) return res && res.status === 401 ? false : true;
     const st = await res.json().catch(() => null);
-    if (st && !st.vinculado && st.disponible) render();
+    if (!st || st.vinculado || !st.disponible) return true;
+    sidebarBox(st.canalesOcultos || 0);
+    const until = Number(storage(() => localStorage.getItem(HIDE_KEY)) || 0);
+    if (until <= Date.now()) card(st.canalesOcultos || 0);
     return true;
   }
 
-  function render() {
-    if (document.getElementById('puente-aviso')) return;
-    const bar = document.createElement('div');
-    bar.id = 'puente-aviso';
-    bar.setAttribute('role', 'status');
-    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:99999;max-width:calc(100vw - 32px);' +
-      'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:10px;' +
-      'background:#5865f2;color:#fff;font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35)';
-    const text = document.createElement('span');
-    text.textContent = '🔗 Vinculá tu cuenta de Discord: tus mensajes salen verificados en Discord y recuperás tu historial.';
-    const go = document.createElement('a');
-    go.href = '/puente/vincular';
-    go.textContent = 'Vincular';
-    go.style.cssText = 'background:#fff;color:#3b44c4;font-weight:700;padding:6px 12px;border-radius:6px;text-decoration:none';
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.textContent = 'Ahora no';
-    close.style.cssText = 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);padding:5px 10px;border-radius:6px;cursor:pointer;font:inherit';
-    close.addEventListener('click', () => {
-      storage(() => localStorage.setItem(HIDE_KEY, String(Date.now() + HIDE_MS)));
-      bar.remove();
-    });
-    bar.append(text, go, close);
-    document.body.appendChild(bar);
+  function card(hidden) {
+    if (document.getElementById('puente-vincular-capa')) return;
+    const back = el('div'); back.id = 'puente-vincular-capa';
+    const box = el('div', 'pv-tarjeta');
+    box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'pv-titulo');
+    const icon = el('div', 'pv-icono'); icon.innerHTML = DISCORD_SVG;
+    const title = el('h2', 'pv-titulo', 'Te falta un paso'); title.id = 'pv-titulo';
+    const text = el('p', 'pv-texto', hidden
+      ? `Vinculá tu cuenta de Discord para ver ${canales(hidden)} y todo tu historial de mensajes. Es un clic.`
+      : 'Vinculá tu cuenta de Discord para ver todos los canales y tu historial de mensajes. Es un clic.');
+    const list = el('ul', 'pv-lista');
+    for (const t of ['Todos los canales del servidor, con su historial', 'Tus mensajes de Discord pasan a tu cuenta', 'Lo que escribas acá sale en Discord con tu nombre y tu foto']) list.appendChild(el('li', null, t));
+    const go = el('button', 'pv-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
+    go.addEventListener('click', () => start(go));
+    const later = el('button', 'pv-luego', 'Ahora no'); later.type = 'button';
+    const close = () => { storage(() => localStorage.setItem(HIDE_KEY, String(Date.now() + HIDE_MS))); back.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    later.addEventListener('click', close);
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+    document.addEventListener('keydown', onKey, true);
+    box.append(icon, title, text, list, go, later);
+    back.appendChild(box);
+    document.body.appendChild(back);
   }
+
+  // Recuadro fijo arriba de la lista de canales
+  function sidebarBox(hidden) {
+    let tries = 0;
+    (function put() {
+      const list = document.getElementById('channel-list');
+      if (!list) { if (++tries < 60) setTimeout(put, 500); return; }
+      if (document.getElementById('puente-vincular-caja')) return;
+      const box = el('div'); box.id = 'puente-vincular-caja';
+      box.appendChild(el('div', 'pvc-titulo', hidden ? `🔒 Hay ${canales(hidden)}` : '🔒 Te faltan canales'));
+      box.appendChild(el('div', 'pvc-texto', 'Vinculá tu Discord para verlos y recuperar tu historial.'));
+      const go = el('button', 'pvc-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
+      go.addEventListener('click', () => start(go));
+      box.appendChild(go);
+      const ref = document.getElementById('puente-miembros-btn') || list;
+      ref.parentElement.insertBefore(box, ref);
+    })();
+  }
+
+  const style = el('style');
+  style.textContent = `
+    #puente-vincular-capa { position: fixed; inset: 0; z-index: 100003; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.7); animation: puente-fade .18s ease-out; }
+    #puente-vincular-capa .pv-tarjeta { width: 100%; max-width: 26rem; box-sizing: border-box; padding: 1.75rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.5); font-family: inherit; }
+    #puente-vincular-capa .pv-icono { display: inline-flex; align-items: center; justify-content: center; width: 4rem; height: 4rem; border-radius: 50%; background: #5865f2; color: #fff; }
+    #puente-vincular-capa .pv-icono svg { width: 2.25rem; height: 2.25rem; }
+    #puente-vincular-capa .pv-titulo { margin: 1rem 0 .5rem; font-size: 1.5rem; font-weight: 800; color: #f2f3f5; }
+    #puente-vincular-capa .pv-texto { margin: 0 0 1rem; font-size: 1rem; line-height: 1.45; color: #b5bac1; }
+    #puente-vincular-capa .pv-lista { margin: 0 0 1.25rem; padding: 0; list-style: none; text-align: left; }
+    #puente-vincular-capa .pv-lista li { position: relative; padding: .375rem 0 .375rem 1.75rem; font-size: .9375rem; color: #dbdee1; }
+    #puente-vincular-capa .pv-lista li::before { content: '✓'; position: absolute; left: .25rem; top: .375rem; color: #23a55a; font-weight: 800; }
+    #puente-vincular-capa .pv-boton, #puente-vincular-caja .pvc-boton { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; border: 0; border-radius: .625rem; background: #5865f2; color: #fff; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+    #puente-vincular-capa .pv-boton:hover, #puente-vincular-caja .pvc-boton:hover { background: #4752c4; }
+    #puente-vincular-capa .pv-boton:disabled, #puente-vincular-caja .pvc-boton:disabled { opacity: .7; cursor: default; }
+    #puente-vincular-capa .pv-luego { margin-top: .5rem; padding: .75rem; width: 100%; border: 0; background: transparent; color: #b5bac1; font: inherit; font-size: .9375rem; cursor: pointer; }
+    #puente-vincular-capa .pv-luego:hover { color: #f2f3f5; text-decoration: underline; }
+    #puente-vincular-caja { margin: .5rem .5rem .375rem; padding: .75rem; border-radius: .625rem; background: rgba(88,101,242,.14); border: 1px solid rgba(88,101,242,.45); }
+    #puente-vincular-caja .pvc-titulo { font-size: .9375rem; font-weight: 700; color: #f2f3f5; }
+    #puente-vincular-caja .pvc-texto { margin: .25rem 0 .625rem; font-size: .8125rem; line-height: 1.35; color: #b5bac1; }
+    #puente-vincular-caja .pvc-boton { min-height: 2.5rem; font-size: .9375rem; }
+    #puente-vincular-caja .pvc-boton svg { width: 1.25rem; height: 1.25rem; }`;
+  document.head.appendChild(style);
 
   // Tras registrarse o iniciar sesion la sesion aparece sin recargar la pagina.
   let tries = 0;

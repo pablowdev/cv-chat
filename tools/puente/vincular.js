@@ -278,6 +278,15 @@ function isMessageLink(previewUrl) {
   return !!own && target.hostname === own && /^\/app(?:\.html)?$/.test(target.pathname);
 }
 
+// Canales de Discord que ve cualquiera del servidor y esta cuenta todavia no (para el aviso de vincular)
+function hiddenChannels(havenUserId) {
+  let locked = new Set();
+  try { locked = require('./accesos.js').lockedChannelIds(); } catch { /* sin accesos */ }
+  const rows = db.prepare(`SELECT id FROM channels WHERE discord_channel_id IS NOT NULL AND is_dm = 0 AND parent_channel_id IS NULL
+    AND id NOT IN (SELECT channel_id FROM channel_members WHERE user_id = ?)`).all(havenUserId);
+  return rows.filter(r => !locked.has(r.id)).length;
+}
+
 function sessionUser(req) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -518,6 +527,8 @@ async function handle(req, res) {
       // Para el menu lateral del celular (como Discord): miembros y avatar propio
       miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial'").get().n,
       avatar: (db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id) || {}).avatar || null,
+      // Sin vincular: cuantos canales de Discord (de los que ve cualquiera) veria al vincular
+      canalesOcultos: link ? 0 : hiddenChannels(user.id),
     });
   }
 
