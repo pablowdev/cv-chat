@@ -7,22 +7,19 @@
 // - Solo se toca users.display_name, y solo si esta vacio o tiene el nombre que
 //   puso el puente la vez anterior (puente_vinculos.nombre_puesto). Si la
 //   persona (o un moderador) le puso otro, se respeta siempre.
-// - Las reglas de Haven: 2 a 20 caracteres, letras, numeros, espacios y "_", y
-//   sin repetir el nombre de otra persona. Un nombre de Discord con emojis o
-//   puntos se adapta (se sacan esos caracteres); si aun asi no sirve o ya lo usa
-//   otra persona, queda su nombre de usuario.
+// - El nombre de Discord tal cual (emojis, puntos, simbolos), de 1 a 32
+//   caracteres como en Discord; solo se le sacan los caracteres de control. Como
+//   en Discord, dos personas pueden tener el mismo nombre para mostrar (cada una
+//   tiene su @usuario). Haven acepta esos nombres por cargar.js.
 // - Los mensajes de una cuenta vinculada no guardan el nombre de Discord
 //   (webhook_username): asi Haven muestra siempre el de la cuenta, el actual.
 //   Al desvincular se les vuelve a poner el de Discord.
 
-let normalizeDisplayName = null;
-try { normalizeDisplayName = require('/app/src/socketHandlers/helpers.js').normalizeDisplayName; } catch { /* fuera de Haven: la regla de abajo */ }
+const { discordLikeName } = require('./cargar.js');
 
 function cleanName(raw) {
-  let v = String(raw || '').normalize('NFC').replace(/[^\p{L}\p{N}\p{M}_ ]+/gu, ' ').trim().replace(/\s+/g, ' ');
-  v = [...v].slice(0, 20).join('').trim();
-  if (normalizeDisplayName) { const c = normalizeDisplayName(v); return c.error ? null : c.value; }
-  return [...v].length >= 2 && /^[\p{L}\p{N}\p{M}_ ]+$/u.test(v) ? v : null;
+  const c = discordLikeName(String(raw || ''));
+  return c.error ? null : c.value;
 }
 
 function ensureColumn(db) {
@@ -38,11 +35,8 @@ function plan(db, havenUserId, discordName) {
   if (u.display_name != null && u.display_name !== l.nombre_puesto) return { skip: 'nombre propio' };
   if (u.display_name_locked && u.display_name !== l.nombre_puesto) return { skip: 'puesto por un moderador' };
   const name = cleanName(discordName);
-  if (!name) return { skip: 'el de Discord no cumple las reglas' };
+  if (!name) return { skip: 'sin nombre en Discord' };
   if (name === (u.display_name || u.username)) return { skip: 'ya se llama asi' };
-  const taken = db.prepare(`SELECT username FROM users WHERE id != ? AND (LOWER(display_name) = LOWER(?) OR (display_name IS NULL AND LOWER(username) = LOWER(?))) LIMIT 1`)
-    .get(u.id, name, name);
-  if (taken) return { skip: `ya lo usa ${taken.username}` };
   return { name };
 }
 

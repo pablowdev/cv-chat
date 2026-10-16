@@ -2481,6 +2481,48 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Nombre para mostrar como en Discord (puente-nombre-libre): de 1 a 32
+// caracteres, cualquiera (emojis, puntos, simbolos). El servidor ya los acepta
+// (tools/puente/cargar.js); aca, el formulario de "Editar perfil", que los
+// rechazaba antes de mandarlos (solo letras, numeros, espacios y "_", hasta 20).
+(function () {
+  'use strict';
+  const MAX = 32;
+  const check = (raw) => {
+    const value = String(raw || '').normalize('NFC').replace(/\p{Cc}/gu, '').trim();
+    const n = [...value].length;
+    return n >= 1 && n <= MAX ? { value } : { error: 'El nombre tiene que tener entre 1 y 32 caracteres' };
+  };
+  function fixForm() {
+    const input = document.getElementById('rename-input');
+    if (input) input.maxLength = MAX;
+    const desc = document.querySelector('[data-i18n="modals.edit_profile.display_name_desc"]');
+    if (desc) desc.textContent = 'Como en Discord: cualquier nombre de hasta 32 caracteres.';
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._saveRename !== 'function' || !document.getElementById('rename-input')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    fixForm();
+    document.addEventListener('focusin', (e) => { if (e.target && e.target.id === 'rename-input') fixForm(); });
+    const orig = app._saveRename;
+    app._saveRename = function (...args) {
+      const input = document.getElementById('rename-input');
+      const raw = input ? input.value : '';
+      const c = check(raw);
+      if (c.error) { if (this._showToast) this._showToast(c.error, 'error'); return; }
+      if (c.value !== (this.user.displayName || this.user.username)) this.socket.emit('rename-user', { username: c.value });
+      // El resto del perfil (biografia, cumpleaños, avatar, grupos) lo guarda Haven
+      // como siempre. Su control del nombre (el de antes) se saltea: en su lugar va
+      // un nombre que lo pasa, y el aviso de cambio de nombre no sale de nuevo.
+      const sock = this.socket, emit = sock.emit;
+      sock.emit = function (ev, ...a) { return ev === 'rename-user' ? sock : emit.call(sock, ev, ...a); };
+      if (input) input.value = 'ok';
+      try { return orig.apply(this, args); } finally { sock.emit = emit; if (input) input.value = raw; }
+    };
+  })();
+})();
+
 // Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
 // como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
 // su cantidad) y la lista de personas, con avatar. Incluye a quienes
