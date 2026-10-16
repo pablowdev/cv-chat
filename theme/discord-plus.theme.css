@@ -1933,3 +1933,53 @@ html body a.puente-enlace-msj:hover { background: #5865f2; color: #fff !importan
 
 /* Sin el cartel de Haven de "Codigos de recuperacion de cuenta" (aviso.js; esto por si acaso) */
 html body .recovery-notice-overlay { display: none !important; }
+
+/* Vistas previas con el embed de Discord, armadas como en Discord (aviso.js, puente-embeds) */
+.puente-embeds { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem; }
+.puente-embed {
+  display: flex; gap: 1rem; box-sizing: border-box; width: fit-content; max-width: min(27rem, 100%);
+  padding: 0.125rem 1rem 1rem 0.75rem; background: #222126; border-left: 4px solid var(--pe-color, #3a3940); border-radius: 0.25rem;
+}
+.puente-embed .pe-body { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.puente-embed a { text-decoration: none; }
+.puente-embed a:hover { text-decoration: underline; }
+.puente-embed .pe-provider { margin-top: 0.5rem; font-size: 0.75rem; line-height: 1rem; color: #b5bac1; }
+.puente-embed .pe-author { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; min-width: 0; }
+.puente-embed .pe-author-icon { width: 1.5rem; height: 1.5rem; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.puente-embed .pe-author-name { font-size: 0.875rem; font-weight: 600; line-height: 1.375rem; color: #f2f3f5; overflow-wrap: anywhere; }
+.puente-embed .pe-title { margin-top: 0.5rem; font-size: 1rem; font-weight: 600; line-height: 1.375rem; color: #00a8fc; overflow-wrap: anywhere; }
+.puente-embed span.pe-title { color: #f2f3f5; }
+.puente-embed .pe-desc { margin-top: 0.5rem; font-size: 0.875rem; line-height: 1.125rem; color: #dbdee1; overflow-wrap: anywhere; white-space: normal; }
+.puente-embed .pe-desc a, .puente-embed .pe-field-value a { color: #00a8fc; }
+.puente-embed .pe-desc code, .puente-embed .pe-field-value code { padding: 0 0.2em; border-radius: 0.25rem; background: #2b2a30; font-size: 0.8125rem; }
+.puente-embed .pe-quote { display: block; margin: 0.125rem 0; padding-left: 0.75rem; border-left: 4px solid #4e5058; }
+.puente-embed .pe-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+.puente-embed .pe-field { grid-column: 1 / -1; min-width: 0; }
+.puente-embed .pe-field.inline { grid-column: auto; }
+.puente-embed .pe-field-name { margin-bottom: 0.125rem; font-size: 0.875rem; font-weight: 600; color: #f2f3f5; }
+.puente-embed .pe-field-value { font-size: 0.875rem; line-height: 1.125rem; color: #dbdee1; }
+.puente-embed .pe-images { display: grid; gap: 0.25rem; margin-top: 1rem; border-radius: 0.25rem; overflow: hidden; }
+.puente-embed .pe-images.pe-grid-2, .puente-embed .pe-images.pe-grid-3, .puente-embed .pe-images.pe-grid-4 { grid-template-columns: 1fr 1fr; width: min(25rem, 100%); }
+.puente-embed .pe-images.pe-grid-3 .pe-image:first-child { grid-row: span 2; }
+.puente-embed .pe-image { display: block; max-width: 100%; height: auto; border-radius: 0.25rem; cursor: pointer; }
+.puente-embed .pe-images[class*="pe-grid-"] .pe-image { width: 100%; height: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0; }
+.puente-embed .pe-thumb { flex: 0 0 auto; width: 5rem; height: 5rem; margin-top: 0.5rem; object-fit: contain; border-radius: 0.25rem; cursor: pointer; }
+.puente-embed .pe-video { position: relative; width: min(25rem, 100%); margin-top: 1rem; border-radius: 0.25rem; overflow: hidden; background: #000; cursor: pointer; }
+.puente-embed .pe-video > img, .puente-embed .pe-video > iframe, .puente-embed .pe-video > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: 0; }
+.puente-embed .pe-video > video { object-fit: contain; }
+.puente-embed .pe-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center;
+  width: 3rem; height: 3rem; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer;
+}
+.puente-embed .pe-video:hover .pe-play { background: rgba(0, 0, 0, 0.8); }
+.puente-embed .pe-footer { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.75rem; line-height: 1rem; color: #b5bac1; }
+.puente-embed .pe-footer-icon { width: 1.25rem; height: 1.25rem; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.puente-embed-media img, .puente-embed-media video { display: block; max-width: min(25rem, 100%); max-height: 18.75rem; height: auto; border-radius: 0.25rem; cursor: pointer; }
+/* Por encima de las reglas de Haven para los enlaces de los mensajes */
+html body .message-content .puente-embed a, html body .thread-msg-content .puente-embed a { text-decoration: none !important; }
+html body .message-content .puente-embed a:hover, html body .thread-msg-content .puente-embed a:hover { text-decoration: underline !important; }
+html body .puente-embed .pe-provider { color: #b5bac1 !important; }
+html body .puente-embed .pe-author-name { color: #f2f3f5 !important; }
+html body .puente-embed a.pe-title { color: #00a8fc !important; }
+html body .puente-embed span.pe-title { color: #f2f3f5 !important; }
+html body .puente-embed .pe-desc a, html body .puente-embed .pe-field-value a { color: #00a8fc !important; }

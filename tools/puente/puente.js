@@ -38,6 +38,8 @@ const vigia = require('./vigia.js');
 const stickers = require('./stickers.js');
 const nombres = require('./nombres.js');
 const enlaces = require('./enlaces.js');
+const embeds = require('./embeds.js');
+const miniaturas = require('./miniaturas.js');
 
 const API = 'https://discord.com/api/v10';
 // GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, mas GUILD_MEMBERS y GUILD_MODERATION
@@ -120,6 +122,8 @@ function start(deps) {
   require('./tema-fijo.js').setup({ db, io, log });
   require('./medicion.js').setup({ io, db });
   require('./buscar.js').setup({ db, io, log, warn });
+  embeds.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn });
+  miniaturas.setup({ log, warn });
   stickers.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   hookHavenEmits();
   connectGateway();
@@ -350,7 +354,8 @@ function onDispatch(t, d) {
         if (d.guild_id === guildId && d.user && d.user.id === botUserId) vigia.onDiscordChange();
         break;
       case 'MESSAGE_CREATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundCreate(d)); break;
-      case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundUpdate(d)); break;
+      // El embed de un enlace (de los dos lados) suele llegar en una actualizacion (embeds.js)
+      case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => { embeds.onDiscordUpdate(d); await inboundUpdate(d); }); break;
       case 'MESSAGE_DELETE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundDelete(d.id)); break;
       case 'MESSAGE_REACTION_ADD': case 'MESSAGE_REACTION_REMOVE': case 'MESSAGE_REACTION_REMOVE_ALL': case 'MESSAGE_REACTION_REMOVE_EMOJI':
         if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => reacciones.onDiscordReaction(t, d));
@@ -435,6 +440,8 @@ async function inboundCreate(msg) {
   markInserted(r.lastInsertRowid);
   if (!msg.webhook_id && msg.author) vincular.recordAuthor(r.lastInsertRowid, msg.author.id);
   emitNew(target.channel, r.lastInsertRowid, target.root);
+  if (Array.isArray(msg.embeds) && msg.embeds.length) embeds.capture(r.lastInsertRowid, msg.embeds);
+  miniaturas.warmFromContent(content);
 }
 
 async function inboundUpdate(msg) {
@@ -561,6 +568,7 @@ function onHavenEmit(event, p) {
   if (!p || p.fromPuente) return;
   if (event === 'new-message' || event === 'new-thread-message') {
     const m = p.message;
+    if (m && m.content) miniaturas.warmFromContent(m.content); // las imagenes livianas, listas antes de que las vean
     if (!m || !m.id || !m.user_id || m.imported_from || m.is_webhook || m.from_discord || insertedByBridge.has(m.id)) return;
     setImmediate(() => outboundCreate(m.id));
   } else if (event === 'message-edited') {
@@ -802,6 +810,7 @@ async function outboundCreate(havenMessageId) {
     }
     const attachments = (sent.attachments || []).map(a => a.id);
     saveOut(m.id, sent.id, target, attachments, true);
+    if (Array.isArray(sent.embeds) && sent.embeds.length) embeds.capture(m.id, sent.embeds);
     lastOut.set(key, { discordId: sent.id, at: Date.now(), createdAt: sqlMs(m.created_at), attachments });
     if (lastOut.size > 500) lastOut.delete(lastOut.keys().next().value);
   });

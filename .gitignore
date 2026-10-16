@@ -12,3 +12,6 @@ backup-local/
 
 # Logo de la pantalla de carga: propio de cada servidor
 tools/puente/web/logo-carga.png
+
+# Dependencias instaladas en el servidor (sharp)
+tools/puente/vendor/

@@ -421,6 +421,17 @@ async function handle(req, res) {
   // o de Discord (?discord=<mensaje>&canal=<canal o hilo>), para abrirlo aca mismo
   // (web/aviso.js). Solo si la persona puede ver ese canal; si no, la misma
   // respuesta que si no existiera.
+  // Imagenes livianas para el chat (miniaturas.js): publicas, como /uploads
+  if (p.startsWith('/puente/mini/') && req.method === 'GET') return require('./miniaturas.js').serve(req, res, p);
+
+  // Embeds de Discord de estos mensajes (embeds.js), para dibujar las vistas previas al instante
+  if (p === '/puente/api/embeds' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const ids = [...new Set(String(u.searchParams.get('ids') || '').split(',').map(x => parseInt(x, 10)).filter(x => x > 0))].slice(0, 100);
+    return json(res, 200, await require('./embeds.js').forUser(user, ids));
+  }
+
   if (p === '/puente/api/mensaje' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

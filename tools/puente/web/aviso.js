@@ -2554,6 +2554,295 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Imagenes livianas en el chat, como Discord (puente-imagenes-livianas): las
+// fotos subidas se ven en una version reducida (tools/puente/miniaturas.js) y al
+// abrirlas, descargarlas o copiar su enlace se usa la original. Como pesan
+// mucho menos, se cargan mas a la vez.
+(function () {
+  'use strict';
+  const UP = /^\/uploads\/((?!deleted-attachments\/|stickers\/)(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.(?:png|jpe?g|webp))$/i;
+  const MINI = /\/puente\/mini\/\d+\/([^?#]+)/;
+  function toMini(v) {
+    if (!v || v.startsWith('data:')) return null;
+    let u;
+    try { u = new URL(v, location.href); } catch { return null; }
+    if (u.origin !== location.origin || u.search) return null;
+    const m = UP.exec(u.pathname);
+    return m ? '/puente/mini/960/' + m[1] : null;
+  }
+  function toOriginal(v) {
+    const m = typeof v === 'string' && MINI.exec(v);
+    return m ? location.origin + '/uploads/' + m[1] : v;
+  }
+  function swap(img) {
+    if (img.dataset.puenteMiniFallo) return;
+    const attr = img.hasAttribute('data-lazy-src') ? 'data-lazy-src' : 'src';
+    const mini = toMini(img.getAttribute(attr));
+    if (!mini) return;
+    img.setAttribute(attr, mini);
+    if (!img.dataset.puenteMini) {
+      img.dataset.puenteMini = '1';
+      // Si la reducida no carga: la original, y no se vuelve a cambiar
+      img.addEventListener('error', () => {
+        const s = img.getAttribute('src') || '';
+        if (!s.includes('/puente/mini/')) return;
+        img.dataset.puenteMiniFallo = '1';
+        img.setAttribute('src', toOriginal(s));
+      });
+    }
+  }
+  const scan = (root) => { if (root.matches && root.matches('img.chat-image')) swap(root); if (root.querySelectorAll) root.querySelectorAll('img.chat-image').forEach(swap); };
+  scan(document);
+  new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'attributes') { if (m.target.matches('img.chat-image')) swap(m.target); }
+      else for (const n of m.addedNodes) if (n.nodeType === 1) scan(n);
+    }
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'data-lazy-src'] });
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._lazyRealSrc !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    // Abrir, descargar y copiar: la original
+    const real = app._lazyRealSrc;
+    app._lazyRealSrc = function (img) { return toOriginal(real.call(this, img)); };
+    (function more(n) {
+      if (app._lazyMedia) { app._lazyMedia.MAX_PARALLEL = 6; return; }
+      if (n < 60) setTimeout(() => more(n + 1), 500);
+    })(0);
+  })();
+})();
+
+// Vistas previas de enlaces como en Discord, y al instante (puente-embeds): el
+// embed que armo Discord para cada enlace lo guarda el puente
+// (tools/puente/embeds.js) y aca se dibuja igual que en Discord: franja de color,
+// sitio, autor con su foto, titulo, texto, imagen o video, y el pie con logo y
+// fecha. Donde no hay embed de Discord (mensajes directos, canales que no se
+// sincronizan) queda la vista previa de Haven.
+(function () {
+  'use strict';
+  const known = new Map(); // id del mensaje -> [embeds]  (sin entrada: lo maneja Haven)
+  const asked = new Set();
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const okUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  // Enlaces que tendrian vista previa (como decide Haven)
+  function previewLinks(msgEl) {
+    return [...msgEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]')].filter(a => {
+      if (a.closest('.puente-embeds')) return false; // los de adentro de la tarjeta
+      const u = a.href;
+      if (!/^https?:/i.test(u) || u.startsWith(location.origin)) return false;
+      if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(u)) return false;
+      if (/^https:\/\/(media\d*\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\//i.test(u)) return false;
+      if (/^https?:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/channels\//i.test(u)) return false; // enlace a un mensaje
+      return true;
+    });
+  }
+  const msgsIn = (root) => {
+    const list = root.matches && root.matches('[data-msg-id]') ? [root] : [...root.querySelectorAll('[data-msg-id]')];
+    return list.filter(m => /^\d+$/.test(m.dataset.msgId || '') && previewLinks(m).length);
+  };
+
+  async function load(ids) {
+    const want = ids.filter(id => !known.has(id) && !asked.has(id));
+    if (!want.length) return;
+    want.forEach(id => asked.add(id));
+    const tk = token();
+    if (!tk) return;
+    for (let i = 0; i < want.length; i += 100) {
+      try {
+        const r = await fetch('/puente/api/embeds?ids=' + want.slice(i, i + 100).join(','), { headers: { Authorization: 'Bearer ' + tk } });
+        if (!r.ok) { want.forEach(id => asked.delete(id)); return; }
+        const data = await r.json();
+        for (const [id, list] of Object.entries(data)) if (Array.isArray(list)) known.set(id, list);
+      } catch { want.forEach(id => asked.delete(id)); return; }
+    }
+  }
+
+  // ── Texto con el formato de Discord (negrita, cursiva, citas, enlaces...) ──
+  function md(raw) {
+    const keep = [];
+    let s = String(raw || '').replace(/\\([\\`*_{}[\]()#+\-.!~|>:@<='"])/g, (m, c) => { keep.push(c); return '\u0000' + (keep.length - 1) + '\u0000'; });
+    s = esc(s);
+    const code = [];
+    s = s.replace(/`([^`\n]+)`/g, (m, c) => { code.push(c); return '\u0001' + (code.length - 1) + '\u0001'; });
+    s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer" data-embed-deferred="puente">${t}</a>`);
+    s = s.replace(/(^|[\s(>])(https?:\/\/[^\s<)]+)/g, (m, p, u) => `${p}<a href="${u}" target="_blank" rel="noopener noreferrer" data-embed-deferred="puente">${u}</a>`);
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_\n]+)__/g, '<u>$1</u>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/(^|[^\w_])_([^_\n]+)_(?!\w)/g, '$1<em>$2</em>')
+      .replace(/~~([^~\n]+)~~/g, '<s>$1</s>');
+    // Citas: lineas que empiezan con "> "
+    s = s.split('\n').map(l => (/^&gt; ?/.test(l) ? '<span class="pe-quote">' + l.replace(/^&gt; ?/, '') + '</span>' : l)).join('\n');
+    s = s.replace(/\n/g, '<br>').replace(/<\/span><br><span class="pe-quote">/g, '<br>');
+    s = s.replace(/\u0001(\d+)\u0001/g, (m, i) => '<code>' + code[i] + '</code>');
+    return s.replace(/\u0000(\d+)\u0000/g, (m, i) => esc(keep[i]));
+  }
+
+  function when(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const hm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const day = new Date(d); day.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diff = Math.round((today - day) / 86400000);
+    if (diff === 0) return 'Hoy a las ' + hm;
+    if (diff === 1) return 'Ayer a las ' + hm;
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + hm;
+  }
+  // Las imagenes del proxy de Discord, al tamaño que se ve (como hace Discord)
+  function sized(u, w, h, maxW, maxH) {
+    const src = okUrl(u);
+    if (!src) return null;
+    if (!/^https:\/\/(images-ext-\d+|media)\.discordapp\.net\//.test(src) || !w || !h) return src;
+    const k = Math.min(1, maxW / w, maxH / h), dpr = Math.min(2, window.devicePixelRatio || 1);
+    return src + (src.includes('?') ? '&' : '?') + 'format=webp&width=' + Math.round(w * k * dpr) + '&height=' + Math.round(h * k * dpr);
+  }
+  function link(cls, text, href) {
+    const h = okUrl(href);
+    const a = el(h ? 'a' : 'span', cls, text);
+    if (h) { a.href = h; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.dataset.embedDeferred = 'puente'; } // sin vista previa de Haven
+    return a;
+  }
+  function image(app, m, cls, maxW, maxH) {
+    const img = el('img', cls);
+    img.src = sized(m.url, m.w, m.h, maxW, maxH);
+    img.alt = '';
+    img.loading = 'lazy';
+    if (m.w && m.h) { const k = Math.min(1, maxW / m.w, maxH / m.h); img.width = Math.round(m.w * k); img.height = Math.round(m.h * k); }
+    img.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (app._openLightbox) app._openLightbox(okUrl(m.url), img); });
+    return img;
+  }
+  // Video: la miniatura con el boton de play; al tocarla, el video (YouTube adentro, o el archivo)
+  function video(app, e) {
+    const thumb = e.thumbnail || e.image;
+    const box = el('div', 'pe-video');
+    const ratio = (e.video.w && e.video.h) ? e.video.h / e.video.w : (thumb && thumb.w && thumb.h ? thumb.h / thumb.w : 9 / 16);
+    box.style.aspectRatio = String(1 / ratio);
+    if (thumb) { const t = el('img', 'pe-video-thumb'); t.src = sized(thumb.url, thumb.w, thumb.h, 400, 300); t.alt = ''; t.loading = 'lazy'; box.appendChild(t); }
+    const play = el('button', 'pe-play'); play.type = 'button'; play.title = 'Reproducir';
+    play.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l10.5-6.5z"/></svg>';
+    box.appendChild(play);
+    box.addEventListener('click', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      const yt = okUrl(e.video.url) && /youtube(-nocookie)?\.com\/embed\//.test(e.video.url) ? e.video.url : null;
+      box.textContent = '';
+      if (yt) {
+        const f = el('iframe'); f.src = yt + (yt.includes('?') ? '&' : '?') + 'autoplay=1&rel=0';
+        f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
+        box.appendChild(f);
+      } else {
+        const v = el('video'); v.src = okUrl(e.video.proxy) || okUrl(e.video.url); v.controls = true; v.autoplay = true; v.playsInline = true;
+        box.appendChild(v);
+      }
+    }, { once: true });
+    return box;
+  }
+  function gifv(e) {
+    const v = el('video', 'pe-gifv');
+    v.src = okUrl(e.video.proxy) || okUrl(e.video.url); v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
+    if (e.video.w && e.video.h) { const k = Math.min(1, 400 / e.video.w, 300 / e.video.h); v.width = Math.round(e.video.w * k); v.height = Math.round(e.video.h * k); }
+    return v;
+  }
+
+  function card(app, e, extraImages) {
+    // Un enlace a una imagen o un gif sueltos: como en Discord, solo la imagen
+    if (e.type === 'gifv' && e.video) { const w = el('div', 'puente-embed-media'); w.appendChild(gifv(e)); return w; }
+    if (e.type === 'image' && (e.thumbnail || e.image)) { const w = el('div', 'puente-embed-media'); w.appendChild(image(app, e.image || e.thumbnail, 'pe-solo', 400, 300)); return w; }
+    const c = el('article', 'puente-embed');
+    if (Number.isInteger(e.color)) c.style.setProperty('--pe-color', '#' + e.color.toString(16).padStart(6, '0'));
+    const body = el('div', 'pe-body');
+    if (e.provider) body.appendChild(link('pe-provider', e.provider.name, e.provider.url));
+    if (e.author) {
+      const a = el('div', 'pe-author');
+      if (okUrl(e.author.icon)) { const i = el('img', 'pe-author-icon'); i.src = sized(e.author.icon, 64, 64, 24, 24); i.alt = ''; a.appendChild(i); }
+      a.appendChild(link('pe-author-name', e.author.name, e.author.url));
+      body.appendChild(a);
+    }
+    if (e.title) body.appendChild(link('pe-title', e.title, e.url));
+    if (e.description) { const d = el('div', 'pe-desc'); d.innerHTML = md(e.description); body.appendChild(d); }
+    if (e.fields && e.fields.length) {
+      const fs = el('div', 'pe-fields');
+      for (const f of e.fields) { const x = el('div', 'pe-field' + (f.inline ? ' inline' : '')); const n = el('div', 'pe-field-name'); n.innerHTML = md(f.name); const v = el('div', 'pe-field-value'); v.innerHTML = md(f.value); x.append(n, v); fs.appendChild(x); }
+      body.appendChild(fs);
+    }
+    const bigThumb = e.thumbnail && (e.type === 'article' || e.type === 'link') && (e.thumbnail.w || 0) >= 300;
+    if (e.type === 'video' && e.video) body.appendChild(video(app, e));
+    else if (e.image || bigThumb) {
+      const imgs = [e.image || e.thumbnail, ...(extraImages || [])];
+      const g = el('div', 'pe-images' + (imgs.length > 1 ? ' pe-grid-' + Math.min(imgs.length, 4) : ''));
+      imgs.slice(0, 4).forEach(m => g.appendChild(image(app, m, 'pe-image', imgs.length > 1 ? 200 : 400, imgs.length > 1 ? 200 : 300)));
+      body.appendChild(g);
+    } else if (e.thumbnail) {
+      c.classList.add('pe-has-thumb');
+      const t = image(app, e.thumbnail, 'pe-thumb', 80, 80);
+      c.appendChild(t);
+    }
+    if (e.footer || e.timestamp) {
+      const f = el('div', 'pe-footer');
+      if (e.footer && okUrl(e.footer.icon)) { const i = el('img', 'pe-footer-icon'); i.src = sized(e.footer.icon, 64, 64, 20, 20); i.alt = ''; f.appendChild(i); }
+      f.appendChild(el('span', '', [e.footer && e.footer.text, e.timestamp && when(e.timestamp)].filter(Boolean).join(' • ')));
+      body.appendChild(f);
+    }
+    c.insertBefore(body, c.firstChild);
+    return c;
+  }
+
+  function render(app, msgEl, list) {
+    const content = msgEl.querySelector('.message-content, .thread-msg-content');
+    if (!content) return;
+    content.querySelectorAll(':scope .link-preview, :scope > .puente-embeds').forEach(n => n.remove());
+    if (!list.length) return;
+    const box = el('div', 'puente-embeds');
+    // Varias imagenes del mismo enlace (un tweet con 4 fotos): una tarjeta con la grilla, como Discord
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i], extra = [];
+      while (list[i + 1] && e.url && list[i + 1].url === e.url && list[i + 1].image && !list[i + 1].title && !list[i + 1].description) { extra.push(list[i + 1].image); i++; }
+      try { box.appendChild(card(app, e, extra)); } catch (err) { console.warn('[puente] embed:', err); }
+    }
+    content.appendChild(box);
+  }
+
+  // Haven no dibuja su vista previa en los enlaces de los mensajes que tienen embed de Discord
+  function defer(msgEl, on) {
+    for (const a of previewLinks(msgEl)) {
+      if (on && !a.dataset.embedDeferred) a.dataset.embedDeferred = 'puente';
+      else if (!on && a.dataset.embedDeferred === 'puente') delete a.dataset.embedDeferred;
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._fetchLinkPreviews !== 'function' || !app.socket) { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._fetchLinkPreviews;
+    app._fetchLinkPreviews = function (containerEl, ...rest) {
+      const self = this;
+      let msgs = [];
+      try { msgs = containerEl ? msgsIn(containerEl) : []; } catch { msgs = []; }
+      if (!msgs.length) return orig.call(self, containerEl, ...rest);
+      msgs.forEach(m => defer(m, true));
+      load(msgs.map(m => m.dataset.msgId)).finally(() => {
+        for (const m of msgs) {
+          const list = known.get(m.dataset.msgId);
+          if (list) render(self, m, list);
+          else defer(m, false); // sin embed de Discord: la vista previa de Haven
+        }
+        orig.call(self, containerEl, ...rest);
+      });
+    };
+    // El embed de Discord llega un instante despues del mensaje: se reemplaza al vuelo
+    app.socket.on('puente-embeds', (d) => {
+      if (!d || !d.messageId || !Array.isArray(d.embeds)) return;
+      const id = String(d.messageId);
+      known.set(id, d.embeds);
+      document.querySelectorAll('[data-msg-id="' + id + '"]').forEach(m => { defer(m, true); render(app, m, d.embeds); });
+    });
+  })();
+})();
+
 // Pantallas tactiles: mantener apretada una reaccion muestra quien reacciono,
 // como en la app de Discord: una hoja desde abajo con una pestaña por emoji (con
 // su cantidad) y la lista de personas, con avatar. Incluye a quienes
