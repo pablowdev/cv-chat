@@ -5310,3 +5310,123 @@ function sheetDrag(sheet, opts) {
     };
   })();
 })();
+// Descripcion del canal en el celular, como en la app de Discord: una linea gris
+// debajo del nombre (sin la barra de Haven con la flechita, que en el celular
+// quedaba cortada y era dificil de tocar). Tocando el nombre o la descripcion
+// se abre una hoja desde abajo con la descripcion entera y, para quien puede
+// cambiarla, "Editar descripción" (la ventana de Haven).
+(function () {
+  'use strict';
+  const mobile = () => window.matchMedia('(max-width: 768px)').matches;
+  const current = (app) => (app.channels || []).find(c => c.code === app.currentChannel) || null;
+  const canEdit = (app) => !!(app.user && (app.user.isAdmin || (app._hasPerm && app._hasPerm('set_channel_topic'))));
+
+  function refresh(app) {
+    const info = document.querySelector('header.channel-header > .channel-info');
+    if (!info) return;
+    let line = info.querySelector('.puente-tema');
+    if (!line) {
+      line = document.createElement('div');
+      line.className = 'puente-tema';
+      info.appendChild(line);
+      info.addEventListener('click', (e) => {
+        if (!mobile() || !window.app || !window.app.currentChannel) return;
+        const ch = current(window.app);
+        if (!ch || ch.is_dm) return;
+        if (!ch.topic && !canEdit(window.app)) return;
+        e.preventDefault();
+        openSheet(window.app, ch);
+      });
+    }
+    const ch = current(app);
+    const topic = ch && !ch.is_dm ? String(ch.topic || '').replace(/\s+/g, ' ').trim() : '';
+    line.textContent = topic;
+    line.hidden = !topic;
+    info.classList.toggle('puente-con-tema', !!topic);
+  }
+
+  // Texto con los enlaces tocables (sin HTML del usuario)
+  function fill(el, text) {
+    const re = /https?:\/\/[^\s<>"']+/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      el.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const a = document.createElement('a');
+      a.href = m[0]; a.textContent = m[0]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      el.appendChild(a);
+      last = m.index + m[0].length;
+    }
+    el.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function closeSheet() {
+    document.getElementById('puente-tema-hoja')?.remove();
+    document.getElementById('puente-tema-fondo')?.remove();
+  }
+
+  function openSheet(app, ch) {
+    closeSheet();
+    const back = document.createElement('div');
+    back.id = 'puente-tema-fondo';
+    back.addEventListener('click', closeSheet);
+    const sheet = document.createElement('div');
+    sheet.id = 'puente-tema-hoja';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', 'Descripción del canal');
+    const handle = document.createElement('div'); handle.className = 'puente-sheet-handle';
+    const title = document.createElement('div'); title.className = 'puente-tema-titulo';
+    title.textContent = '# ' + (ch.name || '');
+    const label = document.createElement('div'); label.className = 'puente-tema-etiqueta';
+    label.textContent = 'Descripción del canal';
+    const body = document.createElement('div'); body.className = 'puente-tema-texto';
+    if (ch.topic) fill(body, String(ch.topic)); else { body.textContent = 'Este canal todavía no tiene descripción.'; body.classList.add('vacio'); }
+    sheet.append(handle, title, label, body);
+    if (canEdit(app)) {
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'puente-tema-editar';
+      edit.textContent = ch.topic ? 'Editar descripción' : 'Agregar descripción';
+      edit.addEventListener('click', () => { closeSheet(); app._editTopic(); });
+      sheet.appendChild(edit);
+    }
+    // Deslizar hacia abajo la cierra, como las otras hojas
+    let y0 = null;
+    sheet.addEventListener('touchstart', (e) => { y0 = sheet.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => {
+      if (y0 == null) return;
+      const dy = e.touches[0].clientY - y0;
+      if (dy > 0) sheet.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    sheet.addEventListener('touchend', (e) => {
+      if (y0 == null) return;
+      const dy = e.changedTouches[0].clientY - y0; y0 = null;
+      if (dy > 80) closeSheet(); else sheet.style.transform = '';
+    });
+    document.body.append(back, sheet);
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._updateTopicBar !== 'function' || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const upd = app._updateTopicBar;
+    app._updateTopicBar = function (...args) {
+      const r = upd.apply(this, args);
+      try { refresh(this); } catch (err) { console.warn('[puente] descripcion:', err); }
+      return r;
+    };
+    const sw = app.switchChannel;
+    app.switchChannel = function (...args) {
+      closeSheet();
+      const r = sw.apply(this, args);
+      Promise.resolve(r).finally(() => { try { refresh(app); } catch { /* queda como estaba */ } });
+      return r;
+    };
+    if (typeof app._showWelcome === 'function') {
+      const wel = app._showWelcome;
+      app._showWelcome = function (...args) { const r = wel.apply(this, args); try { refresh(this); } catch { /* idem */ } return r; };
+    }
+    // Cuando alguien cambia la descripcion, Haven actualiza la lista de canales
+    if (app.socket) app.socket.on('channel-topic-changed', () => setTimeout(() => refresh(app), 0));
+    refresh(app);
+  })();
+})();

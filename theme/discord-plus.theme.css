@@ -1983,3 +1983,47 @@ html body .puente-embed .pe-author-name { color: #f2f3f5 !important; }
 html body .puente-embed a.pe-title { color: #00a8fc !important; }
 html body .puente-embed span.pe-title { color: #f2f3f5 !important; }
 html body .puente-embed .pe-desc a, html body .puente-embed .pe-field-value a { color: #00a8fc !important; }
+
+/* Descripcion del canal en el celular, como en la app de Discord (aviso.js):
+   una linea gris debajo del nombre, en vez de la barra con la flechita. Al
+   tocarla se abre una hoja desde abajo con la descripcion entera. */
+header.channel-header .puente-tema { display: none; }
+@media (max-width: 768px) {
+  html body #channel-topic-bar { display: none !important; }
+  html body header.channel-header > .channel-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  html body header.channel-header > .channel-info.puente-con-tema { cursor: pointer; }
+  html body header.channel-header #channel-header-name { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+  html body header.channel-header .puente-tema {
+    display: block; min-width: 0; max-width: 100%; margin-top: 1px;
+    font-size: 0.75rem; line-height: 1.2; font-weight: 500; color: #949ba4;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  html body header.channel-header .puente-tema[hidden] { display: none; }
+}
+#puente-tema-fondo {
+  position: fixed; inset: 0; z-index: 99998;
+  background: rgba(0, 0, 0, 0.6);
+  animation: puente-fade 0.18s ease-out;
+}
+#puente-tema-hoja {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 99999;
+  width: 100%; max-width: 37.5rem; max-height: 75vh; margin: 0 auto;
+  padding: 0.5rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  background: #252429; color: #dbdee1;
+  border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease;
+  animation: puente-sheet-up 0.22s ease-out;
+}
+#puente-tema-hoja .puente-tema-titulo { font-size: 1.25rem; font-weight: 700; color: #f2f3f5; margin: 0.25rem 0 1rem; overflow-wrap: anywhere; }
+#puente-tema-hoja .puente-tema-etiqueta { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: #949ba4; margin-bottom: 0.375rem; }
+#puente-tema-hoja .puente-tema-texto { background: #2e2d33; border-radius: 0.75rem; padding: 0.875rem 1rem; font-size: 1rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+#puente-tema-hoja .puente-tema-texto.vacio { color: #949ba4; }
+#puente-tema-hoja .puente-tema-texto a { color: #00a8fc; }
+#puente-tema-hoja .puente-tema-editar {
+  display: block; width: 100%; margin-top: 0.875rem; padding: 0.875rem 1rem;
+  border: 0; border-radius: 0.75rem; background: #2e2d33; color: #f2f3f5;
+  font: inherit; font-size: 1rem; font-weight: 600; text-align: left; cursor: pointer;
+}
+#puente-tema-hoja .puente-tema-editar:active { background: #3a3940; }
