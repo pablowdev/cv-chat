@@ -5984,3 +5984,92 @@ function sheetDrag(sheet, opts) {
     });
   })();
 })();
+
+// Boton "atras" del celular, como en la app de Discord para Android:
+//  1. si hay algo abierto encima (menu de un mensaje, perfil, emojis/GIFs, una
+//     imagen, una ventana, el panel de miembros...), lo cierra;
+//  2. si estas en un hilo, vuelve al canal;
+//  3. si estas en un chat, abre la lista de canales;
+//  4. y recien desde la lista de canales, sale de la app.
+// En la app instalada (y en el navegador) el boton atras es el historial: se
+// deja una entrada "de mas" mientras haya algo que deshacer y se la usa al
+// apretar atras. Con la app nativa de Haven (Capacitor) se engancha su manejo.
+(function () {
+  'use strict';
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const shown = (el) => !!(el && el.isConnected && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' && el.getClientRects().length);
+  const byId = (id) => document.getElementById(id);
+  const body = () => byId('app-body');
+  const drawerOpen = () => !!(body() && body().classList.contains('mobile-sidebar-open'));
+  const rightOpen = () => !!(body() && body().classList.contains('mobile-right-open'));
+
+  // Lo que se puede cerrar, de lo mas "arriba" a lo mas "abajo": [esta abierto, cerrarlo]
+  const LAYERS = [
+    [() => byId('puente-medalla-globo'), () => byId('puente-medalla-globo').remove()],
+    [() => shown(byId('image-lightbox')), (app) => app._closeLightbox ? app._closeLightbox() : (byId('image-lightbox').style.display = 'none')],
+    [() => byId('puente-tema-hoja'), () => { byId('puente-tema-hoja')?.remove(); byId('puente-tema-fondo')?.remove(); }],
+    [() => byId('puente-perfil-capa'), () => byId('puente-perfil-capa').remove()],
+    [() => byId('puente-invitar-capa'), () => byId('puente-invitar-capa').remove()],
+    [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
+    [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
+    [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
+    [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],
+    [() => shown(byId('profile-popup')), (app) => app._closeProfilePopup && app._closeProfilePopup()],
+    [() => shown(byId('gif-picker')), (app) => app._closeGifPicker ? app._closeGifPicker() : (byId('gif-picker').style.display = 'none')],
+    [() => shown(byId('emoji-picker')), (app) => (app._toggleEmojiPicker ? app._toggleEmojiPicker() : (byId('emoji-picker').style.display = 'none'))],
+    [() => [...document.querySelectorAll('.modal-overlay')].find(shown), () => { const m = [...document.querySelectorAll('.modal-overlay')].find(shown); if (m) m.style.display = 'none'; }],
+    [() => shown(byId('search-panel')), () => { byId('search-panel').style.display = 'none'; }],
+    [() => rightOpen(), (app) => app._closeMobilePanels && app._closeMobilePanels()],
+    [() => shown(byId('thread-panel')) && !drawerOpen(), (app) => app._closeThread && app._closeThread()],
+  ];
+  // La pagina "Miembros" del celular maneja su propio atras (aviso.js, mas arriba)
+  const membersPage = () => !!byId('puente-miembros');
+
+  function topLayer() { for (const l of LAYERS) { try { if (l[0]()) return l; } catch { /* sigue */ } } return null; }
+
+  // Un paso de "atras". Devuelve true si hizo algo (y la app no se tiene que cerrar).
+  function step(app) {
+    const l = topLayer();
+    if (l) { try { l[1](app); } catch (err) { console.warn('[puente] atras:', err); } return true; }
+    if (!drawerOpen()) { const b = byId('mobile-menu-btn'); if (b) { b.click(); return true; } }
+    return false; // en la lista de canales: salir
+  }
+
+  // ── App instalada y navegador: el historial ──
+  let armed = false;
+  const shouldArm = () => mobile() && !membersPage() && (!!topLayer() || !drawerOpen());
+  function arm() {
+    if (armed || !shouldArm()) return;
+    try { history.pushState({ puenteAtras: 1 }, ''); armed = true; } catch { /* sin historial */ }
+  }
+  addEventListener('popstate', (e) => {
+    if (e.state && e.state.puenteAtras) return; // se cerro algo de mas arriba (p. ej. "Miembros"): seguimos armados
+    if (!armed) return;
+    armed = false;
+    const app = window.app;
+    if (!app || !mobile()) return;
+    step(app);
+    setTimeout(arm, 0); // si queda algo que deshacer (o seguimos en un chat), se vuelve a armar
+  });
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !body() || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    // App nativa de Haven: su atras pasa por aca (sin historial)
+    if (typeof app._handleMobileBack === 'function') {
+      const native = app._handleMobileBack;
+      app._handleMobileBack = function (...a) {
+        if (step(this)) return;
+        return native.apply(this, a); // nada que hacer: que la app se cierre
+      };
+    }
+    // Armar cada vez que cambia algo (se abre o cierra un panel, una hoja, una ventana)
+    let pending = false;
+    const later = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; arm(); }); };
+    new MutationObserver(later).observe(body(), { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(later).observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ['style', 'class'] });
+    document.addEventListener('click', () => setTimeout(arm, 50), true);
+    arm();
+  })();
+})();
