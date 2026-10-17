@@ -1,7 +1,8 @@
 // Canales contador (parte del puente), como los canales "contador de miembros"
 // que muchos servidores de Discord tienen (un bot les cambia el nombre):
-//   👥 haven-N        usuarios registrados en Haven
-//   🔗 vinculados-N   cuentas de Haven vinculadas con Discord
+//   👥 <app>-N          usuarios registrados en Haven (<app>: PUENTE_TITULO en
+//                       minusculas con guiones, "cv-chat"; sin titulo, "haven")
+//   🔗 discord-link-N   cuentas de Haven vinculadas con Discord
 // Son canales propios de Haven (no vienen de Discord), de solo lectura y
 // visibles para todos, en la misma categoria que el contador de Discord.
 // Se actualizan como mucho cada INTERVAL_MS y solo si cambio el numero.
@@ -15,9 +16,11 @@
 const crypto = require('crypto');
 
 const INTERVAL_MS = 5 * 60 * 1000;
+const appSlug = () => String(process.env.PUENTE_TITULO || '').normalize('NFKD').replace(/\p{M}/gu, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'haven';
 const STATS = [
-  { key: 'haven', label: n => `👥 haven-${n}`, count: db => db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0").get().n },
-  { key: 'vinculados', label: n => `🔗 vinculados-${n}`, count: db => db.prepare('SELECT COUNT(*) n FROM puente_vinculos').get().n },
+  { key: 'haven', label: n => `👥 ${appSlug()}-${n}`, count: db => db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0").get().n },
+  { key: 'vinculados', label: n => `🔗 discord-link-${n}`, count: db => db.prepare('SELECT COUNT(*) n FROM puente_vinculos').get().n },
 ];
 const SETTING = 'puente_canales_contador';
 
