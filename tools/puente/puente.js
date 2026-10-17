@@ -115,6 +115,11 @@ function start(deps) {
       haven_message_id INTEGER PRIMARY KEY,
       attachment_ids TEXT NOT NULL
     );
+    -- Bots y webhooks de Discord, para mostrar sus mensajes con la etiqueta "APP"
+    -- como en Discord (en vez de "DISCORD"): los mensajes, y las cuentas de bots
+    -- (asi tambien los que ya estaban, por su autor en puente_autores)
+    CREATE TABLE IF NOT EXISTS puente_apps (message_id INTEGER PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS puente_bots (discord_user_id TEXT PRIMARY KEY);
   `);
   for (const w of db.prepare('SELECT webhook_id FROM puente_webhooks').all()) ourWebhookIds.add(w.webhook_id);
 
@@ -346,6 +351,7 @@ function onDispatch(t, d) {
     switch (t) {
       case 'READY':
         sessionId = d.session_id; resumeUrl = d.resume_gateway_url; botUserId = d.user && d.user.id;
+        if (botUserId) db.prepare('INSERT OR IGNORE INTO puente_bots (discord_user_id) VALUES (?)').run(botUserId);
         log(`conectado a Discord como ${d.user && d.user.username}`);
         break;
       case 'GUILD_CREATE': {
@@ -465,6 +471,10 @@ async function inboundCreate(msg, ownBot = false) {
   if (!r.changes) return;
   markInserted(r.lastInsertRowid);
   if (!msg.webhook_id && msg.author) vincular.recordAuthor(r.lastInsertRowid, msg.author.id);
+  if (msg.webhook_id || (msg.author && msg.author.bot)) {
+    db.prepare('INSERT OR IGNORE INTO puente_apps (message_id) VALUES (?)').run(r.lastInsertRowid);
+    if (!msg.webhook_id) db.prepare('INSERT OR IGNORE INTO puente_bots (discord_user_id) VALUES (?)').run(msg.author.id);
+  }
   emitNew(target.channel, r.lastInsertRowid, target.root);
   // Notificaciones de menciones, respuestas y @everyone (Haven solo avisa de lo escrito en Haven)
   if (!ownBot) avisos.onInbound({ channel: target.channel, content, msg, replyToId: replyTo, author });

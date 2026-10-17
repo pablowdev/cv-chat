@@ -433,6 +433,22 @@ async function handle(req, res) {
     return json(res, 200, { personas: require('./buscar.js').people(u.searchParams.get('q') || '') });
   }
 
+  // Cuales de estos mensajes son de un bot o webhook de Discord (etiqueta "APP", web/aviso.js)
+  if (p === '/puente/api/apps' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const ids = [...new Set(String(u.searchParams.get('ids') || '').split(',').map(x => parseInt(x, 10)).filter(x => x > 0))].slice(0, 200);
+    if (!ids.length) return json(res, 200, { apps: [] });
+    const ph = ids.map(() => '?').join(',');
+    let apps = [];
+    try {
+      apps = db.prepare(`SELECT message_id id FROM puente_apps WHERE message_id IN (${ph})
+                          UNION SELECT pa.message_id FROM puente_autores pa JOIN puente_bots b ON b.discord_user_id = pa.discord_user_id
+                          WHERE pa.message_id IN (${ph})`).all(...ids, ...ids).map(r => r.id);
+    } catch { /* sin las tablas todavia */ }
+    return json(res, 200, { apps });
+  }
+
   if (p === '/puente/api/reacciones-frecuentes' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

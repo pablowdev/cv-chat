@@ -2102,3 +2102,116 @@ html #message-context-menu.puente-sheet, html body #user-context-menu.puente-use
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 .puente-react-picker input, .puente-who-sheet input { -webkit-user-select: text; user-select: text; }
+
+/* ── Como en Discord: citas, etiqueta APP, bienvenida del canal (aviso.js) ── */
+html body .chat-blockquote {
+  margin: 0.125rem 0; padding: 0 0.5rem 0 0.75rem; border: 0; border-left: 4px solid #4e5058; border-radius: 4px;
+  background: transparent !important; font-style: normal !important; color: inherit;
+}
+html body .chat-blockquote .chat-blockquote-body { font-style: normal !important; background: transparent !important; padding: 0; }
+html body .discord-badge.puente-app {
+  border: 0 !important; background: #5865f2 !important; color: #fff !important;
+  font-weight: 700; letter-spacing: 0.02em; border-radius: 0.25rem;
+}
+.puente-inicio { padding: 1.5rem 1rem 1rem; }
+.puente-inicio .pi-numeral {
+  width: 4.25rem; height: 4.25rem; border-radius: 50%; background: #2e2d32; color: #f2f3f5;
+  display: flex; align-items: center; justify-content: center; font-size: 2.75rem; font-weight: 400; margin-bottom: 0.75rem;
+}
+.puente-inicio .pi-titulo { font-size: 1.75rem; line-height: 1.2; font-weight: 800; color: #f2f3f5; margin-bottom: 0.5rem; overflow-wrap: anywhere; }
+.puente-inicio .pi-texto { font-size: 1rem; color: #b5bac1; }
+@media (min-width: 769px) { .puente-inicio { padding: 1.5rem 1rem 0.5rem; } .puente-inicio .pi-titulo { font-size: 2rem; } }
+
+/* Boton gris para agregar otra reaccion (pantallas tactiles) */
+html body .reactions-row .puente-mas-reaccion {
+  display: inline-flex; align-items: center; justify-content: center; height: 1.875rem; min-width: 2.25rem; padding: 0 0.5rem;
+  border: 0; border-radius: 0.5rem; background: #343338; color: #b5bac1; cursor: pointer; vertical-align: top;
+}
+html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
+
+/* ── Celular: encabezado como el de la app de Discord ── */
+@media (max-width: 768px) {
+  html body header.channel-header .puente-tema { display: none !important; }
+  html body header.channel-header > .channel-info { align-items: flex-start !important; text-align: left !important; cursor: pointer; }
+  html body header.channel-header #channel-header-name { font-size: 1.1875rem !important; font-weight: 700 !important; }
+  html.puente-con-canal body header.channel-header #channel-header-name::after { content: " \203A"; color: #949ba4; font-weight: 400; }
+  html body #mobile-users-btn { display: none !important; }
+  /* Fijados, multimedia, hilos y buscar: en la lupa, como en Discord */
+  html body #header-actions-box > :is(#channel-code-display, #copy-code-btn, #channel-code-settings-btn, #search-toggle-btn, #pinned-toggle-btn, #gallery-toggle-btn, #threads-toggle-btn, #move-select-btn, .header-actions-divider) { display: none !important; }
+  html body #mobile-menu-btn { color: #b5bac1 !important; }
+  html body #puente-lupa {
+    display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0;
+    border: 0; border-radius: 50%; background: transparent; color: #b5bac1; cursor: pointer;
+  }
+  html body #puente-lupa:active { background: #2e2d32; }
+}
+@media (min-width: 769px) { #puente-lupa { display: none !important; } }
+
+/* ── Celular: la pantalla de la lupa (buscador y pestañas, como Discord) ── */
+.puente-lupa-pagina {
+  position: fixed; inset: 0; z-index: 100005; display: flex; flex-direction: column;
+  background: #1a191e; color: #dbdee1; animation: puente-fade 0.12s ease-out;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.puente-lupa-pagina .pl-cabeza { display: flex; align-items: center; gap: 0.25rem; padding: 0.75rem 0.75rem 0.5rem 0.25rem; }
+.puente-lupa-pagina .pl-atras { flex: 0 0 2.75rem; height: 2.75rem; border: 0; background: transparent; color: #b5bac1; display: flex; align-items: center; justify-content: center; }
+.puente-lupa-pagina .pl-campo {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.5rem; height: 3rem; padding: 0 0.875rem;
+  border-radius: 0.75rem; background: #111114; border: 1px solid #2e2d32; color: #949ba4;
+}
+.puente-lupa-pagina .pl-chip {
+  flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0.25rem 0.625rem; border: 0; border-radius: 0.375rem; background: #2e2d32; color: #f2f3f5; font: inherit; font-size: 0.9375rem;
+}
+.puente-lupa-pagina .pl-chip-en { color: #b5bac1; }
+.puente-lupa-pagina .pl-input {
+  flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: #f2f3f5; font: inherit; font-size: 1rem;
+}
+.puente-lupa-pagina .pl-tabs { display: flex; gap: 1.5rem; overflow-x: auto; scrollbar-width: none; padding: 0 1rem; border-bottom: 1px solid #2e2d32; flex-shrink: 0; }
+.puente-lupa-pagina .pl-tabs[hidden] { display: none; }
+.puente-lupa-pagina .pl-tab {
+  flex: 0 0 auto; padding: 0.75rem 0 0.625rem; border: 0; border-bottom: 3px solid transparent; background: transparent;
+  color: #949ba4; font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer;
+}
+.puente-lupa-pagina .pl-tab.activa { color: #949cf7; border-bottom-color: #5865f2; }
+.puente-lupa-pagina .pl-contenido { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px)); }
+.puente-lupa-pagina .pl-estado { padding: 1.5rem 0; text-align: center; color: #949ba4; }
+.puente-lupa-pagina .pl-estado:empty { display: none; }
+.puente-lupa-pagina .pl-invitar {
+  display: flex; align-items: center; gap: 1rem; width: 100%; min-height: 3.5rem; margin-bottom: 1.5rem; padding: 0 1rem;
+  border: 0; border-radius: 1rem; background: #2e2d32; color: #f2f3f5; font: inherit; font-size: 1rem; font-weight: 500; text-align: left;
+}
+.puente-lupa-pagina .pl-invitar span { flex: 1 1 auto; }
+.puente-lupa-pagina .pl-invitar svg:last-child { color: #949ba4; }
+.puente-lupa-pagina .pl-lista { display: flex; flex-direction: column; border-radius: 1rem; background: #2e2d32; overflow: hidden; }
+.puente-lupa-pagina .pl-lista:empty { display: none; }
+.puente-lupa-pagina .pl-fila {
+  display: flex; gap: 0.75rem; width: 100%; padding: 0.75rem 1rem; border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.puente-lupa-pagina .pl-fila + .pl-fila { box-shadow: inset 0 1px 0 #3b3a3f; }
+.puente-lupa-pagina .pl-fila:active { background: #36353b; }
+.puente-lupa-pagina .pl-avatar {
+  flex: 0 0 2.5rem; width: 2.5rem; height: 2.5rem; border-radius: 50%; overflow: hidden; background: #5865f2; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700;
+}
+.puente-lupa-pagina .pl-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.puente-lupa-pagina .pl-cuerpo { flex: 1 1 auto; min-width: 0; }
+.puente-lupa-pagina .pl-arriba { display: flex; align-items: baseline; gap: 0.5rem; }
+.puente-lupa-pagina .pl-nombre { font-weight: 600; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-lupa-pagina .pl-fecha { flex-shrink: 0; font-size: 0.75rem; color: #949ba4; }
+.puente-lupa-pagina .pl-texto { margin-top: 0.125rem; color: #dbdee1; font-size: 0.9375rem; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.puente-lupa-pagina .pl-hilo { margin-top: 0.25rem; font-size: 0.8125rem; color: #00a8fc; font-weight: 600; }
+.puente-lupa-pagina .pl-grilla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem; }
+.puente-lupa-pagina .pl-foto { aspect-ratio: 1; padding: 0; border: 0; border-radius: 0.375rem; overflow: hidden; background: #2e2d32; }
+.puente-lupa-pagina .pl-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* La lista de miembros de Haven, adentro de la pestaña Miembros */
+.puente-lupa-pagina #online-users { display: block !important; }
+.puente-lupa-pagina #online-users .user-group-label {
+  padding: 0 0.25rem 0.5rem; font-size: 1rem !important; font-weight: 600 !important; text-transform: none !important; letter-spacing: 0 !important; color: #b5bac1 !important;
+}
+.puente-lupa-pagina #online-users .user-group-label ~ .user-group-label { margin-top: 1.25rem; }
+.puente-lupa-pagina #online-users .user-item { min-height: 3.5rem !important; padding: 0.5rem 1rem !important; border-radius: 0 !important; background: #2e2d32; gap: 0.875rem !important; }
+.puente-lupa-pagina #online-users .user-item .user-item-avatar, .puente-lupa-pagina #online-users .user-item .user-avatar-wrapper { width: 2.5rem !important; height: 2.5rem !important; }
+.puente-lupa-pagina #online-users .user-item-name, .puente-lupa-pagina #online-users .user-item .username { font-size: 1.0625rem !important; }
+.puente-lupa-pagina .pl-hilo-icono { background: #3b3a40; color: #dbdee1; }
+.puente-lupa-pagina .pl-hilo-nombre { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 0.125rem; }

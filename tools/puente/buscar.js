@@ -22,7 +22,8 @@
 const PAGE = 25;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const HAS_ES = { enlace: 'link', enlaces: 'link', link: 'link', imagen: 'image', imagenes: 'image', image: 'image', foto: 'image',
-  video: 'video', videos: 'video', archivo: 'file', archivos: 'file', file: 'file', audio: 'audio', audios: 'audio' };
+  video: 'video', videos: 'video', archivo: 'file', archivos: 'file', file: 'file', audio: 'audio', audios: 'audio',
+  hilo: 'thread', hilos: 'thread', thread: 'thread', documento: 'document', documentos: 'document', document: 'document' };
 
 let db, log, warn, fts = null;
 
@@ -131,6 +132,13 @@ function search(socket, data) {
   else if (f.has === 'link') cond.push(like(['%http://%', '%https://%']));
   else if (f.has === 'video') cond.push(like(['%/uploads/%.mp4%', '%/uploads/%.webm%', '%/uploads/%.mov%', '%youtube.com%', '%youtu.be%']));
   else if (f.has === 'audio') cond.push(like(['%/uploads/%.mp3%', '%/uploads/%.wav%', '%/uploads/%.ogg%', '%/uploads/%.m4a%', '%/uploads/%.opus%']));
+  // Para las pestañas del buscador del celular (web/aviso.js): los que tienen hilo, y
+  // los archivos que no son fotos, videos ni audios
+  else if (f.has === 'thread') cond.push('m.id IN (SELECT thread_id FROM messages WHERE thread_id IS NOT NULL)');
+  else if (f.has === 'document') {
+    cond.push("(m.content LIKE '%/uploads/%' OR m.content LIKE '%[file:%')");
+    cond.push("NOT " + like(['%/uploads/%.png%', '%/uploads/%.jpg%', '%/uploads/%.jpeg%', '%/uploads/%.gif%', '%/uploads/%.webp%', '%/uploads/%.mp4%', '%/uploads/%.webm%', '%/uploads/%.mov%', '%/uploads/%.mp3%', '%/uploads/%.ogg%', '%/uploads/%.m4a%', '%/uploads/%.opus%', '%/uploads/%.wav%']));
+  }
   if (f.pinned === 'true') cond.push('m.id IN (SELECT message_id FROM pinned_messages)');
   if (f.after) { cond.push('m.created_at >= ?'); params.push(f.after); }
   if (f.before) { cond.push('m.created_at < ?'); params.push(f.before); }

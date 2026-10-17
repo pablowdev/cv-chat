@@ -2894,7 +2894,25 @@ function sheetDrag(sheet, opts) {
 
   // El enlace pasa a ser el de CV Chat (asi tampoco lleva a Discord al abrirlo en
   // otra pestaña) y, si se veia la direccion tal cual, dice "#canal › mensaje"
+  // En Discord un enlace entre < > se muestra sin vista previa; Haven dejaba los
+  // signos a la vista ("<https://...>"): se sacan, como se ve en Discord
+  function unbracket(a) {
+    if (a.dataset.puenteSinSignos) return;
+    a.dataset.puenteSinSignos = '1';
+    const prev = a.previousSibling, next = a.nextSibling;
+    if (!prev || prev.nodeType !== 3 || !prev.nodeValue.endsWith('<')) return;
+    const raw = a.getAttribute('href') || '';
+    if (/(>|%3E)$/i.test(raw)) {
+      a.setAttribute('href', raw.replace(/(>|%3E)$/i, ''));
+      if (/(>|%3E)$/i.test(a.textContent)) a.textContent = a.textContent.replace(/(>|%3E)$/i, '');
+    } else if (next && next.nodeType === 3 && next.nodeValue.startsWith('>')) next.nodeValue = next.nodeValue.slice(1);
+    // (Haven a veces ya se comio el ">" del final y deja solo el "<")
+    else if (next && !(next.nodeType === 3 && /^\s/.test(next.nodeValue)) && next.nodeName !== 'BR') return;
+    prev.nodeValue = prev.nodeValue.slice(0, -1);
+  }
+
   function label(a) {
+    unbracket(a);
     if (a.dataset.puenteEnlace) return;
     const p = parse(a.href);
     if (!p) return;
@@ -5968,6 +5986,337 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Celular: el encabezado del canal y la lupa como en la app de Discord.
+//  - Arriba: la flecha "←" (abre la lista de canales, como el menu de antes),
+//    "# canal ›" (tocandolo, la descripcion del canal) y la lupa a la derecha. La
+//    descripcion ya no va debajo del nombre y el boton de miembros pasa a la lupa.
+//  - La lupa abre una pantalla con el buscador ("en: #canal") y las pestañas de
+//    Discord: Miembros (con "Invitar gente" arriba), Multimedia, Fijados, Hilos,
+//    Enlaces y Archivos. Usa el buscador de Haven (con lo que le agrega
+//    buscar.js), asi que solo muestra lo que la persona puede ver. Tocar un
+//    resultado lleva al mensaje (o abre el hilo). El atras del telefono la cierra.
+// Ademas, en todos lados: al principio de un canal, "¡Te damos la bienvenida a
+// #canal!" como en Discord; los mensajes de bots y webhooks de Discord con la
+// etiqueta "APP" (como se ven en Discord) en vez de "DISCORD"; y en el celular,
+// al lado de las reacciones de un mensaje, el boton gris para agregar otra.
+(function () {
+  'use strict';
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const svg = (d, s = 24) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const ARROW = 'M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20v-2Z';
+  const LENS = 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5Zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z';
+  const BACK = 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12l4.6-4.6Z';
+  const SMILE = 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-3.5 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 18a5.5 5.5 0 0 1-5-3.2h10A5.5 5.5 0 0 1 12 18Z';
+  const INVITE = 'M14 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm-4 6c-4 0-7 2-7 4.5V20h11.2a6 6 0 0 1-.2-1.5c0-1.6.6-3 1.6-4.1A12 12 0 0 0 10 14Zm9 0h-2v3h-3v2h3v3h2v-3h3v-2h-3v-3Z';
+  const current = (app) => (app.channels || []).find(c => c.code === app.currentChannel) || null;
+
+  // ── Encabezado ──
+  function header() {
+    const menu = byId('mobile-menu-btn');
+    if (menu && !menu.dataset.puenteFlecha) { menu.dataset.puenteFlecha = '1'; menu.innerHTML = svg(ARROW, 24); menu.setAttribute('aria-label', 'Canales'); menu.title = 'Canales'; }
+    const users = byId('mobile-users-btn');
+    if (users && !byId('puente-lupa')) {
+      const b = el('button', 'puente-lupa');
+      b.id = 'puente-lupa'; b.type = 'button'; b.title = 'Buscar'; b.setAttribute('aria-label', 'Buscar');
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>';
+      b.addEventListener('click', (e) => { e.stopPropagation(); open(window.app); });
+      users.parentElement.insertBefore(b, users);
+    }
+  }
+
+  // ── Pantalla de la lupa ──
+  const TABS = [
+    ['miembros', 'Miembros'], ['multimedia', 'Multimedia', 'has:image'], ['fijados', 'Fijados', 'pinned:true'],
+    ['hilos', 'Hilos', 'has:thread'], ['enlaces', 'Enlaces', 'has:link'], ['archivos', 'Archivos', 'has:document'],
+  ];
+  let page = null, membersHome = null, seq = 0, state = null;
+
+  function close() {
+    if (!page) return;
+    const list = byId('online-users');
+    if (list && membersHome && page.contains(list)) membersHome.parent.insertBefore(list, membersHome.next && membersHome.next.parentNode === membersHome.parent ? membersHome.next : null);
+    membersHome = null;
+    page.remove(); page = null; state = null;
+  }
+  window.puenteLupa = { abierta: () => !!page, cerrar: close };
+
+  const fecha = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); };
+  const IMG_RE = /(\/uploads\/[^\s)"'<>]+?\.(?:png|jpe?g|gif|webp))(?=[\s)"'<>?]|$)|(https?:\/\/[^\s)"'<>]*(?:giphy\.com|tenor\.com)[^\s)"'<>]*)/ig;
+  function images(content) {
+    const out = [];
+    for (const m of String(content || '').matchAll(IMG_RE)) {
+      if (m[1]) out.push({ src: /\.gif$/i.test(m[1]) ? m[1] : '/puente/mini/480/' + m[1].replace(/^\/uploads\//, ''), full: m[1] });
+      else out.push({ src: m[2], full: m[2] });
+    }
+    return out;
+  }
+  function preview(content) {
+    return String(content || '')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' 🖼️ ')
+      .replace(/\[file:([^\]]+)\]\([^)]*\)/g, ' 📎 $1 ')
+      .replace(/\[([^\]]*)\]\((\/uploads\/[^)]*)\)/g, (m, t, u) => ' 📎 ' + (t || u.split('/').pop()) + ' ')
+      .replace(/\[([^\]]+)\]\((https?:[^)]*)\)/g, '$1')
+      .replace(/<(https?:[^>\s]+)>/g, '$1')
+      .replace(/^>\s?/gm, '').replace(/[*_~`|]+/g, '')
+      .replace(/\s+/g, ' ').trim().slice(0, 240);
+  }
+  function go(app, r, thread) {
+    close();
+    const url = location.origin + '/app?channel=' + r.channel_code + '&message=' + r.id;
+    if (window.puenteEnlaces && window.puenteEnlaces.abrir(url)) {
+      if (thread && typeof app._openThread === 'function') setTimeout(() => { try { app._openThread(r.id); } catch { /* sigue */ } }, 900);
+    }
+  }
+  function row(app, r, kind) {
+    const b = el('button', 'pl-fila');
+    b.type = 'button';
+    if (kind === 'hilos') {
+      // Como en Discord: el nombre del hilo y cuantas respuestas tiene
+      const ic = el('div', 'pl-avatar pl-hilo-icono');
+      ic.innerHTML = svg('M4 5h16v2H4V5Zm0 6h10v2H4v-2Zm0 6h16v2H4v-2Zm14-6.5 3 1.5-3 1.5v-3Z', 22);
+      const body = el('div', 'pl-cuerpo');
+      body.appendChild(el('div', 'pl-nombre pl-hilo-nombre', preview(r.content).replace(/^🧵\s*/, '') || 'Hilo'));
+      const n = r.thread_count || 0;
+      body.appendChild(el('div', 'pl-fecha', n + (n === 1 ? ' respuesta' : ' respuestas') + ' · ' + fecha(r.created_at) + (r.username && r.username !== 'Discord' ? ' · ' + r.username : '')));
+      b.append(ic, body);
+      b.addEventListener('click', () => go(app, r, true));
+      return b;
+    }
+    const av = el('div', 'pl-avatar');
+    if (r.avatar) { const img = el('img'); img.src = r.avatar; img.alt = ''; img.loading = 'lazy'; img.onerror = () => { img.remove(); av.textContent = String(r.username || '?').charAt(0).toUpperCase(); }; av.appendChild(img); }
+    else av.textContent = String(r.username || '?').charAt(0).toUpperCase();
+    const body = el('div', 'pl-cuerpo');
+    const top = el('div', 'pl-arriba');
+    top.append(el('span', 'pl-nombre', r.username || ''), el('span', 'pl-fecha', fecha(r.created_at)));
+    body.appendChild(top);
+    const text = preview(r.content);
+    if (text) body.appendChild(el('div', 'pl-texto', text));
+    if (kind === 'hilos' || r.thread_count) body.appendChild(el('div', 'pl-hilo', '🧵 ' + (r.thread_count || 0) + (r.thread_count === 1 ? ' respuesta' : ' respuestas')));
+    b.append(av, body);
+    b.addEventListener('click', () => go(app, r, kind === 'hilos'));
+    return b;
+  }
+
+  function search(app, query, pageNo) {
+    const tk = 'puente-lupa-' + (++seq);
+    return new Promise((resolve) => {
+      const done = (d) => { if (d && d.token === tk) { app.socket.off('search-results', done); clearTimeout(t); resolve(d); } };
+      const t = setTimeout(() => { app.socket.off('search-results', done); resolve(null); }, 15000);
+      app.socket.on('search-results', done);
+      app.socket.emit('search-messages', { query, page: pageNo, sort: 'newest', token: tk });
+    });
+  }
+
+  // Una lista (pestaña o busqueda) que trae mas al llegar al final
+  function list(app, query, kind) {
+    const box = page.querySelector('.pl-contenido');
+    box.textContent = '';
+    const wrap = el('div', kind === 'multimedia' ? 'pl-grilla' : 'pl-lista');
+    box.appendChild(wrap);
+    const status = el('div', 'pl-estado', 'Cargando…');
+    box.appendChild(status);
+    const st = state = { query, kind, page: 0, total: Infinity, loading: false, shown: 0 };
+    const more = async () => {
+      if (st !== state || st.loading || st.shown >= st.total) return;
+      st.loading = true;
+      const d = await search(app, query, st.page + 1);
+      if (st !== state || !page) return;
+      st.loading = false;
+      if (!d) { status.textContent = 'No se pudo buscar. Probá de nuevo.'; return; }
+      st.page = d.page || st.page + 1; st.total = d.total || 0;
+      const res = d.results || [];
+      st.shown += res.length;
+      if (!res.length) st.total = st.shown; // por las dudas: nada mas
+      for (const r of res) {
+        if (kind === 'multimedia') {
+          for (const im of images(r.content)) {
+            const b = el('button', 'pl-foto'); b.type = 'button';
+            const img = el('img'); img.src = im.src; img.alt = ''; img.loading = 'lazy';
+            img.onerror = () => { if (img.src.indexOf('/puente/mini/') >= 0) img.src = im.full; else b.remove(); };
+            b.appendChild(img);
+            b.addEventListener('click', () => go(app, r));
+            wrap.appendChild(b);
+          }
+        } else wrap.appendChild(row(app, r, kind));
+      }
+      if (!st.shown) status.textContent = kind === 'busqueda' ? 'No hay resultados.' : 'Todavía no hay nada acá.';
+      else status.textContent = st.shown >= st.total ? '' : 'Cargando…';
+      // Si no llena la pantalla, traer mas
+      if (st.shown < st.total && box.scrollHeight <= box.clientHeight + 40) more();
+    };
+    box.onscroll = () => { if (box.scrollTop + box.clientHeight > box.scrollHeight - 300) more(); };
+    more();
+  }
+
+  function members(app) {
+    const box = page.querySelector('.pl-contenido');
+    box.textContent = ''; box.onscroll = null; state = null;
+    if (window.puenteInvitar) {
+      const inv = el('button', 'pl-invitar'); inv.type = 'button';
+      inv.innerHTML = svg(INVITE, 24);
+      inv.appendChild(el('span', '', 'Invitar gente'));
+      inv.insertAdjacentHTML('beforeend', svg('M9.4 18 8 16.6l4.6-4.6L8 7.4 9.4 6l6 6-6 6Z', 22));
+      inv.addEventListener('click', () => { close(); window.puenteInvitar(); });
+      box.appendChild(inv);
+    }
+    // La lista de Haven (la del panel de la derecha), mientras la pantalla esta abierta
+    const listEl = byId('online-users');
+    if (listEl) {
+      if (!membersHome) membersHome = { parent: listEl.parentElement, next: listEl.nextSibling };
+      box.appendChild(listEl);
+    }
+  }
+
+  function scope(app) {
+    return page && page.dataset.canal ? 'in:#' + page.dataset.canal + ' ' : '';
+  }
+  function show(app, tab) {
+    page.querySelectorAll('.pl-tab').forEach(b => b.classList.toggle('activa', b.dataset.tab === tab));
+    page.querySelector('.pl-tabs').hidden = false;
+    // Volver a poner la lista de miembros en su lugar si se cambia de pestaña
+    const listEl = byId('online-users');
+    if (tab !== 'miembros' && listEl && membersHome && page.contains(listEl)) {
+      membersHome.parent.insertBefore(listEl, membersHome.next && membersHome.next.parentNode === membersHome.parent ? membersHome.next : null);
+      membersHome = null;
+    }
+    if (tab === 'miembros') return members(app);
+    const t = TABS.find(x => x[0] === tab);
+    list(app, scope(app) + t[2], tab);
+  }
+
+  function open(app) {
+    if (!app || !app.socket) return;
+    close();
+    const ch = current(app);
+    page = el('div', 'puente-lupa-pagina');
+    page.id = 'puente-buscar-cel';
+    if (ch && !ch.is_dm) page.dataset.canal = ch.code;
+    const head = el('div', 'pl-cabeza');
+    const back = el('button', 'pl-atras'); back.type = 'button'; back.setAttribute('aria-label', 'Volver');
+    back.innerHTML = svg(BACK, 30);
+    back.addEventListener('click', close);
+    const field = el('label', 'pl-campo');
+    field.insertAdjacentHTML('beforeend', svg(LENS, 22));
+    if (page.dataset.canal) {
+      const chip = el('button', 'pl-chip'); chip.type = 'button';
+      chip.append(el('span', 'pl-chip-en', 'en:'), document.createTextNode(' ' + (ch.name || '')));
+      chip.title = 'Buscar en todos los canales';
+      chip.addEventListener('click', (e) => { e.preventDefault(); delete page.dataset.canal; chip.remove(); const a = page.querySelector('.pl-tab.activa'); if (a && a.dataset.tab !== 'miembros') show(app, a.dataset.tab); });
+      field.appendChild(chip);
+    }
+    const input = el('input', 'pl-input');
+    input.type = 'search'; input.placeholder = 'Buscar'; input.enterKeyHint = 'search';
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q) { const a = page.querySelector('.pl-tab.activa'); show(app, a ? a.dataset.tab : 'miembros'); return; }
+      input.blur();
+      page.querySelector('.pl-tabs').hidden = true;
+      list(app, scope(app) + q, 'busqueda');
+    });
+    input.addEventListener('input', () => { if (!input.value.trim() && page.querySelector('.pl-tabs').hidden) { const a = page.querySelector('.pl-tab.activa'); show(app, a ? a.dataset.tab : 'miembros'); } });
+    field.appendChild(input);
+    head.append(back, field);
+    const tabs = el('div', 'pl-tabs');
+    for (const [id, label] of TABS) {
+      const b = el('button', 'pl-tab', label); b.type = 'button'; b.dataset.tab = id;
+      b.addEventListener('click', () => { input.value = ''; show(app, id); b.scrollIntoView({ inline: 'nearest', block: 'nearest' }); });
+      tabs.appendChild(b);
+    }
+    page.append(head, tabs, el('div', 'pl-contenido'));
+    document.body.appendChild(page);
+    show(app, 'miembros');
+  }
+
+  // ── Bienvenida al principio del canal ──
+  function welcome(app) {
+    const box = byId('messages');
+    if (!box) return;
+    const ch = current(app);
+    const want = !!(ch && !ch.is_dm && !ch.is_group && app._noMoreHistory && box.querySelector('.message, .message-compact') &&
+      !(app._isForumFeed && app._isForumFeed()));
+    const have = box.querySelector(':scope > .puente-inicio');
+    if (!want) { if (have) have.remove(); return; }
+    if (have && have.dataset.canal === ch.code && box.firstElementChild === have) return;
+    if (have) have.remove();
+    const w = el('div', 'puente-inicio');
+    w.dataset.canal = ch.code;
+    w.appendChild(el('div', 'pi-numeral', '#'));
+    w.appendChild(el('div', 'pi-titulo', '¡Te damos la bienvenida a #' + (ch.name || '') + '!'));
+    w.appendChild(el('div', 'pi-texto', 'Este es el comienzo del canal #' + (ch.name || '') + '.'));
+    box.insertBefore(w, box.firstChild);
+  }
+
+  // ── "APP" en los bots y webhooks de Discord ──
+  const apps = new Map(); // id -> true/false
+  let askTimer = null;
+  function badges() {
+    const want = [];
+    for (const b of document.querySelectorAll('#messages .discord-badge:not([data-puente-app]), #thread-panel .discord-badge:not([data-puente-app])')) {
+      const m = b.closest('[data-msg-id]');
+      const id = m && m.dataset.msgId;
+      if (!id) continue;
+      if (apps.has(id)) { b.dataset.puenteApp = apps.get(id) ? '1' : '0'; if (apps.get(id)) { b.textContent = 'APP'; b.classList.add('puente-app'); } }
+      else want.push(id);
+    }
+    if (!want.length || askTimer) return;
+    askTimer = setTimeout(() => {
+      askTimer = null;
+      const ids = [...new Set(want)].slice(0, 200);
+      fetch('/puente/api/apps?ids=' + ids.join(','), { headers: { Authorization: 'Bearer ' + token() } })
+        .then(r => (r.ok ? r.json() : null)).then(d => {
+          if (!d || !Array.isArray(d.apps)) return;
+          const yes = new Set(d.apps.map(String));
+          for (const id of ids) apps.set(id, yes.has(id));
+          badges();
+        }).catch(() => {});
+    }, 150);
+  }
+
+  // ── Boton para agregar una reaccion, al lado de las reacciones (celular) ──
+  function addButtons(app) {
+    if (!coarse) return;
+    for (const rowEl of document.querySelectorAll('#messages .reactions-row, #thread-panel .reactions-row')) {
+      if (!rowEl.querySelector('.reaction-badge') || rowEl.querySelector('.puente-mas-reaccion')) continue;
+      const msgEl = rowEl.closest('[data-msg-id]');
+      if (!msgEl) continue;
+      const b = el('button', 'puente-mas-reaccion'); b.type = 'button'; b.setAttribute('aria-label', 'Agregar reacción');
+      b.innerHTML = svg(SMILE, 20);
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof app._showReactionPicker === 'function') app._showReactionPicker(msgEl, parseInt(msgEl.dataset.msgId, 10));
+      });
+      rowEl.appendChild(b);
+    }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const box = byId('messages');
+    if (!app || !app.socket || !box || typeof app.switchChannel !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    if (mobile()) header();
+    addEventListener('resize', () => { if (mobile()) header(); });
+    const sw = app.switchChannel;
+    app.switchChannel = function (...a) { close(); return sw.apply(this, a); };
+    let queued = false;
+    const tick = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; try { welcome(app); badges(); addButtons(app); } catch (err) { console.warn('[puente] chat:', err); } });
+    };
+    new MutationObserver(tick).observe(box, { childList: true, subtree: true });
+    const tp = byId('thread-panel');
+    if (tp) new MutationObserver(tick).observe(tp, { childList: true, subtree: true });
+    tick();
+  })();
+})();
+
 // "Activá las notificaciones": casi nadie las tenia prendidas (estan escondidas
 // en los ajustes) y sin ellas la gente vuelve a Discord para enterarse. A quien
 // tiene la cuenta vinculada y todavia no eligio, un cartel abajo (como los de
@@ -6625,6 +6974,7 @@ function sheetDrag(sheet, opts) {
     [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
     [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
     [() => window.puenteAdjuntar && window.puenteAdjuntar.abierto(), () => window.puenteAdjuntar.cerrar()],
+    [() => window.puenteLupa && window.puenteLupa.abierta() && !shown(byId('profile-popup')), () => window.puenteLupa.cerrar()],
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
     [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],
     [() => shown(byId('profile-popup')), (app) => app._closeProfilePopup && app._closeProfilePopup()],

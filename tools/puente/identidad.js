@@ -64,6 +64,7 @@ async function fetchMembers() {
   for (;;) {
     const page = await api('GET', `/guilds/${g}/members?limit=1000&after=${after}`);
     if (!Array.isArray(page)) return;
+    for (const m of page) if (m.user && m.user.bot) { try { db.prepare('INSERT OR IGNORE INTO puente_bots (discord_user_id) VALUES (?)').run(m.user.id); } catch { /* sin la tabla todavia */ } }
     for (const m of page) if (m.user && !m.user.bot) out.push({ id: m.user.id, names: [m.user.username, m.user.global_name, m.nick].filter(Boolean) });
     if (page.length < 1000) break;
     after = page[page.length - 1].user.id;
