@@ -426,6 +426,33 @@ async function handle(req, res) {
     return json(res, 200, { miembros: members() });
   }
 
+  // Los emails de las cuentas, en una planilla (CSV con ";", se abre directo en Excel o
+  // Google Sheets): solo administradores, desde la pagina "Miembros"
+  if (p === '/puente/api/miembros/emails.csv' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
+    let rows = [];
+    try {
+      rows = db.prepare(`SELECT u.username, u.display_name, u.created_at, e.email, e.confirmado, e.origen, v.discord_username
+                         FROM puente_emails e JOIN users u ON u.id = e.haven_user_id
+                         LEFT JOIN puente_vinculos v ON v.haven_user_id = u.id
+                         WHERE e.email IS NOT NULL AND e.email != '' ORDER BY u.created_at`).all();
+    } catch { /* sin la tabla de emails */ }
+    const cell = v => { const s = String(v == null ? '' : v); return /[;"\n\r]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/^([=+\-@])/, "'$1").replace(/"/g, '""') + '"' : s; };
+    const lines = [['usuario', 'nombre', 'email', 'confirmado', 'de donde salio', 'registrado', 'discord'].join(';')];
+    for (const r of rows) {
+      lines.push([r.username, r.display_name || r.username, r.email, r.confirmado ? 'si' : 'no', r.origen === 'discord' ? 'Discord' : 'lo escribio',
+        String(r.created_at || '').slice(0, 10), r.discord_username || ''].map(cell).join(';'));
+    }
+    const body = '﻿' + lines.join('\r\n') + '\r\n';
+    log(`emails: ${user.username} descargo la lista (${rows.length})`);
+    res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="emails-${new Date().toISOString().slice(0, 10)}.csv"` });
+    return res.end(body);
+  }
+
   // Personas para completar from: y mentions: del buscador (buscar.js)
   if (p === '/puente/api/buscar/personas' && req.method === 'GET') {
     const user = sessionUser(req);
