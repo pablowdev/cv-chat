@@ -487,13 +487,23 @@ async function inboundUpdate(msg) {
 
 async function inboundDelete(discordId) {
   const S = stmts();
+  // Tambien los que salieron de Haven: borrados en Discord (por quien lo escribio o
+  // por un moderador), se borran aca. Un mensaje de Discord puede llevar varios de
+  // Haven (texto + imagen): se borran todos. (El puente solo borra en Discord
+  // mensajes que ya se borraron en Haven, asi que eso no borra nada de mas.)
+  const ids = new Set();
   const row = S.byDiscordId.get(discordId);
-  if (!row) return;
-  // Un mensaje que salio de Haven y un moderador borro en Discord: se deja en Haven.
-  if (db.prepare('SELECT 1 FROM puente_salientes WHERE haven_message_id = ?').get(row.id)) return;
-  const ch = S.channelById.get(row.channel_id);
-  db.prepare('DELETE FROM messages WHERE id = ?').run(row.id);
-  io.to(`channel:${ch.code}`).emit('message-deleted', { channelCode: ch.code, messageId: row.id, fromPuente: true });
+  if (row) ids.add(row.id);
+  for (const r of db.prepare('SELECT haven_message_id id FROM puente_salientes WHERE discord_message_id = ?').all(discordId)) ids.add(r.id);
+  for (const id of ids) {
+    const m = db.prepare('SELECT id, channel_id FROM messages WHERE id = ?').get(id);
+    db.prepare('DELETE FROM puente_salientes WHERE haven_message_id = ?').run(id);
+    db.prepare('DELETE FROM puente_adjuntos WHERE haven_message_id = ?').run(id);
+    if (!m) continue;
+    const ch = S.channelById.get(m.channel_id);
+    db.prepare('DELETE FROM messages WHERE id = ?').run(m.id);
+    if (ch) io.to(`channel:${ch.code}`).emit('message-deleted', { channelCode: ch.code, messageId: m.id, fromPuente: true });
+  }
 }
 
 // Avisa a los clientes con el mismo formato que usa Haven al cargar el historial.

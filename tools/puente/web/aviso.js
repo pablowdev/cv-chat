@@ -1683,6 +1683,107 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// El chat nunca baja solo hasta el final si la persona subio a leer. Haven lo
+// bajaba al volver a la app (recarga el canal), cuando llegaba un mensaje y se
+// estaba "cerca" del final (a menos de 150 px), o cuando terminaban de cargar
+// imagenes. Ahora, si se subio con el dedo, la rueda o el teclado, se queda en
+// el mismo mensaje que se estaba leyendo; baja solo con el boton de ir al final,
+// al mandar un mensaje, al cambiar de canal o volviendo abajo a mano.
+(function () {
+  'use strict';
+  const AWAY_PX = 80;
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    const msgs = document.getElementById('messages');
+    if (!app || !msgs || typeof app._scrollToBottom !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    let away = false, awayChannel = null, anchor = null; // anchor: { id, top }
+    let touching = false, gestureUntil = 0, allowUntil = 0;
+    let lastMut = 0, restoringUntil = 0, resyncUntil = 0;
+    const dist = () => msgs.scrollHeight - msgs.clientHeight - msgs.scrollTop;
+    const userScrolling = () => touching || Date.now() < gestureUntil;
+
+    // El primer mensaje que se ve y a que altura esta
+    function saveAnchor() {
+      const top = msgs.getBoundingClientRect().top;
+      for (const m of msgs.querySelectorAll('.message[data-msg-id], .message-compact[data-msg-id]')) {
+        const r = m.getBoundingClientRect();
+        if (r.bottom > top + 1) { anchor = { id: m.dataset.msgId, top: r.top - top }; return; }
+      }
+      anchor = null;
+    }
+    function restoreAnchor() {
+      if (!anchor) return;
+      const m = msgs.querySelector(`[data-msg-id="${CSS.escape(anchor.id)}"]`);
+      if (!m) return;
+      const d = (m.getBoundingClientRect().top - msgs.getBoundingClientRect().top) - anchor.top;
+      if (Math.abs(d) > 1) { restoringUntil = Date.now() + 150; msgs.scrollTop += d; }
+    }
+
+    msgs.addEventListener('touchstart', () => { touching = true; }, { passive: true });
+    const endTouch = () => { touching = false; gestureUntil = Date.now() + 2500; }; // el envion sigue un rato
+    msgs.addEventListener('touchend', endTouch, { passive: true });
+    msgs.addEventListener('touchcancel', endTouch, { passive: true });
+    msgs.addEventListener('wheel', () => { gestureUntil = Date.now() + 800; }, { passive: true });
+    msgs.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') gestureUntil = Date.now() + 1500; }, { passive: true }); // la barra de desplazamiento
+    document.addEventListener('keydown', (e) => {
+      if (['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key) && !(e.target instanceof Element && e.target.closest('input, textarea, [contenteditable="true"]'))) gestureUntil = Date.now() + 800;
+    }, true);
+    msgs.addEventListener('scroll', () => {
+      if (userScrolling()) {
+        away = dist() > AWAY_PX;
+        awayChannel = app.currentChannel;
+        if (away) saveAnchor();
+        return;
+      }
+      // Haven llevo a otro mensaje (tocar una respuesta, un resultado de busqueda):
+      // ese es el que se esta leyendo ahora. No cuando recien redibujo la lista.
+      const now = Date.now();
+      if (away && now > restoringUntil && now - lastMut > 1000) saveAnchor();
+    }, { passive: true });
+
+    // Mandar un mensaje: ahi si, al final (como en Discord)
+    const allow = () => { allowUntil = Date.now() + 4000; away = false; };
+    document.addEventListener('click', (e) => { if (e.target instanceof Element && e.target.closest('#send-btn')) allow(); }, true);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && e.target instanceof Element && e.target.closest('#message-input-area')) allow();
+    }, true);
+
+    const blocked = (self) => {
+      if (!away) return false;
+      if (self.currentChannel !== awayChannel) { away = false; return false; } // otro canal: empieza abajo
+      if (Date.now() < allowUntil) { away = false; return false; }
+      return true;
+    };
+    const orig = app._scrollToBottom;
+    app._scrollToBottom = function (...a) {
+      if (blocked(this)) { restoreAnchor(); return; }
+      return orig.apply(this, a);
+    };
+    if (typeof app._jumpToLatest === 'function') {
+      const jump = app._jumpToLatest;
+      app._jumpToLatest = function (...a) { away = false; return jump.apply(this, a); };
+    }
+    if (typeof app._reloadChannelFromPresent === 'function') {
+      // Al volver a la app Haven recarga el canal: despues, de nuevo en el mensaje que se leia
+      const reload = app._reloadChannelFromPresent;
+      app._reloadChannelFromPresent = function (...a) { if (Date.now() < allowUntil) away = false; return reload.apply(this, a); };
+    }
+    // Haven recarga los mensajes tambien al volver a la app o reconectarse (y si hay
+    // sin leer salta a la linea de "nuevos", sin pasar por _scrollToBottom): en ese
+    // rato, despues de cada redibujo, de vuelta al mensaje que se estaba leyendo
+    const resync = () => { resyncUntil = Date.now() + 8000; };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') resync(); });
+    if (app.socket && typeof app.socket.on === 'function') app.socket.on('connect', resync);
+    new MutationObserver(() => {
+      lastMut = Date.now();
+      if (!away || app.currentChannel !== awayChannel || userScrolling() || lastMut > resyncUntil) return;
+      requestAnimationFrame(restoreAnchor);
+      setTimeout(restoreAnchor, 350); // Haven vuelve a bajar a los 300 ms
+    }).observe(msgs, { childList: true });
+  })();
+})();
+
 // Candadito en el # de los canales cerrados, como en Discord: los de Discord que
 // @everyone no ve y los privados propios de Haven (el puente sabe cuales,
 // /puente/api/canales-cerrados). Se vuelve a poner cada vez que Haven redibuja
