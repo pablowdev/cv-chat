@@ -2142,6 +2142,155 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Pantallas tactiles: el boton + del cuadro de escribir como en la app de
+// Discord: una hoja que sube desde abajo con la camara y la galeria arriba
+// (una pagina web no puede mostrar las fotos del telefono adentro, asi que
+// "Galeria" abre el selector de fotos del telefono), las demas opciones de
+// Haven en el medio, y abajo la barra flotante (Fotos, Encuesta, Voz,
+// Archivos). Cada opcion usa el boton de Haven, asi que hace lo mismo que antes
+// y solo aparecen las que Haven muestra en ese canal.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const svg = (d, s = 26) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const I = {
+    camara: 'M9.4 4 8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.4-2H9.4ZM12 17.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z',
+    fotos: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 13.6V19h14v-3.4l-4-4-4.5 4.5-2.5-2.5-3 3Zm3.5-6.1a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+    encuesta: 'M4 5h11a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3Zm0 5.5h16a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3ZM4 16h7a1.5 1.5 0 0 1 0 3H4a1.5 1.5 0 0 1 0-3Z',
+    voz: 'M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2Z',
+    archivos: 'M16.5 6.5v10.1a4.5 4.5 0 0 1-9 0V5.8a3 3 0 0 1 6 0v9.6a1.5 1.5 0 0 1-3 0V6.5H9v8.9a3 3 0 0 0 6 0V5.8a4.5 4.5 0 0 0-9 0v10.8a6 6 0 0 0 12 0V6.5h-1.5Z',
+    hora: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm1-13h-2v6l5 3 1-1.7-4-2.3V7Z',
+    formato: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z',
+    fuego: 'M13.5 1s.7 2.6.7 4.7c0 2-1.3 3.7-3.4 3.7S7.4 7.7 7.4 5.7V5.4C5.3 7.9 4 11.2 4 14.7A8 8 0 0 0 20 14.7c0-5.4-2.6-10.2-6.5-13.7ZM12 20a3 3 0 0 1-3-2.9c0-1.4.9-2.4 2.5-2.7 1.6-.3 3.2-1.1 4.1-2.3.4 1.2.6 2.5.6 3.9A4.2 4.2 0 0 1 12 20Z',
+    emoji: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-3.5 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm7 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 18a5.5 5.5 0 0 1-5-3.2h10A5.5 5.5 0 0 1 12 18Z',
+    gif: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm4.3 11.2c1 0 1.8-.3 2.4-.9v-2.8H8.2v1.1h1.2v1.1c-.3.2-.6.3-1 .3-.9 0-1.4-.7-1.4-1.9s.6-1.9 1.5-1.9c.5 0 .9.2 1.2.5l.8-.9a2.7 2.7 0 0 0-2-.8C6.8 8.9 5.6 10 5.6 12.1c0 2 1.1 3.1 2.7 3.1Zm3.6-.1h1.4V9h-1.4v6.1Zm2.7 0H16v-2.4h2.2v-1.2H16v-1.3h2.5V9h-3.9v6.1Z',
+    oficial: 'M12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.2l-7.2-.6L12 2Z',
+  };
+  // [boton de Haven, nombre, icono, se prende y apaga]
+  const LIST = [
+    ['emoji-btn', 'Emoji', I.emoji],
+    ['gif-btn', 'GIF', I.gif],
+    ['time-btn', 'Insertar fecha y hora', I.hora],
+    ['format-btn', 'Formato y comandos', I.formato],
+    ['self-destruct-btn', 'Mensaje que se autodestruye', I.fuego, true],
+    ['burn-btn', 'Borrar al leer', I.fuego, true],
+    ['highlight-btn', 'Mensaje oficial', I.oficial, true],
+  ];
+  const BAR = [
+    ['galeria', 'Fotos', I.fotos],
+    ['poll-btn', 'Encuesta', I.encuesta],
+    ['voice-btn', 'Voz', I.voz],
+    ['upload-btn', 'Archivos', I.archivos],
+  ];
+  const byId = (id) => document.getElementById(id);
+  const shown = (b) => b && b.style.display !== 'none' && !b.closest('[style*="display: none"]') && !b.disabled;
+  const armed = (b) => b && (b.classList.contains('active') || b.getAttribute('aria-pressed') === 'true');
+  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html) n.innerHTML = html; return n; };
+
+  function close() {
+    byId('puente-adjuntar')?.remove();
+    byId('puente-adjuntar-fondo')?.remove();
+    byId('composer-plus-btn')?.setAttribute('aria-expanded', 'false');
+  }
+  window.puenteAdjuntar = { abierto: () => !!byId('puente-adjuntar'), cerrar: close };
+
+  // Fotos de la camara o de la galeria: a la cola de adjuntos de Haven, como su boton
+  function pickMedia(camera) {
+    const app = window.app;
+    if (!app || typeof app._queueComposerFiles !== 'function') { byId('upload-btn')?.click(); return; }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    if (camera) { input.accept = 'image/*'; input.setAttribute('capture', 'environment'); } else input.multiple = true;
+    input.style.display = 'none';
+    input.addEventListener('change', () => {
+      if (input.files && input.files.length) app._queueComposerFiles(input.files);
+      input.remove();
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  function run(id) {
+    close();
+    const app = window.app;
+    if ((id === 'camara' || id === 'galeria') && app && !app.currentChannel) { app._showToast && app._showToast('Elegí un canal primero', 'error'); return; }
+    // Despues de este toque, para que los selectores de Haven no se cierren con el
+    setTimeout(() => {
+      if (id === 'camara') pickMedia(true);
+      else if (id === 'galeria') pickMedia(false);
+      else byId(id)?.click();
+    }, 0);
+  }
+
+  function open() {
+    close();
+    const filesOk = shown(byId('upload-btn'));
+    const sheet = el('div', 'puente-adjuntar');
+    sheet.id = 'puente-adjuntar';
+    sheet.appendChild(el('div', 'puente-sheet-handle'));
+
+    const scroll = el('div', 'puente-adj-cuerpo');
+    if (filesOk) {
+      const tiles = el('div', 'puente-adj-mosaico');
+      for (const [id, label, icon] of [['camara', 'Cámara', I.camara], ['galeria', 'Galería', I.fotos]]) {
+        const b = el('button', 'puente-adj-cuadro', svg(icon, 34));
+        b.type = 'button';
+        b.appendChild(el('span', '', label));
+        b.addEventListener('click', (e) => { e.stopPropagation(); run(id); });
+        tiles.appendChild(b);
+      }
+      scroll.appendChild(tiles);
+    }
+    const group = el('div', 'puente-sheet-group');
+    for (const [id, label, icon, toggle] of LIST) {
+      const btn = byId(id);
+      if (!shown(btn)) continue;
+      // La carita y el GIF, solo si no estan ya a la vista en el cuadro de escribir
+      if ((id === 'emoji-btn' || id === 'gif-btn') && btn.getClientRects().length) continue;
+      const it = el('button', 'channel-ctx-item puente-adj-fila' + (toggle && armed(btn) ? ' activo' : ''), svg(icon, 22));
+      it.type = 'button';
+      it.appendChild(el('span', '', label));
+      if (toggle && armed(btn)) it.appendChild(el('span', 'puente-adj-estado', 'Activado'));
+      it.addEventListener('click', (e) => { e.stopPropagation(); run(id); });
+      group.appendChild(it);
+    }
+    if (group.children.length) scroll.appendChild(group);
+    sheet.appendChild(scroll);
+
+    const bar = el('div', 'puente-adj-barra');
+    for (const [id, label, icon] of BAR) {
+      if (id === 'galeria' ? !filesOk : !shown(byId(id))) continue;
+      const b = el('button', 'puente-adj-accion', svg(icon, 26));
+      b.type = 'button';
+      b.appendChild(el('span', '', label));
+      b.addEventListener('click', (e) => { e.stopPropagation(); run(id); });
+      bar.appendChild(b);
+    }
+    if (bar.children.length) sheet.appendChild(bar);
+    if (!scroll.children.length && !bar.children.length) return;
+
+    const back = el('div');
+    back.id = 'puente-adjuntar-fondo';
+    back.addEventListener('click', close);
+    // Como en Discord: se esconde el teclado
+    if (document.activeElement && document.activeElement.id === 'message-input') document.activeElement.blur();
+    document.body.append(back, sheet);
+    byId('composer-plus-btn')?.setAttribute('aria-expanded', 'true');
+    if (typeof haptic === 'function') haptic();
+    sheetDrag(sheet, { close, scroller: scroll });
+  }
+
+  // Antes que Haven: el + abre esta hoja y no su menu
+  document.addEventListener('click', (e) => {
+    const plus = e.target instanceof Element && e.target.closest('#composer-plus-btn');
+    if (!plus) return;
+    e.stopPropagation(); e.preventDefault();
+    window.app && window.app._closeComposerMenu && window.app._closeComposerMenu();
+    if (byId('puente-adjuntar')) close(); else open();
+  }, true);
+})();
+
 // Pantallas tactiles: el selector de emojis y stickers del cuadro de escribir
 // (tambien al editar un mensaje) como en la app de Discord: una hoja que sube
 // desde abajo a media pantalla, con "Usados frecuentemente" arriba de todo.
@@ -6355,6 +6504,7 @@ function sheetDrag(sheet, opts) {
     [() => byId('puente-invitar-capa'), () => byId('puente-invitar-capa').remove()],
     [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
     [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
+    [() => window.puenteAdjuntar && window.puenteAdjuntar.abierto(), () => window.puenteAdjuntar.cerrar()],
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
     [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],
     [() => shown(byId('profile-popup')), (app) => app._closeProfilePopup && app._closeProfilePopup()],

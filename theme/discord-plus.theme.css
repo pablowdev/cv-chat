@@ -432,6 +432,41 @@ html .puente-sheet .channel-ctx-item.danger { color: #f2777a; }
 .puente-sheet-icon { width: 1.375rem; flex-shrink: 0; text-align: center; font-size: 1.25rem; filter: grayscale(1) brightness(1.6); }
 .puente-sheet .channel-ctx-item.danger .puente-sheet-icon { filter: none; }
 
+/* Boton + del cuadro de escribir en pantallas tactiles: hoja como la de Discord,
+   camara y galeria arriba, opciones en el medio y la barra flotante abajo (aviso.js). */
+#puente-adjuntar-fondo { position: fixed; inset: 0; z-index: 100014; background: rgba(0, 0, 0, 0.45); animation: puente-fade 0.14s ease-out; }
+.puente-adjuntar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100015;
+  width: 100%; max-width: 37.5rem; max-height: 85vh; margin: 0 auto;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  padding: 0.5rem 0.75rem 0;
+  background: #1a191e; border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s ease; animation: puente-sheet-up 0.16s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.puente-adj-cuerpo { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 6.5rem; }
+.puente-adj-mosaico { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem; margin-bottom: 0.75rem; }
+.puente-adj-cuadro {
+  aspect-ratio: 1.5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.375rem;
+  padding: 0; border: 0; border-radius: 0.75rem; background: #2e2d32; color: #b5bac1;
+  font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer;
+}
+.puente-adj-cuadro:active { background: #36353b; }
+.puente-adjuntar .puente-adj-fila svg { flex-shrink: 0; width: 1.375rem; color: #b5bac1; }
+.puente-adjuntar .puente-adj-fila.activo, .puente-adjuntar .puente-adj-fila.activo svg { color: #f0b232; }
+.puente-adj-estado { margin-left: auto; font-size: 0.8125rem; font-weight: 600; color: #f0b232; }
+.puente-adj-barra {
+  position: absolute; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: flex; gap: 0.25rem; max-width: calc(100% - 1.5rem); padding: 0.5rem 0.75rem;
+  border-radius: 1.5rem; background: #2b2a30; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.puente-adj-accion {
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem; min-width: 4rem;
+  padding: 0.375rem 0.5rem; border: 0; border-radius: 0.75rem; background: transparent; color: #f2f3f5;
+  font: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer;
+}
+.puente-adj-accion:active { background: #36353b; }
+
 /* Selector de reacciones en pantallas tactiles: hoja con buscador, frecuentes,
    emojis del servidor y categorias, como en la app de Discord (aviso.js). */
 #puente-react-backdrop { position: fixed; inset: 0; z-index: 100018; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.14s ease-out; }
