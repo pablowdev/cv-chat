@@ -622,7 +622,7 @@ function sheetDrag(sheet, opts) {
     let token = null;
     try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
     if (!token) return;
-    fetch('/puente/api/reacciones-frecuentes', { headers: { Authorization: 'Bearer ' + token } })
+    fetch('/puente/api/reacciones-frecuentes?n=5', { headers: { Authorization: 'Bearer ' + token } })
       .then(r => (r.ok ? r.json() : null)).then(d => { if (d && Array.isArray(d.emojis)) quick = d.emojis; }).catch(() => {});
   }
 
@@ -665,9 +665,10 @@ function sheetDrag(sheet, opts) {
 
     menu.appendChild(el('div', 'puente-sheet-handle'));
 
-    // Fila de reacciones rapidas; la ultima abre el selector completo de Haven
+    // Fila de reacciones rapidas, como en Discord: 5 frecuentes y una carita gris
+    // que abre el selector completo, 6 cuadrados iguales
     const row = el('div', 'puente-sheet-reactions');
-    for (const q of quick || []) {
+    for (const q of (quick || []).slice(0, 5)) {
       const b = el('button', 'puente-sheet-react');
       b.type = 'button';
       b.title = q.emoji;
@@ -677,7 +678,11 @@ function sheetDrag(sheet, opts) {
       row.appendChild(b);
     }
     if (reactBtn) {
-      const more = el('button', 'puente-sheet-react puente-sheet-react-more', '☺');
+      // Dibujada (no un emoji de texto: con la fuente de emojis salia amarilla y parecia una reaccion mas)
+      const more = el('button', 'puente-sheet-react puente-sheet-react-more');
+      more.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/>' +
+        '<circle cx="8.3" cy="9.6" r="1.6" fill="#333237"/><circle cx="15.7" cy="9.6" r="1.6" fill="#333237"/>' +
+        '<path d="M7 14.2c1.1 1.9 2.9 3 5 3s3.9-1.1 5-3" fill="none" stroke="#333237" stroke-width="1.8" stroke-linecap="round"/></svg>';
       more.type = 'button';
       more.dataset.action = 'react'; // la accion de Haven: abre el selector de emojis
       more.setAttribute('aria-label', reactBtn.textContent.trim());
