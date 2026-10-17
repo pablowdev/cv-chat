@@ -654,6 +654,11 @@ function sheetDrag(sheet, opts) {
     app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji });
   }
 
+  const SPANISH = {
+    'Thread': 'Hilo', 'Mark as official': 'Marcar como oficial', 'Unmark as official': 'Quitar de oficial',
+    'Remove official': 'Quitar de oficial',
+  };
+
   function toSheet(app, msgEl) {
     const menu = document.getElementById('message-context-menu');
     if (!menu || menu.classList.contains('puente-sheet')) return;
@@ -671,6 +676,12 @@ function sheetDrag(sheet, opts) {
       const first = b.firstChild;
       if (first && first.nodeType === 3 && first.nodeValue.trim()) {
         b.replaceChild(el('span', 'puente-sheet-icon', first.nodeValue.trim()), first);
+      }
+      // Los que Haven no tiene traducidos
+      const walk = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const es = SPANISH[n.nodeValue.trim()];
+        if (es) n.nodeValue = n.nodeValue.replace(n.nodeValue.trim(), es);
       }
     }
 
@@ -830,6 +841,14 @@ function sheetDrag(sheet, opts) {
   document.addEventListener('contextmenu', (e) => {
     if (e.isTrusted && fired && Date.now() < until) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
+  // Y con el dedo todavia apoyado, el navegador seleccionaba la palabra que quedaba
+  // debajo (en el menu recien abierto): ahi no se selecciona nada
+  document.addEventListener('selectstart', (e) => { if (fired) e.preventDefault(); }, true);
+  document.addEventListener('selectionchange', () => {
+    if (!fired) return;
+    const sel = getSelection();
+    if (sel && !sel.isCollapsed) sel.removeAllRanges();
+  });
 })();
 
 // Pantallas tactiles: elegir una reaccion como en la app de Discord. En vez de

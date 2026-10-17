@@ -2093,3 +2093,12 @@ html body .puente-miembros.pm-celular { left: 0 !important; z-index: 100005; pad
 .pm-item-nombres .pm-n2 { flex: 0 1 auto; min-width: 0; white-space: nowrap; }
 .pm-item-meta { font-size: 0.8125rem; color: #96969e; line-height: 1.3; }
 .pm-item .pm-roles { margin-top: 0.125rem; }
+
+/* Menus y hojas de pantallas tactiles: como en Discord, no se selecciona texto
+   (al mantener apretado un mensaje, el dedo quedaba sobre el menu recien abierto
+   y el navegador marcaba la palabra de abajo). Los buscadores siguen normales. */
+html #message-context-menu.puente-sheet, html body #user-context-menu.puente-user-sheet, .puente-react-picker,
+.puente-who-sheet, .puente-adjuntar, #puente-sheet-backdrop, #puente-react-backdrop, #puente-adjuntar-fondo {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.puente-react-picker input, .puente-who-sheet input { -webkit-user-select: text; user-select: text; }
