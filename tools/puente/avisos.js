@@ -22,6 +22,9 @@ function setup(ctx) {
 // con la imagen propia del servidor a la derecha (web/icono-notificacion.png; si
 // no hay, el icono de la app) en vez de la "H" de Haven, y en castellano:
 // "Fulano en #canal" en vez de "Fulano in #canal".
+//
+// Y como en Discord, Haven ya no avisa de cada mensaje de un canal: solo de los
+// mensajes directos y de los que te mencionan, te responden o tienen @everyone/@here.
 const ICON = '/puente/icono-notificacion.png';
 function brand() {
   if (!webpush || webpush.__puenteMarca) return;
@@ -30,6 +33,8 @@ function brand() {
     try {
       if (typeof payload === 'string' && payload.startsWith('{')) {
         const p = JSON.parse(payload);
+        if (p.__puente) delete p.__puente; // de onInbound: ya viene filtrado
+        else if (!wanted(sub, p)) return Promise.resolve();
         if (typeof p.title === 'string') p.title = p.title.replace(/^(.+) in #(.+)$/, '$1 en #$2');
         if (!p.icon) p.icon = ICON;
         payload = JSON.stringify(p);
@@ -38,6 +43,35 @@ function brand() {
     return send(sub, payload, ...rest);
   };
   webpush.__puenteMarca = true;
+}
+
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Notificacion de Haven: si a quien le llega le corresponde. Ante la duda (sin
+// canal o sin saber de quien es la suscripcion) se manda, como hacia Haven.
+function wanted(sub, p) {
+  if (!p.channelCode || !sub || !sub.endpoint) return true;
+  const ch = db.prepare('SELECT id, is_dm, is_group FROM channels WHERE code = ?').get(p.channelCode);
+  if (!ch || ch.is_dm || ch.is_group) return true;
+  const ps = db.prepare('SELECT user_id FROM push_subscriptions WHERE endpoint = ?').get(sub.endpoint);
+  if (!ps) return true;
+  const me = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(ps.user_id);
+  if (!me) return true;
+  // El mensaje entero (Haven corta el texto a 120): el ultimo del canal que empiece igual
+  const body = String(p.body || '');
+  const start = body.endsWith('...') ? body.slice(0, -3) : body;
+  const recent = db.prepare('SELECT content, reply_to FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT 8').all(ch.id);
+  const m = recent.find(r => String(r.content || '').startsWith(start)) || { content: body, reply_to: null };
+  const text = String(m.content || '');
+  if (/@(everyone|here)\b/i.test(text)) return true;
+  for (const n of [me.username, me.display_name]) {
+    if (n && new RegExp('@' + escapeRe(n) + '(?![\\p{L}\\p{N}_])', 'iu').test(text)) return true;
+  }
+  if (m.reply_to) {
+    const r = db.prepare('SELECT user_id FROM messages WHERE id = ?').get(m.reply_to);
+    if (r && r.user_id === ps.user_id) return true;
+  }
+  return false;
 }
 
 function strip(text) {
@@ -84,7 +118,7 @@ function onInbound(d) {
     const payload = JSON.stringify({
       title: `${d.author || 'Alguien'} en #${d.channel.name}`,
       body: body.length > 120 ? body.slice(0, 117) + '...' : body || 'Te mencionó',
-      channelCode: d.channel.code, tag: `haven-${d.channel.code}`, url: '/app',
+      channelCode: d.channel.code, tag: `haven-${d.channel.code}`, url: '/app', __puente: 1,
     });
     let sent = 0;
     for (const uid of want) {

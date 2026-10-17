@@ -81,6 +81,33 @@ function icon(db, size, maskable) {
   return cache.get(key);
 }
 
+// Icono chico de la barra de estado del celular ("badge" de las notificaciones):
+// Android lo pinta de un solo color con la forma de lo que no es transparente,
+// asi que un logo con fondo queda como un cuadrado blanco. Aca: el logo recortado
+// en circulo y solo sus partes claras (letras, dibujo), el resto transparente.
+function badge(db, size) {
+  const file = iconFile(db);
+  if (!file) return null;
+  const key = `${file}|${fs.statSync(file).mtimeMs}|${size}|insignia`;
+  if (!cache.has(key)) {
+    const img = PNG.sync.read(icon(db, size, false));
+    const c = (size - 1) / 2, r = size / 2;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const o = (y * size + x) * 4;
+        const d = Math.hypot(x - c, y - c);
+        const lum = 0.299 * img.data[o] + 0.587 * img.data[o + 1] + 0.114 * img.data[o + 2];
+        let a = Math.max(0, Math.min(1, (lum - 70) / 110)) * (img.data[o + 3] / 255);
+        a *= Math.max(0, Math.min(1, r - d)); // borde del circulo suavizado
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = 255;
+        img.data[o + 3] = Math.round(a * 255);
+      }
+    }
+    cache.set(key, PNG.sync.write(img));
+  }
+  return cache.get(key);
+}
+
 function manifest(db, base) {
   const name = title();
   const server = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
@@ -131,10 +158,11 @@ function handle(db, req, res) {
     res.end(req.method === 'HEAD' ? undefined : body);
     return true;
   }
-  // El icono de Haven ("H"): lo usan sus notificaciones (badge e icono por defecto) y algunas
-  // pantallas. Con el icono del servidor configurado, va ese.
+  // El icono de Haven ("H"): sus notificaciones lo usan de "badge" (el iconito de la barra
+  // de estado). Con el icono del servidor configurado: /icon-192.svg es su version para la
+  // barra de estado (redonda, sin fondo) y /icon-512.svg el icono tal cual.
   if (p === '/icon-192.svg' || p === '/icon-512.svg') {
-    const png = icon(db, p.includes('512') ? 512 : 192, false);
+    const png = p.includes('512') ? icon(db, 512, false) : badge(db, 96);
     if (!png) return false; // sin icono propio: el de Haven
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'public, max-age=3600' });
     res.end(req.method === 'HEAD' ? undefined : png);
