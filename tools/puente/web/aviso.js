@@ -10,17 +10,18 @@ function haptic() {
 // achica y, si se baja bastante, se cierra. El arrastre empieza solo con el
 // contenido desplazado arriba del todo (o donde diga canStart).
 //   sheet: la hoja; opts.close(): cerrarla; opts.scroller: lo que se desplaza
-//   adentro (por defecto la hoja); opts.canStart(e): donde puede empezar.
+//   adentro (por defecto la hoja); opts.canStart(e): donde puede empezar;
+//   opts.snap: al soltar queda abierta como al principio o agrandada del todo.
 function sheetDrag(sheet, opts) {
   'use strict';
   const scroller = opts.scroller || sheet;
   const canStart = opts.canStart || (() => scroller.scrollTop <= 0);
   const max = () => window.innerHeight * 0.95;
-  let y0 = null, dy = 0, h0 = 0, base = 0, active = false;
+  let x0 = 0, y0 = null, dy = 0, h0 = 0, base = 0, active = false;
   sheet.addEventListener('touchstart', (e) => {
     y0 = null;
     if (e.touches.length !== 1 || !canStart(e)) return;
-    y0 = e.touches[0].clientY; dy = 0; active = false;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dy = 0; active = false;
     h0 = sheet.getBoundingClientRect().height;
     if (!sheet.__puenteBase) sheet.__puenteBase = h0; // el alto con el que se abrio
     base = sheet.__puenteBase;
@@ -30,6 +31,8 @@ function sheetDrag(sheet, opts) {
     if (y0 === null) return;
     dy = e.touches[0].clientY - y0;
     if (!active && Math.abs(dy) < 6) return;
+    // Para el costado (la barra de categorias, por ejemplo): no es arrastrar la hoja
+    if (!active && Math.abs(e.touches[0].clientX - x0) > Math.abs(dy)) { y0 = null; sheet.style.transition = ''; return; }
     // Ya esta al maximo y sigue para arriba: que se desplace el contenido
     if (!active && dy < 0 && h0 >= max() - 1) { y0 = null; sheet.style.transition = ''; return; }
     active = true;
@@ -47,8 +50,16 @@ function sheetDrag(sheet, opts) {
   const end = () => {
     if (y0 === null) return;
     sheet.style.transition = '';
-    if (active && base - (h0 - dy) > 90) opts.close();
-    else sheet.style.transform = '';
+    const h = h0 - dy;
+    if (active && base - h > 90) opts.close();
+    else {
+      sheet.style.transform = '';
+      if (active && opts.snap && h > base) {
+        // Para arriba un poco: del todo; para abajo un poco: como se abrio
+        const up = dy < 0 ? h - h0 > 40 : h0 - h < 40 && h0 >= max() - 1;
+        sheet.style.height = (up ? max() : base) + 'px';
+      }
+    }
     y0 = null; active = false;
   };
   sheet.addEventListener('touchend', end, { passive: true });
@@ -775,6 +786,52 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Pantallas tactiles: mantener apretado un mensaje abre su menu un poco antes,
+// como en Discord (350 ms). El navegador lo detecta recien a ~500 ms; aca se
+// adelanta mandando ese mismo "contextmenu" (asi va por los mismos caminos: el
+// menu del mensaje, el de una imagen, el de la persona, quien reacciono), y el
+// del navegador que llega despues, y el toque al soltar, se ignoran.
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  const DELAY = 350, SLOP = 10;
+  const LISTS = '#messages, #thread-messages, #dm-pip-messages';
+  let timer = null, start = null, fired = false, until = 0;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  document.addEventListener('touchstart', (e) => {
+    cancel(); fired = false;
+    if (e.touches.length !== 1) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target || !target.closest(LISTS) || !target.closest('.message, .message-compact')) return;
+    if (target.closest('textarea, input, [contenteditable="true"], video, audio')) return;
+    const t = e.touches[0];
+    start = { x: t.clientX, y: t.clientY };
+    timer = setTimeout(() => {
+      timer = null;
+      if (!target.isConnected) return;
+      fired = true; until = Date.now() + 1500;
+      target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: start.x, clientY: start.y, button: 2 }));
+    }, DELAY);
+  }, { passive: true, capture: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!timer || !start) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - start.x) > SLOP || Math.abs(t.clientY - start.y) > SLOP) cancel();
+  }, { passive: true, capture: true });
+  document.addEventListener('scroll', cancel, { passive: true, capture: true });
+  document.addEventListener('touchcancel', cancel, { passive: true, capture: true });
+  document.addEventListener('touchend', (e) => {
+    cancel();
+    // Soltar despues de abrir el menu: que no sea un toque (cerraria la hoja recien abierta)
+    if (fired && e.cancelable) e.preventDefault();
+    fired = false;
+  }, { passive: false, capture: true });
+  // El del navegador, que llega despues con el dedo todavia apoyado: ya se abrio el menu
+  document.addEventListener('contextmenu', (e) => {
+    if (e.isTrusted && fired && Date.now() < until) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+})();
+
 // Pantallas tactiles: elegir una reaccion como en la app de Discord. En vez de
 // la barrita de Haven (8 emojis y un "..." que abre un panel chico), una hoja
 // que sube desde abajo con buscador, "Usados frecuentemente", los emojis del
@@ -909,8 +966,10 @@ function sheetDrag(sheet, opts) {
     search.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => render(search.value), 120); });
     render('');
 
-    // Manija: hacia arriba se agranda, hacia abajo se cierra
-    sheetDrag(sheet, { close, canStart: (e) => e.target === sheet || e.target.classList.contains('puente-sheet-handle') });
+    // Como en Discord: se abre por la mitad; arrastrando para arriba (de la manija,
+    // el buscador, la barra de abajo o los emojis si estan arriba del todo) se
+    // agranda del todo, y para abajo vuelve o se cierra
+    sheetDrag(sheet, { close, scroller: body, snap: true, canStart: (e) => !body.contains(e.target) || body.scrollTop <= 0 });
 
     document.body.append(back, sheet);
   }
