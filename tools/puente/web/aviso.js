@@ -656,7 +656,7 @@ function sheetDrag(sheet, opts) {
 
   const SPANISH = {
     'Thread': 'Hilo', 'Mark as official': 'Marcar como oficial', 'Unmark as official': 'Quitar de oficial',
-    'Remove official': 'Quitar de oficial',
+    'Remove official': 'Quitar de oficial', 'Edit tags': 'Editar etiquetas',
   };
 
   function toSheet(app, msgEl) {
@@ -781,7 +781,48 @@ function sheetDrag(sheet, opts) {
       app._hideMessageContextMenu = function (...a) {
         const b = document.getElementById('puente-sheet-backdrop');
         if (b) b.remove();
+        if (typeof this._hideImageContextMenu === 'function') this._hideImageContextMenu();
         return hideOrig.apply(this, a);
+      };
+    }
+    // Mantener apretada una imagen de un mensaje: como en Discord, el mismo menu del
+    // mensaje (reacciones, responder...), con las opciones de la imagen al final
+    // ("Guardar imagen", "Copiar imagen"...), en vez del menucito aparte de Haven.
+    // Las opciones son las de Haven: su menu se arma escondido y cada boton lo usa.
+    const IMG_LABELS = {
+      view: ['🔍', 'Ver imagen'], save: ['💾', 'Guardar imagen'], copy: ['📋', 'Copiar imagen'],
+      open: ['🔗', 'Abrir en el navegador'], 'edit-tags': ['🏷️', 'Editar etiquetas'], hide: ['🙈', 'Ocultar imagen'],
+    };
+    const showImg = app._showImageContextMenu;
+    if (typeof showImg === 'function') {
+      app._showImageContextMenu = function (e, src, opts = {}, ...rest) {
+        const img = opts && opts.sourceImg;
+        const msgEl = img && !opts.viewImage && img.closest('#messages .message[data-msg-id], #messages .message-compact[data-msg-id], #thread-panel [data-msg-id]');
+        if (!msgEl) return showImg.call(this, e, src, opts, ...rest);
+        this._showMessageContextMenu(e, msgEl);
+        const sheet = document.getElementById('message-context-menu');
+        if (!sheet || !sheet.classList.contains('puente-sheet')) return showImg.call(this, e, src, opts, ...rest);
+        const r = showImg.call(this, e, src, opts, ...rest);
+        const hidden = document.getElementById('image-context-menu');
+        if (!hidden) return r;
+        hidden.style.display = 'none';
+        const group = el('div', 'puente-sheet-group puente-sheet-imagen');
+        for (const b of hidden.querySelectorAll('button[data-action]')) {
+          if (b.dataset.action === 'edit-tags' && sheet.querySelector('[data-action="edit-tags"]')) continue; // ya esta en el menu del mensaje
+          const [icon, label] = IMG_LABELS[b.dataset.action] || ['', b.textContent.trim()];
+          const it = el('button', 'channel-ctx-item');
+          it.type = 'button';
+          it.append(el('span', 'puente-sheet-icon', icon), el('span', '', label));
+          it.addEventListener('click', (ev) => { ev.stopPropagation(); b.click(); hide(this); });
+          group.appendChild(it);
+        }
+        if (group.children.length) {
+          // Antes de "Eliminar", como Discord
+          const groups = [...sheet.querySelectorAll(':scope > .puente-sheet-group')];
+          const last = groups[groups.length - 1];
+          if (last && last.querySelector('[data-action="delete"]')) sheet.insertBefore(group, last); else sheet.appendChild(group);
+        }
+        return r;
       };
     }
     // El boton ⋯ de cada mensaje abre la misma hoja (en vez de la barrita de iconos)
