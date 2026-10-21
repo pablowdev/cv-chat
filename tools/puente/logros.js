@@ -56,16 +56,21 @@ function setup(ctx) {
   setInterval(() => { try { updateDays(); } catch (err) { warn('logros: dias:', err.message); } }, 2 * 60 * 1000);
   setInterval(() => { maybePostSummary().catch(err => warn('logros: resumen:', err.message)); }, 10 * 60 * 1000);
   setInterval(() => { maybePostMemory().catch(err => warn('logros: recuerdo:', err.message)); }, 10 * 60 * 1000);
-  // Volver a publicar el ultimo recuerdo (para el admin del servidor):
-  //   touch /opt/haven/haven-data/puente-recuerdo-repetir   (en el contenedor: /data/...)
-  // Con una fecha adentro (AAAA-MM-DD), el recuerdo de ese dia.
-  setInterval(() => {
-    const flag = '/data/puente-recuerdo-repetir';
+  // Rehacer recuerdos editandolos (para el admin del servidor): un archivo
+  // /opt/haven/haven-data/puente-recuerdo-editar (en el contenedor /data/...) con
+  // una linea por recuerdo: "AAAA-MM-DD" (edita su propio mensaje) o
+  // "AAAA-MM-DD <id del mensaje de Discord>" (lo pone en ese otro mensaje del bot).
+  setInterval(async () => {
+    const flag = '/data/puente-recuerdo-editar';
     if (!fsMedia.existsSync(flag)) return;
-    let dia = '';
-    try { dia = fsMedia.readFileSync(flag, 'utf8').trim(); fsMedia.unlinkSync(flag); } catch { return; }
-    if (dia && !/^\d{4}-\d{2}-\d{2}$/.test(dia)) { warn('logros: recuerdo repetido: fecha no valida (AAAA-MM-DD):', dia.slice(0, 20)); return; }
-    repostLastMemory(dia || null).then(r => log('logros: recuerdo repetido:', JSON.stringify(r))).catch(err => warn('logros: recuerdo repetido:', err.message));
+    let lines = [];
+    try { lines = fsMedia.readFileSync(flag, 'utf8').split('\n').map(l => l.trim()).filter(Boolean); fsMedia.unlinkSync(flag); } catch { return; }
+    const ok = lines.every(l => /^\d{4}-\d{2}-\d{2}(?: \d{15,25})?$/.test(l));
+    if (!ok) { warn('logros: recuerdo a editar: lineas no validas, no hago nada'); return; }
+    for (const l of lines) {
+      const [dia, into] = l.split(' ');
+      try { log('logros: recuerdo editado:', JSON.stringify(await editMemory(dia, into))); } catch (err) { warn('logros: recuerdo editado:', err.message); }
+    }
   }, 30 * 1000).unref();
 }
 
@@ -583,13 +588,34 @@ async function publishMemory(r) {
   return sent;
 }
 
-// Vuelve a publicar el ultimo recuerdo (por ejemplo, para que salga con sus
-// imagenes) y borra el anterior, en Discord y en la app.
-async function repostLastMemory(dia) {
-  const row = dia
-    ? db.prepare('SELECT dia, message_id, discord_message_id FROM puente_recuerdos WHERE dia = ? AND message_id IS NOT NULL').get(dia)
-    : db.prepare('SELECT dia, message_id, discord_message_id FROM puente_recuerdos WHERE message_id IS NOT NULL ORDER BY at DESC LIMIT 1').get();
-  if (!row) return { error: 'no hay recuerdos publicados' };
+// Rehace el recuerdo de un dia EDITANDO un mensaje del bot que ya esta en
+// Discord (por defecto, el suyo): asi no cambia de lugar ni pierde las
+// reacciones. Le pone el texto y las imagenes de ahora; la app se actualiza sola
+// (llega como edicion). intoId: otro mensaje de recuerdo del bot, para ordenarlos.
+async function editMemory(dia, intoId) {
+  const row = db.prepare('SELECT dia, message_id, discord_message_id FROM puente_recuerdos WHERE dia = ? AND message_id IS NOT NULL').get(dia);
+  if (!row) return { error: 'no hay recuerdo de ese dia' };
+  const target = intoId || row.discord_message_id;
+  if (!target) return { error: 'ese recuerdo no tiene mensaje en Discord' };
+  const r = memoryFor(row);
+  if (r.error) return r;
+  const channelId = await summaryChannelId();
+  if (!channelId) return { error: 'no hay canal del resumen' };
+  // Las imagenes reemplazan a las que tenia el mensaje (attachments: las nuevas)
+  const files = [];
+  for (const f of r.media.files) { try { files.push({ data: fsMedia.readFileSync(f.file), name: f.name }); } catch { /* ya no esta */ } }
+  const payload = { content: memoryText(r), allowed_mentions: { parse: [] }, flags: r.media.links.length ? 0 : 4,
+    attachments: files.map((f, i) => ({ id: i, filename: f.name })) };
+  const url = `/channels/${channelId}/messages/${target}`;
+  const res = files.length && apiFiles ? await apiFiles('PATCH', url, payload, files) : await api('PATCH', url, payload);
+  if (!res || res.__error) return { error: 'Discord no dejó editarlo: ' + (res && res.__error) };
+  db.prepare('UPDATE puente_recuerdos SET discord_message_id = ? WHERE dia = ?').run(target, row.dia);
+  log(`logros: "Un día como hoy" del ${row.dia} editado (${files.length} adjuntos)`);
+  return { ok: true, dia: row.dia, mensaje: target, adjuntos: files.length };
+}
+
+// El recuerdo armado de nuevo a partir de la fila de puente_recuerdos
+function memoryFor(row) {
   const m = db.prepare(`SELECT m.id, m.channel_id, m.user_id, m.webhook_username, m.content, m.created_at, pa.discord_user_id d
     FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id WHERE m.id = ?`).get(row.message_id);
   if (!m) return { error: 'el mensaje original ya no está' };
@@ -597,17 +623,7 @@ async function repostLastMemory(dia) {
   const when = local(parseTs(row.dia + ' 12:00:00') || Date.now());
   const years = Math.max(1, when.getUTCFullYear() - local(parseTs(m.created_at)).getUTCFullYear());
   const r = memoryOf(m, years, n);
-  if (!r) return { error: 'no encuentro el canal del mensaje' };
-  const sent = await publishMemory(r);
-  if (!sent) return { error: 'Discord no dejó publicarlo' };
-  db.prepare('UPDATE puente_recuerdos SET discord_message_id = ? WHERE dia = ?').run(sent.id, row.dia);
-  if (row.discord_message_id) {
-    const channelId = await summaryChannelId();
-    const del = channelId && await api('DELETE', `/channels/${channelId}/messages/${row.discord_message_id}`);
-    if (del && del.__error && del.__error !== 404) warn('logros: no pude borrar el recuerdo anterior:', del.__error);
-  }
-  log(`logros: "Un día como hoy" del ${row.dia} publicado de nuevo (${r.media.files.length} adjuntos)`);
-  return { ok: true, adjuntos: r.media.files.length, enlaces: r.media.links.length };
+  return r || { error: 'no encuentro el canal del mensaje' };
 }
 
 let posting = false;
