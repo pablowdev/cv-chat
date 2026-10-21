@@ -56,6 +56,17 @@ function setup(ctx) {
   setInterval(() => { try { updateDays(); } catch (err) { warn('logros: dias:', err.message); } }, 2 * 60 * 1000);
   setInterval(() => { maybePostSummary().catch(err => warn('logros: resumen:', err.message)); }, 10 * 60 * 1000);
   setInterval(() => { maybePostMemory().catch(err => warn('logros: recuerdo:', err.message)); }, 10 * 60 * 1000);
+  // Volver a publicar el ultimo recuerdo (para el admin del servidor):
+  //   touch /opt/haven/haven-data/puente-recuerdo-repetir   (en el contenedor: /data/...)
+  // Con una fecha adentro (AAAA-MM-DD), el recuerdo de ese dia.
+  setInterval(() => {
+    const flag = '/data/puente-recuerdo-repetir';
+    if (!fsMedia.existsSync(flag)) return;
+    let dia = '';
+    try { dia = fsMedia.readFileSync(flag, 'utf8').trim(); fsMedia.unlinkSync(flag); } catch { return; }
+    if (dia && !/^\d{4}-\d{2}-\d{2}$/.test(dia)) { warn('logros: recuerdo repetido: fecha no valida (AAAA-MM-DD):', dia.slice(0, 20)); return; }
+    repostLastMemory(dia || null).then(r => log('logros: recuerdo repetido:', JSON.stringify(r))).catch(err => warn('logros: recuerdo repetido:', err.message));
+  }, 30 * 1000).unref();
 }
 
 // ── Fechas ───────────────────────────────────────────────────────────────
@@ -457,8 +468,14 @@ function memoryPick(nowMs) {
     }
   }
   if (!best || best.n < 2) return null; // un recuerdo que nadie reacciono no vale la pena
-  const m = best.m, c = channels.get(m.channel_id);
-  // El canal de un hilo es su canal padre en la app
+  return memoryOf(best.m, best.years, best.n, channels);
+}
+
+// El recuerdo de un mensaje: canal, quien, texto, imagenes y enlace a la app
+function memoryOf(m, years, n, channels = channelMap()) {
+  const c = channels.get(m.channel_id);
+  if (!c) return null;
+  const best = { years, n };
   const base = (publicUrl || '').replace(/\/+$/, '');
   const media = mediaOf(m.content);
   // Con las imagenes adjuntas, sin el 🖼️ que las reemplazaba en el texto
@@ -539,24 +556,58 @@ async function maybePostMemory(force) {
   try {
     const r = memoryPick(now);
     if (!r) { db.prepare('INSERT OR IGNORE INTO puente_recuerdos (dia, message_id, at) VALUES (?, NULL, ?)').run(day, now); return; }
-    const channelId = await summaryChannelId();
-    if (!channelId) { warn(`logros: no hay un canal #${SUMMARY_CHANNEL} en Discord: el recuerdo no se publica`); return; }
-    // Sin "flags: 4" (sin vistas previas) cuando lleva imagenes de afuera: asi Discord las muestra.
-    // El enlace a la app va entre < >, que no arma vista previa.
-    const payload = { content: memoryText(r), allowed_mentions: { parse: [] } };
-    if (!r.media.links.length) payload.flags = 4;
-    let files = [];
-    for (const f of r.media.files) { try { files.push({ data: fsMedia.readFileSync(f.file), name: f.name }); } catch { /* ya no esta */ } }
-    let sent = files.length && apiFiles ? await apiFiles('POST', `/channels/${channelId}/messages`, payload, files) : await api('POST', `/channels/${channelId}/messages`, payload);
-    if (files.length && (!sent || sent.__error)) {
-      warn('logros: no pude adjuntar las imagenes del recuerdo, va sin ellas:', sent && sent.__error);
-      sent = await api('POST', `/channels/${channelId}/messages`, payload);
-    }
-    if (!sent || sent.__error) { warn('logros: Discord no dejo publicar el recuerdo:', sent && sent.__error); return; }
+    const sent = await publishMemory(r);
+    if (!sent) return;
     db.prepare('INSERT OR REPLACE INTO puente_recuerdos (dia, message_id, discord_message_id, at) VALUES (?, ?, ?, ?)').run(day, r.id, sent.id, now);
-    try { await postInHaven(sent); } catch (err) { warn('logros: recuerdo en Haven:', err.message); }
     log(`logros: "Un día como hoy" publicado (mensaje de hace ${r.years} años, ${r.n} reacciones)`);
   } finally { remembering = false; }
+}
+
+// Publica un recuerdo en Discord (con sus imagenes) y en la app. Devuelve el mensaje de Discord.
+async function publishMemory(r) {
+  const channelId = await summaryChannelId();
+  if (!channelId) { warn(`logros: no hay un canal #${SUMMARY_CHANNEL} en Discord: el recuerdo no se publica`); return null; }
+  // Sin "flags: 4" (sin vistas previas) cuando lleva imagenes de afuera: asi Discord las muestra.
+  // El enlace a la app va entre < >, que no arma vista previa.
+  const payload = { content: memoryText(r), allowed_mentions: { parse: [] } };
+  if (!r.media.links.length) payload.flags = 4;
+  const files = [];
+  for (const f of r.media.files) { try { files.push({ data: fsMedia.readFileSync(f.file), name: f.name }); } catch { /* ya no esta */ } }
+  let sent = files.length && apiFiles ? await apiFiles('POST', `/channels/${channelId}/messages`, payload, files) : await api('POST', `/channels/${channelId}/messages`, payload);
+  if (files.length && (!sent || sent.__error)) {
+    warn('logros: no pude adjuntar las imagenes del recuerdo, va sin ellas:', sent && sent.__error);
+    sent = await api('POST', `/channels/${channelId}/messages`, payload);
+  }
+  if (!sent || sent.__error) { warn('logros: Discord no dejo publicar el recuerdo:', sent && sent.__error); return null; }
+  try { await postInHaven(sent); } catch (err) { warn('logros: recuerdo en Haven:', err.message); }
+  return sent;
+}
+
+// Vuelve a publicar el ultimo recuerdo (por ejemplo, para que salga con sus
+// imagenes) y borra el anterior, en Discord y en la app.
+async function repostLastMemory(dia) {
+  const row = dia
+    ? db.prepare('SELECT dia, message_id, discord_message_id FROM puente_recuerdos WHERE dia = ? AND message_id IS NOT NULL').get(dia)
+    : db.prepare('SELECT dia, message_id, discord_message_id FROM puente_recuerdos WHERE message_id IS NOT NULL ORDER BY at DESC LIMIT 1').get();
+  if (!row) return { error: 'no hay recuerdos publicados' };
+  const m = db.prepare(`SELECT m.id, m.channel_id, m.user_id, m.webhook_username, m.content, m.created_at, pa.discord_user_id d
+    FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id WHERE m.id = ?`).get(row.message_id);
+  if (!m) return { error: 'el mensaje original ya no está' };
+  const n = db.prepare('SELECT COUNT(*) n FROM reactions WHERE message_id = ?').get(m.id).n;
+  const when = local(parseTs(row.dia + ' 12:00:00') || Date.now());
+  const years = Math.max(1, when.getUTCFullYear() - local(parseTs(m.created_at)).getUTCFullYear());
+  const r = memoryOf(m, years, n);
+  if (!r) return { error: 'no encuentro el canal del mensaje' };
+  const sent = await publishMemory(r);
+  if (!sent) return { error: 'Discord no dejó publicarlo' };
+  db.prepare('UPDATE puente_recuerdos SET discord_message_id = ? WHERE dia = ?').run(sent.id, row.dia);
+  if (row.discord_message_id) {
+    const channelId = await summaryChannelId();
+    const del = channelId && await api('DELETE', `/channels/${channelId}/messages/${row.discord_message_id}`);
+    if (del && del.__error && del.__error !== 404) warn('logros: no pude borrar el recuerdo anterior:', del.__error);
+  }
+  log(`logros: "Un día como hoy" del ${row.dia} publicado de nuevo (${r.media.files.length} adjuntos)`);
+  return { ok: true, adjuntos: r.media.files.length, enlaces: r.media.links.length };
 }
 
 let posting = false;
