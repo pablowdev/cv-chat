@@ -64,7 +64,10 @@ function resize(src, size, maskable) {
         cr = cr * t + bg[0] * (1 - t); cg = cg * t + bg[1] * (1 - t); cb = cb * t + bg[2] * (1 - t);
       }
       out.data[o] = Math.round(cr); out.data[o + 1] = Math.round(cg); out.data[o + 2] = Math.round(cb);
-      out.data[o + 3] = maskable ? 255 : Math.round(alpha);
+      // El icono comun (pestaña, app de PC) redondo y sin fondo, como el del foro:
+      // recortado en circulo con el borde suavizado; afuera, transparente
+      const edge = maskable ? 1 : Math.max(0, Math.min(1, size / 2 - Math.hypot(x - (size - 1) / 2, y - (size - 1) / 2)));
+      out.data[o + 3] = maskable ? 255 : Math.round(alpha * edge);
     }
   }
   return PNG.sync.write(out);
@@ -115,8 +118,8 @@ function manifest(db, base) {
   if (server && server.value) m.description = 'Chat de ' + String(server.value).slice(0, 80);
   if (iconFile(db)) {
     m.icons = [
-      { src: '/puente/icono-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/puente/icono-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/puente/icono-192.png?v=2', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/puente/icono-512.png?v=2', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/puente/icono-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ];
   }
@@ -138,7 +141,7 @@ function pageHead(db, html) {
       .replace('</head>', '<script src="/puente/instalar.js"></script></head>');
   }
   if (iconFile(db)) {
-    html = html.replace(/<link rel="icon"[^>]*>/, '<link rel="icon" type="image/png" href="/puente/icono-192.png">' +
+    html = html.replace(/<link rel="icon"[^>]*>/, '<link rel="icon" type="image/png" href="/puente/icono-192.png?v=2">' +
       '<link rel="apple-touch-icon" href="/puente/icono-maskable-512.png">');
   }
   return html;
