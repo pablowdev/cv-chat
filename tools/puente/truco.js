@@ -218,7 +218,10 @@ function actor(g) {
 const played = (h, i, b) => h.bazas[b][i] !== undefined;
 function canEnvido(g, i) {
   const h = g.h;
-  if (h.env.hecho || h.env.pend || h.baza !== 0 || played(h, i, 0)) return false;
+  if (h.env.hecho || h.env.pend || h.baza !== 0) return false;
+  // Despues de tirar la primera carta ya no se canta… salvo para contestar un truco:
+  // "el envido está primero" (por ejemplo, el mano que jugo sin cantar y le cantan truco)
+  if (played(h, i, 0) && !(h.truco.pend && h.truco.pend.para === i)) return false;
   if (h.truco.nivel > 1) return false; // con el truco querido ya no se canta envido
   if (h.flor.cantada[0] || h.flor.cantada[1]) return false;
   return true;
