@@ -1549,7 +1549,7 @@ html body .pip-input-resizer { display: none !important; }
   html body .message-area > #messages { padding-bottom: 0.75rem !important; }
   html body .message-area > #typing-indicator {
     position: absolute !important; left: 1.25rem; right: 1.25rem; bottom: 0.125rem; height: 1.25rem !important; min-height: 0 !important;
-    margin: 0 !important; padding: 0 !important; z-index: 2; pointer-events: none; font-size: 0.8125rem; line-height: 1.25rem; overflow: hidden;
+    margin: 0 !important; padding: 0 !important; z-index: 99996; pointer-events: none; font-size: 0.8125rem; line-height: 1.25rem; overflow: hidden;
   }
   /* (Haven deja que la barra se parta en varias filas; con varias lineas de texto el + y los botones quedaban
      arriba y abajo: como en Discord, quedan en la primera linea y solo crece el texto) */
@@ -2488,3 +2488,21 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .palo-oro { color: #b07d00; box-shadow: inset 0 0 0 3px #d9a400, 0 2px 6px rgba(0,0,0,0.35); }
 .puente-jg .palo-copa { color: #b3243a; box-shadow: inset 0 0 0 3px #b3243a, 0 2px 6px rgba(0,0,0,0.35); }
 @media (max-width: 380px) { .puente-jg .jg-carta { width: 4.5rem; height: 6.75rem; } }
+
+/* "Está escribiendo…" como en Discord: tres puntitos que laten uno detras del otro
+   (se agrandan, se iluminan y suben un poquito) y los nombres en negrita (aviso.js) */
+#typing-indicator.puente-escribe { display: flex !important; align-items: center; gap: 0.375rem; color: #b5bac1; font-size: 0.875rem; white-space: nowrap; overflow: hidden; }
+#typing-indicator .puente-escribe-texto { overflow: hidden; text-overflow: ellipsis; }
+#typing-indicator .puente-escribe-texto b { color: #f2f3f5; font-weight: 700; }
+.puente-escribe-puntos { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0.1875rem; height: 0.875rem; padding: 0 0.125rem; }
+.puente-escribe-puntos i {
+  display: block; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: #dbdee1;
+  opacity: 0.3; transform: scale(0.8); animation: puente-escribe 1.2s ease-in-out infinite;
+}
+.puente-escribe-puntos i:nth-child(2) { animation-delay: 0.15s; }
+.puente-escribe-puntos i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes puente-escribe {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0) scale(0.8); }
+  30% { opacity: 1; transform: translateY(-0.125rem) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .puente-escribe-puntos i { animation-duration: 2.4s; } }

@@ -7486,6 +7486,66 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// "Está escribiendo…" como en Discord (escribiendo.js): los tres puntitos que
+// laten, y los nombres en negrita: "Fulano está escribiendo…", "Fulano y Mengano
+// están escribiendo…", "A, B y C están escribiendo…", "Varias personas están
+// escribiendo…". Junta a los que escriben en la app y en Discord (desde Discord
+// dura 10 segundos, como alla); el de cada uno se va cuando llega su mensaje.
+(function () {
+  'use strict';
+  const typers = new Map(); // clave -> { nombre, hasta }
+  let timer = null;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const DOTS = '<span class="puente-escribe-puntos" aria-hidden="true"><i></i><i></i><i></i></span>';
+  function render() {
+    const box = document.getElementById('typing-indicator');
+    if (!box) return;
+    const now = Date.now();
+    for (const [k, v] of typers) if (v.hasta <= now) typers.delete(k);
+    clearTimeout(timer);
+    const names = [...new Set([...typers.values()].map(v => v.nombre))];
+    if (!names.length) { box.innerHTML = ''; box.classList.remove('puente-escribe'); return; }
+    const b = n => `<b>${esc(n)}</b>`;
+    const text = names.length === 1 ? `${b(names[0])} está escribiendo…`
+      : names.length === 2 ? `${b(names[0])} y ${b(names[1])} están escribiendo…`
+        : names.length === 3 ? `${b(names[0])}, ${b(names[1])} y ${b(names[2])} están escribiendo…`
+          : 'Varias personas están escribiendo…';
+    box.innerHTML = DOTS + `<span class="puente-escribe-texto">${text}</span>`;
+    box.classList.add('puente-escribe');
+    const next = Math.min(...[...typers.values()].map(v => v.hasta));
+    timer = setTimeout(render, Math.max(200, next - now + 50));
+  }
+  function add(app, username, ms) {
+    if (!username) return;
+    const u = app._lastOnlineUsers && app._lastOnlineUsers.find(x => x.username === username || x.displayName === username);
+    let nombre = username;
+    try { if (u && app._getNickname) nombre = app._getNickname(u.id, username) || username; } catch { /* el nombre tal cual */ }
+    typers.set(username, { nombre, hasta: Date.now() + ms });
+    render();
+  }
+  function remove(name) {
+    let hit = false;
+    for (const [k, v] of typers) if (k === name || v.nombre === name) { typers.delete(k); hit = true; }
+    if (hit) render();
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.socket || typeof app._showTyping !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._showTyping;
+    app._showTyping = function (username) {
+      try { add(this, username, 5000); } catch (err) { console.warn('[puente] escribiendo:', err); return orig.apply(this, arguments); }
+    };
+    app.socket.on('puente-escribiendo', (d) => { if (d && d.channelCode === app.currentChannel) add(app, d.username, d.ms || 10000); });
+    app.socket.on('new-message', (d) => { if (d && d.message && d.channelCode === app.currentChannel) remove(d.message.username); });
+    if (typeof app.switchChannel === 'function') {
+      const sw = app.switchChannel;
+      app.switchChannel = function (...a) { typers.clear(); render(); return sw.apply(this, a); };
+    }
+  })();
+})();
+
 // "Activá las notificaciones": casi nadie las tenia prendidas (estan escondidas
 // en los ajustes) y sin ellas la gente vuelve a Discord para enterarse. A quien
 // tiene la cuenta vinculada y todavia no eligio, un cartel abajo (como los de

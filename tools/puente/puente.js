@@ -34,6 +34,7 @@ const adjuntos = require('./adjuntos.js');
 const accesos = require('./accesos.js');
 const baneos = require('./baneos.js');
 const rol = require('./rol.js');
+const escribiendo = require('./escribiendo.js');
 const logros = require('./logros.js');
 const avisos = require('./avisos.js');
 const identidad = require('./identidad.js');
@@ -51,7 +52,7 @@ const API = 'https://discord.com/api/v10';
 // para los accesos (roles, expulsiones, baneos). Si Discord rechaza los
 // miembros (falta "Server Members Intent"), el puente sigue sin ellos.
 const MEMBERS_INTENT = 1 << 1;
-let intents = (1 << 0) | MEMBERS_INTENT | (1 << 2) | (1 << 9) | (1 << 10) | (1 << 15); // + GUILD_MESSAGE_REACTIONS
+let intents = (1 << 0) | MEMBERS_INTENT | (1 << 2) | (1 << 9) | (1 << 10) | (1 << 11) | (1 << 15); // + GUILD_MESSAGE_REACTIONS, GUILD_MESSAGE_TYPING
 const WEBHOOK_NAME = 'Haven (puente)';
 const THREAD_TYPES = new Set([10, 11, 12]);
 
@@ -144,6 +145,7 @@ function start(deps) {
   require('./perfil.js').setup({ db, io, log, warn });
   require('./mercado.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });
+  escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
   require('./tema-fijo.js').setup({ db, io, log });
@@ -387,6 +389,7 @@ function onDispatch(t, d) {
         if (d.guild_id === guildId && d.user && d.user.id === botUserId) vigia.onDiscordChange();
         break;
       case 'MESSAGE_CREATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundCreate(d)); break;
+      case 'TYPING_START': if (d.guild_id === guildId && isBridged(d.channel_id)) escribiendo.onDiscordTyping(d); break;
       // El embed de un enlace (de los dos lados) suele llegar en una actualizacion (embeds.js)
       case 'MESSAGE_UPDATE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, async () => { embeds.onDiscordUpdate(d); await inboundUpdate(d); }); break;
       case 'MESSAGE_DELETE': if (isBridged(d.channel_id)) enqueue('in:' + d.channel_id, () => inboundDelete(d.id)); break;
