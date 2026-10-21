@@ -6383,6 +6383,657 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// Marketplace (mercado.js): publicar cosas para vender, nuevas o usadas, y
+// servicios. Se entra con el icono de la tienda, debajo del logo del servidor en
+// la columna de la izquierda (en el celular y en la PC). Pantallas: la vidriera
+// (busqueda, filtros, "Guardados" y "Mis publicaciones"), una publicacion (fotos,
+// precio, quien vende y su reputacion, "Escribir al vendedor" por mensaje
+// directo), publicar o editar, marcar como vendida, confirmar una compra y
+// opinar, y la reputacion de cada persona. La app no cobra ni participa.
+// Un enlace /app?mercado=<id> abre esa publicacion.
+(function () {
+  'use strict';
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const toast = (t, k) => { try { window.app && window.app._showToast && window.app._showToast(t, k || 'info'); } catch { /* sin aviso */ } };
+  const svg = (d, s = 22) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const I = {
+    tienda: 'M4 4h16l1 5a3 3 0 0 1-2 2.83V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8.17A3 3 0 0 1 3 9l1-5Zm2 8v7h4v-4h4v4h4v-7a3 3 0 0 1-2.5-1.15A3 3 0 0 1 12 12a3 3 0 0 1-3.5-1.15A3 3 0 0 1 6 12ZM5.6 6l-.6 3a1 1 0 0 0 2 0h2a1 1 0 0 0 2 0h2a1 1 0 0 0 2 0h2a1 1 0 0 0 2 0l-.6-3H5.6Z',
+    atras: 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12l4.6-4.6Z',
+    cerrar: 'M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z',
+    mas: 'M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z',
+    buscar: 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5Zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
+    corazon: 'M12 21s-7.5-4.6-9.6-9.3C1 8.3 3.1 4.5 6.9 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.8 0 5.9 3.8 4.5 7.2C19.5 16.4 12 21 12 21Z',
+    msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
+    filtro: 'M3 5h18v2l-7 7v5l-4 2v-7L3 7V5Z',
+    foto: 'M9.4 4 8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.4-2H9.4ZM12 17.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
+  };
+  const MONEDA = { ARS: '$', USD: 'US$', USDT: 'USDT' };
+  const money = (p, m) => (p == null ? 'A convenir' : `${MONEDA[m] || '$'} ${Number(p).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`);
+  function ago(ms) {
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    for (const [sec, one, many] of [[86400 * 30, 'mes', 'meses'], [86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) {
+      if (s >= sec) { const n = Math.floor(s / sec); return `hace ${n} ${n === 1 ? one : many}`; }
+    }
+    return 'recién';
+  }
+  async function api(path, body) {
+    const opts = { headers: { Authorization: 'Bearer ' + token() } };
+    if (body !== undefined) { opts.method = 'POST'; opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    let r;
+    try { r = await fetch('/puente/api/mercado/' + path, opts); } catch { return { error: 'No hay conexión. Probá de nuevo.' }; }
+    let d = null;
+    try { d = await r.json(); } catch { /* sin cuerpo */ }
+    if (!r.ok) return { error: (d && d.error) || 'Algo salió mal. Probá de nuevo.' };
+    return d || {};
+  }
+  const avatar = (p, cls = 'mk-av') => {
+    const a = el('div', cls);
+    if (p && p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.loading = 'lazy'; i.onerror = () => { i.remove(); a.textContent = (p.nombre || '?').charAt(0).toUpperCase(); }; a.appendChild(i); }
+    else a.textContent = ((p && p.nombre) || '?').charAt(0).toUpperCase();
+    return a;
+  };
+  const repLine = (r) => {
+    if (!r || r.porcentaje == null) return 'Sin opiniones todavía';
+    return `${r.porcentaje}% positivas · ${r.positivas} 👍 · ${r.negativas} 👎`;
+  };
+
+  // ── La pantalla ──
+  let page = null, stack = [], state = null;
+  const filters = { ver: '', tipo: '', q: '', condicion: '', moneda: '', min: '', max: '', zona: '', orden: '' };
+
+  function close() {
+    if (!page) return;
+    page.remove(); page = null; stack = []; state = null;
+    document.querySelectorAll('.puente-mk-btn').forEach(b => b.classList.remove('active'));
+  }
+  function back() {
+    if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a, true); }
+    else close();
+  }
+  window.puenteMercado = { abierto: () => !!page, atras: back, abrir: (id) => (id ? go('item', id) : go('lista')) };
+
+  function frame() {
+    if (page) return page;
+    page = el('div', 'puente-mk');
+    page.id = 'puente-mercado';
+    const bar = byId('server-bar');
+    if (!mobile() && bar) page.style.left = Math.round(bar.getBoundingClientRect().right) + 'px';
+    document.body.appendChild(page);
+    document.querySelectorAll('.puente-mk-btn').forEach(b => b.classList.add('active'));
+    return page;
+  }
+  function go(view, arg) { frame(); stack.push([view, arg]); show(view, arg); }
+  function head(title, opts = {}) {
+    const h = el('div', 'mk-head');
+    const b = el('button', 'mk-icono'); b.type = 'button';
+    const root = stack.length <= 1;
+    b.innerHTML = svg(root && !mobile() ? I.cerrar : I.atras, 24);
+    b.setAttribute('aria-label', root ? 'Cerrar' : 'Volver');
+    b.addEventListener('click', back);
+    h.append(b, el('div', 'mk-titulo', title));
+    if (opts.right) h.appendChild(opts.right);
+    return h;
+  }
+  function body() { const b = el('div', 'mk-cuerpo'); return b; }
+  function show(view, arg) {
+    page.textContent = '';
+    page.scrollTop = 0;
+    try { ({ lista, item, publicar, vendido, perfil, pendientes })[view](arg); } catch (err) { console.warn('[puente] marketplace:', err); }
+  }
+
+  // ── Vidriera ──
+  function lista() {
+    const pub = el('button', 'mk-btn mk-primario mk-publicar'); pub.type = 'button';
+    pub.innerHTML = svg(I.mas, 18); pub.appendChild(el('span', '', 'Publicar'));
+    pub.addEventListener('click', () => {
+      if (state && state.puedePublicar === false) { toast('Para publicar tenés que confirmar tu email (Configuración → Mi cuenta).', 'error'); return; }
+      go('publicar');
+    });
+    page.appendChild(head('Marketplace', { right: pub }));
+    const b = body(); page.appendChild(b);
+    // Busqueda
+    const sbox = el('label', 'mk-buscar');
+    sbox.insertAdjacentHTML('beforeend', svg(I.buscar, 20));
+    const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar en el Marketplace'; q.value = filters.q; q.enterKeyHint = 'search';
+    let t = null;
+    q.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { filters.q = q.value.trim(); load(true); }, 400); });
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); filters.q = q.value.trim(); q.blur(); load(true); } });
+    sbox.appendChild(q);
+    const fbtn = el('button', 'mk-icono mk-filtro-btn'); fbtn.type = 'button'; fbtn.innerHTML = svg(I.filtro, 20); fbtn.setAttribute('aria-label', 'Filtros');
+    sbox.appendChild(fbtn);
+    b.appendChild(sbox);
+    // Chips
+    const chips = el('div', 'mk-chips');
+    const CH = [['', '', 'Todo'], ['', 'producto', 'Productos'], ['', 'servicio', 'Servicios'], ['guardados', '', 'Guardados'], ['mias', '', 'Mis publicaciones']];
+    for (const [ver, tipo, label] of CH) {
+      const c = el('button', 'mk-chip', label); c.type = 'button';
+      c.classList.toggle('on', filters.ver === ver && filters.tipo === tipo);
+      c.addEventListener('click', () => { filters.ver = ver; filters.tipo = tipo; chips.querySelectorAll('.mk-chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); load(true); });
+      chips.appendChild(c);
+    }
+    b.appendChild(chips);
+    // Filtros
+    const fx = el('div', 'mk-filtros'); fx.hidden = !(filters.condicion || filters.moneda || filters.zona || filters.orden);
+    const sel = (opts, key, label) => {
+      const s = el('select'); s.setAttribute('aria-label', label);
+      for (const [v, l] of opts) { const o = el('option', null, l); o.value = v; s.appendChild(o); }
+      s.value = filters[key];
+      s.addEventListener('change', () => { filters[key] = s.value; minmax.hidden = !filters.moneda; load(true); });
+      return s;
+    };
+    fx.append(
+      sel([['', 'Nuevo o usado'], ['nuevo', 'Nuevo'], ['usado', 'Usado']], 'condicion', 'Estado'),
+      sel([['', 'Cualquier moneda'], ['ARS', 'Pesos'], ['USD', 'Dólares'], ['USDT', 'USDT']], 'moneda', 'Moneda'),
+      sel([['', 'Más nuevos'], ['barato', 'Más baratos'], ['caro', 'Más caros']], 'orden', 'Ordenar'));
+    const zona = el('input'); zona.type = 'text'; zona.placeholder = 'Zona (barrio, ciudad)'; zona.value = filters.zona;
+    zona.addEventListener('change', () => { filters.zona = zona.value.trim(); load(true); });
+    const minmax = el('div', 'mk-minmax'); minmax.hidden = !filters.moneda;
+    for (const k of ['min', 'max']) {
+      const i = el('input'); i.type = 'number'; i.inputMode = 'decimal'; i.min = '0'; i.placeholder = k === 'min' ? 'Desde' : 'Hasta'; i.value = filters[k];
+      i.addEventListener('change', () => { filters[k] = i.value; load(true); });
+      minmax.appendChild(i);
+    }
+    fx.append(zona, minmax);
+    fbtn.addEventListener('click', () => { fx.hidden = !fx.hidden; });
+    b.appendChild(fx);
+    b.appendChild(el('div', 'mk-pend-lugar'));
+    const grid = el('div', 'mk-grilla'); b.appendChild(grid);
+    const status = el('div', 'mk-estado', 'Cargando…'); b.appendChild(status);
+
+    let desde = 0, loading = false, more = true, seq = 0;
+    async function load(reset) {
+      if (reset) { desde = 0; more = true; grid.textContent = ''; status.textContent = 'Cargando…'; }
+      if (loading && !reset) return;
+      if (!more) return;
+      loading = true;
+      const my = ++seq;
+      const qs = new URLSearchParams();
+      for (const k of Object.keys(filters)) if (filters[k]) qs.set(k, filters[k]);
+      qs.set('desde', String(desde));
+      const d = await api('lista?' + qs);
+      if (my !== seq || !page || !grid.isConnected) return;
+      loading = false;
+      if (d.error) { status.textContent = d.error; return; }
+      state = { puedePublicar: d.puedePublicar };
+      setBadge(d.pendientes);
+      pend(b.querySelector('.mk-pend-lugar'), d.pendientes);
+      for (const it of d.items) grid.appendChild(tile(it));
+      desde += d.items.length; more = !!d.mas;
+      status.textContent = grid.children.length ? (more ? 'Cargando…' : '') :
+        filters.ver === 'mias' ? 'Todavía no publicaste nada. Tocá "Publicar" para vender algo.' :
+        filters.ver === 'guardados' ? 'Todavía no guardaste publicaciones. Tocá ♡ en una para tenerla acá.' :
+        (filters.q || filters.zona || filters.condicion || filters.moneda) ? 'No hay publicaciones con esa búsqueda.' : 'Todavía no hay publicaciones. ¡Sé el primero en publicar!';
+    }
+    page.addEventListener('scroll', () => { if (grid.isConnected && page.scrollTop + page.clientHeight > page.scrollHeight - 400) load(false); }, { passive: true });
+    load(true);
+  }
+
+  function pend(box, n) {
+    if (!box) return;
+    box.textContent = '';
+    if (!n) return;
+    const p = el('button', 'mk-pendientes'); p.type = 'button';
+    p.append(el('span', 'mk-pend-n', String(n)), el('span', '', n === 1 ? 'Tenés 1 cosa pendiente: confirmar una compra u opinar' : `Tenés ${n} cosas pendientes: confirmar compras u opinar`));
+    p.addEventListener('click', () => go('pendientes'));
+    box.appendChild(p);
+  }
+
+  function tile(it) {
+    const c = el('button', 'mk-tarjeta'); c.type = 'button';
+    const ph = el('div', 'mk-tfoto');
+    if (it.foto) { const i = el('img'); i.src = it.foto; i.alt = ''; i.loading = 'lazy'; ph.appendChild(i); }
+    else ph.innerHTML = svg(it.tipo === 'servicio' ? I.tienda : I.foto, 34);
+    if (it.estado === 'vendida') ph.appendChild(el('span', 'mk-sello', 'Vendido'));
+    else if (it.vencida) ph.appendChild(el('span', 'mk-sello gris', 'Vencida'));
+    else if (it.oculta) ph.appendChild(el('span', 'mk-sello rojo', 'Oculta'));
+    c.append(ph, el('div', 'mk-tprecio', money(it.precio, it.moneda)), el('div', 'mk-ttitulo', it.titulo));
+    const meta = [it.tipo === 'servicio' ? 'Servicio' : it.condicion === 'nuevo' ? 'Nuevo' : it.condicion === 'usado' ? 'Usado' : '', it.zona || ''].filter(Boolean).join(' · ');
+    if (meta) c.appendChild(el('div', 'mk-tmeta', meta));
+    c.addEventListener('click', () => go('item', it.id));
+    return c;
+  }
+
+  // ── Una publicacion ──
+  async function item(id) {
+    page.appendChild(head('Publicación'));
+    const b = body(); page.appendChild(b);
+    b.appendChild(el('div', 'mk-estado', 'Cargando…'));
+    const d = await api('item?id=' + encodeURIComponent(id));
+    if (!page || !b.isConnected) return;
+    b.textContent = '';
+    if (d.error) { b.appendChild(el('div', 'mk-estado', d.error)); return; }
+    const it = d.item;
+    // Fotos (deslizando, como en el Marketplace de Facebook)
+    if (it.fotos.length) {
+      const car = el('div', 'mk-fotos');
+      const strip = el('div', 'mk-tira');
+      for (const f of it.fotos) {
+        const i = el('img'); i.src = f; i.alt = ''; i.loading = 'lazy';
+        i.addEventListener('click', () => { try { window.app._openLightbox(f, i); } catch { window.open(f, '_blank'); } });
+        strip.appendChild(i);
+      }
+      car.appendChild(strip);
+      if (it.fotos.length > 1) {
+        const dots = el('div', 'mk-puntos');
+        it.fotos.forEach((_, k) => dots.appendChild(el('span', k ? '' : 'on')));
+        strip.addEventListener('scroll', () => { const k = Math.round(strip.scrollLeft / strip.clientWidth); dots.querySelectorAll('span').forEach((s, j) => s.classList.toggle('on', j === k)); }, { passive: true });
+        car.appendChild(dots);
+      }
+      b.appendChild(car);
+    }
+    const info = el('div', 'mk-info');
+    info.append(el('div', 'mk-precio', money(it.precio, it.moneda)), el('h2', 'mk-nombre', it.titulo));
+    const tags = el('div', 'mk-tags');
+    for (const t of [it.tipo === 'servicio' ? 'Servicio' : 'Producto', it.condicion === 'nuevo' ? 'Nuevo' : it.condicion === 'usado' ? 'Usado' : '', it.zona ? '📍 ' + it.zona : ''].filter(Boolean)) tags.appendChild(el('span', 'mk-tag', t));
+    info.appendChild(tags);
+    let when = 'Publicado ' + ago(it.renovado);
+    if (it.mia) when += it.vencida ? ' · venció' : ` · vence en ${Math.max(1, Math.round((it.vence - Date.now()) / 864e5))} días`;
+    info.appendChild(el('div', 'mk-cuando', when));
+    if (it.estado === 'vendida') info.appendChild(el('div', 'mk-aviso', '✅ Vendido'));
+    if (it.oculta) info.appendChild(el('div', 'mk-aviso rojo', '🙈 Oculta por un administrador: no la ve nadie más.'));
+    if (it.venta && it.mia && it.venta.estado === 'pendiente' && it.venta.comprador) info.appendChild(el('div', 'mk-aviso', `Esperando que ${it.venta.comprador.nombre} confirme la compra.`));
+    if (it.descripcion) info.appendChild(el('div', 'mk-desc', it.descripcion));
+    b.appendChild(info);
+
+    // Quien vende
+    if (it.vendedor) {
+      const s = el('button', 'mk-vendedor'); s.type = 'button';
+      const txt = el('div', 'mk-vtexto');
+      txt.append(el('div', 'mk-vnombre', it.vendedor.nombre), el('div', 'mk-vrep', repLine(it.vendedor.reputacion)));
+      s.append(avatar(it.vendedor), txt);
+      s.insertAdjacentHTML('beforeend', svg('M9.4 18 8 16.6l4.6-4.6L8 7.4 9.4 6l6 6-6 6Z', 20));
+      s.addEventListener('click', () => go('perfil', it.vendedor.id));
+      b.appendChild(s);
+    }
+
+    const acts = el('div', 'mk-acciones');
+    const btn = (label, cls, fn, icon) => { const x = el('button', 'mk-btn ' + (cls || '')); x.type = 'button'; if (icon) x.innerHTML = svg(icon, 18); x.appendChild(el('span', '', label)); x.addEventListener('click', fn); acts.appendChild(x); return x; };
+    if (!it.mia) {
+      if (it.estado === 'activa') btn('Escribir al vendedor', 'mk-primario', () => writeTo(it), I.msj);
+      const g = btn(it.guardada ? 'Guardado' : 'Guardar', it.guardada ? 'on' : '', async () => {
+        const si = !g.classList.contains('on');
+        const r = await api('guardar', { id: it.id, si });
+        if (r.error) return toast(r.error, 'error');
+        g.classList.toggle('on', si); g.querySelector('span').textContent = si ? 'Guardado' : 'Guardar';
+      }, I.corazon);
+    }
+    btn('Compartir', '', () => share(it));
+    if (it.mia) {
+      btn('Editar', '', () => go('publicar', it));
+      if (it.estado === 'activa') btn(it.tipo === 'servicio' ? 'Registrar una venta' : 'Marcar como vendido', 'mk-primario', () => go('vendido', it));
+      if (it.estado === 'vendida') btn('Volver a publicar', '', async () => { const r = await api('reactivar', { id: it.id }); if (r.error) return toast(r.error, 'error'); show('item', it.id); });
+      if (it.estado === 'activa' && (it.vencida || it.vence - Date.now() < 7 * 864e5)) btn('Renovar 30 días', '', async () => { const r = await api('renovar', { id: it.id }); if (r.error) return toast(r.error, 'error'); toast('Publicación renovada', 'success'); show('item', it.id); });
+    }
+    if (it.mia || d.admin) btn('Borrar', 'mk-peligro', async () => {
+      if (!confirm('¿Borrar esta publicación? No se puede deshacer.')) return;
+      const r = await api('borrar', { id: it.id });
+      if (r.error) return toast(r.error, 'error');
+      toast('Publicación borrada', 'success'); back();
+    });
+    if (d.admin && !it.mia) btn(it.oculta ? 'Mostrar de nuevo' : 'Ocultar (admin)', 'mk-peligro', async () => {
+      const r = await api('ocultar', { id: it.id, si: !it.oculta });
+      if (r.error) return toast(r.error, 'error');
+      show('item', it.id);
+    });
+    if (!it.mia) btn(it.denunciada ? 'Denunciada' : 'Denunciar', 'mk-suave', async (e) => {
+      if (it.denunciada) return;
+      const motivo = prompt('¿Qué tiene de malo esta publicación? (lo ven solo los administradores)');
+      if (motivo === null) return;
+      const r = await api('denunciar', { id: it.id, motivo });
+      if (r.error) return toast(r.error, 'error');
+      it.denunciada = true; e.currentTarget.querySelector('span').textContent = 'Denunciada';
+      toast('Gracias. Los administradores la van a revisar.', 'success');
+    });
+    if (d.admin && it.denuncias) acts.appendChild(el('div', 'mk-nota', `🚩 ${it.denuncias} denuncia${it.denuncias === 1 ? '' : 's'}`));
+    b.appendChild(acts);
+    b.appendChild(el('div', 'mk-nota', 'CV Chat no participa de la compra ni cobra nada: el pago y la entrega los acuerdan ustedes. Encontrate en un lugar seguro y no pagues por adelantado a quien no conocés.'));
+  }
+
+  function linkOf(it) { return location.origin + '/app?mercado=' + it.id; }
+  function share(it) {
+    const url = linkOf(it), text = `${it.titulo} · ${money(it.precio, it.moneda)}`;
+    if (navigator.share && mobile()) { navigator.share({ title: it.titulo, text, url }).catch(() => {}); return; }
+    const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+
+  // Mensaje directo con quien vende, con la publicacion ya escrita (sin mandar)
+  function writeTo(it) {
+    const app = window.app;
+    if (!app || !app.socket || !it.vendedor) return;
+    const text = `¡Hola! Te escribo por tu publicación "${it.titulo}" (${money(it.precio, it.moneda)}): ${linkOf(it)}`;
+    let done = false;
+    const fill = () => {
+      if (done) return; done = true;
+      setTimeout(() => {
+        const box = byId('message-input');
+        if (!box) return;
+        box.value = text;
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        box.focus();
+      }, 900);
+    };
+    app.socket.once('dm-opened', fill);
+    setTimeout(() => { if (!done) app.socket.off('dm-opened', fill); }, 8000);
+    close();
+    app.socket.emit('start-dm', { targetUserId: it.vendedor.id });
+  }
+
+  // ── Publicar o editar ──
+  function publicar(existing) {
+    const ed = existing && existing.id ? existing : null;
+    page.appendChild(head(ed ? 'Editar publicación' : 'Nueva publicación'));
+    const b = body(); page.appendChild(b);
+    const f = el('div', 'mk-form'); b.appendChild(f);
+    const data = {
+      tipo: ed ? ed.tipo : 'producto', condicion: ed ? ed.condicion : 'usado',
+      fotos: ed ? ed.fotos.map(u => ({ name: u.split('/').pop(), url: u })) : [],
+    };
+    const field = (label, node, hint) => { const w = el('label', 'mk-campo'); w.appendChild(el('span', 'mk-etq', label)); w.appendChild(node); if (hint) w.appendChild(el('span', 'mk-ayuda', hint)); f.appendChild(w); return w; };
+    const seg = (opts, key, onChange) => {
+      const s = el('div', 'mk-seg');
+      for (const [v, l] of opts) {
+        const x = el('button', 'mk-seg-op', l); x.type = 'button'; x.classList.toggle('on', data[key] === v);
+        x.addEventListener('click', () => { data[key] = v; s.querySelectorAll('.mk-seg-op').forEach(y => y.classList.toggle('on', y === x)); if (onChange) onChange(); });
+        s.appendChild(x);
+      }
+      return s;
+    };
+    const condWrap = el('div');
+    let condField = null;
+    const tipoSeg = seg([['producto', 'Producto'], ['servicio', 'Servicio']], 'tipo', () => { if (condField) condField.hidden = data.tipo !== 'producto'; fotoAyuda.textContent = fotoHint(); });
+    field('Qué publicás', tipoSeg);
+
+    // Fotos
+    const fotoHint = () => `Hasta 6. La primera es la portada.${data.tipo === 'producto' ? ' Al menos una.' : ''}`;
+    const grid = el('div', 'mk-fgrid');
+    const fotoAyuda = el('span', 'mk-ayuda', fotoHint());
+    const fw = el('div', 'mk-campo'); fw.append(el('span', 'mk-etq', 'Fotos'), grid, fotoAyuda); f.appendChild(fw);
+    const input = el('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true; input.hidden = true;
+    fw.appendChild(input);
+    function drawFotos() {
+      grid.textContent = '';
+      data.fotos.forEach((p, k) => {
+        const t = el('div', 'mk-fthumb');
+        if (p.url) { const i = el('img'); i.src = p.url; i.alt = ''; t.appendChild(i); } else t.appendChild(el('span', 'mk-subiendo', 'Subiendo…'));
+        if (k === 0 && p.url) t.appendChild(el('span', 'mk-portada', 'Portada'));
+        const x = el('button', 'mk-fquitar'); x.type = 'button'; x.innerHTML = svg(I.cerrar, 16); x.setAttribute('aria-label', 'Quitar foto');
+        x.addEventListener('click', () => { data.fotos.splice(k, 1); drawFotos(); });
+        t.appendChild(x);
+        grid.appendChild(t);
+      });
+      if (data.fotos.length < 6) {
+        const add = el('button', 'mk-fadd'); add.type = 'button'; add.innerHTML = svg(I.foto, 28); add.appendChild(el('span', '', 'Agregar'));
+        add.addEventListener('click', () => input.click());
+        grid.appendChild(add);
+      }
+    }
+    // Se achica en el telefono antes de subirla (mas rapido con datos moviles)
+    function shrink(file) {
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          resolve(c.toDataURL('image/jpeg', 0.86));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => resolve(null); r.readAsDataURL(file); };
+        img.src = url;
+      });
+    }
+    input.addEventListener('change', async () => {
+      const files = [...input.files].slice(0, 6 - data.fotos.length);
+      input.value = '';
+      for (const file of files) {
+        const slot = { name: null, url: null };
+        data.fotos.push(slot); drawFotos();
+        const dataUrl = await shrink(file);
+        const r = dataUrl ? await api('foto', { imagen: dataUrl }) : { error: 'No se pudo leer la foto.' };
+        if (r.error) { data.fotos.splice(data.fotos.indexOf(slot), 1); toast(r.error, 'error'); }
+        else { slot.name = r.foto; slot.url = r.url; }
+        if (page && grid.isConnected) drawFotos();
+      }
+    });
+    drawFotos();
+
+    const titulo = el('input'); titulo.type = 'text'; titulo.maxLength = 80; titulo.placeholder = 'Qué vendés u ofrecés'; titulo.value = ed ? ed.titulo : '';
+    field('Título', titulo);
+    const desc = el('textarea'); desc.maxLength = 2000; desc.rows = 5; desc.placeholder = 'Contá cómo está, qué incluye, cómo lo entregás…'; desc.value = ed ? ed.descripcion || '' : '';
+    field('Descripción', desc);
+    // Precio
+    const pr = el('div', 'mk-precio-fila');
+    const precio = el('input'); precio.type = 'text'; precio.inputMode = 'decimal'; precio.placeholder = '0'; precio.value = ed && ed.precio != null ? String(ed.precio).replace('.', ',') : '';
+    const moneda = el('select');
+    for (const [v, l] of [['ARS', '$ Pesos'], ['USD', 'US$ Dólares'], ['USDT', 'USDT']]) { const o = el('option', null, l); o.value = v; moneda.appendChild(o); }
+    moneda.value = (ed && ed.moneda) || 'ARS';
+    pr.append(moneda, precio);
+    const conv = el('label', 'mk-check');
+    const convI = el('input'); convI.type = 'checkbox'; convI.checked = !!(ed && ed.precio == null);
+    conv.append(convI, el('span', '', 'A convenir'));
+    const syncConv = () => { precio.disabled = moneda.disabled = convI.checked; };
+    convI.addEventListener('change', syncConv); syncConv();
+    const pw = field('Precio', pr); pw.appendChild(conv);
+    condWrap.appendChild(seg([['nuevo', 'Nuevo'], ['usado', 'Usado']], 'condicion'));
+    condField = field('Estado', condWrap); condField.hidden = data.tipo !== 'producto';
+    const zona = el('input'); zona.type = 'text'; zona.maxLength = 60; zona.placeholder = 'Barrio o ciudad (opcional)'; zona.value = ed && ed.zona ? ed.zona : '';
+    field('Zona', zona);
+    const err = el('div', 'mk-error'); f.appendChild(err);
+    f.appendChild(el('div', 'mk-nota', 'No se puede publicar nada ilegal. Las publicaciones duran 30 días y se renuevan con un toque. CV Chat no participa de la venta ni cobra comisión.'));
+    const send = el('button', 'mk-btn mk-primario mk-enviar'); send.type = 'button'; send.textContent = ed ? 'Guardar cambios' : 'Publicar';
+    f.appendChild(send);
+    for (const x of [titulo, desc, precio, zona]) x.addEventListener('input', () => { err.textContent = ''; });
+    send.addEventListener('click', async () => {
+      err.textContent = '';
+      if (data.fotos.some(p => !p.name)) { err.textContent = 'Esperá a que terminen de subir las fotos.'; return; }
+      if (titulo.value.trim().length < 3) { err.textContent = 'Poné un título (al menos 3 letras).'; titulo.focus(); return; }
+      if (data.tipo === 'producto' && !data.fotos.length) { err.textContent = 'Agregá al menos una foto.'; return; }
+      let p = null;
+      if (!convI.checked) {
+        const raw = precio.value.trim().replace(/\./g, '').replace(',', '.');
+        if (!raw || !Number.isFinite(Number(raw)) || Number(raw) < 0) { err.textContent = 'Poné un precio, o marcá "A convenir".'; precio.focus(); return; }
+        p = Number(raw);
+      }
+      send.disabled = true;
+      const r = await api('publicar', {
+        id: ed ? ed.id : undefined, tipo: data.tipo, condicion: data.tipo === 'producto' ? data.condicion : null,
+        titulo: titulo.value, descripcion: desc.value, precio: p, moneda: moneda.value, zona: zona.value, fotos: data.fotos.map(x => x.name),
+      });
+      send.disabled = false;
+      if (r.error) { err.textContent = r.error; return; }
+      toast(ed ? 'Cambios guardados' : '¡Publicado!', 'success');
+      stack.pop(); // sin volver al formulario con "atras"
+      if (ed) { stack.pop(); }
+      go('item', r.id);
+    });
+  }
+
+  // ── Marcar como vendido ──
+  function vendido(it) {
+    page.appendChild(head(it.tipo === 'servicio' ? 'Registrar una venta' : 'Marcar como vendido'));
+    const b = body(); page.appendChild(b);
+    b.appendChild(el('p', 'mk-texto', '¿A quién se lo vendiste? Le llega un aviso para confirmar la compra, y después se pueden dejar una opinión entre ustedes.'));
+    const sbox = el('label', 'mk-buscar'); sbox.insertAdjacentHTML('beforeend', svg(I.buscar, 20));
+    const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar por nombre'; sbox.appendChild(q); b.appendChild(sbox);
+    const list = el('div', 'mk-lista'); b.appendChild(list);
+    let t = null, seq = 0;
+    q.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const my = ++seq;
+        const d = q.value.trim().length >= 2 ? await api('personas?q=' + encodeURIComponent(q.value.trim())) : { personas: [] };
+        if (my !== seq || !list.isConnected) return;
+        list.textContent = '';
+        for (const p of d.personas || []) {
+          const r = el('button', 'mk-fila'); r.type = 'button';
+          const tx = el('div', 'mk-vtexto'); tx.append(el('div', 'mk-vnombre', p.nombre), el('div', 'mk-vrep', '@' + p.usuario));
+          r.append(avatar(p), tx);
+          r.addEventListener('click', async () => {
+            if (!confirm(`¿Se lo vendiste a ${p.nombre}?`)) return;
+            const res = await api('vendido', { id: it.id, comprador: p.id });
+            if (res.error) return toast(res.error, 'error');
+            toast(`Listo. Le avisamos a ${p.nombre} para que confirme.`, 'success');
+            back();
+          });
+          list.appendChild(r);
+        }
+        if (q.value.trim().length >= 2 && !(d.personas || []).length) list.appendChild(el('div', 'mk-estado', 'No encontramos a nadie con ese nombre.'));
+      }, 300);
+    });
+    if (it.tipo === 'producto') {
+      const out = el('button', 'mk-btn mk-suave'); out.type = 'button'; out.textContent = 'Lo vendí fuera de CV Chat';
+      out.addEventListener('click', async () => { const r = await api('vendido', { id: it.id, fuera: true }); if (r.error) return toast(r.error, 'error'); back(); });
+      b.appendChild(out);
+    }
+    setTimeout(() => q.focus(), 100);
+  }
+
+  // ── Reputacion de una persona ──
+  async function perfil(uid) {
+    page.appendChild(head('Reputación'));
+    const b = body(); page.appendChild(b);
+    b.appendChild(el('div', 'mk-estado', 'Cargando…'));
+    const d = await api('reputacion?u=' + encodeURIComponent(uid));
+    if (!page || !b.isConnected) return;
+    b.textContent = '';
+    if (d.error) { b.appendChild(el('div', 'mk-estado', d.error)); return; }
+    const top = el('div', 'mk-perfil');
+    const tx = el('div', 'mk-vtexto'); tx.append(el('div', 'mk-pnombre', d.persona.nombre), el('div', 'mk-vrep', '@' + d.persona.usuario));
+    top.append(avatar(d.persona, 'mk-av grande'), tx);
+    b.appendChild(top);
+    const r = d.reputacion;
+    const stats = el('div', 'mk-stats');
+    for (const [n, l] of [[r.porcentaje == null ? '–' : r.porcentaje + '%', 'positivas'], [r.positivas, '👍'], [r.negativas, '👎'], [r.ventas, r.ventas === 1 ? 'venta' : 'ventas'], [r.compras, r.compras === 1 ? 'compra' : 'compras']]) {
+      const s = el('div', 'mk-stat'); s.append(el('div', 'mk-stat-n', String(n)), el('div', 'mk-stat-l', l)); stats.appendChild(s);
+    }
+    b.appendChild(stats);
+    b.appendChild(el('div', 'mk-sub', 'Opiniones'));
+    if (!d.opiniones.length) b.appendChild(el('div', 'mk-estado', 'Todavía no tiene opiniones.'));
+    const ops = el('div', 'mk-lista');
+    for (const o of d.opiniones) {
+      const row = el('div', 'mk-opinion' + (o.positiva ? '' : ' mala'));
+      const h = el('div', 'mk-ophead');
+      h.append(el('span', 'mk-opicon', o.positiva ? '👍' : '👎'), el('span', 'mk-vnombre', o.de ? o.de.nombre : 'Alguien'),
+        el('span', 'mk-vrep', ` · como ${o.rol === 'vendedor' ? 'vendedor' : 'comprador'} · ${ago(o.creado)}`));
+      row.appendChild(h);
+      if (o.comentario) row.appendChild(el('div', 'mk-optexto', o.comentario));
+      row.appendChild(el('div', 'mk-vrep', o.titulo));
+      ops.appendChild(row);
+    }
+    b.appendChild(ops);
+    // Sus publicaciones
+    const l = await api('lista?u=' + encodeURIComponent(uid));
+    if (!page || !b.isConnected || l.error || !l.items.length) return;
+    b.appendChild(el('div', 'mk-sub', 'Publicaciones'));
+    const grid = el('div', 'mk-grilla'); for (const it of l.items) grid.appendChild(tile(it)); b.appendChild(grid);
+  }
+
+  // ── Pendientes: confirmar compras y opinar ──
+  async function pendientes() {
+    page.appendChild(head('Pendientes'));
+    const b = body(); page.appendChild(b);
+    const d = await api('pendientes');
+    if (!page || !b.isConnected) return;
+    if (d.error) { b.appendChild(el('div', 'mk-estado', d.error)); return; }
+    setBadge(d.total);
+    if (!d.total) { b.appendChild(el('div', 'mk-estado', 'No tenés nada pendiente.')); return; }
+    for (const c of d.confirmar) {
+      const box = el('div', 'mk-caja');
+      box.appendChild(el('div', 'mk-texto', `${c.otro ? c.otro.nombre : 'Alguien'} dice que te vendió "${c.titulo}". ¿Se lo compraste?`));
+      const row = el('div', 'mk-acciones');
+      for (const [si, label, cls] of [[true, 'Sí, se lo compré', 'mk-primario'], [false, 'No', '']]) {
+        const x = el('button', 'mk-btn ' + cls, label); x.type = 'button';
+        x.addEventListener('click', async () => { const r = await api('confirmar', { venta: c.venta, si }); if (r.error) return toast(r.error, 'error'); show('pendientes'); });
+        row.appendChild(x);
+      }
+      box.appendChild(row); b.appendChild(box);
+    }
+    for (const o of d.opinar) {
+      const box = el('div', 'mk-caja');
+      box.appendChild(el('div', 'mk-texto', `¿Cómo te fue con ${o.otro ? o.otro.nombre : 'esa persona'} ${o.rol === 'vendedor' ? 'como comprador' : 'como vendedor'}? ("${o.titulo}")`));
+      let pos = null;
+      const row = el('div', 'mk-seg');
+      for (const [v, l] of [[true, '👍 Bien'], [false, '👎 Mal']]) {
+        const x = el('button', 'mk-seg-op', l); x.type = 'button';
+        x.addEventListener('click', () => { pos = v; row.querySelectorAll('.mk-seg-op').forEach(y => y.classList.toggle('on', y === x)); err.textContent = ''; });
+        row.appendChild(x);
+      }
+      const com = el('textarea'); com.rows = 2; com.maxLength = 300; com.placeholder = 'Comentario (opcional, lo ve todo el mundo)';
+      const err = el('div', 'mk-error');
+      const send = el('button', 'mk-btn mk-primario', 'Enviar opinión'); send.type = 'button';
+      send.addEventListener('click', async () => {
+        if (pos === null) { err.textContent = 'Elegí 👍 o 👎.'; return; }
+        const r = await api('opinar', { venta: o.venta, positiva: pos, comentario: com.value });
+        if (r.error) { err.textContent = r.error; return; }
+        toast('¡Gracias por tu opinión!', 'success'); show('pendientes');
+      });
+      box.append(row, com, err, send); b.appendChild(box);
+    }
+  }
+
+  // ── El icono en la columna de la izquierda y el numerito de pendientes ──
+  function setBadge(n) {
+    for (const b of document.querySelectorAll('.puente-mk-btn .puente-rail-badge')) { b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; }
+  }
+  function addButtons() {
+    const mk = (cls) => {
+      const b = el('button', cls + ' puente-mk-btn'); b.type = 'button'; b.title = 'Marketplace'; b.setAttribute('aria-label', 'Marketplace');
+      b.innerHTML = svg(I.tienda, 24);
+      const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (page) close(); else { stack = []; go('lista'); } });
+      return b;
+    };
+    const srv = document.querySelector('#puente-rail .puente-rail-server');
+    if (srv && !document.querySelector('#puente-rail .puente-mk-btn')) srv.after(mk('puente-rail-btn'));
+    const home = byId('home-server');
+    if (home && !document.querySelector('#server-bar .puente-mk-btn')) {
+      const b = mk('server-icon');
+      home.after(b);
+    }
+    return !!(srv || home);
+  }
+  async function refreshBadge() { const d = await api('pendientes'); if (!d.error) setBadge(d.total); }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.socket || !token() || !addButtons()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    // Por si la columna se arma despues
+    setTimeout(addButtons, 3000);
+    refreshBadge();
+    setInterval(refreshBadge, 5 * 60 * 1000);
+    app.socket.on('puente-mercado', (d) => setBadge(d && d.pendientes));
+    // Ir a un canal o a los mensajes directos cierra el Marketplace (en la PC)
+    if (typeof app.switchChannel === 'function') {
+      const sw = app.switchChannel;
+      app.switchChannel = function (...a) { close(); return sw.apply(this, a); };
+    }
+    for (const id of ['home-server']) byId(id) && byId(id).addEventListener('click', close);
+    document.addEventListener('click', (e) => {
+      if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server')) close();
+    }, true);
+    // Enlaces a una publicacion: se abre aca mismo
+    document.addEventListener('click', (e) => {
+      const a = e.target instanceof Element && e.target.closest('a[href]');
+      if (!a || e.ctrlKey || e.metaKey) return;
+      let u; try { u = new URL(a.href, location.href); } catch { return; }
+      const id = u.origin === location.origin && /^\/app/.test(u.pathname) && u.searchParams.get('mercado');
+      if (!id || !/^\d+$/.test(id)) return;
+      e.preventDefault(); e.stopPropagation();
+      stack = []; go('item', id);
+    }, true);
+    const sp = new URLSearchParams(location.search).get('mercado');
+    if (sp && /^\d+$/.test(sp)) setTimeout(() => { stack = []; go('item', sp); }, 1500);
+    addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
+  })();
+})();
+
 // "Activá las notificaciones": casi nadie las tenia prendidas (estan escondidas
 // en los ajustes) y sin ellas la gente vuelve a Discord para enterarse. A quien
 // tiene la cuenta vinculada y todavia no eligio, un cartel abajo (como los de
@@ -7040,6 +7691,7 @@ function sheetDrag(sheet, opts) {
     [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
     [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
     [() => window.puenteAdjuntar && window.puenteAdjuntar.abierto(), () => window.puenteAdjuntar.cerrar()],
+    [() => window.puenteMercado && window.puenteMercado.abierto() && !shown(byId('profile-popup')) && !shown(byId('image-lightbox')), () => window.puenteMercado.atras()],
     [() => window.puenteLupa && window.puenteLupa.abierta() && !shown(byId('profile-popup')), () => window.puenteLupa.cerrar()],
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
     [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],

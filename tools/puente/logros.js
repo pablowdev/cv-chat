@@ -315,6 +315,12 @@ function medallas(havenId, pre) {
   if (weeks) add('destacado', '⭐', 'Destacado de la semana', weeks === 1 ? `Estuvo en el podio de #${SUMMARY_CHANNEL}` : `Estuvo ${weeks} veces en el podio de #${SUMMARY_CHANNEL}`);
   let inv = 0;
   try { inv = require('./invitaciones.js').count(havenId).invitados; } catch { /* sin invitaciones */ }
+  // Marketplace (mercado.js): la reputacion, y la medalla con 5 ventas sin ninguna opinion mala
+  let rep = null;
+  try { rep = require('./mercado.js').summary(havenId); } catch { /* sin marketplace */ }
+  if (rep && rep.ventas >= 5 && rep.negativas === 0 && rep.positivas >= 5) add('mercado-confiable', '🏪', 'Vendedor confiable', `${rep.ventas} ventas en el Marketplace, todas con buena opinión`);
+  if (rep && rep.porcentaje !== null) add('mercado-rep', '⭐', `${rep.porcentaje}% · ${rep.positivas + rep.negativas}`,
+    `Marketplace: ${rep.positivas} 👍 · ${rep.negativas} 👎 (${rep.ventas} ${rep.ventas === 1 ? 'venta' : 'ventas'}, ${rep.compras} ${rep.compras === 1 ? 'compra' : 'compras'})`);
   if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',
     `Trajo ${inv === 1 ? 'a 1 persona' : `a ${inv} personas`} a ${appName()}`);
   if (!pre) cache.set(key, { at: Date.now(), data: list });

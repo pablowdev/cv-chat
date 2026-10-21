@@ -805,6 +805,10 @@ async function handle(req, res) {
     const r = await require('./perfil.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p.startsWith('/puente/api/mercado/')) {
+    const r = await require('./mercado.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p.startsWith('/puente/api/invitacion/')) {
     const r = await require('./invitaciones.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
