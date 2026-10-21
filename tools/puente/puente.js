@@ -143,6 +143,7 @@ function start(deps) {
   require('./invitaciones.js').setup({ db, log, warn, publicUrl });
   require('./perfil.js').setup({ db, io, log, warn });
   require('./mercado.js').setup({ db, io, log, warn });
+  require('./truco.js').setup({ db, io, log, warn });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
   require('./tema-fijo.js').setup({ db, io, log });

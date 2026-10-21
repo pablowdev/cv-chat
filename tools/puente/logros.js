@@ -321,6 +321,10 @@ function medallas(havenId, pre) {
   if (rep && rep.ventas >= 5 && rep.negativas === 0 && rep.positivas >= 5) add('mercado-confiable', '🏪', 'Vendedor confiable', `${rep.ventas} ventas en el Marketplace, todas con buena opinión`);
   if (rep && rep.porcentaje !== null) add('mercado-rep', '⭐', `${rep.porcentaje}% · ${rep.positivas + rep.negativas}`,
     `Marketplace: ${rep.positivas} 👍 · ${rep.negativas} 👎 (${rep.ventas} ${rep.ventas === 1 ? 'venta' : 'ventas'}, ${rep.compras} ${rep.compras === 1 ? 'compra' : 'compras'})`);
+  // Juegos (truco.js): 10 partidas de truco ganadas contra otras personas
+  let tr = null;
+  try { tr = require('./truco.js').stats(havenId); } catch { /* sin juegos */ }
+  if (tr && tr.ganadas >= 10) add('truquero', '🃏', 'Viejo truquero', `Ganó ${tr.ganadas} partidas de truco en ${appName()}`);
   if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',
     `Trajo ${inv === 1 ? 'a 1 persona' : `a ${inv} personas`} a ${appName()}`);
   if (!pre) cache.set(key, { at: Date.now(), data: list });

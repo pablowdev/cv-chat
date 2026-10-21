@@ -7000,11 +7000,14 @@ function sheetDrag(sheet, opts) {
     };
     const srv = document.querySelector('#puente-rail .puente-rail-server');
     if (srv && !document.querySelector('#puente-rail .puente-mk-btn')) srv.after(mk('puente-rail-btn'));
+    // (Si Haven puso el logo del servidor en otro lado, con la columna de arriba, alcanza con ese)
     const home = byId('home-server');
-    if (home && !document.querySelector('#server-bar .puente-mk-btn')) {
+    if (home && home.closest('#server-bar') && !document.querySelector('#server-bar .puente-mk-btn')) {
       const b = mk('server-icon');
       home.after(b);
     }
+    // Por si quedo uno de mas
+    for (const sel of ['.puente-mk-btn.puente-rail-btn', '.puente-mk-btn.server-icon']) [...document.querySelectorAll(sel)].slice(1).forEach(x => x.remove());
     return !!(srv || home);
   }
   async function refreshBadge() { const d = await api('pendientes'); if (!d.error) setBadge(d.total); }
@@ -7039,6 +7042,446 @@ function sheetDrag(sheet, opts) {
     }, true);
     const sp = new URLSearchParams(location.search).get('mercado');
     if (sp && /^\d+$/.test(sp)) setTimeout(() => { stack = []; go('item', sp); }, 1500);
+    addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
+  })();
+})();
+
+// Juegos (truco.js): por ahora el Truco argentino, 1 contra 1, contra otra
+// persona o contra la compu. Se entra con el icono de las cartas, debajo del
+// Marketplace en la columna de la izquierda. La sala: crear partida (a 15 o 30,
+// con o sin flor; mesa abierta, desafiar a alguien o la compu), las que te
+// desafiaron, tus partidas, las mesas que esperan rival, tu récord y el ranking
+// del mes. La mesa: las cartas del rival boca abajo, las tres bazas en el paño,
+// tus cartas abajo (se tocan para jugar) y los cantos que se pueden hacer en
+// ese momento (los decide el servidor). Un enlace /app?truco=<id> abre la mesa.
+(function () {
+  'use strict';
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const toast = (t, k) => { try { window.app && window.app._showToast && window.app._showToast(t, k || 'info'); } catch { /* sin aviso */ } };
+  const svg = (d, s = 22) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const I = {
+    cartas: 'M7.5 3.6 15 2.1a2 2 0 0 1 2.35 1.57l2.9 14.6a2 2 0 0 1-1.57 2.35l-7.5 1.5a2 2 0 0 1-2.35-1.57L5.93 5.95A2 2 0 0 1 7.5 3.6Zm4.1 5.2-1.6 2.6 2.6 1.6 1.6-2.6-2.6-1.6ZM4.2 6.6l1.4 7.1-1.8-8.3c.1.4.2.8.4 1.2Z',
+    atras: 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12l4.6-4.6Z',
+    cerrar: 'M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z',
+    buscar: 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5Zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
+    msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
+    puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
+  };
+  const PALO = { espada: '🗡️', basto: '🪵', oro: '🪙', copa: '🍷' };
+  const BTN = {
+    truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido',
+    flor: '¡Flor!', quiero: '¡Quiero!', noquiero: 'No quiero', mazo: 'Al mazo',
+  };
+  const CANTO = { truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Quiero vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido' };
+  const app = () => window.app;
+  const emit = (ev, data) => new Promise((resolve) => {
+    const a = app();
+    if (!a || !a.socket) return resolve({ error: 'Sin conexión.' });
+    let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; resolve({ error: 'El servidor no contestó. Probá de nuevo.' }); } }, 10000);
+    a.socket.emit(ev, data || {}, (r) => { if (done) return; done = true; clearTimeout(t); resolve(r || {}); });
+  });
+  const avatar = (p, cls = 'jg-av') => {
+    const a = el('div', cls);
+    if (p && p.compu) { a.textContent = '🤖'; return a; }
+    if (p && p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.onerror = () => { i.remove(); a.textContent = (p.nombre || '?').charAt(0).toUpperCase(); }; a.appendChild(i); }
+    else a.textContent = ((p && p.nombre) || '?').charAt(0).toUpperCase();
+    return a;
+  };
+  function card(c, cls) {
+    const d = el('div', 'jg-carta ' + (cls || '') + (c ? ' palo-' + c.p : ' dorso'));
+    if (!c) return d;
+    d.append(el('span', 'jg-num', String(c.n)), el('span', 'jg-palo', PALO[c.p]), el('span', 'jg-num abajo', String(c.n)));
+    d.title = `${c.n} de ${c.p}`;
+    return d;
+  }
+  // Un sonidito (sin archivos): al jugar una carta o cuando te cantan
+  let actx = null;
+  function beep(freq = 520, ms = 90) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.value = freq; o.type = 'triangle'; g.gain.value = 0.06;
+      o.connect(g); g.connect(actx.destination); o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + ms / 1000); o.stop(actx.currentTime + ms / 1000 + 0.02);
+    } catch { /* sin sonido */ }
+  }
+
+  // ── La pantalla ──
+  let page = null, stack = [], mesa = null, tickT = null;
+  function close() {
+    if (!page) return;
+    page.remove(); page = null; stack = []; mesa = null; clearInterval(tickT);
+    document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
+  }
+  function back() {
+    if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); }
+    else close();
+  }
+  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); } };
+  function frame() {
+    if (page) return page;
+    if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
+    page = el('div', 'puente-jg');
+    page.id = 'puente-juegos';
+    const bar = byId('server-bar');
+    if (!mobile() && bar) page.style.left = Math.round(bar.getBoundingClientRect().right) + 'px';
+    document.body.appendChild(page);
+    document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.add('active'));
+    return page;
+  }
+  function go(view, arg) { frame(); stack.push([view, arg]); show(view, arg); }
+  function head(title, right) {
+    const h = el('div', 'jg-head');
+    const b = el('button', 'jg-icono'); b.type = 'button';
+    const root = stack.length <= 1;
+    b.innerHTML = svg(root && !mobile() ? I.cerrar : I.atras, 24);
+    b.setAttribute('aria-label', root ? 'Cerrar' : 'Volver');
+    b.addEventListener('click', back);
+    h.append(b, el('div', 'jg-titulo', title));
+    if (right) h.appendChild(right);
+    return h;
+  }
+  function show(view, arg) {
+    clearInterval(tickT); mesa = null;
+    page.textContent = '';
+    try { ({ inicio, crear, mesa: table })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+  }
+
+  // ── Sala ──
+  async function inicio() {
+    page.appendChild(head('Juegos'));
+    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const hero = el('div', 'jg-hero');
+    hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
+    const btns = el('div', 'jg-acciones');
+    const nb = el('button', 'jg-btn jg-primario', 'Crear partida'); nb.type = 'button'; nb.addEventListener('click', () => go('crear'));
+    const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button';
+    cb.addEventListener('click', async () => { const r = await emit('truco:crear', { puntos: 15, flor: false, modo: 'compu' }); if (r.error) return toast(r.error, 'error'); go('mesa', r.id); });
+    btns.append(nb, cb); hero.appendChild(btns);
+    b.appendChild(hero);
+    const box = el('div'); box.appendChild(el('div', 'jg-estado', 'Cargando…')); b.appendChild(box);
+    const d = await emit('truco:inicio');
+    if (!page || !box.isConnected) return;
+    box.textContent = '';
+    if (d.error) { box.appendChild(el('div', 'jg-estado', d.error)); return; }
+    setBadge(d.mias.filter(m => m.teToca).length);
+    const section = (title, items, render) => { if (!items.length) return; box.appendChild(el('div', 'jg-sub', title)); const l = el('div', 'jg-lista'); items.forEach(x => l.appendChild(render(x))); box.appendChild(l); };
+    const row = (who, top, bottom, label, cls, fn) => {
+      const r = el('button', 'jg-fila'); r.type = 'button';
+      const t = el('div', 'jg-ftexto'); t.append(el('div', 'jg-fnombre', top), el('div', 'jg-fmeta', bottom));
+      r.append(avatar(who), t);
+      if (label) r.appendChild(el('span', 'jg-chip ' + (cls || ''), label));
+      r.addEventListener('click', fn);
+      return r;
+    };
+    const rules = (m) => `A ${m.puntos} · ${m.flor ? 'con flor' : 'sin flor'}`;
+    section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => joinGame(a.id)));
+    section('Tus partidas', d.mias, (m) => {
+      const who = m.rival || m.invitado || { nombre: '?' };
+      const top = m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`;
+      const bottom = m.estado === 'jugando' ? `Vos ${m.yo} · ${who.nombre} ${m.el} · ${rules(m)}` : m.estado === 'terminada' ? `${m.ganaste ? 'Ganaste' : 'Perdiste'} ${m.yo} a ${m.el}` : rules(m);
+      return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('mesa', m.id));
+    });
+    section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => joinGame(a.id)));
+    if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
+    // Récord y ranking
+    const s = d.stats;
+    box.appendChild(el('div', 'jg-sub', 'Tu récord'));
+    const st = el('div', 'jg-stats');
+    for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
+    box.appendChild(st);
+    for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
+      const list = d.ranking[k];
+      box.appendChild(el('div', 'jg-sub', title));
+      if (!list.length) { box.appendChild(el('div', 'jg-vacio', 'Todavía nadie ganó una partida contra otra persona.')); continue; }
+      const l = el('div', 'jg-lista');
+      list.forEach((p, k2) => { const r = el('div', 'jg-fila jg-rank'); r.append(el('span', 'jg-pos', ['🥇', '🥈', '🥉'][k2] || String(k2 + 1)), avatar(p), el('span', 'jg-fnombre', p.nombre), el('span', 'jg-chip', `${p.ganadas} ${p.ganadas === 1 ? 'victoria' : 'victorias'}`)); l.appendChild(r); });
+      box.appendChild(l);
+    }
+  }
+  async function joinGame(id) {
+    const r = await emit('truco:unirse', { id });
+    if (r.error) return toast(r.error, 'error');
+    go('mesa', r.id);
+  }
+
+  // ── Crear partida ──
+  function crear() {
+    page.appendChild(head('Nueva partida'));
+    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const f = el('div', 'jg-form'); b.appendChild(f);
+    const data = { puntos: 30, flor: false, modo: 'abierta', rival: null };
+    const seg = (label, key, opts, onChange) => {
+      const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
+      const s = el('div', 'jg-seg');
+      for (const [v, l] of opts) {
+        const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', data[key] === v);
+        x.addEventListener('click', () => { data[key] = v; s.querySelectorAll('.jg-seg-op').forEach(y => y.classList.toggle('on', y === x)); if (onChange) onChange(); });
+        s.appendChild(x);
+      }
+      w.appendChild(s); f.appendChild(w); return w;
+    };
+    seg('A cuántos puntos', 'puntos', [[15, 'A 15'], [30, 'A 30']]);
+    seg('Flor', 'flor', [[false, 'Sin flor'], [true, 'Con flor']]);
+    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; hint.textContent = HINT[data.modo]; });
+    const HINT = {
+      abierta: 'La mesa queda en la sala y la toma el primero que quiera jugar.',
+      desafio: 'Le mandás un mensaje directo con el enlace a la mesa.',
+      compu: 'Para practicar. No cuenta para el ranking.',
+    };
+    const hint = el('div', 'jg-ayuda', HINT.abierta); f.appendChild(hint);
+    // Elegir a quien desafiar
+    const pick = el('div', 'jg-campo'); pick.hidden = true;
+    const sbox = el('label', 'jg-buscar'); sbox.insertAdjacentHTML('beforeend', svg(I.buscar, 20));
+    const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar a quién desafiar'; sbox.appendChild(q);
+    const list = el('div', 'jg-lista');
+    const chosen = el('div', 'jg-elegido');
+    pick.append(sbox, chosen, list); f.appendChild(pick);
+    let t = null, seq = 0;
+    q.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const my = ++seq;
+        let ps = [];
+        if (q.value.trim().length >= 2) {
+          try { ps = ((await (await fetch('/puente/api/mercado/personas?q=' + encodeURIComponent(q.value.trim()), { headers: { Authorization: 'Bearer ' + localStorage.getItem('haven_token') } })).json()).personas) || []; } catch { ps = []; }
+        }
+        if (my !== seq || !list.isConnected) return;
+        list.textContent = '';
+        for (const p of ps) {
+          const r = el('button', 'jg-fila'); r.type = 'button';
+          const tx = el('div', 'jg-ftexto'); tx.append(el('div', 'jg-fnombre', p.nombre), el('div', 'jg-fmeta', '@' + p.usuario));
+          r.append(avatar(p), tx);
+          r.addEventListener('click', () => { data.rival = p; chosen.textContent = 'Vas a desafiar a ' + p.nombre; list.textContent = ''; q.value = ''; err.textContent = ''; });
+          list.appendChild(r);
+        }
+      }, 300);
+    });
+    const err = el('div', 'jg-error'); f.appendChild(err);
+    const go2 = el('button', 'jg-btn jg-primario jg-ancho', 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
+    go2.addEventListener('click', async () => {
+      err.textContent = '';
+      if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
+      go2.disabled = true;
+      const r = await emit('truco:crear', { puntos: data.puntos, flor: data.flor, modo: data.modo, rival: data.rival && data.rival.id });
+      go2.disabled = false;
+      if (r.error) { err.textContent = r.error; return; }
+      if (data.modo === 'desafio') { challenge(data.rival, r.id, data); return; }
+      stack.pop(); go('mesa', r.id);
+    });
+  }
+
+  // Mensaje directo al desafiado, con el enlace ya escrito (sin mandar)
+  function challenge(p, id, data) {
+    const a = app();
+    const text = `¡Te desafío a un truco a ${data.puntos}${data.flor ? ' con flor' : ''}! Entrá acá: ${location.origin}/app?truco=${id}`;
+    let done = false;
+    const fill = () => {
+      if (done) return; done = true;
+      setTimeout(() => { const box = byId('message-input'); if (!box) return; box.value = text; box.dispatchEvent(new Event('input', { bubbles: true })); box.focus(); }, 900);
+    };
+    a.socket.once('dm-opened', fill);
+    setTimeout(() => { if (!done) a.socket.off('dm-opened', fill); }, 8000);
+    toast('Mandale el mensaje para que entre a la mesa', 'success');
+    close();
+    a.socket.emit('start-dm', { targetUserId: p.id });
+  }
+
+  // ── La mesa ──
+  async function table(id) {
+    mesa = { id, s: null };
+    const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
+    page.appendChild(head('Truco', menu));
+    const b = el('div', 'jg-mesa'); page.appendChild(b);
+    b.appendChild(el('div', 'jg-estado', 'Cargando…'));
+    menu.addEventListener('click', () => {
+      const s = mesa && mesa.s;
+      if (!s) return;
+      if (s.estado === 'esperando' && s.soyCreador) { if (confirm('¿Cancelar la partida?')) emit('truco:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); return; }
+      if (s.estado === 'jugando' && s.soyJugador) { if (confirm('¿Abandonar la partida? La perdés.')) emit('truco:accion', { id, tipo: 'abandonar' }); return; }
+      share(id);
+    });
+    const d = await emit('truco:ver', { id });
+    if (!page || !mesa || mesa.id !== id) return;
+    if (d.error) { b.textContent = ''; b.appendChild(el('div', 'jg-estado', d.error)); return; }
+    render(d.partida);
+    tickT = setInterval(() => { const bar = page && page.querySelector('.jg-reloj > span'); if (bar && mesa && mesa.s && mesa.s.deadline) { const left = Math.max(0, mesa.s.deadline - Date.now()); bar.style.width = (100 * left / 60000) + '%'; const tx = page.querySelector('.jg-reloj-t'); if (tx) tx.textContent = Math.ceil(left / 1000) + ' s'; } }, 500);
+  }
+  function share(id) {
+    const url = `${location.origin}/app?truco=${id}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => toast('Enlace de la mesa copiado', 'success'), () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+
+  function render(s) {
+    if (!page || !mesa || mesa.id !== s.id) return;
+    const prev = mesa.s;
+    mesa.s = s;
+    if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && mesa && mesa.id === s.id) { stack.pop(); go('mesa', s.siguiente); } }, 600); }
+    const t = page.querySelector('.jg-titulo');
+    if (t) t.textContent = `Truco a ${s.puntos} · ${s.flor ? 'con flor' : 'sin flor'}`;
+    const b = page.querySelector('.jg-mesa');
+    b.textContent = '';
+    // Esperando rival
+    if (s.estado === 'esperando') {
+      const w = el('div', 'jg-espera');
+      w.append(el('div', 'jg-hero-cartas', '🂠'), el('div', 'jg-hero-t', s.invitado ? `Esperando a ${s.invitado.nombre}` : 'Esperando rival'),
+        el('div', 'jg-hero-s', s.invitado ? 'Cuando entre por el enlace, empieza la partida.' : 'La mesa está en la sala de Juegos: la toma el primero que quiera jugar.'));
+      const acts = el('div', 'jg-acciones');
+      const c = el('button', 'jg-btn', 'Copiar enlace'); c.type = 'button'; c.addEventListener('click', () => share(s.id));
+      acts.appendChild(c);
+      if (!s.soyJugador) { const j = el('button', 'jg-btn jg-primario', 'Jugar'); j.type = 'button'; j.addEventListener('click', () => joinGame(s.id)); acts.appendChild(j); }
+      else if (s.soyCreador) { const x = el('button', 'jg-btn jg-suave', 'Cancelar partida'); x.type = 'button'; x.addEventListener('click', () => emit('truco:cancelar', { id: s.id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); })); acts.appendChild(x); }
+      w.appendChild(acts); b.appendChild(w); return;
+    }
+    // Marcador
+    const score = el('div', 'jg-marcador');
+    const side = (p, mine) => { const x = el('div', 'jg-lado' + (mine ? ' mio' : '')); x.append(avatar(p), el('div', 'jg-lnombre', mine ? 'Vos' : p.nombre), el('div', 'jg-lpuntos', String(p.puntos))); return x; };
+    score.append(side(s.rival, false), el('div', 'jg-meta', `de ${s.puntos}`), side(s.yo, true));
+    b.appendChild(score);
+    if (s.estado === 'terminada') return end(b, s);
+
+    // El rival: sus cartas boca abajo y lo que grita
+    const top = el('div', 'jg-rival');
+    const backs = el('div', 'jg-dorsos');
+    for (let k = 0; k < s.rivalCartas; k++) backs.appendChild(card(null, 'chica'));
+    top.appendChild(backs);
+    if (s.grito && !s.grito.mio) top.appendChild(el('div', 'jg-globo', s.grito.text));
+    b.appendChild(top);
+    // El paño: las tres bazas (arriba la carta del rival, abajo la tuya)
+    const felt = el('div', 'jg-pano');
+    s.bazas.forEach((z, k) => {
+      const col = el('div', 'jg-baza' + (k === s.baza ? ' actual' : '') + (z.gana ? ' gano-' + z.gana : ''));
+      col.append(z.rival ? card(z.rival, 'jugada') : el('div', 'jg-hueco'), z.yo ? card(z.yo, 'jugada') : el('div', 'jg-hueco'));
+      if (z.gana) col.appendChild(el('div', 'jg-bres', z.gana === 'yo' ? 'Tuya' : z.gana === 'rival' ? 'Suya' : 'Parda'));
+      felt.appendChild(col);
+    });
+    b.appendChild(felt);
+    // Que pasa ahora
+    const st = el('div', 'jg-status');
+    if (s.pendiente) {
+      const who = s.pendiente.de === 'yo' ? 'Cantaste' : `${s.rival.nombre} cantó`;
+      st.appendChild(el('div', 'jg-canto' + (s.pendiente.de === 'yo' ? '' : ' rival'), `${who}: ${CANTO[s.pendiente.canto] || s.pendiente.canto}`));
+      if (s.pendiente.de === 'yo') st.appendChild(el('div', 'jg-turno', `Esperando que ${s.rival.nombre} conteste…`));
+    } else st.appendChild(el('div', 'jg-turno', s.turno === 'yo' ? 'Te toca' : `Juega ${s.rival.nombre}…`));
+    const last = (s.log || []).slice(-1)[0];
+    if (last) st.appendChild(el('div', 'jg-ultimo', last));
+    if (s.deadline) { const r = el('div', 'jg-reloj' + ((s.turno === 'yo' && !(s.pendiente && s.pendiente.de === 'yo')) ? ' mio' : '')); r.appendChild(el('span')); r.appendChild(el('span', 'jg-reloj-t')); st.appendChild(r); }
+    b.appendChild(st);
+    if (s.grito && s.grito.mio) b.appendChild(el('div', 'jg-globo mio', s.grito.text));
+    // Tus cartas
+    const canPlay = (s.acciones || []).includes('jugar');
+    const hand = el('div', 'jg-mano' + (canPlay ? ' juega' : ''));
+    s.cartas.forEach((c, k) => {
+      const x = card(c, 'mia');
+      if (canPlay) { x.tabIndex = 0; x.setAttribute('role', 'button'); x.addEventListener('click', () => play(s, { tipo: 'jugar', carta: k })); }
+      hand.appendChild(x);
+    });
+    b.appendChild(hand);
+    if (s.baza === 0 && s.miEnvido != null) b.appendChild(el('div', 'jg-envido', `Tu envido: ${s.miEnvido}${s.mano ? ' · sos mano' : ''}`));
+    else if (s.mano) b.appendChild(el('div', 'jg-envido', 'Sos mano'));
+    // Los cantos de ahora
+    const acts = el('div', 'jg-cantos');
+    const order = ['quiero', 'noquiero', 'truco', 'retruco', 'vale4', 'envido', 'real', 'falta', 'flor', 'mazo'];
+    for (const a of order) {
+      if (!(s.acciones || []).includes(a)) continue;
+      if (a === 'mazo' && !(s.acciones.length > 1 || s.turno === 'yo')) continue;
+      const x = el('button', 'jg-btn ' + (a === 'quiero' || a === 'truco' || a === 'retruco' || a === 'vale4' ? 'jg-primario' : a === 'mazo' || a === 'noquiero' ? 'jg-suave' : 'jg-envido-btn'), BTN[a]);
+      x.type = 'button';
+      x.addEventListener('click', () => { if (a === 'mazo' && !confirm('¿Irte al mazo? Le das los puntos de la mano.')) return; play(s, { tipo: a }); });
+      acts.appendChild(x);
+    }
+    const gr = el('button', 'jg-btn jg-suave', '💬'); gr.type = 'button'; gr.title = 'Decir algo';
+    gr.addEventListener('click', () => {
+      const old = page.querySelector('.jg-gritos'); if (old) { old.remove(); return; }
+      const list = el('div', 'jg-gritos');
+      (s.gritos || []).forEach((g, k) => { const o = el('button', 'jg-grito', g); o.type = 'button'; o.addEventListener('click', () => { list.remove(); emit('truco:accion', { id: s.id, tipo: 'grito', grito: k }); }); list.appendChild(o); });
+      b.appendChild(list);
+    });
+    acts.appendChild(gr);
+    b.appendChild(acts);
+    // Sonido cuando juega o canta el otro
+    if (prev && prev.estado === 'jugando') {
+      const prevCanto = prev.pendiente && prev.pendiente.canto, nowCanto = s.pendiente && s.pendiente.canto;
+      if (s.pendiente && s.pendiente.de === 'rival' && nowCanto !== prevCanto) { beep(380, 160); setTimeout(() => beep(520, 160), 170); }
+      else if (JSON.stringify(prev.bazas) !== JSON.stringify(s.bazas)) beep(620, 70);
+    }
+  }
+  async function play(s, a) {
+    const r = await emit('truco:accion', { id: s.id, ...a });
+    if (r.error) toast(r.error, 'error');
+  }
+  function end(b, s) {
+    const w = el('div', 'jg-fin');
+    const won = s.ganador === 'yo';
+    w.append(el('div', 'jg-hero-cartas', won ? '🏆' : '🃏'), el('div', 'jg-hero-t', won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`),
+      el('div', 'jg-hero-s', `${s.yo.puntos} a ${s.rival.puntos}${s.motivo === 'abandono' ? (won ? ' · tu rival abandonó' : ' · por abandono') : ''}`));
+    const acts = el('div', 'jg-acciones');
+    if (s.soyJugador && !s.siguiente) {
+      const r = el('button', 'jg-btn jg-primario', s.revancha && s.revancha.yo ? 'Esperando revancha…' : s.revancha && s.revancha.rival ? `${s.rival.nombre} quiere la revancha: ¡Dale!` : 'Revancha');
+      r.type = 'button'; r.disabled = !!(s.revancha && s.revancha.yo);
+      r.addEventListener('click', () => emit('truco:accion', { id: s.id, tipo: 'revancha' }).then(x => { if (x.error) toast(x.error, 'error'); else if (x.id) { stack.pop(); go('mesa', x.id); } }));
+      acts.appendChild(r);
+    }
+    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = []; go('inicio'); });
+    acts.appendChild(v);
+    w.appendChild(acts);
+    const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
+    w.appendChild(log);
+    b.appendChild(w);
+  }
+
+  // ── Icono y numerito ("te toca") ──
+  function setBadge(n) {
+    for (const x of document.querySelectorAll('.puente-jg-btn .puente-rail-badge')) { x.textContent = n ? String(n) : ''; x.style.display = n ? '' : 'none'; }
+  }
+  let badgeT = null;
+  function refreshBadge() { clearTimeout(badgeT); badgeT = setTimeout(async () => { const d = await emit('truco:inicio'); if (!d.error) setBadge(d.mias.filter(m => m.teToca).length); }, 400); }
+  function addButtons() {
+    const mk = (cls) => {
+      const b = el('button', cls + ' puente-jg-btn'); b.type = 'button'; b.title = 'Juegos'; b.setAttribute('aria-label', 'Juegos');
+      b.innerHTML = svg(I.cartas, 24);
+      const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (page) close(); else { stack = []; go('inicio'); } });
+      return b;
+    };
+    const after = (sel, fallback) => document.querySelector(sel) || document.querySelector(fallback);
+    const m1 = after('#puente-rail .puente-mk-btn', '#puente-rail .puente-rail-server');
+    if (m1 && !document.querySelector('#puente-rail .puente-jg-btn')) m1.after(mk('puente-rail-btn'));
+    const m2 = after('#server-bar .puente-mk-btn', '#server-bar #home-server');
+    if (m2 && !document.querySelector('#server-bar .puente-jg-btn')) m2.after(mk('server-icon'));
+    for (const sel of ['.puente-jg-btn.puente-rail-btn', '.puente-jg-btn.server-icon']) [...document.querySelectorAll(sel)].slice(1).forEach(x => x.remove());
+    return !!(m1 || m2) && !!document.querySelector('.puente-mk-btn');
+  }
+
+  let tries = 0;
+  (function wait() {
+    const a = app();
+    if (!a || !a.socket || !addButtons()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    setTimeout(addButtons, 3000);
+    refreshBadge();
+    a.socket.on('truco:estado', (s) => { if (page && mesa && mesa.id === s.id) render(s); refreshBadge(); });
+    a.socket.on('truco:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio') show('inicio'); });
+    a.socket.on('connect', () => { if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida)); });
+    if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
+    document.addEventListener('click', (e) => {
+      if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn')) close();
+    }, true);
+    // Enlace a una mesa: se abre aca mismo
+    document.addEventListener('click', (e) => {
+      const l = e.target instanceof Element && e.target.closest('a[href]');
+      if (!l || e.ctrlKey || e.metaKey) return;
+      let u; try { u = new URL(l.href, location.href); } catch { return; }
+      const id = u.origin === location.origin && /^\/app/.test(u.pathname) && u.searchParams.get('truco');
+      if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
+      e.preventDefault(); e.stopPropagation();
+      stack = []; go('mesa', id);
+    }, true);
+    const sp = new URLSearchParams(location.search).get('truco');
+    if (sp && /^[a-f0-9]{6,20}$/.test(sp)) setTimeout(() => { stack = []; go('mesa', sp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();
@@ -7700,6 +8143,7 @@ function sheetDrag(sheet, opts) {
     [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
     [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
     [() => window.puenteAdjuntar && window.puenteAdjuntar.abierto(), () => window.puenteAdjuntar.cerrar()],
+    [() => window.puenteJuegos && window.puenteJuegos.abierto() && !shown(byId('profile-popup')), () => window.puenteJuegos.atras()],
     [() => window.puenteMercado && window.puenteMercado.abierto() && !shown(byId('profile-popup')) && !shown(byId('image-lightbox')), () => window.puenteMercado.atras()],
     [() => window.puenteLupa && window.puenteLupa.abierta() && !shown(byId('profile-popup')), () => window.puenteLupa.cerrar()],
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
