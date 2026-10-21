@@ -178,3 +178,21 @@
     if (form) form.parentElement.insertBefore(box, form); else card.insertBefore(box, card.firstChild);
   }).catch(() => {});
 })();
+
+// El icono de la pestaña: el redondo y sin fondo (instalable.js). Haven lo cambia
+// por la imagen original del servidor (cuadrada, con fondo) cuando carga; aca se
+// vuelve a poner el redondo cada vez que lo cambia.
+(function () {
+  'use strict';
+  const first = document.querySelector('link[rel~="icon"]');
+  const ICON = first && first.getAttribute('href');
+  if (!ICON || ICON.indexOf('/puente/icono-') !== 0) return; // sin icono propio del servidor: el de Haven
+  const fix = () => {
+    for (const l of document.querySelectorAll('link[rel~="icon"]')) {
+      if ((l.getAttribute('href') || '').indexOf('/puente/icono-') !== 0) { l.removeAttribute('type'); l.setAttribute('href', ICON); }
+    }
+  };
+  new MutationObserver(fix).observe(document.head, { subtree: true, childList: true, attributes: true, attributeFilter: ['href'] });
+  fix();
+})();
+
