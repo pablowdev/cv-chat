@@ -7,6 +7,9 @@
 // Revisa:
 //  1. Canales que vienen de Discord y en Haven son publicos.
 //  2. Cuentas sin vincular dentro de un canal de Discord (los admins de Haven no cuentan).
+//     Con PUENTE_SIN_VINCULAR_VEN=publicos las cuentas sin vincular ven lo que ve
+//     @everyone en Discord, asi que solo es un problema si estan en un canal que
+//     @everyone no puede ver.
 //  3. Cuentas vinculadas dentro de un canal que en Discord no pueden ver.
 // Si encuentra algo, lo publica en el canal de admins (AVISO_CANAL, "admilinks"
 // por defecto). Si esta todo bien no publica nada. Lo ejecuta haven-auditoria.timer.
@@ -25,6 +28,8 @@ const CANAL = process.env.AVISO_CANAL || 'admilinks';
 const PRUEBA = process.env.AUDITORIA_PRUEBA === '1';
 const SECO = process.env.AUDITORIA_SECO === '1';
 const VIEW = 1n << 10n, ADMINISTRATOR = 1n << 3n;
+const OPEN_UNLINKED = String(process.env.PUENTE_SIN_VINCULAR_VEN || '').trim().toLowerCase() === 'publicos';
+const EVERYONE = { user: { id: '0' }, roles: [] };
 const THREAD_TYPES = new Set([10, 11, 12]);
 const token = (db.prepare("SELECT value FROM server_settings WHERE key = 'ferry_bot_token'").get() || {}).value;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -65,24 +70,35 @@ async function main() {
   // 1. Canales de Discord publicos en Haven
   for (const c of havenChannels) if (!c.is_private) problems.push(`#${c.name} es público en Haven (debería ser privado)`);
 
+  // Lo que hay en Discord: el servidor, sus roles y sus canales
+  let guild = null, roles = null, info = null;
+  const any = havenChannels[0];
+  if (any) {
+    const first = await get(`/channels/${any.d}`);
+    guild = first && await get(`/guilds/${first.guild_id}`);
+    const channels = guild && await get(`/guilds/${guild.id}/channels`);
+    if (!guild || !Array.isArray(channels)) throw new Error('no pude leer el servidor de Discord');
+    roles = new Map((guild.roles || []).map(r => [r.id, BigInt(r.permissions || '0')]));
+    info = new Map(channels.map(c => [c.id, c]));
+  }
+  // Canal que @everyone puede ver en Discord (los hilos, por el canal donde estan)
+  const everyoneSees = (d) => {
+    let ch = info && info.get(d);
+    if (ch && THREAD_TYPES.has(ch.type) && ch.parent_id) ch = info.get(ch.parent_id);
+    return !!(ch && guild && canView(EVERYONE, ch, guild, roles));
+  };
+
   // 2. Cuentas sin vincular dentro de canales de Discord
   const ghost = (db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get() || {}).id || -1;
-  const unlinked = db.prepare(`SELECT c.name canal, u.username, (pa.haven_user_id IS NULL) a_mano FROM channel_members cm
+  const unlinked = db.prepare(`SELECT c.name canal, c.discord_channel_id d, u.username, (pa.haven_user_id IS NULL) a_mano FROM channel_members cm
     JOIN channels c ON c.id = cm.channel_id JOIN users u ON u.id = cm.user_id
     LEFT JOIN puente_vinculos v ON v.haven_user_id = u.id
     LEFT JOIN puente_accesos pa ON pa.haven_user_id = u.id AND pa.channel_id = c.id
     WHERE c.discord_channel_id IS NOT NULL AND u.is_admin = 0 AND u.id != ? AND v.haven_user_id IS NULL`).all(ghost);
-  for (const r of unlinked) problems.push(`${r.username} está en #${r.canal} sin tener la cuenta de Discord vinculada${r.a_mano ? ' (agregado a mano)' : ''}`);
+  for (const r of unlinked) if (!(OPEN_UNLINKED && everyoneSees(r.d))) problems.push(`${r.username} está en #${r.canal} sin tener la cuenta de Discord vinculada${r.a_mano ? ' (agregado a mano)' : ''}`);
 
   // 3. Cuentas vinculadas en canales que Discord no les deja ver
-  const any = havenChannels[0];
-  if (any) {
-    const first = await get(`/channels/${any.d}`);
-    const guild = first && await get(`/guilds/${first.guild_id}`);
-    const channels = guild && await get(`/guilds/${guild.id}/channels`);
-    if (!guild || !Array.isArray(channels)) throw new Error('no pude leer el servidor de Discord');
-    const roles = new Map((guild.roles || []).map(r => [r.id, BigInt(r.permissions || '0')]));
-    const info = new Map(channels.map(c => [c.id, c]));
+  if (guild) {
     const members = db.prepare(`SELECT v.discord_user_id, u.id, u.username, u.is_admin FROM puente_vinculos v JOIN users u ON u.id = v.haven_user_id`).all();
     const inChannel = db.prepare('SELECT c.discord_channel_id d, c.name, (pa.haven_user_id IS NULL) a_mano FROM channel_members cm JOIN channels c ON c.id = cm.channel_id LEFT JOIN puente_accesos pa ON pa.haven_user_id = cm.user_id AND pa.channel_id = c.id WHERE cm.user_id = ? AND c.discord_channel_id IS NOT NULL');
     for (const m of members) {
