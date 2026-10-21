@@ -12,7 +12,7 @@
 //  - Resumen: los lunes a las 10, de la semana anterior, en el canal de Discord
 //    PUENTE_RESUMEN_CANAL ("que-paso"); llega a Haven como cualquier mensaje.
 
-let db, api, log, warn, getGuildId, appName, community, publicUrl, postInHaven, locked;
+let db, api, apiFiles, log, warn, getGuildId, appName, community, publicUrl, postInHaven, locked;
 const ZONE_H = Number(process.env.PUENTE_ZONA_HORAS || -3);   // Argentina
 const SUMMARY_CHANNEL = String(process.env.PUENTE_RESUMEN_CANAL || 'que-paso');
 const SUMMARY_DAY = 1, SUMMARY_HOUR = 10;                      // lunes 10:00
@@ -21,7 +21,7 @@ const CACHE_MS = 10 * 60 * 1000;
 const cache = new Map();
 
 function setup(ctx) {
-  ({ db, api, log, warn, getGuildId, appName, community, publicUrl, postInHaven } = ctx);
+  ({ db, api, apiFiles, log, warn, getGuildId, appName, community, publicUrl, postInHaven } = ctx);
   locked = ctx.lockedChannelIds || (() => new Set());
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_dias (
@@ -460,11 +460,46 @@ function memoryPick(nowMs) {
   const m = best.m, c = channels.get(m.channel_id);
   // El canal de un hilo es su canal padre en la app
   const base = (publicUrl || '').replace(/\/+$/, '');
+  const media = mediaOf(m.content);
+  // Con las imagenes adjuntas, sin el 🖼️ que las reemplazaba en el texto
+  const texto = media.files.length || media.links.length
+    ? excerpt(String(m.content || '').replace(MEDIA_RE, ' ').replace(EXT_IMG_RE, ' '), 300) : excerpt(m.content, 300);
   return {
     id: m.id, years: best.years, n: best.n, canal: c, nombre: nameOf(m) || 'Alguien',
-    texto: excerpt(m.content, 300), fecha: m.created_at,
+    texto, media, fecha: m.created_at,
     url: `${base}/app?channel=${encodeURIComponent(c.code)}&message=${m.id}`,
   };
+}
+
+// Las fotos, GIFs y videos del mensaje original, para que el recuerdo los muestre
+// (sin ellos perdia la gracia): los subidos a la app van adjuntos (asi se ven
+// igual en Discord y en la app, y los marcados como spoiler siguen tapados); los
+// de afuera (GIPHY, Tenor, una imagen de otra pagina) como enlace, que Discord y
+// la app muestran como imagen. Hasta 4 y unos 9 MB entre todos.
+const fsMedia = require('fs'), pathMedia = require('path');
+const MEDIA_RE = /(?:!\[[^\]]*\]\()?((?:spoiler-img:)?\/uploads\/[^\s)|]+?\.(?:png|jpe?g|gif|webp|mp4|webm|mov))(?:\|[^)\s]*)?\)?/gi;
+const EXT_IMG_RE = /https?:\/\/(?:[^\s<>]*(?:giphy\.com|tenor\.com)[^\s<>]*|[^\s<>]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s<>]*)?)/gi;
+const MEDIA_MAX = 4, MEDIA_BYTES = 9 * 1024 * 1024;
+function mediaOf(content) {
+  const files = [], links = [];
+  let total = 0;
+  for (const m of String(content || '').matchAll(MEDIA_RE)) {
+    if (files.length + links.length >= MEDIA_MAX) break;
+    const spoiler = m[1].startsWith('spoiler-img:');
+    const rel = m[1].replace(/^spoiler-img:/, '').replace(/^\/uploads\//, '');
+    if (rel.includes('..')) continue;
+    const file = pathMedia.join('/data/uploads', rel);
+    let size = 0;
+    try { size = fsMedia.statSync(file).size; } catch { continue; }
+    if (total + size > MEDIA_BYTES) { if (publicUrl) links.push(publicUrl.replace(/\/+$/, '') + '/uploads/' + rel); continue; }
+    total += size;
+    files.push({ file, name: (spoiler ? 'SPOILER_' : '') + pathMedia.basename(rel) });
+  }
+  for (const m of String(content || '').matchAll(EXT_IMG_RE)) {
+    if (files.length + links.length >= MEDIA_MAX) break;
+    if (!links.includes(m[0])) links.push(m[0]);
+  }
+  return { files, links };
 }
 
 // :nombre: de Haven -> el emoji de Discord (<:nombre:id>) si vino de Discord, para que alla se vea la imagen
@@ -483,6 +518,8 @@ function memoryText(r) {
     '',
     `**${r.nombre}:**`,
     ...toDiscordEmojis(r.texto).split('\n').map(l => '> ' + l),
+    '',
+    ...(r.media && r.media.links.length ? ['', ...r.media.links] : []),
     '',
     `⭐ ${r.n} reacciones · 💬 Mirá la conversación completa en ${appName()}: <${r.url}>`,
   ];
@@ -504,7 +541,17 @@ async function maybePostMemory(force) {
     if (!r) { db.prepare('INSERT OR IGNORE INTO puente_recuerdos (dia, message_id, at) VALUES (?, NULL, ?)').run(day, now); return; }
     const channelId = await summaryChannelId();
     if (!channelId) { warn(`logros: no hay un canal #${SUMMARY_CHANNEL} en Discord: el recuerdo no se publica`); return; }
-    const sent = await api('POST', `/channels/${channelId}/messages`, { content: memoryText(r), allowed_mentions: { parse: [] }, flags: 4 });
+    // Sin "flags: 4" (sin vistas previas) cuando lleva imagenes de afuera: asi Discord las muestra.
+    // El enlace a la app va entre < >, que no arma vista previa.
+    const payload = { content: memoryText(r), allowed_mentions: { parse: [] } };
+    if (!r.media.links.length) payload.flags = 4;
+    let files = [];
+    for (const f of r.media.files) { try { files.push({ data: fsMedia.readFileSync(f.file), name: f.name }); } catch { /* ya no esta */ } }
+    let sent = files.length && apiFiles ? await apiFiles('POST', `/channels/${channelId}/messages`, payload, files) : await api('POST', `/channels/${channelId}/messages`, payload);
+    if (files.length && (!sent || sent.__error)) {
+      warn('logros: no pude adjuntar las imagenes del recuerdo, va sin ellas:', sent && sent.__error);
+      sent = await api('POST', `/channels/${channelId}/messages`, payload);
+    }
     if (!sent || sent.__error) { warn('logros: Discord no dejo publicar el recuerdo:', sent && sent.__error); return; }
     db.prepare('INSERT OR REPLACE INTO puente_recuerdos (dia, message_id, discord_message_id, at) VALUES (?, ?, ?, ?)').run(day, r.id, sent.id, now);
     try { await postInHaven(sent); } catch (err) { warn('logros: recuerdo en Haven:', err.message); }

@@ -130,7 +130,7 @@ function start(deps) {
   const community = () => String(process.env.PUENTE_COMUNIDAD || '').replace(/[^\p{L}\p{N} ._!?-]/gu, '').trim().slice(0, 40) || guildName || appName();
   avisos.setup({ db, io, log, warn });
   identidad.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
-  logros.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
+  logros.setup({ db, api: (m, e, b) => api(m, e, b), apiFiles: (m, e, b, f) => apiFiles(m, e, b, f), log, warn, getGuildId: () => guildId, appName, community, publicUrl,
     lockedChannelIds: () => accesos.lockedChannelIds(), postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   vincular.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, publicUrl,
     onLinked: async discordUserId => {
