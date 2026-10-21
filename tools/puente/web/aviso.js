@@ -5874,8 +5874,15 @@ function sheetDrag(sheet, opts) {
     const names = popup.querySelector('.profile-popup-names');
     if (!names) return;
     popup.dataset.puenteMedallas = String(profile.id);
-    const items = (data && data.medallas || []).slice();
-    if (data && data.racha) items.push({ emoji: '🔥', nombre: data.racha + (data.racha === 1 ? ' día' : ' días'), detalle: `Racha: ${data.racha} días seguidos escribiendo en CV Chat` });
+    let items = (data && data.medallas || []).slice();
+    if (data && data.racha) {
+      // Con la racha encendida, una sola: "🔥 9 días" (la medalla de racha va en el detalle)
+      const isStreak = m => /^racha/.test(m.id || '') || /^Racha de /.test(m.nombre || '');
+      const medal = items.find(isStreak);
+      items = items.filter(m => !isStreak(m));
+      items.push({ emoji: '🔥', nombre: data.racha + (data.racha === 1 ? ' día' : ' días'),
+        detalle: `Racha: ${data.racha} días seguidos escribiendo en CV Chat` + (medal ? ` · Medalla: ${medal.nombre}` : '') });
+    }
     if (items.length) {
       const row = document.createElement('div');
       row.className = 'puente-medallas';
