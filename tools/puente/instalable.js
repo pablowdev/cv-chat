@@ -130,6 +130,10 @@ function manifest(db, base) {
 // icono de la pestana iguales a los de la app instalada.
 function pageHead(db, html) {
   if (!title()) return html;
+  // Los textos fijos de la pagina con el nombre de la app (no adentro de los scripts)
+  html = html.split(/(<script\b[\s\S]*?<\/script>)/i).map(part => (/^<script\b/i.test(part) ? part
+    : part.replace(/>([^<>]*\bHaven\b[^<>]*)</g, (m, t) => (KEEP_HAVEN.test(t) ? m : '>' + t.replace(/\bHaven\b/g, title()) + '<'))
+      .replace(/(placeholder|title|aria-label)="([^"]*\bHaven\b[^"]*)"/g, (m, a, t) => (KEEP_HAVEN.test(t) ? m : `${a}="${t.replace(/\bHaven\b/g, title())}"`)))).join('');
   html = html.replace(/<meta name="theme-color" content="[^"]*">/, `<meta name="theme-color" content="${BG_HEX}">`);
   // En /app: los carteles de Haven que recomiendan su app de Android y la de
   // PC se reemplazan por el propio (web/instalar.js). Sin el id, la cola de
@@ -147,11 +151,41 @@ function pageHead(db, html) {
   return html;
 }
 
+// Los textos de Haven (sus traducciones, /locales/<idioma>.json) con el nombre de
+// la app en vez de "Haven" ("Bienvenido a CV Chat"...). Menos donde se habla de
+// Haven como proyecto: donaciones, creditos y el aviso de version nueva.
+const localeCache = new Map(); // archivo -> { mtime, body }
+const KEEP_HAVEN = /ko-fi|donaci|donation|generosidad|generosity|amnibro|\{\{remote\}\}|\{\{local\}\}/i;
+function rename(v, name) {
+  if (typeof v === 'string') return KEEP_HAVEN.test(v) ? v : v.replace(/\bHaven\b/g, name);
+  if (Array.isArray(v)) return v.map(x => rename(x, name));
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = rename(v[k], name); return o; }
+  return v;
+}
+function locale(file) {
+  const st = fs.statSync(file);
+  const hit = localeCache.get(file);
+  if (hit && hit.mtime === st.mtimeMs && hit.name === title()) return hit.body;
+  const body = Buffer.from(JSON.stringify(rename(JSON.parse(fs.readFileSync(file, 'utf8')), title())), 'utf8');
+  localeCache.set(file, { mtime: st.mtimeMs, name: title(), body });
+  return body;
+}
+
 // Devuelve true si atendio el pedido.
 function handle(db, req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return false;
   const p = req.url.split('?')[0];
   if (!title()) return false;
+  const lm = p.match(/^\/locales\/([a-z]{2}(?:-[A-Za-z]{2,4})?)\.json$/);
+  if (lm) {
+    const file = path.join('/app/public/locales', lm[1] + '.json');
+    if (!fs.existsSync(file)) return false;
+    let body;
+    try { body = locale(file); } catch { return false; } // si algo falla, el de Haven tal cual
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': body.length, 'Cache-Control': 'no-cache' });
+    res.end(req.method === 'HEAD' ? undefined : body);
+    return true;
+  }
   if (p === '/manifest.webmanifest') {
     let base = {};
     try { base = JSON.parse(fs.readFileSync('/app/public/manifest.webmanifest', 'utf8')); } catch { /* se arma uno minimo */ }

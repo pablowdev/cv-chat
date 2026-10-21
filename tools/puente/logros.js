@@ -418,7 +418,7 @@ function summaryText(s) {
   const base = (publicUrl || '').replace(/\/+$/, '');
   if (base) {
     lines.push('');
-    lines.push(`👉 ¿Todavía no estás en ${appName()}? Entrá con tu Discord en un clic: <${base}>`);
+    lines.push(`👉 ¿Todavía no estás en ${appName()}? Entrá y creá tu cuenta en un clic: <${base}>`);
     lines.push(`📖 Mirá tu historia en ${community()}: <${base}/puente/historia>`);
   }
   let text = lines.join('\n');

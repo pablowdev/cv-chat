@@ -85,7 +85,7 @@
     main.appendChild(top);
 
     if (!d.vinculado) {
-      const c = card('Te falta tu historia de Discord');
+      const c = card('¿Ya escribías en Discord?');
       c.classList.add('aviso');
       c.appendChild(el('p', null, `Vinculá tu cuenta de Discord y acá aparecen todos tus mensajes de ${d.comunidad}, desde el primero.`));
       const a = el('a', 'boton', 'Vincular Discord'); a.href = '/puente/vincular'; c.appendChild(a);

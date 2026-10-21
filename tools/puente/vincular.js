@@ -85,7 +85,7 @@ function hookHttp() {
   http.Server.prototype.emit = function (event, req, res, ...rest) {
     if (event === 'request' && req && typeof req.url === 'string') {
       const url = req.url;
-      if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg')) {
+      if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg') || url.startsWith('/locales/')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
       // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
@@ -827,7 +827,7 @@ function shareTags(html) {
   const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
   const title = appName();
   const server = String((row && row.value) || '').trim();
-  const desc = server ? `El chat de ${server}. Entrá, creá tu cuenta y vinculá tu Discord.` : 'Entrá, creá tu cuenta y vinculá tu Discord.';
+  const desc = server ? `El chat de ${server}. Entrá y creá tu cuenta.` : 'Entrá y creá tu cuenta.';
   const image = publicUrl ? `${publicUrl}/puente/logo-carga.png` : '/puente/logo-carga.png';
   const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +
     `<meta property="og:site_name" content="${esc(server || title)}"><meta property="og:description" content="${esc(desc)}">` +

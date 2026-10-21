@@ -3053,7 +3053,7 @@ function sheetDrag(sheet, opts) {
     const input = document.getElementById('rename-input');
     if (input) input.maxLength = MAX;
     const desc = document.querySelector('[data-i18n="modals.edit_profile.display_name_desc"]');
-    if (desc) desc.textContent = 'Como en Discord: cualquier nombre de hasta 32 caracteres.';
+    if (desc) desc.textContent = 'Cualquier nombre de hasta 32 caracteres.';
   }
   let tries = 0;
   (function wait() {
@@ -6420,7 +6420,7 @@ function sheetDrag(sheet, opts) {
     const icon = document.createElement('div'); icon.className = 'pn-icono'; icon.textContent = '🔔';
     const txt = document.createElement('div'); txt.className = 'pn-texto';
     const t1 = document.createElement('b'); t1.textContent = 'Activá las notificaciones';
-    const t2 = document.createElement('span'); t2.textContent = 'Enterate cuando te mencionan o te responden, también desde Discord.';
+    const t2 = document.createElement('span'); t2.textContent = 'Enterate cuando te mencionan o te responden.';
     txt.append(t1, t2);
     const btns = document.createElement('div'); btns.className = 'pn-botones';
     const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'pn-si'; yes.textContent = 'Activar';
@@ -6495,7 +6495,7 @@ function sheetDrag(sheet, opts) {
     box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
     const x = el('button', 'pi-cerrar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.addEventListener('click', close);
     box.append(x, el('div', 'pi-icono', '🤝'), el('h2', 'pi-titulo', 'Invitá a alguien a __PUENTE_APP__'));
-    box.appendChild(el('p', 'pi-texto', 'Mandale tu enlace. Cuando se cree la cuenta y vincule su Discord, cuenta para tu medalla 🤝 Reclutador (sube con 3, 10 y 25), y los que más traen salen cada semana en #que-paso.'));
+    box.appendChild(el('p', 'pi-texto', 'Mandale tu enlace. Cuando se cree la cuenta y confirme su email, cuenta para tu medalla 🤝 Reclutador (sube con 3, 10 y 25), y los que más traen salen cada semana en #que-paso.'));
     const row = el('div', 'pi-fila');
     const input = el('input', 'pi-enlace'); input.readOnly = true; input.value = 'Cargando…';
     const copy = el('button', 'pi-copiar', 'Copiar'); copy.type = 'button';
@@ -6512,9 +6512,9 @@ function sheetDrag(sheet, opts) {
     if (!d) { input.value = 'No se pudo cargar. Probá de nuevo.'; return; }
     input.value = d.enlace;
     stats.textContent = d.invitados
-      ? `Ya trajiste ${d.invitados === 1 ? 'a 1 persona' : `a ${d.invitados} personas`}` + (d.pendientes ? ` (y ${d.pendientes} más que todavía no vincularon su Discord).` : '.')
-      : d.pendientes ? `${d.pendientes === 1 ? 'Una persona entró' : `${d.pendientes} personas entraron`} con tu enlace y todavía no vinculó su Discord.` : 'Todavía no trajiste a nadie: ¡estrená tu enlace!';
-    const text = `Pasate a __PUENTE_APP__, entrás con tu Discord en un clic: ${d.enlace}`;
+      ? `Ya trajiste ${d.invitados === 1 ? 'a 1 persona' : `a ${d.invitados} personas`}` + (d.pendientes ? ` (y ${d.pendientes} más que todavía no confirmaron su cuenta).` : '.')
+      : d.pendientes ? `${d.pendientes === 1 ? 'Una persona entró' : `${d.pendientes} personas entraron`} con tu enlace y todavía no confirmó su cuenta.` : 'Todavía no trajiste a nadie: ¡estrená tu enlace!';
+    const text = `Sumate a __PUENTE_APP__, el chat de la comunidad: ${d.enlace}`;
     copy.addEventListener('click', () => {
       const done = () => { copy.textContent = '¡Copiado!'; setTimeout(() => { copy.textContent = 'Copiar'; }, 1800); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(d.enlace).then(done, () => { input.select(); document.execCommand('copy'); done(); });
@@ -6691,7 +6691,7 @@ function sheetDrag(sheet, opts) {
     // Nombre
     const nameGroup = $('rename-input')?.closest('.form-group');
     box.querySelector('.modal-desc')?.remove();
-    let s = section('Nombre para mostrar', 'Cualquier nombre de hasta 32 caracteres, como en Discord.');
+    let s = section('Nombre para mostrar', 'Cualquier nombre de hasta 32 caracteres.');
     if (nameGroup) { nameGroup.querySelector('label')?.remove(); s.appendChild(nameGroup); }
     left.appendChild(s);
 

@@ -1,7 +1,7 @@
 // "Invitá a alguien": cada cuenta tiene su enlace (/?invita=<usuario>). Quien
 // entra por ahi y se crea la cuenta queda anotado como invitado de esa persona
-// (tabla puente_invitaciones); cuenta recien cuando vincula su Discord, asi
-// nadie suma con cuentas inventadas. Con eso salen la medalla 🤝 Reclutador
+// (tabla puente_invitaciones); cuenta recien cuando vincula su Discord o
+// confirma su email, asi nadie suma con cuentas inventadas. Con eso salen la medalla 🤝 Reclutador
 // (logros.js) y los reclutadores de la semana en el resumen.
 //
 //  GET  /puente/api/invitacion/quien?u=<usuario>  nombre y foto de quien invita (para el inicio)
@@ -23,18 +23,23 @@ function setup(ctx) {
 const userByName = (u) => db.prepare("SELECT id, username, COALESCE(display_name, username) nombre, avatar FROM users WHERE username = ? COLLATE NOCASE AND username != 'discord-historial'").get(String(u || '').slice(0, 40));
 const linkFor = (username) => `${String(publicUrl || '').replace(/\/+$/, '')}/?invita=${encodeURIComponent(username)}`;
 
-// Cuantas personas trajo (las que ya vincularon su Discord) y cuantas faltan vincular
+// Un invitado vale cuando vinculo su Discord o confirmo su email
+const VALID = `(i.invitado_id IN (SELECT haven_user_id FROM puente_vinculos)
+  OR i.invitado_id IN (SELECT haven_user_id FROM puente_emails WHERE confirmado = 1))`;
+
+// Cuantas personas trajo (las que ya valen) y cuantas faltan
 function count(havenUserId) {
-  const r = db.prepare(`SELECT COUNT(*) total, SUM(CASE WHEN v.haven_user_id IS NOT NULL THEN 1 ELSE 0 END) ok
-    FROM puente_invitaciones i LEFT JOIN puente_vinculos v ON v.haven_user_id = i.invitado_id WHERE i.invita_id = ?`).get(havenUserId);
+  const r = db.prepare(`SELECT COUNT(*) total, SUM(CASE WHEN ${VALID} THEN 1 ELSE 0 END) ok
+    FROM puente_invitaciones i WHERE i.invita_id = ?`).get(havenUserId);
   return { invitados: r.ok || 0, pendientes: (r.total || 0) - (r.ok || 0) };
 }
 
-// Los que trajeron gente en una semana (por cuando vinculo el invitado)
+// Los que trajeron gente en una semana (por cuando entro el invitado, si ya vale)
 function weekTop(fromSql, toSql, n = 3) {
   return db.prepare(`SELECT i.invita_id id, COALESCE(u.display_name, u.username) nombre, COUNT(*) n
-    FROM puente_invitaciones i JOIN puente_vinculos v ON v.haven_user_id = i.invitado_id JOIN users u ON u.id = i.invita_id
-    WHERE v.linked_at >= ? AND v.linked_at < ? GROUP BY i.invita_id ORDER BY n DESC LIMIT ?`).all(fromSql, toSql, n);
+    FROM puente_invitaciones i JOIN users u ON u.id = i.invita_id
+    WHERE datetime(i.at / 1000, 'unixepoch') >= ? AND datetime(i.at / 1000, 'unixepoch') < ? AND ${VALID}
+    GROUP BY i.invita_id ORDER BY n DESC LIMIT ?`).all(fromSql, toSql, n);
 }
 
 async function handle(req, res, p, u, h) {
