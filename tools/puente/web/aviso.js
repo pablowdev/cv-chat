@@ -6978,6 +6978,8 @@ function sheetDrag(sheet, opts) {
   }
 
   // ── El icono en la columna de la izquierda y el numerito de pendientes ──
+  const NEW_KEY = 'puente_mercado_visto', NEW_UNTIL = Date.UTC(2026, 10, 22); // hasta el 21 de noviembre
+  const isNew = () => { if (Date.now() > NEW_UNTIL) return false; try { return !localStorage.getItem(NEW_KEY); } catch { return true; } };
   function setBadge(n) {
     for (const b of document.querySelectorAll('.puente-mk-btn .puente-rail-badge')) { b.textContent = n ? String(n) : ''; b.style.display = n ? '' : 'none'; }
   }
@@ -6986,7 +6988,14 @@ function sheetDrag(sheet, opts) {
       const b = el('button', cls + ' puente-mk-btn'); b.type = 'button'; b.title = 'Marketplace'; b.setAttribute('aria-label', 'Marketplace');
       b.innerHTML = svg(I.tienda, 24);
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
-      b.addEventListener('click', (e) => { e.stopPropagation(); if (page) close(); else { stack = []; go('lista'); } });
+      // "NUEVO!" para que se vea, hasta que la persona entra por primera vez (o pasa un mes)
+      if (isNew()) b.appendChild(el('span', 'puente-mk-nuevo', 'NUEVO!'));
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        try { localStorage.setItem(NEW_KEY, '1'); } catch { /* sin almacenamiento */ }
+        document.querySelectorAll('.puente-mk-nuevo').forEach(x => x.remove());
+        if (page) close(); else { stack = []; go('lista'); }
+      });
       return b;
     };
     const srv = document.querySelector('#puente-rail .puente-rail-server');

@@ -2357,3 +2357,6 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-mk .mk-caja { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; margin-bottom: 0.75rem; border-radius: 0.875rem; background: #2e2d32; }
 .puente-mk .mk-texto { color: #dbdee1; line-height: 1.4; margin: 0 0 0.75rem; }
 .puente-mk .mk-caja .mk-texto, .puente-mk .mk-caja .mk-acciones { margin-bottom: 0; }
+
+/* "NUEVO!" en el icono del Marketplace (aviso.js) */
+.puente-mk-btn .puente-mk-nuevo { position: absolute; top: -0.4375rem; right: -0.75rem; z-index: 2; padding: 0.0625rem 0.25rem; border-radius: 999px; background: #f0b232; color: #1a1a1e; font-size: 0.5rem; font-weight: 800; line-height: 1.35; letter-spacing: 0; white-space: nowrap; pointer-events: none; box-shadow: 0 0 0 2px #121214; }
