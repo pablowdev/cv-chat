@@ -2390,6 +2390,21 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-btn.jg-envido-btn { background: #3b2f0b; color: #f0b232; }
 .puente-jg .jg-ancho { width: 100%; }
 .puente-jg .jg-hero { text-align: center; padding: 1.25rem 1rem; margin-bottom: 0.5rem; border-radius: 1rem; background: #1f4d36; }
+/* Inicio de Juegos en pantallas anchas: el banner y los botones a la izquierda, las partidas,
+   el record y el ranking a la derecha, todo a la vista sin bajar */
+@media (min-width: 1100px) {
+  .puente-jg .jg-cuerpo.jg-inicio { display: grid; grid-template-columns: minmax(0, 38rem) minmax(0, 30rem); justify-content: center; align-items: start; gap: 0 1.75rem; max-width: none; }
+  .puente-jg .jg-cuerpo.jg-inicio > .jg-hero { position: sticky; top: 0; margin-bottom: 0; }
+  .puente-jg .jg-cuerpo.jg-inicio > :not(.jg-hero) { min-width: 0; }
+  .puente-jg .jg-cuerpo.jg-inicio > * { max-width: none; margin-left: 0; margin-right: 0; }
+  .puente-jg .jg-cuerpo.jg-inicio > :not(.jg-hero) > .jg-sub:first-child { margin-top: 0; }
+  .puente-jg .jg-cuerpo.jg-inicio > .jg-hero { grid-row: span 2; }
+  .puente-jg .jg-cuerpo.jg-inicio > .jg-rankings { grid-column: 2; }
+}
+@media (min-width: 1560px) {
+  .puente-jg .jg-cuerpo.jg-inicio { grid-template-columns: minmax(0, 38rem) minmax(0, 26rem) minmax(0, 26rem); }
+  .puente-jg .jg-cuerpo.jg-inicio > .jg-rankings { grid-column: 3; grid-row: 1 / span 2; }
+}
 /* Banner propio del Truco (aviso.js): ocupa el ancho del recuadro, arriba */
 .puente-jg .jg-hero.jg-con-banner { padding: 0 0 1rem; overflow: hidden; background: #0d1410; }
 .puente-jg .jg-banner { display: block; width: 100%; height: auto; margin-bottom: 0.75rem; }
@@ -2432,7 +2447,14 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-error { color: #f2777a; font-size: 0.875rem; }
 .puente-jg .jg-error:empty { display: none; }
 /* La mesa */
-.puente-jg .jg-mesa { max-width: 32rem; margin: 0 auto; padding: 0.75rem 0.75rem calc(1rem + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 0.625rem; }
+/* Tamanio de las cartas: tan grandes como entren, segun el ancho y el alto de la pantalla,
+   para ver la mesa entera sin bajar */
+.puente-jg {
+  --jg-mano: clamp(4.5rem, min(27vw, 14.5vh), 10rem);
+  --jg-jugada: clamp(3.5rem, min(18vw, 10vh), 7rem);
+  --jg-chica: clamp(2.25rem, min(11vw, 6vh), 4rem);
+}
+.puente-jg .jg-mesa { max-width: 46rem; margin: 0 auto; padding: 0.75rem 0.75rem calc(1rem + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 0.625rem; }
 .puente-jg .jg-espera, .puente-jg .jg-fin { text-align: center; padding: 2rem 1rem; border-radius: 1rem; background: #1f4d36; }
 .puente-jg .jg-fin .jg-log { margin-top: 1rem; text-align: left; font-size: 0.8125rem; color: #c9e6d4; }
 .puente-jg .jg-marcador { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.875rem; background: #2e2d32; }
@@ -2452,7 +2474,7 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 }
 .puente-jg .jg-baza { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.375rem; padding: 0.25rem 0; border-radius: 0.75rem; }
 .puente-jg .jg-baza.actual { background: rgba(255,255,255,0.06); }
-.puente-jg .jg-hueco { width: 3.75rem; height: 5.5rem; border-radius: 0.5rem; border: 2px dashed rgba(255,255,255,0.18); }
+.puente-jg .jg-hueco { width: var(--jg-jugada); height: calc(var(--jg-jugada) * 1.47); border-radius: 0.5rem; border: 2px dashed rgba(255,255,255,0.18); }
 .puente-jg .jg-bres { font-size: 0.6875rem; font-weight: 800; color: #c9e6d4; text-transform: uppercase; }
 .puente-jg .jg-baza.gano-yo .jg-bres { color: #fff; }
 .puente-jg .jg-status { text-align: center; min-height: 3rem; }
@@ -2475,11 +2497,11 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-grito { padding: 0.5rem 0.75rem; border: 0; border-radius: 999px; background: #36353b; color: #f2f3f5; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
 /* Las cartas (dibujo simple: numero y palo) */
 .puente-jg .jg-carta {
-  position: relative; flex: 0 0 auto; width: 5.25rem; height: 7.75rem; border-radius: 0.625rem; background: #fbfaf6; color: #222;
+  position: relative; flex: 0 0 auto; width: var(--jg-mano); height: calc(var(--jg-mano) * 1.47); border-radius: 0.625rem; background: #fbfaf6; color: #222;
   box-shadow: 0 2px 6px rgba(0,0,0,0.35); transition: transform 0.15s ease; display: flex; align-items: center; justify-content: center;
 }
-.puente-jg .jg-carta.jugada { width: 3.75rem; height: 5.5rem; }
-.puente-jg .jg-carta.chica { width: 2.25rem; height: 3.25rem; }
+.puente-jg .jg-carta.jugada { width: var(--jg-jugada); height: calc(var(--jg-jugada) * 1.47); }
+.puente-jg .jg-carta.chica { width: var(--jg-chica); height: calc(var(--jg-chica) * 1.47); }
 .puente-jg .jg-carta.dorso { background: url('/puente/cartas/dorso.webp?v=2') center / cover no-repeat, repeating-linear-gradient(45deg, #9b2244 0 6px, #b8325a 6px 12px); box-shadow: inset 0 0 0 3px #fbfaf6, 0 2px 4px rgba(0,0,0,0.35); }
 .puente-jg .jg-num { position: absolute; top: 0.25rem; left: 0.375rem; font-size: 1.25rem; font-weight: 800; line-height: 1; font-family: Georgia, 'Times New Roman', serif; }
 .puente-jg .jg-num.abajo { top: auto; left: auto; bottom: 0.25rem; right: 0.375rem; transform: rotate(180deg); }
@@ -2491,7 +2513,7 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .palo-basto { color: #2f7d32; box-shadow: inset 0 0 0 3px #2f7d32, 0 2px 6px rgba(0,0,0,0.35); }
 .puente-jg .palo-oro { color: #b07d00; box-shadow: inset 0 0 0 3px #d9a400, 0 2px 6px rgba(0,0,0,0.35); }
 .puente-jg .palo-copa { color: #b3243a; box-shadow: inset 0 0 0 3px #b3243a, 0 2px 6px rgba(0,0,0,0.35); }
-@media (max-width: 380px) { .puente-jg .jg-carta { width: 4.5rem; height: 6.75rem; } }
+
 /* Cartas con dibujo (si el servidor tiene /puente/cartas/): la imagen ocupa la carta, dentro
    del borde del palo, y el numero con el palo en dos esquinas */
 .puente-jg .jg-carta.con-dibujo { overflow: hidden; }

@@ -7199,7 +7199,7 @@ function sheetDrag(sheet, opts) {
     if ((which || prefGame()) === 'funball') return fbInicio();
     page.appendChild(head('Juegos'));
     page.appendChild(gameTabs('truco'));
-    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero');
     hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
     // el banner de este servidor (/puente/cartas/banner.webp, no va al repositorio); si no esta, el de siempre
@@ -7244,8 +7244,11 @@ function sheetDrag(sheet, opts) {
     const st = el('div', 'jg-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    // los rankings aparte: en pantallas anchas van en su propia columna
+    const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
       const list = d.ranking[k];
+      const box = rk;
       box.appendChild(el('div', 'jg-sub', title));
       if (!list.length) { box.appendChild(el('div', 'jg-vacio', 'Todavía nadie ganó una partida contra otra persona.')); continue; }
       const l = el('div', 'jg-lista');
@@ -7813,7 +7816,7 @@ function sheetDrag(sheet, opts) {
   async function fbInicio() {
     page.appendChild(head('Juegos'));
     page.appendChild(gameTabs('funball'));
-    const b = el('div', 'jg-cuerpo fb-ui'); page.appendChild(b);
+    const b = el('div', 'jg-cuerpo fb-ui jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero fb-hero');
     const mini = el('div', 'fb-hero-dibujo'); mini.innerHTML = '<svg viewBox="0 0 120 56" aria-hidden="true"><defs><radialGradient id="fbh-r" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffb3b0"/><stop offset=".3" stop-color="#ff4d4f"/><stop offset="1" stop-color="#7a0b12"/></radialGradient><radialGradient id="fbh-v" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#c3ffd9"/><stop offset=".3" stop-color="#33d17a"/><stop offset="1" stop-color="#05502a"/></radialGradient></defs><ellipse cx="34" cy="48" rx="20" ry="6" fill="#4a52d0"/><ellipse cx="86" cy="48" rx="20" ry="6" fill="#4a52d0"/><circle cx="34" cy="30" r="17" fill="url(#fbh-r)"/><circle cx="86" cy="34" r="12" fill="url(#fbh-v)"/></svg>';
     // el logo de este servidor (web/funball/logo.webp); si no esta, el dibujo de siempre
@@ -7860,8 +7863,11 @@ function sheetDrag(sheet, opts) {
     const st = el('div', 'jg-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    // los rankings aparte: en pantallas anchas van en su propia columna
+    const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
       const list = d.ranking[k];
+      const box = rk;
       box.appendChild(el('div', 'jg-sub', title));
       if (!list.length) { box.appendChild(el('div', 'jg-vacio', 'Todavía nadie ganó una partida contra otra persona.')); continue; }
       const l = el('div', 'jg-lista');
