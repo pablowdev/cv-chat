@@ -7508,6 +7508,77 @@ function sheetDrag(sheet, opts) {
   ];
   // Perspectiva del original: columnas a la derecha, filas hacia arriba a la izquierda
   const FB_W = 500, FB_H = 440;
+  // Camara: el tablero se puede acercar y, acercado, sigue la jugada como en el original
+  const fbCam = { z: 1, cx: FB_W / 2, cy: FB_H / 2, movio: false };
+  try { fbCam.z = Math.min(3, Math.max(1, +localStorage.getItem('puente_fb_zoom') || 1)); } catch (e) {}
+  function fbVB() {
+    const w = FB_W / fbCam.z, h = FB_H / fbCam.z;
+    fbCam.cx = Math.min(FB_W - w / 2, Math.max(w / 2, fbCam.cx));
+    fbCam.cy = Math.min(FB_H - h / 2, Math.max(h / 2, fbCam.cy));
+    return `${(fbCam.cx - w / 2).toFixed(1)} ${(fbCam.cy - h / 2).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`;
+  }
+  function fbCamAplicar() {
+    const t = page && page.querySelector('.fb-tablero');
+    if (t) t.setAttribute('viewBox', fbVB());
+    const v = page && page.querySelector('.fb-visor');
+    if (v) v.classList.toggle('fb-cerca', fbCam.z > 1);
+  }
+  // px, py: el punto del tablero que queda quieto al acercar o alejar
+  function fbZoom(z, px, py) {
+    const z0 = fbCam.z;
+    z = Math.min(3, Math.max(1, z));
+    if (px == null) { px = fbCam.cx; py = fbCam.cy; }
+    fbCam.cx = px + (fbCam.cx - px) * z0 / z; fbCam.cy = py + (fbCam.cy - py) * z0 / z; fbCam.z = z;
+    try { localStorage.setItem('puente_fb_zoom', String(z)); } catch (e) {}
+    fbCamAplicar();
+  }
+  function fbVisor(board) {
+    const v = el('div', 'fb-visor' + (fbCam.z > 1 ? ' fb-cerca' : ''));
+    v.appendChild(board);
+    const bar = el('div', 'fb-zoom');
+    const boton = (t, titulo, fn) => { const b = el('button', 'fb-zoom-btn', t); b.type = 'button'; b.title = titulo; b.setAttribute('aria-label', titulo); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); bar.appendChild(b); };
+    boton('+', 'Acercar', () => fbZoom(fbCam.z * 1.5));
+    boton('−', 'Alejar', () => fbZoom(fbCam.z / 1.5));
+    boton('⤢', 'Ver todo el tablero', () => fbZoom(1));
+    v.appendChild(bar);
+    // arrastrar mueve el tablero acercado (o la pagina, si se ve entero); dos dedos acercan
+    const pts = new Map();
+    let pinza = null;
+    const aTablero = (cx, cy) => {
+      const t = v.querySelector('.fb-tablero'), r = t.getBoundingClientRect(), w = FB_W / fbCam.z, h = FB_H / fbCam.z;
+      return { x: fbCam.cx - w / 2 + (cx - r.left) / r.width * w, y: fbCam.cy - h / 2 + (cy - r.top) / r.height * h, k: w / r.width };
+    };
+    const scroller = () => { for (let n = v.parentElement; n; n = n.parentElement) { const st = getComputedStyle(n); if (/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight) return n; } return document.scrollingElement; };
+    v.addEventListener('pointerdown', (e) => { if (e.target.closest('.fb-zoom')) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, mov: false }); pinza = null; });
+    v.addEventListener('pointermove', (e) => {
+      const p = pts.get(e.pointerId);
+      if (!p) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        if (!pinza) pinza = { d, z: fbCam.z };
+        else { const t = aTablero(mx, my); fbZoom(pinza.z * d / Math.max(1, pinza.d), t.x, t.y); }
+        fbCam.movio = true;
+        return;
+      }
+      if (!p.mov && Math.abs(e.clientX - p.x0) + Math.abs(e.clientY - p.y0) < 7) return;
+      p.mov = true; fbCam.movio = true;
+      if (fbCam.z > 1) { const k = aTablero(0, 0).k; fbCam.cx -= dx * k; fbCam.cy -= dy * k; fbCamAplicar(); }
+      else if (e.pointerType === 'touch') { const sc = scroller(); if (sc) sc.scrollTop -= dy; }
+    });
+    const suelta = (e) => { pts.delete(e.pointerId); pinza = null; if (!pts.size) setTimeout(() => { fbCam.movio = false; }, 0); };
+    v.addEventListener('pointerup', suelta);
+    v.addEventListener('pointercancel', suelta);
+    v.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && fbCam.z === 1) return;
+      e.preventDefault();
+      const t = aTablero(e.clientX, e.clientY);
+      fbZoom(fbCam.z * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002)), t.x, t.y);
+    }, { passive: false });
+    return v;
+  }
   function fbXY(c, r, flip) {
     if (flip) { c = 7 - c; r = 7 - r; }
     return { x: 30 + 39 * c - 25 * r + 175, y: 30 + 378 - (3 * c + 51 * r) };
@@ -7571,7 +7642,7 @@ function sheetDrag(sheet, opts) {
   // Dibujos propios del servidor (tools/puente/web/funball/, no van al repositorio): una hoja
   // con las piezas y la piedra del piso. Si no estan, se dibuja todo con los graficos de abajo
   const FB_ARTE = '/puente/funball/';
-  const FB_PIEZAS = {"normal":[0,0,114,77,57,38],"chica":[116,0,46,36,22,18],"tobogan":[164,0,114,72,57,34],"bomba":[280,0,115,72,57,34],"jabon":[397,0,112,72,56,36],"tele":[511,0,116,73,58,34],"resorte":[0,79,101,78,50,44],"blindada":[103,79,116,76,58,38],"arania":[221,79,164,104,82,65],"rojaB":[387,79,154,136,77,124,70],"verdeB":[0,217,121,118,60,104,55]};
+  const FB_PIEZAS = {"normal":[0,0,114,77,57,38],"chica":[116,0,46,36,22,18],"tobogan":[164,0,114,72,57,34],"bomba":[280,0,115,72,57,34],"jabon":[397,0,112,72,56,36],"tele":[511,0,116,73,58,34],"resorte":[0,79,101,78,50,44],"blindada":[103,79,116,76,58,38],"arania":[221,79,164,104,82,65],"rojaB":[387,79,154,136,77,124,70],"verdeB":[0,217,121,118,60,104,55],"desague":[123,217,88,66,33,52],"canionR":[213,217,106,112,52,82],"canionG":[321,217,106,112,52,82]};
   const FB_HOJA = [640, 335];
   const FB_BASE_PIEZA = { 0: 'normal', 2: 'chica', 3: 'bomba', 4: 'blindada', 5: 'tele', 7: 'resorte', 8: 'tobogan', 9: 'jabon' };
   const FB_ESC = 0.33;
@@ -7582,12 +7653,12 @@ function sheetDrag(sheet, opts) {
     const i = new Image();
     i.onload = () => { fbArte = true; };
     i.onerror = () => { fbArte = false; if (page && fbMesa && fbMesa.s) fbDraw(fbMesa.s); };
-    i.src = FB_ARTE + 'piezas.webp';
+    i.src = FB_ARTE + 'piezas.webp?v=' + Object.keys(FB_PIEZAS).length;
   }
   function fbPieza(g, id, x, y, sc) {
     const [px, py, w, h, ax, ay] = FB_PIEZAS[id];
     const s = sv('svg', { x: x - ax * sc, y: y - ay * sc, width: w * sc, height: h * sc, viewBox: `${px} ${py} ${w} ${h}` }, g);
-    sv('image', { href: FB_ARTE + 'piezas.webp', width: FB_HOJA[0], height: FB_HOJA[1] }, s);
+    sv('image', { href: FB_ARTE + 'piezas.webp?v=' + Object.keys(FB_PIEZAS).length, width: FB_HOJA[0], height: FB_HOJA[1] }, s);
   }
   function fbBase(g, b, x, y) {
     fbProbarArte();
@@ -7604,7 +7675,8 @@ function sheetDrag(sheet, opts) {
       case 3: fbCuenco(g, x, y, 17, 7.5, 'url(#fb-oro)', 'url(#fb-oro-in)', '#5a2c00'); break; // bomba
       case 4: fbCuenco(g, x, y, 17, 7.5, 'url(#fb-plata)', 'url(#fb-plata-in)', '#3a3e45'); break; // blindada
       case 5: fbAnillo(g, x, y, 15, 6.8, 'url(#fb-oro)', 'url(#fb-turquesa)'); break; // teletransportador
-      case 6: // desague
+      case 6: // desague: el caño blanco del original
+        if (fbArte !== false) { sv('ellipse', { cx: x - 1, cy: y + 4, rx: 15, ry: 5, fill: 'url(#fb-sombra)' }, g); fbPieza(g, 'desague', x, y + 3, FB_ESC); break; }
         fbCuenco(g, x, y, 16, 7, 'url(#fb-acero)', '#050404', '#111214');
         sv('path', { d: `M${x - 7} ${y}h14M${x - 5} ${y - 2.2}h10M${x - 5} ${y + 2.4}h10`, stroke: '#8a909a', 'stroke-width': 1.1 }, g);
         break;
@@ -7642,6 +7714,12 @@ function sheetDrag(sheet, opts) {
   }
   // Canion cargado: cupula gris y el canion del color de la bola (alto: 0 a 1, para la animacion)
   function fbTorreta(g, k, x, y, alto = 1, tubo = 1) {
+    if (fbArte !== false) {
+      const a = Math.max(0.05, Math.min(1, alto) * (0.4 + 0.6 * tubo));
+      sv('ellipse', { cx: x - 2, cy: y + 4, rx: 18, ry: 6, fill: 'url(#fb-sombra)' }, g);
+      const w = sv('g', { transform: `translate(${x} ${y}) scale(${0.6 + 0.4 * Math.min(1, alto)} ${a}) translate(${-x} ${-y})` }, g);
+      return fbPieza(w, k === 'R' ? 'canionR' : 'canionG', x, y + 3, FB_ESC * 1.05);
+    }
     const col = k === 'R' ? ['#ff6a55', '#c8160f', '#6a0705'] : ['#6dffa8', '#159a48', '#04411c'];
     const id = 'fb-tubo-' + k;
     if (!g.ownerSVGElement || !g.ownerSVGElement.getElementById(id)) {
@@ -7900,7 +7978,7 @@ function sheetDrag(sheet, opts) {
   // Dibuja el tablero (celdas: 64 x [base, color, tamanio, arania]); marca la seleccion y los destinos
   function fbBoard(s, celdas, opts) {
     const flip = s.yo && s.yo.color === 'R';
-    const svgEl = sv('svg', { viewBox: `0 0 ${FB_W} ${FB_H}`, class: 'fb-tablero', role: 'img', 'aria-label': 'Tablero de Funball' });
+    const svgEl = sv('svg', { viewBox: fbVB(), class: 'fb-tablero', role: 'img', 'aria-label': 'Tablero de Funball' });
     fbDefs(svgEl);
     sv('rect', { width: FB_W, height: FB_H, filter: 'url(#fb-piedra)' }, svgEl);
     fbProbarArte();
@@ -7921,7 +7999,7 @@ function sheetDrag(sheet, opts) {
       if (sel && sel[0] === c && sel[1] === r) sv('rect', { x: p.x - 19, y: p.y - 34, width: 38, height: 44, rx: 6, class: 'fb-sel' }, g);
       if (v[1] && v[2] && v[0] === 11 && v[1] !== 'S') {
         fbTorreta(g, v[1], p.x, p.y);
-        const t = sv('text', { x: p.x, y: p.y - 3, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(v[2]);
+        const t = sv('text', { x: p.x, y: p.y + 4, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(v[2]);
       } else if (v[1] && v[2]) fbBall(g, v[1], v[2], p.x, p.y, true);
       if (v[3]) fbSpider(g, p.x, p.y);
       sv('rect', { x: p.x - 19, y: p.y - 30, width: 38, height: 40, fill: 'transparent', class: 'fb-toque' }, g);
@@ -7967,21 +8045,21 @@ function sheetDrag(sheet, opts) {
     };
     score.append(side(s.rival, false), el('div', 'jg-meta', 'bolas'), side(s.yo, true));
     b.appendChild(score);
-    if (s.estado === 'terminada') { b.appendChild(fbBoard(s, s.celdas)); return fbEnd(b, s); }
+    if (s.estado === 'terminada') { b.appendChild(fbVisor(fbBoard(s, s.celdas))); return fbEnd(b, s); }
     const sel = fbMesa.sel && s.teToca && s.jugadasPosibles && s.jugadasPosibles[fbMesa.sel.join(',')] ? fbMesa.sel : null;
     if (!sel) fbMesa.sel = null;
     const targets = sel ? s.jugadasPosibles[sel.join(',')] : [];
     const board = fbBoard(s, s.celdas, { sel, targets });
     board.addEventListener('click', (e) => {
       const g = e.target instanceof Element && e.target.closest('.fb-celda');
-      if (!g || !fbMesa || !fbMesa.s || !fbMesa.s.teToca || fbMesa.busy || fbMesa.anim) return;
+      if (!g || !fbMesa || !fbMesa.s || !fbMesa.s.teToca || fbMesa.busy || fbMesa.anim || fbCam.movio) return;
       const c = +g.dataset.c, r = +g.dataset.r, key = c + ',' + r, cur = fbMesa.s;
       if (fbMesa.sel && fbMesa.sel[0] === c && fbMesa.sel[1] === r) { fbMesa.sel = null; return fbDraw(cur); }
       if (fbMesa.sel && targets.some(t => t[0] === c && t[1] === r)) return fbPlay(cur, fbMesa.sel, [c, r]);
       if (cur.jugadasPosibles[key]) { fbMesa.sel = [c, r]; beep(560, 50); return fbDraw(cur); }
       fbMesa.sel = null; fbDraw(cur);
     });
-    b.appendChild(board);
+    b.appendChild(fbVisor(board));
     const st = el('div', 'jg-status');
     const mine = s.teToca;
     st.appendChild(el('div', 'jg-turno', mine ? `Te toca (${s.yo.color === 'R' ? 'rojas' : 'verdes'})` : `Juega ${s.rival.nombre}…`));
@@ -8104,6 +8182,9 @@ function sheetDrag(sheet, opts) {
     const idx = (c, r) => c * 8 + r;
     const P = (c, r) => { const p = fbXY(c, r, flip); return { x: p.x, y: p.y, yb: p.y + 2 }; };
     let ocultas = [];
+    let foco = null;
+    const mira = () => { if (fbCam.z <= 1 || !foco) return; fbCam.cx += (foco.x - fbCam.cx) * 0.16; fbCam.cy += (foco.y - fbCam.cy) * 0.16; svg.setAttribute('viewBox', fbVB()); };
+    const tween = (ms, fn) => fbTween(vivo, ms, (t) => { fn(t); mira(); });
     const pintar = (oc = []) => {
       ocultas = oc;
       const n = fbBoard(vista, cells.map((v, i) => oc.includes(i) ? [v[0], '', 0, v[3]] : v));
@@ -8129,12 +8210,13 @@ function sheetDrag(sheet, opts) {
       const ms = desliza ? 110 * dist + 60 : flota ? 650 * dist : (300 + 60 * dist) * Math.sqrt(impulso);
       impulso = 1;
       beep(desliza ? 300 : 480, 50);
-      await fbTween(vivo, ms, (t) => {
+      await tween(ms, (t) => {
         limpiar();
         const u = flota ? t : t;
         const x = a.x + (b.x - a.x) * u, piso = a.yb + (b.yb - a.yb) * u;
         // como en el original: sube, cruza alto y baja (arco de techo plano)
         const z = z0 + (z1 - z0) * u + (flota ? h * (Math.sin(u * Math.PI) + Math.sin(u * Math.PI * 6) * 0.25) : h * (1 - Math.pow(2 * u - 1, 4)));
+        foco = { x, y: piso - z - r };
         fbEsfera(fx, k, r, x, piso - z, { piso, sombraEsc: Math.max(0.4, 1 - z / 120), sombraOp: Math.max(0.25, 1 - z / 90), op: flota ? 0.8 : null });
         if (flota) sv('ellipse', { cx: x, cy: piso - z - r * 0.86, rx: r * 1.12, ry: r * 1.02, fill: 'rgba(220,240,255,0.12)', stroke: 'rgba(235,248,255,0.8)', 'stroke-width': 1.1 }, fx);
       });
@@ -8148,9 +8230,9 @@ function sheetDrag(sheet, opts) {
       if (tipo === 'fusion' || tipo === 'ataque') {
         beep(380, 70);
         const rG = Math.max(rF * 1.08, rT);
-        await fbTween(vivo, 260, (t) => { limpiar(); const r = rT + (rG - rT) * fbEase(t); fbEsfera(fx, T.k, r, p.x, p.yb); fbEsfera(fx, ini.k, rI, p.x, p.yb - altoBola(r), { sombra: false }); });
+        await tween(260, (t) => { limpiar(); const r = rT + (rG - rT) * fbEase(t); fbEsfera(fx, T.k, r, p.x, p.yb); fbEsfera(fx, ini.k, rI, p.x, p.yb - altoBola(r), { sombra: false }); });
         const cid = 'fb-clip-' + Math.round(rnd() * 1e9);
-        await fbTween(vivo, 520, (t) => {
+        await tween(520, (t) => {
           limpiar();
           const u = fbEase(t), top = p.yb - altoBola(rG);
           fbEsfera(fx, T.k, rG, p.x, p.yb);
@@ -8162,10 +8244,10 @@ function sheetDrag(sheet, opts) {
           const ri = rI * (1 - 0.55 * u);
           fbEsfera(fx, ini.k, ri, p.x, top + (altoBola(rG) * 0.45) * u, { sombra: false, op: 1 - u * 0.6 });
         });
-        await fbTween(vivo, 200, (t) => { limpiar(); fbEsfera(fx, fin1.k || ini.k, rG + (rF - rG) * fbEase(t), p.x, p.yb); });
+        await tween(200, (t) => { limpiar(); fbEsfera(fx, fin1.k || ini.k, rG + (rF - rG) * fbEase(t), p.x, p.yb); });
       } else if (tipo === 'deserta' || tipo === 'explota' || tipo === 'huevo') {
         beep(tipo === 'huevo' ? 620 : 260, 70);
-        await fbTween(vivo, 340, (t) => {
+        await tween(340, (t) => {
           limpiar();
           const u = fbEase(t);
           if (tipo === 'huevo') fbEsfera(fx, 'S', 6, p.x, p.yb, { sy: 1 - 0.8 * u, op: 1 - u });
@@ -8175,16 +8257,16 @@ function sheetDrag(sheet, opts) {
         });
         const kk = tipo === 'huevo' ? ini.k : T.k, r0 = tipo === 'huevo' ? rI : rT;
         const rG = tipo === 'explota' ? fbR(T.s + ini.s) * 1.08 : rF;
-        await fbTween(vivo, 260, (t) => { limpiar(); fbEsfera(fx, kk, r0 + (rG - r0) * fbEase(t), p.x, p.yb); });
+        await tween(260, (t) => { limpiar(); fbEsfera(fx, kk, r0 + (rG - r0) * fbEase(t), p.x, p.yb); });
         if (tipo === 'explota') await vidrios(p, rG, kk);
       } else if (tipo === 'anulan') {
         beep(200, 160);
-        await fbTween(vivo, 160, (t) => { limpiar(); fbEsfera(fx, T.k, rT, p.x, p.yb); fbEsfera(fx, ini.k, rI, p.x - (rT + rI) * 0.5 * (1 - t), p.yb - altoBola(rT) * 0.3 * (1 - t), { sombra: false }); });
+        await tween(160, (t) => { limpiar(); fbEsfera(fx, T.k, rT, p.x, p.yb); fbEsfera(fx, ini.k, rI, p.x - (rT + rI) * 0.5 * (1 - t), p.yb - altoBola(rT) * 0.3 * (1 - t), { sombra: false }); });
         const L0 = (rT + rI) * 1.3;
-        await fbTween(vivo, 950, (t) => { limpiar(); fbEstrella(fx, p.x, p.yb - rT * 0.9 - 6 * t, L0 * (1 - t), 40 + t * 560, ini.k, T.k); });
+        await tween(950, (t) => { limpiar(); fbEstrella(fx, p.x, p.yb - rT * 0.9 - 6 * t, L0 * (1 - t), 40 + t * 560, ini.k, T.k); });
       } else if (tipo === 'revienta') {
         beep(900, 40);
-        await fbTween(vivo, 380, (t) => {
+        await tween(380, (t) => {
           limpiar();
           if (T.s) fbEsfera(fx, T.k, rT * (1 + t * 0.3), p.x, p.yb, { op: 1 - t });
           sv('ellipse', { cx: p.x, cy: p.yb - rT * 0.9, rx: (rT + 4) * (1 + t * 1.2), ry: (rT + 4) * 0.8 * (1 + t * 1.2), fill: 'none', stroke: '#e8f6ff', 'stroke-width': 1.5 * (1 - t), opacity: 1 - t }, fx);
@@ -8193,20 +8275,21 @@ function sheetDrag(sheet, opts) {
       limpiar();
     }
     async function vidrios(p, r, k) {
+      foco = p;
       beep(140, 200);
       const ps = fbVidrios(12, p.x, p.yb - r * 0.9, r, rnd);
       const fill = k === 'R' ? 'url(#fb-roja)' : k === 'G' ? 'url(#fb-verde)' : 'url(#fb-esfera-gris)';
-      await fbTween(vivo, 700, (t) => { limpiar(); fbPintaVidrios(fx, ps, t * 0.8, fill, p.yb + 6); });
+      await tween(700, (t) => { limpiar(); fbPintaVidrios(fx, ps, t * 0.8, fill, p.yb + 6); });
     }
     // ── la bola se parte: la mitad sale por arriba (desborde, iman) ──
     async function partir(c, rr, k, keep, over, iman) {
-      const p = P(c, rr), i = idx(c, rr);
+      const p = P(c, rr), i = idx(c, rr); foco = p;
       pintar([...ocultas, i]);
       const tot = fbR(keep + over), rk = fbR(keep), ro = fbR(over);
       if (iman) {
-        await fbTween(vivo, 260, (t) => { limpiar(); fbEsfera(fx, k, tot * (1 + 0.25 * fbEase(t)), p.x, p.yb); });
+        await tween(260, (t) => { limpiar(); fbEsfera(fx, k, tot * (1 + 0.25 * fbEase(t)), p.x, p.yb); });
         const R = tot * 1.25;
-        await fbTween(vivo, 760, () => {
+        await tween(760, () => {
           limpiar();
           fbEsfera(fx, k, R, p.x, p.yb);
           const cp = sv('clipPath', { id: 'fb-clip-iman' }, fx);
@@ -8218,10 +8301,10 @@ function sheetDrag(sheet, opts) {
             sv('path', { d, stroke: '#fff', 'stroke-width': 1.6, fill: 'none', opacity: 0.9 }, rayos);
           }
         });
-        await fbTween(vivo, 200, (t) => { limpiar(); fbEsfera(fx, k, R + (tot - R) * t, p.x, p.yb); });
+        await tween(200, (t) => { limpiar(); fbEsfera(fx, k, R + (tot - R) * t, p.x, p.yb); });
       }
       beep(520, 60);
-      await fbTween(vivo, 420, (t) => {
+      await tween(420, (t) => {
         limpiar();
         const u = fbEase(t), rb = tot + (rk - tot) * u, rt = ro * u;
         fbEsfera(fx, k, rb, p.x, p.yb);
@@ -8232,10 +8315,10 @@ function sheetDrag(sheet, opts) {
       arranque = { c, r: rr, z: altoBola(rk) };
     }
     async function resorte(e) {
-      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1], r = fbR(cells[i][2]);
+      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1], r = fbR(cells[i][2]); foco = p;
       pintar([...ocultas, i]);
       beep(700, 60);
-      await fbTween(vivo, 280, (t) => {
+      await tween(280, (t) => {
         limpiar();
         const st = 1 + Math.sin(t * Math.PI) * 0.9 - 0.25 * Math.max(0, 1 - t * 3);
         const g = sv('g', { transform: `translate(${p.x} ${p.y}) scale(1 ${st}) translate(${-p.x} ${-p.y})` }, fx);
@@ -8247,65 +8330,69 @@ function sheetDrag(sheet, opts) {
       limpiar();
     }
     async function bomba(c, rr, k, sz) {
-      const p = P(c, rr), r = fbR(sz);
-      await fbTween(vivo, 520, (t) => { limpiar(); const b = Math.abs(Math.sin(t * Math.PI * 3)) * 9 * (1 - t * 0.3); fbEsfera(fx, k, r, p.x, p.yb - b, { piso: p.yb, sy: 1 - (b < 2 ? 0.12 : 0) }); });
+      const p = P(c, rr), r = fbR(sz); foco = p;
+      await tween(520, (t) => { limpiar(); const b = Math.abs(Math.sin(t * Math.PI * 3)) * 9 * (1 - t * 0.3); fbEsfera(fx, k, r, p.x, p.yb - b, { piso: p.yb, sy: 1 - (b < 2 ? 0.12 : 0) }); });
       impulso = 1.6;
     }
     async function teletransporte(e) {
       const a = P(e.de[0], e.de[1]), b = P(e.a[0], e.a[1]), i = idx(e.de[0], e.de[1]);
       const k = cells[i][1], sz = cells[i][2], r = fbR(sz);
+      foco = a;
       pintar([...ocultas, i]);
       beep(760, 80);
-      await fbTween(vivo, 320, (t) => { limpiar(); fbEsfera(fx, k, r, a.x, a.yb); fbCapsula(fx, a.x, a.yb, r, fbEase(t), 0, 1, 1, rnd); });
-      await fbTween(vivo, 420, (t) => { limpiar(); fbCapsula(fx, a.x, a.yb, r, 1, t, 1, 1, rnd); });
-      await fbTween(vivo, 380, (t) => { limpiar(); fbCapsula(fx, a.x, a.yb, r, 1, 1, 1 + 0.6 * t, 1 - t, rnd); });
+      await tween(320, (t) => { limpiar(); fbEsfera(fx, k, r, a.x, a.yb); fbCapsula(fx, a.x, a.yb, r, fbEase(t), 0, 1, 1, rnd); });
+      await tween(420, (t) => { limpiar(); fbCapsula(fx, a.x, a.yb, r, 1, t, 1, 1, rnd); });
+      await tween(380, (t) => { limpiar(); fbCapsula(fx, a.x, a.yb, r, 1, 1, 1 + 0.6 * t, 1 - t, rnd); });
       beep(900, 80);
-      await fbTween(vivo, 380, (t) => { limpiar(); fbCapsula(fx, b.x, b.yb, r, 1, 1, 1.6 - 0.6 * t, t, rnd); });
-      await fbTween(vivo, 300, (t) => { limpiar(); fbEsfera(fx, k, r, b.x, b.yb); fbCapsula(fx, b.x, b.yb, r, 1 - fbEase(t), 1 - t, 1, 1, rnd); });
+      foco = b;
+      await tween(380, (t) => { limpiar(); fbCapsula(fx, b.x, b.yb, r, 1, 1, 1.6 - 0.6 * t, t, rnd); });
+      await tween(300, (t) => { limpiar(); fbEsfera(fx, k, r, b.x, b.yb); fbCapsula(fx, b.x, b.yb, r, 1 - fbEase(t), 1 - t, 1, 1, rnd); });
       limpiar();
     }
     async function desague(e) {
-      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1], r = fbR(cells[i][2]);
+      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1], r = fbR(cells[i][2]); foco = p;
       pintar([...ocultas, i]);
       beep(220, 300);
-      await fbTween(vivo, 380, (t) => { limpiar(); fbEsfera(fx, k, r * (1 + 0.55 * fbEase(t)), p.x, p.yb); });
+      await tween(380, (t) => { limpiar(); fbEsfera(fx, k, r * (1 + 0.55 * fbEase(t)), p.x, p.yb); });
       const R = r * 1.55;
-      await fbTween(vivo, 340, (t) => { limpiar(); fbEsfera(fx, k, R, p.x, p.yb); sv('ellipse', { cx: p.x, cy: p.yb - R * 1.45, rx: R * 0.62 * t, ry: R * 0.26 * t, fill: '#2a0505', opacity: 0.85 }, fx); });
-      await fbTween(vivo, 520, (t) => { limpiar(); const sy = 1 - fbEase(t); fbEsfera(fx, k, R * (1 - 0.3 * t), p.x, p.yb, { sy: Math.max(0.02, sy), sombraEsc: 1 - t }); });
+      await tween(340, (t) => { limpiar(); fbEsfera(fx, k, R, p.x, p.yb); sv('ellipse', { cx: p.x, cy: p.yb - R * 1.45, rx: R * 0.62 * t, ry: R * 0.26 * t, fill: '#2a0505', opacity: 0.85 }, fx); });
+      await tween(520, (t) => { limpiar(); const sy = 1 - fbEase(t); fbEsfera(fx, k, R * (1 - 0.3 * t), p.x, p.yb, { sy: Math.max(0.02, sy), sombraEsc: 1 - t }); });
       limpiar();
     }
     async function achica(e, a, b) {
-      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1];
+      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1]; foco = p;
       pintar([...ocultas, i]);
       beep(340, 80);
-      await fbTween(vivo, 260, (t) => { limpiar(); fbEsfera(fx, k, fbR(a) + (fbR(b) - fbR(a)) * fbEase(t), p.x, p.yb); });
+      await tween(260, (t) => { limpiar(); fbEsfera(fx, k, fbR(a) + (fbR(b) - fbR(a)) * fbEase(t), p.x, p.yb); });
       limpiar();
     }
     async function canion(e, sz0) {
-      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1];
+      const p = P(e.c, e.r), i = idx(e.c, e.r), k = cells[i][1]; foco = p;
       pintar([...ocultas, i]);
-      await fbTween(vivo, 260, (t) => { limpiar(); fbEsfera(fx, k, fbR(sz0) * (1 + 0.25 * Math.sin(t * Math.PI)), p.x, p.yb); });
-      await fbTween(vivo, 320, (t) => { limpiar(); fbEsfera(fx, k, fbR(sz0) * (1 - fbEase(t)), p.x, p.yb, { sy: 1 - 0.5 * t }); });
-      await fbTween(vivo, 320, (t) => { limpiar(); fbTorreta(fx, k, p.x, p.y, fbEase(t), 0); });
-      await fbTween(vivo, 380, (t) => { limpiar(); fbTorreta(fx, k, p.x, p.y, 1, fbEase(t)); });
+      await tween(260, (t) => { limpiar(); fbEsfera(fx, k, fbR(sz0) * (1 + 0.25 * Math.sin(t * Math.PI)), p.x, p.yb); });
+      await tween(320, (t) => { limpiar(); fbEsfera(fx, k, fbR(sz0) * (1 - fbEase(t)), p.x, p.yb, { sy: 1 - 0.5 * t }); });
+      await tween(320, (t) => { limpiar(); fbTorreta(fx, k, p.x, p.y, fbEase(t), 0); });
+      await tween(380, (t) => { limpiar(); fbTorreta(fx, k, p.x, p.y, 1, fbEase(t)); });
       limpiar();
     }
     async function disparo(e) {
       const a = P(e.de[0], e.de[1]), b = P(e.a[0], e.a[1]);
       const n = Math.max(Math.abs(e.a[0] - e.de[0]), Math.abs(e.a[1] - e.de[1]));
       beep(120, 160);
-      await fbTween(vivo, 90 * n + 120, (t) => {
+      await tween(90 * n + 120, (t) => {
         limpiar();
         const x = a.x + (b.x - a.x) * t, y = a.y - 14 + (b.y - a.y) * t - 10 * Math.sin(t * Math.PI);
+        foco = { x, y };
         sv('circle', { cx: x, cy: y, r: 3.5, fill: 'url(#fb-esfera-gris)' }, fx);
         sv('circle', { cx: a.x, cy: a.y - 14, r: 8 * (1 - t), fill: '#ffd040', opacity: 1 - t }, fx);
       });
       await boom(b, 'url(#fb-esfera-gris)');
     }
     async function boom(p, fill) {
+      foco = p;
       beep(110, 260);
       const ps = fbVidrios(14, p.x, p.y - 6, 12, rnd);
-      await fbTween(vivo, 650, (t) => {
+      await tween(650, (t) => {
         limpiar();
         sv('circle', { cx: p.x, cy: p.y - 8, r: 6 + 30 * t, fill: '#ffcf40', opacity: Math.max(0, 0.9 - t * 1.4) }, fx);
         sv('circle', { cx: p.x, cy: p.y - 8, r: 3 + 16 * t, fill: '#fff', opacity: Math.max(0, 0.9 - t * 2) }, fx);
@@ -8317,9 +8404,10 @@ function sheetDrag(sheet, opts) {
       const a = P(e.de[0], e.de[1]), b = P(e.a[0], e.a[1]);
       cells[idx(e.de[0], e.de[1])][3] = 0;
       pintar(ocultas);
-      await fbTween(vivo, 520, (t) => {
+      await tween(520, (t) => {
         limpiar();
         const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - Math.abs(Math.sin(t * Math.PI * 4)) * 2;
+        foco = { x, y };
         fbSpider(fx, x, y);
       });
       cells[idx(e.a[0], e.a[1])][3] = 1;
@@ -8327,8 +8415,8 @@ function sheetDrag(sheet, opts) {
       pintar(ocultas);
     }
     async function pone(e) {
-      const p = P(e.c, e.r);
-      await fbTween(vivo, 260, (t) => { limpiar(); fbEsfera(fx, 'S', 6, p.x, p.yb, { sx: t, sy: t }); });
+      const p = P(e.c, e.r); foco = p;
+      await tween(260, (t) => { limpiar(); fbEsfera(fx, 'S', 6, p.x, p.yb, { sx: t, sy: t }); });
       limpiar();
     }
 
