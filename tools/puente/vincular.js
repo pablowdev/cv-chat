@@ -401,6 +401,15 @@ async function handle(req, res) {
     return send(res, 200, 'image/png', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
+  // Dibujos de las cartas del truco: tools/puente/web/cartas/<palo>-<n>.webp, propios de
+  // cada servidor (no van al repositorio); si no estan, el juego usa las cartas simples
+  const naipe = req.method === 'GET' && /^\/puente\/cartas\/((?:espada|basto|oro|copa)-(?:[1-7]|1[012]))\.webp$/.exec(p);
+  if (naipe) {
+    const file = path.join(STATIC, 'cartas', naipe[1] + '.webp');
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin dibujo');
+    return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
     return send(res, 200, 'application/javascript', temaFijo.script(db));
   }

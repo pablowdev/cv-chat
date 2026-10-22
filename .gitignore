@@ -16,3 +16,6 @@ tools/puente/web/icono-notificacion.png
 
 # Dependencias instaladas en el servidor (sharp)
 tools/puente/vendor/
+
+# Dibujos de las cartas del truco: propios de cada servidor
+tools/puente/web/cartas/

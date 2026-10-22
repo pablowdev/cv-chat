@@ -7090,11 +7090,22 @@ function sheetDrag(sheet, opts) {
     else a.textContent = ((p && p.nombre) || '?').charAt(0).toUpperCase();
     return a;
   };
+  // Cada servidor puede tener su dibujo para cada carta (/puente/cartas/<palo>-<n>.webp,
+  // no va al repositorio); si no esta, la carta simple con el numero y el palo
+  let conDibujos = true;
+  const plain = (d, c) => d.replaceChildren(el('span', 'jg-num', String(c.n)), el('span', 'jg-palo', PALO[c.p]), el('span', 'jg-num abajo', String(c.n)));
   function card(c, cls) {
     const d = el('div', 'jg-carta ' + (cls || '') + (c ? ' palo-' + c.p : ' dorso'));
     if (!c) return d;
-    d.append(el('span', 'jg-num', String(c.n)), el('span', 'jg-palo', PALO[c.p]), el('span', 'jg-num abajo', String(c.n)));
     d.title = `${c.n} de ${c.p}`;
+    if (!conDibujos) { plain(d, c); return d; }
+    const img = el('img', 'jg-dibujo');
+    img.alt = ''; img.draggable = false; img.decoding = 'async';
+    img.onerror = () => { conDibujos = false; d.classList.remove('con-dibujo'); plain(d, c); };
+    img.src = `/puente/cartas/${c.p}-${c.n}.webp`;
+    const esq = (abajo) => { const e = el('span', 'jg-esq' + (abajo ? ' abajo' : '')); e.append(el('b', null, String(c.n)), el('i', null, PALO[c.p])); return e; };
+    d.classList.add('con-dibujo');
+    d.append(img, esq(false), esq(true));
     return d;
   }
   // Un sonidito (sin archivos): al jugar una carta o cuando te cantan
