@@ -7178,7 +7178,8 @@ function sheetDrag(sheet, opts) {
     clearInterval(tickT); mesa = null;
     page.textContent = '';
     fbMesa = null;
-    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
+    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── Sala ──
@@ -7810,7 +7811,8 @@ function sheetDrag(sheet, opts) {
     const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button';
     cb.addEventListener('click', async () => { const r = await emit('funball:crear', { modo: 'compu', tablero: -1, arania: true, nivel: 2 }); if (r.error) return toast(r.error, 'error'); go('fbMesa', r.id); });
     const rb = el('button', 'jg-btn jg-suave', 'Cómo se juega'); rb.type = 'button'; rb.addEventListener('click', () => go('fbReglas'));
-    btns.append(nb, cb, rb); hero.appendChild(btns);
+    const tb = el('button', 'jg-btn jg-suave', 'Tutorial'); tb.type = 'button'; tb.addEventListener('click', () => go('fbTutorial', 0));
+    btns.append(nb, cb, tb, rb); hero.appendChild(btns);
     b.appendChild(hero);
     const box = el('div'); box.appendChild(el('div', 'jg-estado', 'Cargando…')); b.appendChild(box);
     const d = await emit('funball:inicio');
@@ -7940,9 +7942,57 @@ function sheetDrag(sheet, opts) {
     a.socket.emit('start-dm', { targetUserId: p.id });
   }
 
+  // Tutorial, como el del original: cada leccion muestra una jugada que se repite sola.
+  // Las jugadas salen del motor (funball-motor.js), con el mismo registro que una partida.
+const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, hacia adelante o de costado (nunca hacia atrás). Tocá tu bola y después una de las casillas marcadas.","c":[[3,3,0,"R",5,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":5},{"t":"bola","c":4,"r":3,"k":"R","s":5}]},{"t":"Juntarse","x":"Si saltás sobre una bola de tu color, se juntan en una más grande.","c":[[3,3,0,"R",5,0],[4,3,0,"R",6,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":5},{"t":"fusion","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":11}]},{"t":"Desbordar","x":"Una bola no puede pasar de 15. Si al juntarse se pasa, se parte en dos y la mitad sigue de largo en la misma dirección.","c":[[3,3,0,"R",10,0],[4,3,0,"R",10,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":10},{"t":"fusion","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":20},{"t":"bola","c":4,"r":3,"k":"R","s":10},{"t":"desborda","c":4,"r":3},{"t":"mueve","de":[4,3],"a":[5,3],"k":"R","s":10},{"t":"bola","c":5,"r":3,"k":"R","s":10}]},{"t":"Atacar","x":"Si saltás sobre una bola enemiga más chica, la absorbés y tu bola crece.","c":[[1,6,0,"G",4,0],[3,3,0,"R",8,0],[4,3,0,"G",5,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":8},{"t":"ataque","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":13}]},{"t":"Anularse","x":"Dos bolas enemigas del mismo tamaño se anulan: las dos desaparecen.","c":[[1,6,0,"G",4,0],[3,3,0,"R",7,0],[4,3,0,"G",7,0],[6,1,0,"R",3,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":7},{"t":"anulan","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"","s":0}]},{"t":"Desertar","x":"Saltar sobre una enemiga más grande es mala idea: tu bola se pasa al otro bando y la agranda.","c":[[1,6,0,"G",4,0],[3,3,0,"R",4,0],[4,3,0,"G",9,0],[6,1,0,"R",3,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":4},{"t":"deserta","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"G","s":11}]},{"t":"Reventar","x":"…salvo que la hagas pasar de 15: entonces la bola enemiga revienta en pedazos.","c":[[1,6,0,"G",4,0],[3,3,0,"R",7,0],[4,3,0,"G",13,0],[6,1,0,"R",3,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":7},{"t":"explota","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":1}]},{"t":"Bomba","x":"Una bola en la bomba sale disparada en línea recta, tan lejos como quieras.","c":[[1,3,3,"R",9,0],[5,3,0,"G",5,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":1,"r":3,"k":"","s":0},{"t":"mueve","de":[1,3],"a":[5,3],"k":"R","s":9},{"t":"ataque","c":5,"r":3},{"t":"bola","c":5,"r":3,"k":"R","s":14}]},{"t":"Blindada","x":"La bola que está en una base blindada no puede ser atacada. Las tuyas sí pueden juntarse con ella.","c":[[3,3,0,"R",6,0],[4,3,4,"R",5,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"fusion","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":11}]},{"t":"Tobogán","x":"La bola patina y sigue de largo, empujando lo que haya adelante.","c":[[3,3,0,"R",6,0],[4,3,8,"",0,0],[5,3,0,"G",5,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"","s":0},{"t":"mueve","de":[4,3],"a":[5,3],"k":"R","s":6},{"t":"bola","c":5,"r":3,"k":"R","s":6},{"t":"mueve","de":[5,3],"a":[6,3],"k":"G","s":5},{"t":"bola","c":6,"r":3,"k":"G","s":5}]},{"t":"Teletransportador","x":"La bola que cae acá viaja al siguiente teletransportador libre, hacia la meta enemiga.","c":[[2,1,5,"",0,0],[3,3,0,"R",6,0],[4,3,5,"",0,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"R","s":6},{"t":"teletransporta","de":[4,3],"a":[2,1]},{"t":"bola","c":2,"r":1,"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"","s":0}]},{"t":"Base chica","x":"En una base chica entran bolas de hasta 5: si cae una más grande, se achica.","c":[[3,3,0,"R",9,0],[4,3,2,"",0,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":9},{"t":"bola","c":4,"r":3,"k":"R","s":9},{"t":"achica","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":5}]},{"t":"Resorte","x":"La bola rebota a la casilla siguiente, en la misma dirección.","c":[[3,3,0,"R",6,0],[4,3,7,"",0,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"R","s":6},{"t":"resorte","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"","s":0},{"t":"mueve","de":[4,3],"a":[5,3],"k":"R","s":6},{"t":"bola","c":5,"r":3,"k":"R","s":6}]},{"t":"Desagüe","x":"Muy peligroso: la bola que cae acá se va por el desagüe y desaparece.","c":[[1,1,0,"R",2,0],[3,3,0,"R",6,0],[4,3,6,"",0,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"bola","c":4,"r":3,"k":"R","s":6},{"t":"desague","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"","s":0}]},{"t":"Imán","x":"En el imán no te pueden atacar. Pero al salir, la mitad de la bola se queda pegada.","c":[[3,3,10,"R",9,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"R","s":4},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":5},{"t":"bola","c":4,"r":3,"k":"R","s":5}]},{"t":"Cañón","x":"Con una bola en el cañón podés destruir otra base en línea recta. Cuanto más grande la bola, más lejos llega.","c":[[2,3,11,"R",10,0],[5,3,0,"G",5,0],[6,6,0,"G",4,0]],"e":[{"t":"dispara","de":[2,3],"a":[5,3]},{"t":"explota","c":5,"r":3},{"t":"base","c":5,"r":3,"b":2},{"t":"bola","c":5,"r":3,"k":"","s":0},{"t":"bola","c":2,"r":3,"k":"","s":0}]},{"t":"Jabón","x":"La bola se vuelve una burbuja y puede flotar hasta dos casillas…","c":[[3,3,9,"R",6,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[5,2],"k":"R","s":6},{"t":"bola","c":5,"r":2,"k":"R","s":6},{"t":"bola","c":5,"r":2,"k":"R","s":6}]},{"t":"Burbuja","x":"…pero revienta con cualquier cosa que no sea una base vacía.","c":[[3,3,9,"R",6,0],[5,2,0,"G",3,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[5,2],"k":"R","s":6},{"t":"revienta","c":5,"r":2}]},{"t":"Mina","x":"¡Cuidado! La mina explota: la bola desaparece y todas las de alrededor se achican (salvo las blindadas).","c":[[1,6,0,"G",4,0],[3,3,0,"R",8,0],[4,3,12,"",0,0],[4,4,0,"R",4,0],[5,3,0,"G",7,0],[5,4,4,"G",9,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":8},{"t":"bola","c":4,"r":3,"k":"R","s":8},{"t":"explota","c":4,"r":3},{"t":"base","c":4,"r":3,"b":1},{"t":"bola","c":4,"r":3,"k":"","s":0},{"t":"bola","c":4,"r":4,"k":"","s":0},{"t":"bola","c":5,"r":3,"k":"G","s":2}]},{"t":"La araña","x":"La araña camina sola por el tablero y deja huevos.","c":[[1,1,0,"R",6,0],[3,4,0,"",0,1],[6,6,0,"G",5,0]],"e":[{"t":"bola","c":1,"r":1,"k":"","s":0},{"t":"mueve","de":[1,1],"a":[2,1],"k":"R","s":6},{"t":"bola","c":2,"r":1,"k":"R","s":6},{"t":"arania","de":[3,4],"a":[2,3]}]},{"t":"Huevos","x":"Si caés sobre un huevo, tu bola suma 3.","c":[[3,3,0,"R",6,0],[4,3,0,"S",3,0],[6,6,0,"G",4,0]],"e":[{"t":"bola","c":3,"r":3,"k":"","s":0},{"t":"mueve","de":[3,3],"a":[4,3],"k":"R","s":6},{"t":"huevo","c":4,"r":3},{"t":"bola","c":4,"r":3,"k":"R","s":9},{"t":"bola","c":4,"r":3,"k":"R","s":9}]},{"t":"La meta","x":"Ganás si llegás con una bola a la base del rival, o si te quedás con las únicas bolas del tablero.","c":[[2,6,0,"G",5,0],[6,1,0,"R",6,0]],"e":[{"t":"bola","c":6,"r":1,"k":"","s":0},{"t":"mueve","de":[6,1],"a":[7,0],"k":"R","s":6},{"t":"bola","c":7,"r":0,"k":"R","s":6}]}];
+  function fbTutorial(n) {
+    n = Math.max(0, Math.min(FB_TUTORIAL.length - 1, n | 0));
+    const L = FB_TUTORIAL[n];
+    page.appendChild(head('Tutorial'));
+    const b = el('div', 'jg-mesa fb-ui fb-tut'); page.appendChild(b);
+    b.appendChild(el('div', 'fb-tut-titulo', L.t));
+    const tablero = el('div', 'fb-mesa'); b.appendChild(tablero);
+    b.appendChild(el('div', 'fb-cartel fb-tut-texto', L.x));
+    const nav = el('div', 'jg-acciones fb-tut-nav');
+    const ir = (k) => { stack[stack.length - 1] = ['fbTutorial', k]; show('fbTutorial', k); };
+    const ant = el('button', 'jg-btn', 'Anterior'); ant.type = 'button'; ant.disabled = n === 0; ant.addEventListener('click', () => ir(n - 1));
+    const ultima = n === FB_TUTORIAL.length - 1;
+    const sig = el('button', 'jg-btn jg-primario', ultima ? '¡A jugar!' : 'Siguiente'); sig.type = 'button';
+    sig.addEventListener('click', () => (ultima ? back() : ir(n + 1)));
+    nav.append(ant, el('span', 'fb-tut-n', `${n + 1} / ${FB_TUTORIAL.length}`), sig);
+    b.appendChild(nav);
+    // el tablero antes y despues de la jugada
+    const celdas = Array.from({ length: 64 }, () => [0, '', 0, 0]);
+    for (const [c, r, bb, k, sz, sp] of L.c) celdas[c * 8 + r] = [bb, k, sz, sp];
+    const despues = celdas.map(v => v.slice());
+    for (const e of L.e) {
+      if (e.t === 'bola') { const v = despues[e.c * 8 + e.r]; v[1] = e.k; v[2] = e.s; }
+      else if (e.t === 'base') despues[e.c * 8 + e.r][0] = e.b;
+      else if (e.t === 'arania') { despues[e.de[0] * 8 + e.de[1]][3] = 0; despues[e.a[0] * 8 + e.a[1]][3] = 1; }
+    }
+    const s = { id: 'tut' + n, yo: { color: 'G' }, rival: { color: 'R' }, estado: 'jugando', celdas: despues, ultima: { n: n + 1, ev: L.e } };
+    fbMesa = { id: s.id, s, sel: null, busy: false, tutorial: true };
+    // la camara se acerca a donde pasa la jugada
+    const pts = L.e.flatMap(e => e.de ? [e.de, e.a] : e.c != null ? [[e.c, e.r]] : []).map(([c, r]) => fbXY(c, r, false));
+    if (fbCam.tutZ == null) fbCam.tutZ = fbCam.z;
+    fbCam.z = 2;
+    fbCam.cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+    fbCam.cy = pts.reduce((a, p) => a + p.y, 0) / pts.length - 10;
+    const prev = { celdas };
+    fbDraw({ ...s, celdas });
+    const vigente = () => page && fbMesa && fbMesa.id === s.id;
+    const ciclo = () => {
+      if (!vigente()) return;
+      fbAnimate(prev, s);
+      const espera = () => { if (!vigente()) return; if (fbMesa.anim) return setTimeout(espera, 200); setTimeout(() => { if (vigente()) { fbDraw({ ...s, celdas }); setTimeout(ciclo, 700); } }, 1500); };
+      setTimeout(espera, 300);
+    };
+    setTimeout(ciclo, 900);
+  }
   function fbReglas() {
     page.appendChild(head('Cómo se juega'));
     const b = el('div', 'jg-cuerpo fb-reglas fb-ui'); page.appendChild(b);
+    const tut = el('button', 'jg-btn jg-ancho', 'Ver el tutorial'); tut.type = 'button'; tut.addEventListener('click', () => go('fbTutorial', 0)); b.appendChild(tut);
     for (const [t, d] of FB_REGLAS) { const x = el('div', 'fb-regla'); x.append(el('b', '', t), el('span', '', d)); b.appendChild(x); }
     b.appendChild(el('div', 'jg-sub', 'Las bases'));
     FB_BASES.forEach(([t, d], i) => {
@@ -8039,6 +8089,7 @@ function sheetDrag(sheet, opts) {
     const b = page && page.querySelector('.fb-mesa');
     if (!b) return;
     b.textContent = '';
+    if (fbMesa && fbMesa.tutorial) { b.appendChild(fbVisor(fbBoard(s, s.celdas, {}))); return; }
     const score = el('div', 'jg-marcador fb-marcador');
     const count = (k) => s.celdas.reduce((n, v) => n + (v[1] === k && v[2] ? 1 : 0), 0);
     const side = (p, mine) => {

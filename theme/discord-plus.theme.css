@@ -2608,6 +2608,13 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .fb-ui .jg-turno, .puente-jg .fb-ui .jg-ultimo { color: #f8f400; font-family: "Courier New", ui-monospace, monospace; font-weight: 700; text-transform: uppercase; }
 .puente-jg .fb-ui .fb-pie { color: #f2e8d8; text-shadow: 0 1px 2px #000; }
 .puente-jg .fb-ui .fb-visor { border-radius: 2px; box-shadow: 0 0 0 2px #6b6258, 3px 4px 0 2px rgba(0,0,0,0.6); }
+/* Tutorial del Funball (aviso.js, fbTutorial) */
+.puente-jg .fb-tut { max-width: none; min-height: 100%; }
+.puente-jg .fb-tut > * { box-sizing: border-box; width: 100%; max-width: 38rem; margin-left: auto; margin-right: auto; }
+.puente-jg .fb-tut-titulo { align-self: center; width: auto; padding: 0.25rem 1rem; background: #000; border: 2px solid #6b6258; color: #e9a8f5; font: 700 1.125rem/1.2 "Courier New", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
+.puente-jg .fb-ui .fb-tut-texto { margin: 0; text-transform: none; letter-spacing: 0.02em; text-align: center; line-height: 1.35; }
+.puente-jg .fb-tut-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.puente-jg .fb-tut-n { color: #f8f400; font: 700 0.9375rem "Courier New", ui-monospace, monospace; text-shadow: 0 1px 2px #000; }
 @keyframes fb-titila { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.45; } }
 @keyframes fb-boom { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .puente-jg .fb-vuela { transition-duration: 0.05s; } }
