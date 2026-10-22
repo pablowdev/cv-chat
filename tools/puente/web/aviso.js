@@ -7796,10 +7796,15 @@ function sheetDrag(sheet, opts) {
   async function fbInicio() {
     page.appendChild(head('Juegos'));
     page.appendChild(gameTabs('funball'));
-    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const b = el('div', 'jg-cuerpo fb-ui'); page.appendChild(b);
     const hero = el('div', 'jg-hero fb-hero');
     const mini = el('div', 'fb-hero-dibujo'); mini.innerHTML = '<svg viewBox="0 0 120 56" aria-hidden="true"><defs><radialGradient id="fbh-r" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffb3b0"/><stop offset=".3" stop-color="#ff4d4f"/><stop offset="1" stop-color="#7a0b12"/></radialGradient><radialGradient id="fbh-v" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#c3ffd9"/><stop offset=".3" stop-color="#33d17a"/><stop offset="1" stop-color="#05502a"/></radialGradient></defs><ellipse cx="34" cy="48" rx="20" ry="6" fill="#4a52d0"/><ellipse cx="86" cy="48" rx="20" ry="6" fill="#4a52d0"/><circle cx="34" cy="30" r="17" fill="url(#fbh-r)"/><circle cx="86" cy="34" r="12" fill="url(#fbh-v)"/></svg>';
-    hero.append(mini, el('div', 'jg-hero-t', 'Funball'), el('div', 'jg-hero-s', 'El clásico de 1995, 1 contra 1'));
+    // el logo de este servidor (web/funball/logo.webp); si no esta, el dibujo de siempre
+    const logo = el('img', 'fb-logo'); logo.alt = 'Funball'; logo.src = FB_ARTE + 'logo.webp';
+    const titulo = el('div', 'jg-hero-t', 'Funball');
+    logo.addEventListener('load', () => { mini.remove(); titulo.remove(); hero.classList.add('fb-con-logo'); });
+    logo.addEventListener('error', () => logo.remove());
+    hero.append(logo, mini, titulo, el('div', 'jg-hero-s fb-cartel', '¡Bienvenido a Funball!'));
     const btns = el('div', 'jg-acciones');
     const nb = el('button', 'jg-btn jg-primario', 'Crear partida'); nb.type = 'button'; nb.addEventListener('click', () => go('fbCrear'));
     const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button';
@@ -7854,7 +7859,7 @@ function sheetDrag(sheet, opts) {
 
   async function fbCrear() {
     page.appendChild(head('Nueva partida de Funball'));
-    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const b = el('div', 'jg-cuerpo fb-ui'); page.appendChild(b);
     const f = el('div', 'jg-form'); b.appendChild(f);
     const info = await emit('funball:inicio');
     if (!page || !f.isConnected) return;
@@ -7937,7 +7942,7 @@ function sheetDrag(sheet, opts) {
 
   function fbReglas() {
     page.appendChild(head('Cómo se juega'));
-    const b = el('div', 'jg-cuerpo fb-reglas'); page.appendChild(b);
+    const b = el('div', 'jg-cuerpo fb-reglas fb-ui'); page.appendChild(b);
     for (const [t, d] of FB_REGLAS) { const x = el('div', 'fb-regla'); x.append(el('b', '', t), el('span', '', d)); b.appendChild(x); }
     b.appendChild(el('div', 'jg-sub', 'Las bases'));
     FB_BASES.forEach(([t, d], i) => {
@@ -7954,7 +7959,7 @@ function sheetDrag(sheet, opts) {
     mesa = { id: 'fb:' + id, s: null };
     const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
     page.appendChild(head('Funball', menu));
-    const b = el('div', 'jg-mesa fb-mesa'); page.appendChild(b);
+    const b = el('div', 'jg-mesa fb-mesa fb-ui'); page.appendChild(b);
     b.appendChild(el('div', 'jg-estado', 'Cargando…'));
     menu.addEventListener('click', () => {
       const s = fbMesa && fbMesa.s;
@@ -8213,9 +8218,55 @@ function sheetDrag(sheet, opts) {
     fbSonidos = new Set();
     fetch('/puente/funball/sonidos.json', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).then(l => { for (const n of l) fbSonidos.add(n); }).catch(() => {});
   }
+  // Efectos armados con el sintetizador del navegador para cada cosa que pasa en el tablero
+  function fbSintetizar(nombre) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = actx.currentTime, out = actx.createGain();
+      out.gain.value = 0.5; out.connect(actx.destination);
+      const tono = (tipo, f0, f1, ini, dur, vol) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = tipo; o.frequency.setValueAtTime(f0, t0 + ini); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + ini + dur);
+        g.gain.setValueAtTime(0.0001, t0 + ini); g.gain.exponentialRampToValueAtTime(vol, t0 + ini + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + ini + dur);
+        o.connect(g); g.connect(out); o.start(t0 + ini); o.stop(t0 + ini + dur + 0.02);
+      };
+      const ruido = (ini, dur, vol, f0, f1, q = 0.8) => {
+        const n = Math.ceil(actx.sampleRate * dur), b = actx.createBuffer(1, n, actx.sampleRate), d = b.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        const src = actx.createBufferSource(), fl = actx.createBiquadFilter(), g = actx.createGain();
+        src.buffer = b; fl.type = 'bandpass'; fl.Q.value = q; fl.frequency.setValueAtTime(f0, t0 + ini); fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t0 + ini + dur);
+        g.gain.setValueAtTime(vol, t0 + ini); g.gain.exponentialRampToValueAtTime(0.0001, t0 + ini + dur);
+        src.connect(fl); fl.connect(g); g.connect(out); src.start(t0 + ini); src.stop(t0 + ini + dur);
+      };
+      switch (nombre) {
+        case 'salto': tono('sine', 220, 520, 0, 0.12, 0.25); tono('sine', 300, 140, 0.13, 0.08, 0.2); break;
+        case 'tobogan': ruido(0, 0.35, 0.25, 900, 2400, 2); break;
+        case 'burbuja': for (let i = 0; i < 4; i++) tono('sine', 500 + i * 140, 900 + i * 160, i * 0.09, 0.07, 0.12); break;
+        case 'elegir': tono('square', 660, 880, 0, 0.05, 0.08); break;
+        case 'fusion': tono('sine', 180, 90, 0, 0.35, 0.3); tono('triangle', 360, 180, 0, 0.3, 0.12); break;
+        case 'ataque': tono('sawtooth', 160, 60, 0, 0.4, 0.18); ruido(0, 0.25, 0.2, 400, 120); break;
+        case 'anulan': tono('square', 880, 110, 0, 0.9, 0.12); tono('sine', 1320, 160, 0, 0.9, 0.08); break;
+        case 'deserta': tono('sine', 400, 120, 0, 0.3, 0.25); break;
+        case 'huevo': ruido(0, 0.08, 0.3, 2500, 1200, 3); tono('sine', 500, 900, 0.05, 0.15, 0.15); break;
+        case 'revienta': ruido(0, 0.12, 0.4, 3000, 5000, 1.5); tono('sine', 1200, 2400, 0, 0.06, 0.1); break;
+        case 'vidrios': for (let i = 0; i < 6; i++) { tono('sine', 2400 + Math.random() * 2400, 1800, i * 0.05, 0.12, 0.08); } ruido(0, 0.3, 0.3, 4000, 2000, 2); break;
+        case 'desborda': case 'iman': tono('sine', 300, 700, 0, 0.2, 0.25); if (nombre === 'iman') ruido(0, 0.5, 0.15, 6000, 3000, 6); break;
+        case 'resorte': for (let i = 0; i < 5; i++) tono('sine', 300 + i * 120, 500 + i * 160, i * 0.035, 0.06, 0.18); break;
+        case 'teletransporte': tono('sine', 300, 1800, 0, 0.8, 0.15); tono('triangle', 310, 1820, 0.02, 0.8, 0.08); break;
+        case 'teletransporte-llega': tono('sine', 1800, 300, 0, 0.6, 0.15); break;
+        case 'desague': ruido(0, 1.1, 0.35, 600, 120, 4); tono('sine', 400, 60, 0.3, 0.8, 0.2); break;
+        case 'achica': tono('sine', 600, 250, 0, 0.25, 0.2); break;
+        case 'canion': tono('square', 140, 50, 0, 0.18, 0.25); ruido(0, 0.15, 0.4, 1500, 300); break;
+        case 'explota': ruido(0, 1.2, 0.8, 900, 60, 0.6); tono('sine', 90, 30, 0, 0.9, 0.5); break;
+        case 'ganador': [523, 659, 784, 1047].forEach((n, i) => tono('square', n, n, i * 0.14, 0.18, 0.1)); tono('square', 1047, 1047, 0.56, 0.5, 0.1); break;
+        default: return false;
+      }
+      return true;
+    } catch { return false; }
+  }
   function fbSon(nombre, freq, ms) {
     fbCargarSonidos();
-    if (!fbSonidos.has(nombre)) return beep(freq, ms);
+    if (!fbSonidos.has(nombre)) return fbSintetizar(nombre) || beep(freq, ms);
     let a = fbAudio.get(nombre);
     if (!a) { a = new Audio('/puente/funball/sonidos/' + nombre + '.mp3'); a.preload = 'auto'; fbAudio.set(nombre, a); }
     try { const b = a.paused ? a : a.cloneNode(); b.currentTime = 0; b.play().catch(() => {}); } catch (e) { beep(freq, ms); }

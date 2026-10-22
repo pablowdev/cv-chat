@@ -2577,6 +2577,37 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .fb-con-base { flex-direction: row; align-items: center; gap: 0.75rem; }
 .puente-jg .fb-con-base > div { display: flex; flex-direction: column; gap: 0.125rem; }
 .puente-jg .fb-base-ico { flex: 0 0 auto; width: 3rem; height: auto; }
+/* Pantallas del Funball con el aspecto del original: fondo de piedra, losas grises con el texto
+   grabado y carteles negros con letras amarillas. Las texturas son del servidor (web/funball/) */
+.puente-jg .fb-ui { background: #4a3f37 url(/puente/funball/fondo.webp) repeat; background-size: 256px; }
+.puente-jg .jg-cuerpo.fb-ui { max-width: none; min-height: 100%; }
+.puente-jg .jg-cuerpo.fb-ui > * { max-width: 40rem; margin-left: auto; margin-right: auto; }
+.puente-jg .fb-ui .fb-hero { background: none; padding: 0 0 0.75rem; }
+.puente-jg .fb-logo { display: block; width: 100%; height: auto; border-radius: 0.25rem; box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.55); image-rendering: auto; }
+.puente-jg .fb-ui .fb-cartel { margin: 0.75rem 0; padding: 0.5rem 0.75rem; background: #000; border: 2px solid #6b6258; box-shadow: inset 0 0 0 2px #000, 0 2px 0 rgba(0,0,0,0.5);
+  color: #f8f400; font: 700 1rem/1.2 "Courier New", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
+.puente-jg .fb-ui .jg-btn, .puente-jg .fb-ui .jg-fila, .puente-jg .fb-ui .jg-stat, .puente-jg .fb-ui .jg-seg-op, .puente-jg .fb-ui .fb-regla {
+  background: #8c929a url(/puente/funball/losa.webp) repeat; background-size: 160px;
+  border: 0; border-radius: 2px; color: #24272b;
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.55), inset -3px -3px 0 rgba(0,0,0,0.45), 3px 4px 0 rgba(0,0,0,0.6);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45), 0 -1px 0 rgba(0,0,0,0.35);
+}
+.puente-jg .fb-ui .jg-btn { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 800; }
+.puente-jg .fb-ui .jg-btn:hover, .puente-jg .fb-ui .jg-fila:hover { filter: brightness(1.08); }
+.puente-jg .fb-ui .jg-btn:active, .puente-jg .fb-ui .jg-seg-op.on { box-shadow: inset 3px 3px 0 rgba(0,0,0,0.45), inset -2px -2px 0 rgba(255,255,255,0.35); transform: translate(2px, 3px); }
+.puente-jg .fb-ui .jg-btn.jg-primario { color: #6a0a06; }
+.puente-jg .fb-ui .jg-seg { background: rgba(0,0,0,0.35); border-radius: 2px; }
+.puente-jg .fb-ui .jg-seg-op.on { color: #6a0a06; }
+.puente-jg .fb-ui .jg-fnombre, .puente-jg .fb-ui .fb-regla b, .puente-jg .fb-ui .jg-stat-n { color: #1a1c1f; }
+.puente-jg .fb-ui .jg-fmeta, .puente-jg .fb-ui .jg-stat-l, .puente-jg .fb-ui .fb-regla span { color: #1f2226; font-weight: 600; }
+.puente-jg .fb-ui .jg-sub, .puente-jg .fb-ui .jg-etq { display: inline-block; padding: 0.25rem 0.625rem; background: #000; border: 2px solid #6b6258; color: #f8f400; font-family: "Courier New", ui-monospace, monospace; }
+.puente-jg .fb-ui .jg-vacio, .puente-jg .fb-ui .jg-estado { color: #f2e8d8; text-shadow: 0 1px 2px #000; }
+.puente-jg .fb-ui .jg-marcador { background: #000; border: 2px solid #6b6258; border-radius: 2px; color: #f8f400; }
+.puente-jg .fb-ui .jg-marcador .jg-lnombre, .puente-jg .fb-ui .jg-marcador .jg-meta, .puente-jg .fb-ui .jg-marcador .jg-lpuntos { color: #f8f400; font-family: "Courier New", ui-monospace, monospace; font-weight: 700; }
+.puente-jg .fb-ui .jg-status { padding: 0.5rem 0.75rem; background: #000; border: 2px solid #6b6258; }
+.puente-jg .fb-ui .jg-turno, .puente-jg .fb-ui .jg-ultimo { color: #f8f400; font-family: "Courier New", ui-monospace, monospace; font-weight: 700; text-transform: uppercase; }
+.puente-jg .fb-ui .fb-pie { color: #f2e8d8; text-shadow: 0 1px 2px #000; }
+.puente-jg .fb-ui .fb-visor { border-radius: 2px; box-shadow: 0 0 0 2px #6b6258, 3px 4px 0 2px rgba(0,0,0,0.6); }
 @keyframes fb-titila { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.45; } }
 @keyframes fb-boom { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .puente-jg .fb-vuela { transition-duration: 0.05s; } }
