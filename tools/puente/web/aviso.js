@@ -7515,61 +7515,147 @@ function sheetDrag(sheet, opts) {
   const fbSize = (s) => 6 + Math.min(15, s) * 0.8;
   const SVGNS = 'http://www.w3.org/2000/svg';
   const sv = (tag, attrs, parent) => { const n = document.createElementNS(SVGNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  // Graficos al estilo del original (render 3D de los 90): piedra de fondo, bolas de marmol
+  // (rojas con vetas amarillas, verdes con vetas blancas), bases con volumen y brillo metalico
   function fbDefs(svgEl) {
     const d = sv('defs', {}, svgEl);
-    const grad = (id, stops, rad) => {
-      const g = sv(rad ? 'radialGradient' : 'linearGradient', rad ? { id, cx: '35%', cy: '30%', r: '75%' } : { id, x1: '0', y1: '0', x2: '0', y2: '1' }, d);
-      stops.forEach(([o, c]) => sv('stop', { offset: o, 'stop-color': c }, g));
-    };
-    grad('fb-roja', [['0', '#ffb3b0'], ['0.25', '#ff4d4f'], ['0.8', '#a5121b'], ['1', '#5c060c']], true);
-    grad('fb-verde', [['0', '#c3ffd9'], ['0.25', '#33d17a'], ['0.8', '#0b7a3e'], ['1', '#04381c']], true);
-    grad('fb-base', [['0', '#7c86ff'], ['1', '#3a42b8']]);
-    grad('fb-oro', [['0', '#ffe08a'], ['1', '#b8860b']]);
-    grad('fb-plata', [['0', '#f4f6f8'], ['1', '#7d838c']]);
-    grad('fb-hielo', [['0', '#e1edff'], ['1', '#8fb6f5']]);
-    grad('fb-oscuro', [['0', '#55575e'], ['1', '#1e1f22']]);
-    grad('fb-jabon', [['0', '#ffe3f6'], ['0.5', '#c9f3ff'], ['1', '#e0d4ff']]);
-    grad('fb-huevo', [['0', '#fffdf2'], ['1', '#d9cfa8']], true);
+    d.innerHTML = `
+      <filter id="fb-piedra" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7" result="f"/>
+        <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="2" result="g"/>
+        <feComposite in="f" in2="g" operator="arithmetic" k1="0" k2="0.55" k3="0.6" k4="0" result="m"/>
+        <feColorMatrix in="m" type="matrix" values="0.36 0 0 0 0.06  0.31 0 0 0 0.055  0.30 0 0 0 0.06  0 0 0 0 1"/>
+      </filter>
+      <filter id="fb-venas-r" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="turbulence" baseFrequency="0.07" numOctaves="2" seed="4" result="t"/>
+        <feColorMatrix in="t" type="luminanceToAlpha" result="a"/>
+        <feComponentTransfer in="a" result="v"><feFuncA type="table" tableValues="0 1 0.1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/></feComponentTransfer>
+        <feFlood flood-color="#ffd84a" result="y"/><feComposite in="y" in2="v" operator="in" result="yv"/>
+        <feFlood flood-color="#c8141b" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="yv"/></feMerge>
+      </filter>
+      <filter id="fb-venas-v" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="2" seed="9" result="t"/>
+        <feColorMatrix in="t" type="luminanceToAlpha" result="a"/>
+        <feComponentTransfer in="a" result="v"><feFuncA type="table" tableValues="0 0.95 0.1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"/></feComponentTransfer>
+        <feFlood flood-color="#e9fff1" result="y"/><feComposite in="y" in2="v" operator="in" result="yv"/>
+        <feFlood flood-color="#13804a" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="yv"/></feMerge>
+      </filter>
+      <pattern id="fb-marmol-r" patternUnits="userSpaceOnUse" width="240" height="240"><rect width="240" height="240" filter="url(#fb-venas-r)"/></pattern>
+      <pattern id="fb-marmol-v" patternUnits="userSpaceOnUse" width="240" height="240"><rect width="240" height="240" filter="url(#fb-venas-v)"/></pattern>
+      <radialGradient id="fb-sombreado" cx="36%" cy="30%" r="72%">
+        <stop offset="0" stop-color="#fff" stop-opacity="0.35"/><stop offset="0.35" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="0.78" stop-color="#000" stop-opacity="0.35"/><stop offset="1" stop-color="#000" stop-opacity="0.75"/>
+      </radialGradient>
+      <radialGradient id="fb-brillo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff" stop-opacity="0.95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <radialGradient id="fb-sombra" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#000" stop-opacity="0.6"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+      <linearGradient id="fb-azul" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa2ff"/><stop offset="0.45" stop-color="#4f58d6"/><stop offset="1" stop-color="#262c8a"/></linearGradient>
+      <linearGradient id="fb-azul-lado" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3096"/><stop offset="1" stop-color="#121552"/></linearGradient>
+      <linearGradient id="fb-lila" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0ff"/><stop offset="0.5" stop-color="#b9bcf4"/><stop offset="1" stop-color="#8d90d8"/></linearGradient>
+      <linearGradient id="fb-oro" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0b0"/><stop offset="0.35" stop-color="#e6a925"/><stop offset="0.7" stop-color="#9c6508"/><stop offset="1" stop-color="#5a3500"/></linearGradient>
+      <linearGradient id="fb-cobre" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd9a8"/><stop offset="0.45" stop-color="#d0762a"/><stop offset="1" stop-color="#6a2d06"/></linearGradient>
+      <linearGradient id="fb-plata" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.4" stop-color="#c9ced6"/><stop offset="0.75" stop-color="#7d848f"/><stop offset="1" stop-color="#3e434b"/></linearGradient>
+      <linearGradient id="fb-acero" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa0aa"/><stop offset="0.5" stop-color="#4b5059"/><stop offset="1" stop-color="#1b1d21"/></linearGradient>
+      <radialGradient id="fb-pozo" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#000"/><stop offset="0.7" stop-color="#0b0a0c"/><stop offset="1" stop-color="#3b3640"/></radialGradient>
+      <radialGradient id="fb-jabon" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity="0.9"/><stop offset="0.4" stop-color="#ffc7ef" stop-opacity="0.75"/><stop offset="0.7" stop-color="#b5ecff" stop-opacity="0.7"/><stop offset="1" stop-color="#c7a8ff" stop-opacity="0.85"/></radialGradient>
+      <radialGradient id="fb-esfera-gris" cx="36%" cy="30%" r="70%"><stop offset="0" stop-color="#d5d9df"/><stop offset="0.4" stop-color="#6c727c"/><stop offset="1" stop-color="#16181c"/></radialGradient>
+      <radialGradient id="fb-rosa" cx="36%" cy="30%" r="70%"><stop offset="0" stop-color="#ffd1ea"/><stop offset="0.4" stop-color="#f0479e"/><stop offset="1" stop-color="#6d0a3c"/></radialGradient>
+      <radialGradient id="fb-huevo" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.6" stop-color="#efe6c6"/><stop offset="1" stop-color="#a99c70"/></radialGradient>`;
     return d;
   }
-  // La base de cada celda
+  // Un disco con espesor (la base vista en perspectiva) y su brillo
+  function fbDisc(g, x, y, rx, ry, top, side, h) {
+    sv('ellipse', { cx: x, cy: y + 2.5, rx: rx + 2, ry: ry + 2, fill: 'url(#fb-sombra)' }, g);
+    sv('ellipse', { cx: x, cy: y + h, rx, ry, fill: side }, g);
+    sv('rect', { x: x - rx, y, width: rx * 2, height: h, fill: side }, g);
+    sv('ellipse', { cx: x, cy: y, rx, ry, fill: top }, g);
+    sv('ellipse', { cx: x - rx * 0.3, cy: y - ry * 0.35, rx: rx * 0.45, ry: ry * 0.32, fill: 'url(#fb-brillo)', opacity: 0.55 }, g);
+  }
   function fbBase(g, b, x, y) {
-    const disc = (rx, ry, fill, stroke) => sv('ellipse', { cx: x, cy: y, rx, ry, fill, stroke: stroke || 'rgba(0,0,0,.35)', 'stroke-width': 1 }, g);
     switch (b) {
-      case 1: sv('ellipse', { cx: x, cy: y, rx: 16, ry: 7.5, fill: '#08080b', stroke: '#2b2d31', 'stroke-width': 1.5 }, g); break;
-      case 2: disc(9, 4.5, 'url(#fb-base)'); break;
-      case 3: disc(17, 8, 'url(#fb-oro)', '#7a5a00'); sv('path', { d: `M${x - 6} ${y + 1}l6-4 6 4M${x - 6} ${y + 4}l6-4 6 4`, stroke: '#7a4b00', 'stroke-width': 1.6, fill: 'none', 'stroke-linecap': 'round' }, g); break;
-      case 4: sv('path', { d: `M${x - 16} ${y}a16 9 0 0 1 32 0a16 7 0 0 1-32 0z`, fill: 'url(#fb-plata)', stroke: '#5d636b', 'stroke-width': 1 }, g); sv('path', { d: `M${x - 9} ${y - 4}q9-6 18 0`, stroke: '#fff', 'stroke-width': 1.4, fill: 'none', opacity: 0.8 }, g); break;
-      case 5: sv('ellipse', { cx: x, cy: y, rx: 15, ry: 7, fill: 'none', stroke: '#ff9f1c', 'stroke-width': 4 }, g); sv('ellipse', { cx: x, cy: y, rx: 15, ry: 7, fill: 'none', stroke: '#ffd38a', 'stroke-width': 1.2 }, g); break;
-      case 6: disc(16, 7.5, 'url(#fb-oscuro)', '#0b0b0d'); sv('path', { d: `M${x} ${y}m-9 0a9 4 0 1 0 9-3a6 3 0 1 0 5 2a3 1.5 0 1 0-3 1`, stroke: '#8a8d94', 'stroke-width': 1.2, fill: 'none' }, g); break;
-      case 7: for (let k = 0; k < 4; k++) sv('ellipse', { cx: x, cy: y - k * 3.5, rx: 11, ry: 4.5, fill: 'none', stroke: k === 3 ? '#e6b98a' : '#b07a45', 'stroke-width': 2.2 }, g); break;
-      case 8: disc(17, 7, 'url(#fb-hielo)', '#6f93cf'); sv('path', { d: `M${x - 10} ${y - 1}h14`, stroke: '#fff', 'stroke-width': 1.5, 'stroke-linecap': 'round', opacity: 0.9 }, g); break;
-      case 9: disc(16, 7.5, 'url(#fb-jabon)', '#c58bd8'); sv('circle', { cx: x + 6, cy: y - 2, r: 2.5, fill: '#fff', opacity: 0.85 }, g); sv('circle', { cx: x - 5, cy: y + 1, r: 1.6, fill: '#fff', opacity: 0.7 }, g); break;
-      case 10: disc(16, 7.5, 'url(#fb-plata)', '#5d636b'); sv('path', { d: `M${x - 7} ${y - 1}v-5a7 7 0 0 1 14 0v5`, stroke: '#d6343d', 'stroke-width': 4, fill: 'none' }, g); sv('path', { d: `M${x - 7} ${y - 1}v-2.2M${x + 7} ${y - 1}v-2.2`, stroke: '#e3e5e8', 'stroke-width': 4 }, g); break;
-      case 11: disc(16, 7.5, 'url(#fb-oscuro)', '#0b0b0d'); sv('rect', { x: x - 4, y: y - 14, width: 8, height: 13, rx: 2.5, fill: '#4e5058', stroke: '#16171a', 'stroke-width': 1 }, g); sv('circle', { cx: x, cy: y - 14, r: 3, fill: '#16171a' }, g); break;
-      case 12: { disc(13, 6, 'url(#fb-oscuro)', '#0b0b0d'); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; sv('line', { x1: x + Math.cos(a) * 8, y1: y - 3 + Math.sin(a) * 4, x2: x + Math.cos(a) * 14, y2: y - 3 + Math.sin(a) * 7, stroke: '#9aa0a8', 'stroke-width': 2, 'stroke-linecap': 'round' }, g); } sv('circle', { cx: x, cy: y - 4, r: 7, fill: '#3a3c42', stroke: '#9aa0a8', 'stroke-width': 1 }, g); sv('circle', { cx: x - 2, cy: y - 6, r: 1.6, fill: '#f23f43' }, g); break; }
-      default: disc(16, 7.5, 'url(#fb-base)', '#262b80');
+      case 1: // agujero
+        sv('ellipse', { cx: x, cy: y, rx: 16, ry: 7.5, fill: 'url(#fb-pozo)' }, g);
+        sv('path', { d: `M${x - 16} ${y}a16 7.5 0 0 0 32 0`, fill: 'none', stroke: 'rgba(255,255,255,.12)', 'stroke-width': 1 }, g);
+        break;
+      case 2: fbDisc(g, x, y, 8, 4, 'url(#fb-azul)', 'url(#fb-azul-lado)', 2); break;
+      case 3: // bomba: plato dorado
+        fbDisc(g, x, y, 16.5, 7.5, 'url(#fb-oro)', '#5a3500', 3);
+        sv('ellipse', { cx: x, cy: y + 0.5, rx: 10, ry: 4.2, fill: 'none', stroke: '#6b4100', 'stroke-width': 1.2, opacity: 0.8 }, g);
+        break;
+      case 4: // blindada: cupula de plata
+        sv('ellipse', { cx: x, cy: y + 3, rx: 18, ry: 8.5, fill: 'url(#fb-sombra)' }, g);
+        sv('path', { d: `M${x - 16} ${y + 1}a16 11 0 0 1 32 0a16 6.5 0 0 1-32 0z`, fill: 'url(#fb-plata)' }, g);
+        sv('ellipse', { cx: x - 5, cy: y - 5, rx: 6, ry: 2.6, fill: 'url(#fb-brillo)' }, g);
+        break;
+      case 5: // teletransportador: anillo de oro
+        sv('ellipse', { cx: x, cy: y + 3, rx: 18, ry: 8.5, fill: 'url(#fb-sombra)' }, g);
+        sv('ellipse', { cx: x, cy: y + 1.5, rx: 14.5, ry: 6.5, fill: 'none', stroke: '#6b4100', 'stroke-width': 4.5 }, g);
+        sv('ellipse', { cx: x, cy: y, rx: 14.5, ry: 6.5, fill: 'none', stroke: 'url(#fb-oro)', 'stroke-width': 4.5 }, g);
+        sv('path', { d: `M${x - 11} ${y - 4}q6-3.5 13-2.5`, stroke: '#fff7d0', 'stroke-width': 1.3, fill: 'none', opacity: 0.85 }, g);
+        break;
+      case 6: // desague: rejilla oscura con caños
+        fbDisc(g, x, y, 15.5, 7, 'url(#fb-acero)', '#121316', 2.5);
+        sv('ellipse', { cx: x, cy: y, rx: 9, ry: 4, fill: '#050506' }, g);
+        sv('path', { d: `M${x - 7} ${y}h14M${x - 5} ${y - 2.4}h10M${x - 5} ${y + 2.4}h10`, stroke: '#8a909a', 'stroke-width': 1.1 }, g);
+        break;
+      case 7: // resorte de cobre
+        sv('ellipse', { cx: x, cy: y + 2, rx: 14, ry: 6, fill: 'url(#fb-sombra)' }, g);
+        for (let k = 0; k < 5; k++) sv('ellipse', { cx: x, cy: y - k * 3, rx: 10.5, ry: 4.2, fill: 'none', stroke: k % 2 ? '#8a3f0e' : 'url(#fb-cobre)', 'stroke-width': 2.4 }, g);
+        break;
+      case 8: fbDisc(g, x, y, 16.5, 7.5, 'url(#fb-lila)', '#6e70b8', 2.5); break; // tobogan: hielo
+      case 9: // jabon: burbuja tornasolada
+        sv('ellipse', { cx: x, cy: y + 2.5, rx: 18, ry: 8.5, fill: 'url(#fb-sombra)' }, g);
+        sv('ellipse', { cx: x, cy: y, rx: 15.5, ry: 7.5, fill: 'url(#fb-jabon)', stroke: 'rgba(255,255,255,.75)', 'stroke-width': 0.8 }, g);
+        sv('ellipse', { cx: x - 5, cy: y - 2.4, rx: 4, ry: 1.6, fill: '#fff', opacity: 0.9 }, g);
+        break;
+      case 10: // iman: herradura roja sobre plata
+        fbDisc(g, x, y, 15.5, 7, 'url(#fb-plata)', '#3e434b', 2.5);
+        sv('path', { d: `M${x - 7.5} ${y - 1}v-5a7.5 7.5 0 0 1 15 0v5`, stroke: '#7a0b12', 'stroke-width': 5.2, fill: 'none' }, g);
+        sv('path', { d: `M${x - 7.5} ${y - 1}v-5a7.5 7.5 0 0 1 15 0v5`, stroke: '#e0303a', 'stroke-width': 3.6, fill: 'none' }, g);
+        sv('path', { d: `M${x - 7.5} ${y - 1}v-2.4M${x + 7.5} ${y - 1}v-2.4`, stroke: '#eef0f3', 'stroke-width': 5 }, g);
+        break;
+      case 11: // canion: base de acero con caño
+        fbDisc(g, x, y, 15.5, 7, 'url(#fb-acero)', '#111215', 3);
+        sv('rect', { x: x - 4.5, y: y - 15, width: 9, height: 14, rx: 3, fill: 'url(#fb-acero)' }, g);
+        sv('ellipse', { cx: x, cy: y - 15, rx: 4.5, ry: 2, fill: '#000' }, g);
+        sv('rect', { x: x - 3, y: y - 13, width: 1.6, height: 10, fill: 'rgba(255,255,255,.35)' }, g);
+        break;
+      case 12: { // mina: erizo de metal
+        sv('ellipse', { cx: x, cy: y + 2, rx: 15, ry: 6.5, fill: 'url(#fb-sombra)' }, g);
+        for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; sv('line', { x1: x, y1: y - 6, x2: x + Math.cos(a) * 13, y2: y - 6 + Math.sin(a) * 9, stroke: '#6c727c', 'stroke-width': 2.2, 'stroke-linecap': 'round' }, g); }
+        sv('circle', { cx: x, cy: y - 6, r: 8, fill: 'url(#fb-esfera-gris)' }, g);
+        sv('circle', { cx: x - 1.5, cy: y - 8.5, r: 1.8, fill: '#ff3b30' }, g);
+        break;
+      }
+      default: fbDisc(g, x, y, 16.5, 7.5, 'url(#fb-azul)', 'url(#fb-azul-lado)', 3); // normal: disco azul
     }
   }
   function fbBall(parent, k, s, x, y, num) {
     const g = sv('g', { class: 'fb-bola' }, parent);
     if (k === 'S') {
-      sv('ellipse', { cx: x, cy: y - 6, rx: 5, ry: 6.5, fill: 'url(#fb-huevo)', stroke: '#a59a72', 'stroke-width': 0.8 }, g);
-      [[-1.5, -8], [1.8, -5], [-0.5, -3.5]].forEach(([dx, dy]) => sv('circle', { cx: x + dx, cy: y + dy, r: 0.8, fill: '#8a7d55' }, g));
+      sv('ellipse', { cx: x, cy: y + 1, rx: 6, ry: 2.5, fill: 'url(#fb-sombra)' }, g);
+      sv('ellipse', { cx: x, cy: y - 6, rx: 5, ry: 6.6, fill: 'url(#fb-huevo)' }, g);
+      [[-1.5, -8], [1.8, -5], [-0.5, -3.5], [2, -9]].forEach(([dx, dy]) => sv('circle', { cx: x + dx, cy: y + dy, r: 0.75, fill: '#8a7d55' }, g));
       return;
     }
-    const r = fbSize(s);
-    sv('ellipse', { cx: x, cy: y + 1, rx: r * 0.9, ry: r * 0.35, fill: 'rgba(0,0,0,.35)' }, g);
-    sv('circle', { cx: x, cy: y - r * 0.85, r, fill: k === 'R' ? 'url(#fb-roja)' : 'url(#fb-verde)', stroke: k === 'R' ? '#4d050a' : '#03301a', 'stroke-width': 0.8 }, g);
-    sv('ellipse', { cx: x - r * 0.35, cy: y - r * 1.35, rx: r * 0.32, ry: r * 0.2, fill: '#fff', opacity: 0.55 }, g);
-    if (num) { const t = sv('text', { x, y: y - r * 0.85 + 3.6, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(s); }
+    const r = fbSize(s), cy = y - r * 0.85;
+    sv('ellipse', { cx: x + r * 0.15, cy: y + 1.5, rx: r * 1.05, ry: r * 0.4, fill: 'url(#fb-sombra)' }, g);
+    sv('circle', { cx: x, cy, r, fill: k === 'R' ? 'url(#fb-marmol-r)' : 'url(#fb-marmol-v)' }, g);
+    sv('circle', { cx: x, cy, r, fill: 'url(#fb-sombreado)' }, g);
+    sv('ellipse', { cx: x - r * 0.38, cy: cy - r * 0.45, rx: r * 0.3, ry: r * 0.2, fill: 'url(#fb-brillo)' }, g);
+    if (num) { const t = sv('text', { x, y: cy + 3.6, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(s); }
   }
   function fbSpider(g, x, y) {
-    const s = sv('g', { class: 'fb-arania', transform: `translate(${x} ${y - 6})` }, g);
-    for (const side of [-1, 1]) for (let k = 0; k < 4; k++) sv('path', { d: `M0 0q${side * 7} ${-5 + k * 3} ${side * 11} ${-1 + k * 3.2}`, stroke: '#c2185b', 'stroke-width': 1.6, fill: 'none', 'stroke-linecap': 'round' }, s);
-    sv('ellipse', { cx: 0, cy: 1, rx: 6, ry: 5, fill: '#e91e8c', stroke: '#7a0a48', 'stroke-width': 1 }, s);
-    sv('circle', { cx: 0, cy: -4, r: 3.4, fill: '#f06bb5', stroke: '#7a0a48', 'stroke-width': 0.8 }, s);
-    sv('circle', { cx: -1.2, cy: -4.6, r: 0.8, fill: '#fff' }, s); sv('circle', { cx: 1.2, cy: -4.6, r: 0.8, fill: '#fff' }, s);
+    const s = sv('g', { class: 'fb-arania', transform: `translate(${x} ${y - 5})` }, g);
+    sv('ellipse', { cx: 0, cy: 6, rx: 13, ry: 4, fill: 'url(#fb-sombra)' }, s);
+    for (const side of [-1, 1]) for (let k = 0; k < 4; k++) {
+      sv('path', { d: `M${side * 3} 0q${side * 8} ${-7 + k * 3} ${side * 13} ${1 + k * 2.6}`, stroke: '#7d0c45', 'stroke-width': 2.6, fill: 'none', 'stroke-linecap': 'round' }, s);
+      sv('path', { d: `M${side * 3} 0q${side * 8} ${-7 + k * 3} ${side * 13} ${1 + k * 2.6}`, stroke: '#f06bb5', 'stroke-width': 1.2, fill: 'none', 'stroke-linecap': 'round' }, s);
+    }
+    sv('ellipse', { cx: 0, cy: 2, rx: 7, ry: 5.5, fill: 'url(#fb-rosa)' }, s);
+    sv('circle', { cx: 0, cy: -4, r: 3.8, fill: 'url(#fb-rosa)' }, s);
+    sv('circle', { cx: -1.4, cy: -4.8, r: 0.9, fill: '#fff' }, s); sv('circle', { cx: 1.4, cy: -4.8, r: 0.9, fill: '#fff' }, s);
   }
 
   async function fbInicio() {
@@ -7759,6 +7845,7 @@ function sheetDrag(sheet, opts) {
     const flip = s.yo && s.yo.color === 'R';
     const svgEl = sv('svg', { viewBox: `0 0 ${FB_W} ${FB_H}`, class: 'fb-tablero', role: 'img', 'aria-label': 'Tablero de Funball' });
     fbDefs(svgEl);
+    sv('rect', { width: FB_W, height: FB_H, filter: 'url(#fb-piedra)' }, svgEl);
     const order = [];
     for (let c = 0; c < 8; c++) for (let r = 0; r < 8; r++) order.push([c, r, fbXY(c, r, flip)]);
     order.sort((a, b) => a[2].y - b[2].y || a[2].x - b[2].x);
