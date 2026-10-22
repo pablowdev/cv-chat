@@ -19,13 +19,12 @@ const M = require('./funball-motor.js');
 
 const BOT = -1;
 const BOT_NAME = 'La Compu';
-const TURNO_MS = 60 * 1000;
 const NIVELES = ['Fácil', 'Normal', 'Difícil', 'Imposible'];
 
 let db, io, log, warn, webpush = null;
 let boards = [];
 const games = new Map(); // id -> partida
-const timers = new Map(); // id -> reloj del turno
+const timers = new Map(); // id -> la jugada pendiente de la compu
 const pushed = new Map(); // "id:user" -> ultimo aviso
 const rng = (n) => crypto.randomInt(n);
 
@@ -52,7 +51,7 @@ function setup(ctx) {
       if (g.estado === 'terminada' && Date.now() - (g.fin || 0) > 3600e3) { db.prepare('DELETE FROM puente_funball_mesas WHERE id = ?').run(r.id); continue; }
       if (g.estado === 'esperando' && Date.now() - g.creado > 24 * 3600e3) { db.prepare('DELETE FROM puente_funball_mesas WHERE id = ?').run(r.id); continue; }
       games.set(g.id, g);
-      if (g.estado === 'jugando') { g.deadline = Date.now() + TURNO_MS; arm(g); }
+      if (g.estado === 'jugando') { g.deadline = null; arm(g); }
     } catch { /* fila rota */ }
   }
   setInterval(sweep, 10 * 60 * 1000).unref();
@@ -235,9 +234,9 @@ function rematch(g) {
   return { ok: true, id: n.id };
 }
 
-// ── Despues de cada cambio: guardar, avisar, el reloj y la compu ──
+// ── Despues de cada cambio: guardar, avisar y la compu (sin limite de tiempo por turno, como el original) ──
 function tick(g) {
-  g.deadline = g.estado === 'jugando' ? Date.now() + TURNO_MS : null;
+  g.deadline = null;
   arm(g);
   push(g, false);
 }
@@ -246,20 +245,7 @@ function arm(g) {
   clearTimeout(timers.get(g.id));
   if (g.estado !== 'jugando') return;
   const i = seatOfColor(g, g.turno);
-  if (g.jugadores[i] === BOT) { timers.set(g.id, setTimeout(() => botMove(g), 1400 + rng(800))); return; }
-  timers.set(g.id, setTimeout(() => timeout(g), Math.max(1000, (g.deadline || Date.now()) - Date.now())));
-}
-
-// Se le termino el tiempo: juega por el una jugada al azar. Tres veces seguidas: abandona.
-function timeout(g) {
-  if (g.estado !== 'jugando') return;
-  const i = seatOfColor(g, g.turno);
-  g.timeouts[i] = (g.timeouts[i] || 0) + 1;
-  note(g, `⏰ A ${nameOf(g.jugadores[i]).nombre} se le terminó el tiempo.`);
-  if (g.timeouts[i] >= 3) { finish(g, 1 - i, 'abandono'); push(g, true); return; }
-  const mv = M.aiMove(M.load(g.tab), g.turno, 1, rng);
-  if (!mv) { finish(g, 1 - i, 'sin-jugadas'); push(g, true); return; }
-  play(g, i, mv[0], mv[1]);
+  if (g.jugadores[i] === BOT) timers.set(g.id, setTimeout(() => botMove(g), 1400 + rng(800)));
 }
 
 // La compu: la misma del original (busca 0 a 3 jugadas adelante segun el nivel)

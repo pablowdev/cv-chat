@@ -419,6 +419,19 @@ async function handle(req, res) {
     return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
+  // Sonidos del Funball: tools/puente/web/funball/sonidos/<nombre>.mp3, propios de cada servidor
+  if (p === '/puente/funball/sonidos.json' && req.method === 'GET') {
+    let l = [];
+    try { l = fs.readdirSync(path.join(STATIC, 'funball', 'sonidos')).filter(n => /^[a-z-]{1,30}\.mp3$/.test(n)).map(n => n.slice(0, -4)); } catch { /* sin sonidos */ }
+    return send(res, 200, 'application/json', JSON.stringify(l), { 'Cache-Control': 'public, max-age=3600' });
+  }
+  const fbSon = req.method === 'GET' && /^\/puente\/funball\/sonidos\/([a-z-]{1,30})\.mp3$/.exec(p);
+  if (fbSon) {
+    const file = path.join(STATIC, 'funball', 'sonidos', fbSon[1] + '.mp3');
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin sonido');
+    return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
     return send(res, 200, 'application/javascript', temaFijo.script(db));
   }
