@@ -736,7 +736,7 @@ html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name { visib
     display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
     position: absolute; left: 0; top: 0; bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
     width: 4.5rem; padding: calc(env(safe-area-inset-top, 0px) + 0.75rem) 0 0.75rem; box-sizing: border-box;
-    background: #121214; z-index: 4; overflow-y: auto; scrollbar-width: none;
+    background: #121214; z-index: 4; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
   }
   .puente-rail-btn {
     position: relative; width: 3rem; height: 3rem; flex-shrink: 0; padding: 0; border: 0; border-radius: 1rem;

@@ -7015,9 +7015,9 @@ function sheetDrag(sheet, opts) {
   let tries = 0;
   (function wait() {
     const app = window.app;
-    if (!app || !app.socket || !token() || !addButtons()) { if (++tries < 120) setTimeout(wait, 500); return; }
-    // Por si la columna se arma despues
-    setTimeout(addButtons, 3000);
+    if (!app || !app.socket || !token() || !addButtons()) { setTimeout(wait, ++tries < 120 ? 500 : 3000); return; }
+    // Por si la columna se arma despues o Haven la vuelve a armar
+    setInterval(addButtons, 2000);
     refreshBadge();
     setInterval(refreshBadge, 5 * 60 * 1000);
     app.socket.on('puente-mercado', (d) => setBadge(d && d.pendientes));
@@ -8863,8 +8863,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   let tries = 0;
   (function wait() {
     const a = app();
-    if (!a || !a.socket || !addButtons()) { if (++tries < 120) setTimeout(wait, 500); return; }
-    setTimeout(addButtons, 3000);
+    if (!a || !a.socket || !addButtons()) { setTimeout(wait, ++tries < 120 ? 500 : 3000); return; }
+    setInterval(addButtons, 2000);
     refreshBadge();
     a.socket.on('truco:estado', (s) => { if (page && mesa && mesa.id === s.id) render(s); refreshBadge(); });
     a.socket.on('truco:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio') show('inicio'); });
