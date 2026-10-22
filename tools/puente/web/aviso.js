@@ -7151,7 +7151,7 @@ function sheetDrag(sheet, opts) {
     if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); }
     else close();
   }
-  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = []; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
+  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
@@ -7184,21 +7184,68 @@ function sheetDrag(sheet, opts) {
   }
 
   // ── Sala ──
-  // Arriba, los juegos: Truco y Funball (se recuerda el ultimo que se uso)
-  const prefGame = () => { try { return localStorage.getItem('puente_juego') || 'truco'; } catch { return 'truco'; } };
-  function gameTabs(cur) {
-    const t = el('div', 'jg-seg fb-juegos');
-    for (const [v, l] of [['truco', 'Truco'], ['funball', 'Funball']]) {
-      const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', cur === v);
-      x.addEventListener('click', () => { if (cur === v) return; try { localStorage.setItem('puente_juego', v); } catch { /* sin guardar */ } stack = [['inicio', v]]; show('inicio', v); });
-      t.appendChild(x);
+  // La biblioteca, como la de Steam: cada juego es una tarjeta con su tapa. Para sumar un juego
+  // nuevo alcanza con agregarlo aca (id = la vista de su sala, evento = el que da sus partidas)
+  const JUEGOS = [
+    { id: 'truco', nombre: 'Truco', sub: 'Argentino, 1 contra 1', evento: 'truco:inicio', tapa: () => `/puente/cartas/banner.webp?v=${CARTAS_V}`, fondo: '#0d1410' },
+    { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
+  ];
+  async function biblioteca() {
+    page.appendChild(head('Juegos'));
+    const b = el('div', 'jg-bib'); page.appendChild(b);
+    const seguir = el('div'); b.appendChild(seguir);
+    b.appendChild(el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.length})`));
+    const grilla = el('div', 'jg-tapas'); b.appendChild(grilla);
+    const tarjetas = {};
+    for (const j of JUEGOS) {
+      const t = el('button', 'jg-tapa'); t.type = 'button'; t.setAttribute('aria-label', j.nombre);
+      const caja = el('div', 'jg-tapa-img'); caja.style.background = j.fondo;
+      const img = el('img'); img.alt = ''; img.draggable = false; img.src = j.tapa();
+      if (j.ajuste) img.style.objectFit = j.ajuste;
+      img.addEventListener('error', () => { img.remove(); caja.appendChild(el('div', 'jg-tapa-sin', j.nombre)); });
+      const badge = el('span', 'jg-tapa-badge'); badge.style.display = 'none';
+      caja.append(img, badge);
+      t.append(caja, el('div', 'jg-tapa-n', j.nombre), el('div', 'jg-tapa-s', j.sub));
+      t.addEventListener('click', () => go('inicio', j.id));
+      grilla.appendChild(t);
+      tarjetas[j.id] = { t, badge };
     }
-    return t;
+    const pronto = el('div', 'jg-tapa pronto');
+    const pc = el('div', 'jg-tapa-img'); pc.appendChild(el('div', 'jg-tapa-sin', '＋'));
+    pronto.append(pc, el('div', 'jg-tapa-n', 'Más juegos'), el('div', 'jg-tapa-s', 'Muy pronto'));
+    grilla.appendChild(pronto);
+    // las partidas en curso de todos los juegos, primero las que te toca
+    const datos = await Promise.all(JUEGOS.map(j => emit(j.evento).catch(() => ({ error: true }))));
+    if (!page || !b.isConnected) return;
+    const curso = [];
+    JUEGOS.forEach((j, i) => {
+      const d = datos[i];
+      if (!d || d.error) return;
+      if (d.tableros && !d.tableros.length) { tarjetas[j.id].t.remove(); return; }
+      const mias = (d.mias || []).filter(m => m.estado !== 'terminada');
+      const n = mias.filter(m => m.teToca).length + (d.abiertas || []).filter(a => a.paraVos).length;
+      if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
+      for (const m of mias) curso.push({ j, m });
+    });
+    if (!curso.length) return;
+    curso.sort((a, z) => (z.m.teToca ? 1 : 0) - (a.m.teToca ? 1 : 0));
+    seguir.appendChild(el('div', 'jg-bib-titulo', 'Seguir jugando'));
+    const l = el('div', 'jg-seguir'); seguir.appendChild(l);
+    for (const { j, m } of curso.slice(0, 6)) {
+      const who = m.rival || m.invitado || { nombre: '?' };
+      const r = el('button', 'jg-fila'); r.type = 'button';
+      const tx = el('div', 'jg-ftexto');
+      tx.append(el('div', 'jg-fnombre', m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`), el('div', 'jg-fmeta', j.nombre));
+      r.append(avatar(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who), tx);
+      if (m.teToca) r.appendChild(el('span', 'jg-chip amarillo', 'Te toca'));
+      r.addEventListener('click', () => go(j.mesa || 'mesa', m.id));
+      l.appendChild(r);
+    }
   }
   async function inicio(which) {
-    if ((which || prefGame()) === 'funball') return fbInicio();
-    page.appendChild(head('Juegos'));
-    page.appendChild(gameTabs('truco'));
+    if (which === 'funball') return fbInicio();
+    if (which !== 'truco') return biblioteca();
+    page.appendChild(head('Truco'));
     const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero');
     hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
@@ -7480,7 +7527,7 @@ function sheetDrag(sheet, opts) {
       r.addEventListener('click', () => emit('truco:accion', { id: s.id, tipo: 'revancha' }).then(x => { if (x.error) toast(x.error, 'error'); else if (x.id) { stack.pop(); go('mesa', x.id); } }));
       acts.appendChild(r);
     }
-    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = []; go('inicio'); });
+    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'truco'); });
     acts.appendChild(v);
     w.appendChild(acts);
     const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
@@ -7814,8 +7861,7 @@ function sheetDrag(sheet, opts) {
   }
 
   async function fbInicio() {
-    page.appendChild(head('Juegos'));
-    page.appendChild(gameTabs('funball'));
+    page.appendChild(head('Funball'));
     const b = el('div', 'jg-cuerpo fb-ui jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero fb-hero');
     const mini = el('div', 'fb-hero-dibujo'); mini.innerHTML = '<svg viewBox="0 0 120 56" aria-hidden="true"><defs><radialGradient id="fbh-r" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffb3b0"/><stop offset=".3" stop-color="#ff4d4f"/><stop offset="1" stop-color="#7a0b12"/></radialGradient><radialGradient id="fbh-v" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#c3ffd9"/><stop offset=".3" stop-color="#33d17a"/><stop offset="1" stop-color="#05502a"/></radialGradient></defs><ellipse cx="34" cy="48" rx="20" ry="6" fill="#4a52d0"/><ellipse cx="86" cy="48" rx="20" ry="6" fill="#4a52d0"/><circle cx="34" cy="30" r="17" fill="url(#fbh-r)"/><circle cx="86" cy="34" r="12" fill="url(#fbh-v)"/></svg>';
@@ -8834,7 +8880,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       r.addEventListener('click', () => emit('funball:accion', { id: s.id, tipo: 'revancha' }).then(x => { if (x.error) toast(x.error, 'error'); else if (x.id) { stack.pop(); go('fbMesa', x.id); } }));
       acts.appendChild(r);
     }
-    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = []; go('inicio', 'funball'); });
+    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'funball'); });
     acts.appendChild(v);
     w.appendChild(acts);
     const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
@@ -8879,9 +8925,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     setInterval(addButtons, 2000);
     refreshBadge();
     a.socket.on('truco:estado', (s) => { if (page && mesa && mesa.id === s.id) render(s); refreshBadge(); });
-    a.socket.on('truco:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio') show('inicio'); });
+    a.socket.on('truco:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && t[1] !== 'funball') show('inicio', t[1]); });
     a.socket.on('funball:estado', (s) => { if (page && fbMesa && fbMesa.id === s.id) fbRender(s); refreshBadge(); });
-    a.socket.on('funball:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio' && page.querySelector('.fb-hero')) show('inicio', 'funball'); });
+    a.socket.on('funball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && t[1] !== 'truco') show('inicio', t[1]); });
     a.socket.on('connect', () => {
       if (page && fbMesa) emit('funball:ver', { id: fbMesa.id }).then(d => d.partida && fbRender(d.partida, true));
       else if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida));

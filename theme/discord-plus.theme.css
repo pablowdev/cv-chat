@@ -2557,7 +2557,24 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 
 /* Funball (funball.js): el tablero en perspectiva como el original, con bolas y bases
    dibujadas de nuevo (aviso.js) */
-.puente-jg .fb-juegos { margin: 0 0.75rem 0.5rem; }
+/* Biblioteca de Juegos (aviso.js, biblioteca): tarjetas con la tapa de cada juego, como Steam */
+.puente-jg .jg-bib { max-width: 72rem; margin: 0 auto; padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
+.puente-jg .jg-bib-titulo { margin: 1.25rem 0 0.75rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #b5bac1; }
+.puente-jg .jg-tapas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(17rem, calc(50% - 0.5rem)), 1fr)); gap: 1.25rem 1rem; }
+.puente-jg .jg-tapa { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.puente-jg .jg-tapa-img { position: relative; aspect-ratio: 3 / 2; border-radius: 0.375rem; overflow: hidden; box-shadow: 0 0.5rem 1.25rem rgba(0,0,0,0.5); transition: transform 0.18s ease, box-shadow 0.18s ease; }
+.puente-jg .jg-tapa-img img { display: block; width: 100%; height: 100%; object-fit: cover; -webkit-user-select: none; user-select: none; }
+.puente-jg .jg-tapa:hover .jg-tapa-img, .puente-jg .jg-tapa:focus-visible .jg-tapa-img { transform: translateY(-0.25rem) scale(1.02); box-shadow: 0 0 0 2px #66c0f4, 0 0.75rem 1.75rem rgba(0,0,0,0.6); }
+.puente-jg .jg-tapa:focus-visible { outline: none; }
+.puente-jg .jg-tapa-sin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; color: #f2f3f5; }
+.puente-jg .jg-tapa-badge { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.1875rem 0.5rem; border-radius: 999px; background: #f0b232; color: #1a1a1e; font-size: 0.75rem; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+.puente-jg .jg-tapa-n { margin-top: 0.625rem; font-size: 1rem; font-weight: 700; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-jg .jg-tapa-s { font-size: 0.8125rem; color: #949ba4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-jg .jg-tapa.pronto { cursor: default; }
+.puente-jg .jg-tapa.pronto .jg-tapa-img { box-shadow: none; border: 2px dashed #3a3940; background: transparent; }
+.puente-jg .jg-tapa.pronto .jg-tapa-sin { color: #5c5e66; font-size: 2.5rem; font-weight: 400; }
+.puente-jg .jg-tapa.pronto:hover .jg-tapa-img { transform: none; box-shadow: none; }
+.puente-jg .jg-seguir { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr)); gap: 0.5rem; }
 .puente-jg .fb-hero { background: linear-gradient(160deg, #2b2f8f 0%, #1c1d4f 100%); }
 .puente-jg .fb-hero-dibujo svg { display: block; width: 7.5rem; height: auto; margin: 0 auto 0.25rem; }
 .puente-jg .fb-seg-varias { flex-wrap: wrap; }
