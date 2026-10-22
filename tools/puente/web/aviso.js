@@ -7069,7 +7069,6 @@ function sheetDrag(sheet, opts) {
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
   };
-  const PALO = { espada: '🗡️', basto: '🪵', oro: '🪙', copa: '🍷' };
   const BTN = {
     truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido',
     flor: '¡Flor!', quiero: '¡Quiero!', noquiero: 'No quiero', mazo: 'Al mazo',
@@ -7093,7 +7092,27 @@ function sheetDrag(sheet, opts) {
   // Cada servidor puede tener su dibujo para cada carta (/puente/cartas/<palo>-<n>.webp,
   // no va al repositorio); si no esta, la carta simple con el numero y el palo
   let conDibujos = true;
-  const plain = (d, c) => d.replaceChildren(el('span', 'jg-num', String(c.n)), el('span', 'jg-palo', PALO[c.p]), el('span', 'jg-num abajo', String(c.n)));
+  // Los palos dibujados como en la baraja española: el oro dorado, la copa roja con pie
+  // dorado, la espada de hoja clara con empuñadura azul y el basto verde con nudos
+  const PALO_SVG = {
+    oro: '<circle cx="12" cy="16" r="10.6" fill="#f6c430" stroke="#9a6a00" stroke-width="1.4"/><circle cx="12" cy="16" r="7.4" fill="#fbd75b" stroke="#b07d00" stroke-width="1"/>'
+      + '<path d="M12 10.2l1.5 3.5 3.8.3-2.9 2.5.9 3.7L12 18.2l-3.3 2 .9-3.7-2.9-2.5 3.8-.3z" fill="#d9480f"/>',
+    copa: '<path d="M4.5 5.5h15c0 6.2-3.2 10.2-7.5 10.2S4.5 11.7 4.5 5.5z" fill="#c8102e" stroke="#7a0a1c" stroke-width="1.2" stroke-linejoin="round"/>'
+      + '<rect x="3.8" y="4" width="16.4" height="2.6" rx="1.2" fill="#f2b705" stroke="#8a6500" stroke-width=".9"/>'
+      + '<path d="M10.6 15.4h2.8l-.3 9.2h-2.2z" fill="#f2b705" stroke="#8a6500" stroke-width=".9"/><ellipse cx="12" cy="19.6" rx="2.7" ry="1.4" fill="#f2b705" stroke="#8a6500" stroke-width=".9"/>'
+      + '<path d="M5.8 29.5c1-3.6 3.5-5.2 6.2-5.2s5.2 1.6 6.2 5.2z" fill="#f2b705" stroke="#8a6500" stroke-width=".9" stroke-linejoin="round"/>',
+    espada: '<path d="M12 1.5l2.3 4V20H9.7V5.5z" fill="#e3eaf2" stroke="#1e5aa8" stroke-width="1.1" stroke-linejoin="round"/><path d="M12 4.5V19.5" stroke="#9fb3c8" stroke-width=".8"/>'
+      + '<path d="M3.5 20.2c2 .9 4.5 1 8.5 1s6.5-.1 8.5-1v2.4c-2 .9-4.5 1-8.5 1s-6.5-.1-8.5-1z" fill="#1e5aa8" stroke="#123a70" stroke-width=".8"/>'
+      + '<rect x="10.6" y="23.4" width="2.8" height="5" rx=".6" fill="#8a5a2b" stroke="#4d2f12" stroke-width=".7"/><circle cx="12" cy="29.9" r="1.8" fill="#f2b705" stroke="#8a6500" stroke-width=".8"/>',
+    basto: '<g transform="rotate(-14 12 16)"><path d="M9.6 11.2L5.7 8.4l1.3-1.9 3.3 2.4zM15.6 17.6l3.6-2.3 1.2 1.9-3.5 2.2zM9.9 23.4l-3 -1.6.9-1.7 2.7 1.4z" fill="#b5722f" stroke="#5e3512" stroke-width="1" stroke-linejoin="round"/>'
+      + '<ellipse cx="6.3" cy="7.4" rx="1.3" ry="1" fill="#f0d7a8" stroke="#7a4a1e" stroke-width=".7"/><ellipse cx="19.9" cy="16.2" rx="1.3" ry="1" fill="#f0d7a8" stroke="#7a4a1e" stroke-width=".7"/><ellipse cx="7.3" cy="20.9" rx="1.1" ry=".9" fill="#f0d7a8" stroke="#7a4a1e" stroke-width=".7"/>'
+      + '<path d="M10.4 30.4L9.3 14C8.5 7 9.9 2.3 12.8 2.3s4.2 4.7 3.2 11.7l-1.7 16.4z" fill="#b5722f" stroke="#5e3512" stroke-width="1.2" stroke-linejoin="round"/>'
+      + '<path d="M11.3 4.6c.7-1 1.7-1.2 2.6-.5M11 9v15" stroke="#dca063" stroke-width=".9" fill="none" stroke-linecap="round"/>'
+      + '<path d="M12.3 7.5l1.6.6M13.6 13l1.4.5M11.6 19l1.6.5M12.4 25.5l1.4.4" stroke="#5e3512" stroke-width="1" stroke-linecap="round"/>'
+      + '<ellipse cx="12.3" cy="30.5" rx="2" ry=".8" fill="#f0d7a8" stroke="#7a4a1e" stroke-width=".7"/></g>',
+  };
+  const palo = (p, cls) => { const s = el('span', cls); s.innerHTML = `<svg viewBox="0 0 24 32" aria-hidden="true">${PALO_SVG[p] || ''}</svg>`; return s; };
+  const plain = (d, c) => d.replaceChildren(el('span', 'jg-num', String(c.n)), palo(c.p, 'jg-palo'), el('span', 'jg-num abajo', String(c.n)));
   function card(c, cls) {
     const d = el('div', 'jg-carta ' + (cls || '') + (c ? ' palo-' + c.p : ' dorso'));
     if (!c) return d;
@@ -7103,7 +7122,7 @@ function sheetDrag(sheet, opts) {
     img.alt = ''; img.draggable = false; img.decoding = 'async';
     img.onerror = () => { conDibujos = false; d.classList.remove('con-dibujo'); plain(d, c); };
     img.src = `/puente/cartas/${c.p}-${c.n}.webp`;
-    const esq = (abajo) => { const e = el('span', 'jg-esq' + (abajo ? ' abajo' : '')); e.append(el('b', null, String(c.n)), el('i', null, PALO[c.p])); return e; };
+    const esq = (abajo) => { const e = el('span', 'jg-esq' + (abajo ? ' abajo' : '')); e.append(el('b', null, String(c.n)), palo(c.p, 'jg-esq-palo')); return e; };
     d.classList.add('con-dibujo');
     d.append(img, esq(false), esq(true));
     return d;
