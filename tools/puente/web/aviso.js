@@ -7622,7 +7622,13 @@ function sheetDrag(sheet, opts) {
       <radialGradient id="fb-esfera-gris" cx="36%" cy="30%" r="70%"><stop offset="0" stop-color="#d5d9df"/><stop offset="0.4" stop-color="#6c727c"/><stop offset="1" stop-color="#16181c"/></radialGradient>
       <radialGradient id="fb-rosa" cx="38%" cy="30%" r="70%"><stop offset="0" stop-color="#ffc2f0"/><stop offset="0.4" stop-color="#ee2fc4"/><stop offset="1" stop-color="#6a0a5a"/></radialGradient>
       <radialGradient id="fb-sombreado-capsula" cx="62%" cy="30%" r="75%"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
-      <radialGradient id="fb-huevo" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.6" stop-color="#efe6c6"/><stop offset="1" stop-color="#a99c70"/></radialGradient>`;
+      <radialGradient id="fb-huevo" cx="40%" cy="30%" r="72%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#f6e6ea"/><stop offset="0.8" stop-color="#d9a6b6"/><stop offset="1" stop-color="#b0306e"/></radialGradient>
+      <filter id="fb-llama" x="-40%" y="-40%" width="180%" height="180%"><feTurbulence type="fractalNoise" baseFrequency="0.11" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <radialGradient id="fb-fuego-1" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.35" stop-color="#fff6a0"/><stop offset="0.7" stop-color="#ffd23a"/><stop offset="1" stop-color="#ff9a18"/></radialGradient>
+      <radialGradient id="fb-fuego-2" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#fff3a0"/><stop offset="0.4" stop-color="#ffb428"/><stop offset="0.8" stop-color="#ff6a14"/><stop offset="1" stop-color="#d8341a"/></radialGradient>
+      <radialGradient id="fb-fuego-3" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#ff9a30"/><stop offset="0.5" stop-color="#ea4a1c"/><stop offset="1" stop-color="#8a1808"/></radialGradient>
+      <radialGradient id="fb-fuego-4" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#c8341a"/><stop offset="0.6" stop-color="#7a1608"/><stop offset="1" stop-color="#2a0804"/></radialGradient>
+      <radialGradient id="fb-fuego-5" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#5a1a0c"/><stop offset="1" stop-color="#140604"/></radialGradient>`;
     return d;
   }
   // Un cuenco visto en perspectiva: borde con brillo, adentro hundido
@@ -7743,12 +7749,16 @@ function sheetDrag(sheet, opts) {
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? R * 0.42 : R; d += (i ? 'L' : 'M') + (cx + Math.cos(a) * rr).toFixed(2) + ' ' + (cy + Math.sin(a) * rr).toFixed(2); }
     return d + 'Z';
   }
+  // El huevo de la arania: una bolita blanca apoyada en el fondo de la base
+  function fbHuevo(g, x, y) {
+    sv('ellipse', { cx: x, cy: y - 0.5, rx: 4.6, ry: 1.8, fill: '#b0306e', opacity: 0.9 }, g);
+    sv('ellipse', { cx: x, cy: y - 3.6, rx: 4.2, ry: 3.9, fill: 'url(#fb-huevo)' }, g);
+    sv('ellipse', { cx: x - 1.3, cy: y - 5, rx: 1.3, ry: 0.9, fill: '#fff' }, g);
+  }
   function fbBall(parent, k, s, x, y, num) {
     const g = sv('g', { class: 'fb-bola' }, parent);
     if (k === 'S') {
-      sv('ellipse', { cx: x + 1, cy: y + 1.5, rx: 6, ry: 2.5, fill: 'url(#fb-sombra)' }, g);
-      sv('ellipse', { cx: x, cy: y - 6, rx: 5, ry: 6.6, fill: 'url(#fb-huevo)' }, g);
-      [[-1.5, -8], [1.8, -5], [-0.5, -3.5], [2, -9]].forEach(([dx, dy]) => sv('circle', { cx: x + dx, cy: y + dy, r: 0.75, fill: '#8a7d55' }, g));
+      fbHuevo(g, x, y);
       return;
     }
     if (fbArte !== false) {
@@ -8174,7 +8184,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (o.sombra !== false) sv('ellipse', { cx: x - r * 0.25, cy: (o.piso != null ? o.piso : yb) + 1, rx: r * 1.05 * (o.sombraEsc || 1), ry: r * 0.45 * (o.sombraEsc || 1), fill: 'url(#fb-sombra)', opacity: o.sombraOp != null ? o.sombraOp : 1 }, g);
     const b = sv('g', {}, g);
     if (k === 'S') {
-      sv('ellipse', { cx: x, cy: yb - 6, rx: 5, ry: 6.6, fill: 'url(#fb-huevo)' }, b);
+      fbHuevo(b, x, yb);
     } else if (fbArte !== false) {
       const id = k === 'R' ? 'rojaB' : 'verdeB', pz = FB_PIEZAS[id];
       fbPieza(b, id, x, yb, r / pz[6]);
@@ -8203,14 +8213,25 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }
   }
   // La estrella de cuatro puntas, mitad de cada color, que gira y se achica al anularse
-  function fbEstrella(g, x, y, L, ang, ka, kb) {
-    const col = { R: ['#ff4a3a', '#a8120c'], G: ['#30d070', '#0b6f35'] };
-    const s = sv('g', { transform: `translate(${x} ${y}) scale(1 0.55) rotate(${ang})` }, g);
+  function fbEstrella(g, x, y, L, ang, ka, kb, giro = 0) {
+    const col = { R: ['#ff5a4a', '#c41c12', '#7a0c08'], G: ['#3ee08a', '#119a50', '#065a2c'] };
+    // giro: vuelta sobre su eje vertical (la estrella se ve de canto y vuelve)
+    const sx = Math.max(0.12, Math.abs(Math.cos(giro)));
+    const s = sv('g', { transform: `translate(${x} ${y}) scale(${sx} 0.8) rotate(${ang})` }, g);
+    const puntas = [];
     for (let i = 0; i < 4; i++) {
-      const [c1, c2] = col[i % 2 ? kb : ka] || col.R, w = L * 0.28;
-      const r = sv('g', { transform: `rotate(${i * 90})` }, s);
-      sv('polygon', { points: `0,0 ${L},0 ${w * 0.7},${-w}`, fill: c1 }, r);
-      sv('polygon', { points: `0,0 ${L},0 ${w * 0.7},${w}`, fill: c2 }, r);
+      const a = i * 90, k = i % 2 ? kb : ka, w = L * 0.24;
+      puntas.push({ a, k, w });
+    }
+    // primero las de atras (las que apuntan hacia arriba en pantalla quedan detras)
+    puntas.sort((p, q) => Math.sin((q.a + ang) * Math.PI / 180) - Math.sin((p.a + ang) * Math.PI / 180));
+    for (const { a, k, w } of puntas) {
+      const [c1, c2, c3] = col[k] || col.R;
+      const r = sv('g', { transform: `rotate(${a})` }, s);
+      const luz = Math.cos((a + ang - 45) * Math.PI / 180) * Math.cos(giro) > 0;
+      sv('polygon', { points: `0,0 ${L},0 ${w},${-w}`, fill: luz ? c1 : c2 }, r);
+      sv('polygon', { points: `0,0 ${L},0 ${w},${w}`, fill: luz ? c2 : c3 }, r);
+      sv('line', { x1: w * 0.6, y1: -w * 0.35, x2: L * 0.55, y2: -w * 0.12, stroke: '#ffffff', 'stroke-width': Math.max(0.4, L * 0.03), opacity: luz ? 0.7 : 0.25 }, r);
     }
   }
   // La capsula rayada del teletransportador
@@ -8248,16 +8269,19 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (t <= 0 || t >= 1) return;
     const n = nubes || fbNubes(() => 0.5);
     const S = 26 * esc * (0.45 + 0.75 * Math.min(1, t * 2.2)), sube = 16 * esc * t;
-    const col = t < 0.18 ? ['#fffbe0', '#ffe85a'] : t < 0.4 ? ['#ffe14a', '#ff9a18'] : t < 0.62 ? ['#ff9a18', '#e83c12'] : t < 0.82 ? ['#d8341a', '#7a1006'] : ['#5a1408', '#1e0a06'];
+    const fase = t < 0.16 ? 1 : t < 0.38 ? 2 : t < 0.6 ? 3 : t < 0.82 ? 4 : 5;
+    const col = ['', 'url(#fb-fuego-1)', 'url(#fb-fuego-2)', 'url(#fb-fuego-3)', 'url(#fb-fuego-4)', 'url(#fb-fuego-5)'];
+    const centro = ['', '#ffffff', '#fff3a0', '#ffb428', '#d8341a', '#3a1008'];
+    const col2 = [col[fase], centro[fase]];
     const op = t > 0.82 ? Math.max(0, 1 - (t - 0.82) / 0.18) : 1;
-    const c = sv('g', { opacity: op }, g);
+    const c = sv('g', { opacity: op, filter: 'url(#fb-llama)' }, g);
     for (const q of n) {
       const w = Math.sin(t * 9 + q.f) * 0.06;
-      sv('circle', { cx: x + q.x * S, cy: y - S * 0.55 - sube + q.y * S * 0.9, r: Math.max(0.5, (q.r + w) * S), fill: col[1] }, c);
+      sv('circle', { cx: x + q.x * S, cy: y - S * 0.55 - sube + q.y * S * 0.9, r: Math.max(0.5, (q.r + w) * S), fill: col2[0] }, c);
     }
     for (const q of n) {
       const w = Math.cos(t * 8 + q.f) * 0.05;
-      sv('circle', { cx: x + q.x * S * 0.85 - S * 0.05, cy: y - S * 0.62 - sube + q.y * S * 0.85, r: Math.max(0.3, (q.r * 0.62 + w) * S), fill: col[0] }, c);
+      sv('circle', { cx: x + q.x * S * 0.85 - S * 0.05, cy: y - S * 0.62 - sube + q.y * S * 0.85, r: Math.max(0.3, (q.r * 0.45 + w) * S), fill: col2[1], opacity: 0.55 }, c);
     }
   }
   // Sonidos propios del servidor (tools/puente/web/funball/sonidos/<nombre>.mp3, no van al
@@ -8435,7 +8459,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         fbSon('anulan', 200, 160);
         await tween(160, (t) => { limpiar(); fbEsfera(fx, T.k, rT, p.x, p.yb); fbEsfera(fx, ini.k, rI, p.x - (rT + rI) * 0.5 * (1 - t), p.yb - altoBola(rT) * 0.3 * (1 - t), { sombra: false }); });
         const L0 = (rT + rI) * 1.3;
-        await tween(950, (t) => { limpiar(); fbEstrella(fx, p.x, p.yb - rT * 0.9 - 6 * t, L0 * (1 - t), 40 + t * 560, ini.k, T.k); });
+        // como en el original: aparece grande, da vueltas en el aire y se achica mientras se aleja
+        await tween(1150, (t) => { limpiar(); const u = fbEase(t); fbEstrella(fx, p.x - 10 * u, p.yb - rT * 0.9 - 12 * u, L0 * 1.25 * (1 - 0.85 * u), 20 + t * 420, ini.k, T.k, t * Math.PI * 3); });
       } else if (tipo === 'revienta') {
         fbSon('revienta', 900, 40);
         const rb = Math.max(rT, rI) + 2, cyb = p.yb - rb * 0.9;
@@ -8531,9 +8556,24 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       pintar([...ocultas, i]);
       fbSon('desague', 220, 300);
       await tween(380, (t) => { limpiar(); fbEsfera(fx, k, r * (1 + 0.55 * fbEase(t)), p.x, p.yb); });
-      const R = r * 1.55;
-      await tween(340, (t) => { limpiar(); fbEsfera(fx, k, R, p.x, p.yb); sv('ellipse', { cx: p.x, cy: p.yb - R * 1.45, rx: R * 0.62 * t, ry: R * 0.26 * t, fill: '#2a0505', opacity: 0.85 }, fx); });
-      await tween(520, (t) => { limpiar(); const sy = 1 - fbEase(t); fbEsfera(fx, k, R * (1 - 0.3 * t), p.x, p.yb, { sy: Math.max(0.02, sy), sombraEsc: 1 - t }); });
+      const R = r * 1.55, cy = p.yb - R * 0.86;
+      const adentro = k === 'G' ? ['#04401c', '#0b6f35'] : ['#5a0606', '#a8201a'];
+      // la cascara cortada a la altura "corte": abajo la bola, arriba la boca abierta
+      const cascara = (corte, boca) => {
+        const id = 'fb-clip-des-' + Math.round(rnd() * 1e9);
+        const cp = sv('clipPath', { id }, fx);
+        sv('rect', { x: p.x - R * 2, y: corte, width: R * 4, height: R * 3 }, cp);
+        fbEsfera(fx, k, R, p.x, p.yb, { clip: `url(#${id})` });
+        const dy = corte - cy, ancho = Math.sqrt(Math.max(0, R * R - dy * dy));
+        if (ancho > 0.5 && boca > 0) {
+          sv('ellipse', { cx: p.x, cy: corte, rx: ancho * boca, ry: ancho * 0.36 * boca, fill: adentro[0] }, fx);
+          sv('ellipse', { cx: p.x, cy: corte + ancho * 0.1 * boca, rx: ancho * 0.8 * boca, ry: ancho * 0.24 * boca, fill: adentro[1], opacity: 0.6 }, fx);
+        }
+      };
+      await tween(420, (t) => { limpiar(); cascara(cy - R * (1 - 0.3 * fbEase(t)), fbEase(t)); });
+      await tween(520, (t) => { limpiar(); cascara(cy - R * 0.7 + R * 1.1 * fbEase(t), 1); });
+      // al final queda un disco chato del color de la bola que se va por el cano
+      await tween(420, (t) => { limpiar(); fbEsfera(fx, k, R * (1 - 0.45 * t), p.x, p.yb, { sy: 0.32 * (1 - t) + 0.02, sombraEsc: 1 - t }); });
       limpiar();
     }
     async function achica(e, a, b) {
