@@ -437,7 +437,10 @@ function winner(S) {
 function legalFrom(S, c, r, k) {
   const x = S.cells[c][r];
   if (!isMine(x, k)) return [];
-  return getTargets(S, x, 1, rec(x)).map(y => [y.c, y.r]);
+  // Como en el original, la burbuja no se puede mandar a una casilla con bola, ni a un resorte o tobogan
+  return getTargets(S, x, 1, rec(x))
+    .filter(y => !(x.b === SOAP && ((y.b >= SPRING && y.b <= SLIDE) || y.s)))
+    .map(y => [y.c, y.r]);
 }
 function legalMoves(S, k) {
   const out = [];
