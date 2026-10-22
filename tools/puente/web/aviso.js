@@ -7046,8 +7046,8 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
-// Juegos (truco.js): por ahora el Truco argentino, 1 contra 1, contra otra
-// persona o contra la compu. Se entra con el icono de las cartas, debajo del
+// Juegos (truco.js y funball.js): el Truco argentino y el Funball (el de DOS de 1995),
+// 1 contra 1, contra otra persona o contra la compu. Se entra con el icono de las cartas, debajo del
 // Marketplace en la columna de la izquierda. La sala: crear partida (a 15 o 30,
 // con o sin flor; mesa abierta, desafiar a alguien o la compu), las que te
 // desafiaron, tus partidas, las mesas que esperan rival, tu récord y el ranking
@@ -7150,7 +7150,7 @@ function sheetDrag(sheet, opts) {
     if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); }
     else close();
   }
-  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); } };
+  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = []; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
@@ -7177,12 +7177,26 @@ function sheetDrag(sheet, opts) {
   function show(view, arg) {
     clearInterval(tickT); mesa = null;
     page.textContent = '';
-    try { ({ inicio, crear, mesa: table })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    fbMesa = null;
+    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── Sala ──
-  async function inicio() {
+  // Arriba, los juegos: Truco y Funball (se recuerda el ultimo que se uso)
+  const prefGame = () => { try { return localStorage.getItem('puente_juego') || 'truco'; } catch { return 'truco'; } };
+  function gameTabs(cur) {
+    const t = el('div', 'jg-seg fb-juegos');
+    for (const [v, l] of [['truco', 'Truco'], ['funball', 'Funball']]) {
+      const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', cur === v);
+      x.addEventListener('click', () => { if (cur === v) return; try { localStorage.setItem('puente_juego', v); } catch { /* sin guardar */ } stack = [['inicio', v]]; show('inicio', v); });
+      t.appendChild(x);
+    }
+    return t;
+  }
+  async function inicio(which) {
+    if ((which || prefGame()) === 'funball') return fbInicio();
     page.appendChild(head('Juegos'));
+    page.appendChild(gameTabs('truco'));
     const b = el('div', 'jg-cuerpo'); page.appendChild(b);
     const hero = el('div', 'jg-hero');
     hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
@@ -7464,12 +7478,447 @@ function sheetDrag(sheet, opts) {
     b.appendChild(w);
   }
 
+  // ── Funball (funball.js) ──
+  // El juego de DOS de 1995, remasterizado: el mismo tablero en perspectiva, con bolas
+  // y bases dibujadas de nuevo. Cada uno ve su meta abajo a la derecha. Se toca una bola
+  // propia y se marcan los destinos posibles (los decide el servidor); se toca el destino.
+  const FB_BASES = [
+    ['Normal', 'Una base común: una bola puede saltar acá.'],
+    ['Agujero', 'Nada puede caer acá.'],
+    ['Chica', 'Solo entran bolas chicas: al final del turno, las de más de 5 se achican a 5.'],
+    ['Bomba', 'Llena de energía a la bola: al salir, sigue saltando en línea hasta llegar a algo que no sea una base común vacía.'],
+    ['Blindada', 'La bola que está acá no puede ser atacada.'],
+    ['Teletransportador', 'La bola que cae acá viaja al siguiente teletransportador libre, hacia la meta enemiga.'],
+    ['Desagüe', 'Muy peligroso: la bola que cae acá se va por el desagüe y desaparece.'],
+    ['Resorte', 'La bola rebota a la casilla siguiente, en la misma dirección.'],
+    ['Tobogán', 'La bola patina y sigue de largo, empujando lo que haya adelante.'],
+    ['Jabón', 'La bola se vuelve una burbuja: puede flotar hasta dos casillas, pero revienta con cualquier cosa que no sea una base vacía.'],
+    ['Imán', 'Acá no te pueden atacar y te podés juntar con las tuyas. Pero al salir, la mitad de la bola se queda pegada (y las de 3 o menos no se mueven).'],
+    ['Cañón', 'Con una bola acá, el cañón destruye otra base en línea recta. Cuanto más grande la bola, más lejos llega. La bola se gasta en el disparo.'],
+    ['Mina', 'Explota: la bola desaparece y todas las de alrededor se achican 5 (salvo las blindadas). Puede explotar en cadena.'],
+  ];
+  const FB_REGLAS = [
+    ['Objetivo', 'Llegar con una bola a la base de la meta enemiga, o quedarte con las únicas bolas del tablero.'],
+    ['Saltar', 'Cada bola salta a una casilla vecina (no hacia atrás). Algunas bases cambian eso.'],
+    ['Juntarse', 'Saltar sobre una bola tuya las junta. Si pasa de 15, se parte en dos y la mitad sigue de largo (rebota en el borde).'],
+    ['Atacar', 'Saltar sobre una enemiga más chica la absorbe y tu bola crece.'],
+    ['Desertar', 'Saltar sobre una enemiga más grande es suicidio: la agrandás con la mitad de la tuya… salvo que la hagas pasar de 15: entonces revienta.'],
+    ['Anularse', 'Dos bolas enemigas del mismo tamaño se anulan y desaparecen.'],
+    ['La araña', 'Camina por el tablero y deja huevos. Caer sobre un huevo suma 3.'],
+  ];
+  // Perspectiva del original: columnas a la derecha, filas hacia arriba a la izquierda
+  const FB_W = 500, FB_H = 440;
+  function fbXY(c, r, flip) {
+    if (flip) { c = 7 - c; r = 7 - r; }
+    return { x: 30 + 39 * c - 25 * r + 175, y: 30 + 378 - (3 * c + 51 * r) };
+  }
+  const fbSize = (s) => 6 + Math.min(15, s) * 0.8;
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const sv = (tag, attrs, parent) => { const n = document.createElementNS(SVGNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; };
+  function fbDefs(svgEl) {
+    const d = sv('defs', {}, svgEl);
+    const grad = (id, stops, rad) => {
+      const g = sv(rad ? 'radialGradient' : 'linearGradient', rad ? { id, cx: '35%', cy: '30%', r: '75%' } : { id, x1: '0', y1: '0', x2: '0', y2: '1' }, d);
+      stops.forEach(([o, c]) => sv('stop', { offset: o, 'stop-color': c }, g));
+    };
+    grad('fb-roja', [['0', '#ffb3b0'], ['0.25', '#ff4d4f'], ['0.8', '#a5121b'], ['1', '#5c060c']], true);
+    grad('fb-verde', [['0', '#c3ffd9'], ['0.25', '#33d17a'], ['0.8', '#0b7a3e'], ['1', '#04381c']], true);
+    grad('fb-base', [['0', '#7c86ff'], ['1', '#3a42b8']]);
+    grad('fb-oro', [['0', '#ffe08a'], ['1', '#b8860b']]);
+    grad('fb-plata', [['0', '#f4f6f8'], ['1', '#7d838c']]);
+    grad('fb-hielo', [['0', '#e1edff'], ['1', '#8fb6f5']]);
+    grad('fb-oscuro', [['0', '#55575e'], ['1', '#1e1f22']]);
+    grad('fb-jabon', [['0', '#ffe3f6'], ['0.5', '#c9f3ff'], ['1', '#e0d4ff']]);
+    grad('fb-huevo', [['0', '#fffdf2'], ['1', '#d9cfa8']], true);
+    return d;
+  }
+  // La base de cada celda
+  function fbBase(g, b, x, y) {
+    const disc = (rx, ry, fill, stroke) => sv('ellipse', { cx: x, cy: y, rx, ry, fill, stroke: stroke || 'rgba(0,0,0,.35)', 'stroke-width': 1 }, g);
+    switch (b) {
+      case 1: sv('ellipse', { cx: x, cy: y, rx: 16, ry: 7.5, fill: '#08080b', stroke: '#2b2d31', 'stroke-width': 1.5 }, g); break;
+      case 2: disc(9, 4.5, 'url(#fb-base)'); break;
+      case 3: disc(17, 8, 'url(#fb-oro)', '#7a5a00'); sv('path', { d: `M${x - 6} ${y + 1}l6-4 6 4M${x - 6} ${y + 4}l6-4 6 4`, stroke: '#7a4b00', 'stroke-width': 1.6, fill: 'none', 'stroke-linecap': 'round' }, g); break;
+      case 4: sv('path', { d: `M${x - 16} ${y}a16 9 0 0 1 32 0a16 7 0 0 1-32 0z`, fill: 'url(#fb-plata)', stroke: '#5d636b', 'stroke-width': 1 }, g); sv('path', { d: `M${x - 9} ${y - 4}q9-6 18 0`, stroke: '#fff', 'stroke-width': 1.4, fill: 'none', opacity: 0.8 }, g); break;
+      case 5: sv('ellipse', { cx: x, cy: y, rx: 15, ry: 7, fill: 'none', stroke: '#ff9f1c', 'stroke-width': 4 }, g); sv('ellipse', { cx: x, cy: y, rx: 15, ry: 7, fill: 'none', stroke: '#ffd38a', 'stroke-width': 1.2 }, g); break;
+      case 6: disc(16, 7.5, 'url(#fb-oscuro)', '#0b0b0d'); sv('path', { d: `M${x} ${y}m-9 0a9 4 0 1 0 9-3a6 3 0 1 0 5 2a3 1.5 0 1 0-3 1`, stroke: '#8a8d94', 'stroke-width': 1.2, fill: 'none' }, g); break;
+      case 7: for (let k = 0; k < 4; k++) sv('ellipse', { cx: x, cy: y - k * 3.5, rx: 11, ry: 4.5, fill: 'none', stroke: k === 3 ? '#e6b98a' : '#b07a45', 'stroke-width': 2.2 }, g); break;
+      case 8: disc(17, 7, 'url(#fb-hielo)', '#6f93cf'); sv('path', { d: `M${x - 10} ${y - 1}h14`, stroke: '#fff', 'stroke-width': 1.5, 'stroke-linecap': 'round', opacity: 0.9 }, g); break;
+      case 9: disc(16, 7.5, 'url(#fb-jabon)', '#c58bd8'); sv('circle', { cx: x + 6, cy: y - 2, r: 2.5, fill: '#fff', opacity: 0.85 }, g); sv('circle', { cx: x - 5, cy: y + 1, r: 1.6, fill: '#fff', opacity: 0.7 }, g); break;
+      case 10: disc(16, 7.5, 'url(#fb-plata)', '#5d636b'); sv('path', { d: `M${x - 7} ${y - 1}v-5a7 7 0 0 1 14 0v5`, stroke: '#d6343d', 'stroke-width': 4, fill: 'none' }, g); sv('path', { d: `M${x - 7} ${y - 1}v-2.2M${x + 7} ${y - 1}v-2.2`, stroke: '#e3e5e8', 'stroke-width': 4 }, g); break;
+      case 11: disc(16, 7.5, 'url(#fb-oscuro)', '#0b0b0d'); sv('rect', { x: x - 4, y: y - 14, width: 8, height: 13, rx: 2.5, fill: '#4e5058', stroke: '#16171a', 'stroke-width': 1 }, g); sv('circle', { cx: x, cy: y - 14, r: 3, fill: '#16171a' }, g); break;
+      case 12: { disc(13, 6, 'url(#fb-oscuro)', '#0b0b0d'); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; sv('line', { x1: x + Math.cos(a) * 8, y1: y - 3 + Math.sin(a) * 4, x2: x + Math.cos(a) * 14, y2: y - 3 + Math.sin(a) * 7, stroke: '#9aa0a8', 'stroke-width': 2, 'stroke-linecap': 'round' }, g); } sv('circle', { cx: x, cy: y - 4, r: 7, fill: '#3a3c42', stroke: '#9aa0a8', 'stroke-width': 1 }, g); sv('circle', { cx: x - 2, cy: y - 6, r: 1.6, fill: '#f23f43' }, g); break; }
+      default: disc(16, 7.5, 'url(#fb-base)', '#262b80');
+    }
+  }
+  function fbBall(parent, k, s, x, y, num) {
+    const g = sv('g', { class: 'fb-bola' }, parent);
+    if (k === 'S') {
+      sv('ellipse', { cx: x, cy: y - 6, rx: 5, ry: 6.5, fill: 'url(#fb-huevo)', stroke: '#a59a72', 'stroke-width': 0.8 }, g);
+      [[-1.5, -8], [1.8, -5], [-0.5, -3.5]].forEach(([dx, dy]) => sv('circle', { cx: x + dx, cy: y + dy, r: 0.8, fill: '#8a7d55' }, g));
+      return;
+    }
+    const r = fbSize(s);
+    sv('ellipse', { cx: x, cy: y + 1, rx: r * 0.9, ry: r * 0.35, fill: 'rgba(0,0,0,.35)' }, g);
+    sv('circle', { cx: x, cy: y - r * 0.85, r, fill: k === 'R' ? 'url(#fb-roja)' : 'url(#fb-verde)', stroke: k === 'R' ? '#4d050a' : '#03301a', 'stroke-width': 0.8 }, g);
+    sv('ellipse', { cx: x - r * 0.35, cy: y - r * 1.35, rx: r * 0.32, ry: r * 0.2, fill: '#fff', opacity: 0.55 }, g);
+    if (num) { const t = sv('text', { x, y: y - r * 0.85 + 3.6, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(s); }
+  }
+  function fbSpider(g, x, y) {
+    const s = sv('g', { class: 'fb-arania', transform: `translate(${x} ${y - 6})` }, g);
+    for (const side of [-1, 1]) for (let k = 0; k < 4; k++) sv('path', { d: `M0 0q${side * 7} ${-5 + k * 3} ${side * 11} ${-1 + k * 3.2}`, stroke: '#c2185b', 'stroke-width': 1.6, fill: 'none', 'stroke-linecap': 'round' }, s);
+    sv('ellipse', { cx: 0, cy: 1, rx: 6, ry: 5, fill: '#e91e8c', stroke: '#7a0a48', 'stroke-width': 1 }, s);
+    sv('circle', { cx: 0, cy: -4, r: 3.4, fill: '#f06bb5', stroke: '#7a0a48', 'stroke-width': 0.8 }, s);
+    sv('circle', { cx: -1.2, cy: -4.6, r: 0.8, fill: '#fff' }, s); sv('circle', { cx: 1.2, cy: -4.6, r: 0.8, fill: '#fff' }, s);
+  }
+
+  async function fbInicio() {
+    page.appendChild(head('Juegos'));
+    page.appendChild(gameTabs('funball'));
+    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const hero = el('div', 'jg-hero fb-hero');
+    const mini = el('div', 'fb-hero-dibujo'); mini.innerHTML = '<svg viewBox="0 0 120 56" aria-hidden="true"><defs><radialGradient id="fbh-r" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffb3b0"/><stop offset=".3" stop-color="#ff4d4f"/><stop offset="1" stop-color="#7a0b12"/></radialGradient><radialGradient id="fbh-v" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#c3ffd9"/><stop offset=".3" stop-color="#33d17a"/><stop offset="1" stop-color="#05502a"/></radialGradient></defs><ellipse cx="34" cy="48" rx="20" ry="6" fill="#4a52d0"/><ellipse cx="86" cy="48" rx="20" ry="6" fill="#4a52d0"/><circle cx="34" cy="30" r="17" fill="url(#fbh-r)"/><circle cx="86" cy="34" r="12" fill="url(#fbh-v)"/></svg>';
+    hero.append(mini, el('div', 'jg-hero-t', 'Funball'), el('div', 'jg-hero-s', 'El clásico de 1995, 1 contra 1'));
+    const btns = el('div', 'jg-acciones');
+    const nb = el('button', 'jg-btn jg-primario', 'Crear partida'); nb.type = 'button'; nb.addEventListener('click', () => go('fbCrear'));
+    const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button';
+    cb.addEventListener('click', async () => { const r = await emit('funball:crear', { modo: 'compu', tablero: -1, arania: true, nivel: 2 }); if (r.error) return toast(r.error, 'error'); go('fbMesa', r.id); });
+    const rb = el('button', 'jg-btn jg-suave', 'Cómo se juega'); rb.type = 'button'; rb.addEventListener('click', () => go('fbReglas'));
+    btns.append(nb, cb, rb); hero.appendChild(btns);
+    b.appendChild(hero);
+    const box = el('div'); box.appendChild(el('div', 'jg-estado', 'Cargando…')); b.appendChild(box);
+    const d = await emit('funball:inicio');
+    if (!page || !box.isConnected) return;
+    box.textContent = '';
+    if (d.error) { box.appendChild(el('div', 'jg-estado', d.error)); return; }
+    if (!d.tableros.length) { hero.querySelectorAll('.jg-btn:not(.jg-suave)').forEach(x => { x.disabled = true; }); box.appendChild(el('div', 'jg-vacio', 'El Funball todavía no está disponible.')); return; }
+    const section = (title, items, render) => { if (!items.length) return; box.appendChild(el('div', 'jg-sub', title)); const l = el('div', 'jg-lista'); items.forEach(x => l.appendChild(render(x))); box.appendChild(l); };
+    const row = (who, top, bottom, label, cls, fn) => {
+      const r = el('button', 'jg-fila'); r.type = 'button';
+      const t = el('div', 'jg-ftexto'); t.append(el('div', 'jg-fnombre', top), el('div', 'jg-fmeta', bottom));
+      r.append(avatar(who), t);
+      if (label) r.appendChild(el('span', 'jg-chip ' + (cls || ''), label));
+      r.addEventListener('click', fn);
+      return r;
+    };
+    const rules = (m) => m.tablero + (m.arania === false ? ' · sin araña' : '');
+    section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => fbJoin(a.id)));
+    section('Tus partidas', d.mias, (m) => {
+      const who = m.rival || m.invitado || { nombre: '?' };
+      const top = m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`;
+      const bottom = m.estado === 'terminada' ? (m.ganaste === null ? 'Empate' : m.ganaste ? 'Ganaste' : 'Perdiste') + ' · ' + m.tablero : m.tablero;
+      return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('fbMesa', m.id));
+    });
+    section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => fbJoin(a.id)));
+    if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
+    const s = d.stats;
+    box.appendChild(el('div', 'jg-sub', 'Tu récord'));
+    const st = el('div', 'jg-stats');
+    for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
+    box.appendChild(st);
+    for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
+      const list = d.ranking[k];
+      box.appendChild(el('div', 'jg-sub', title));
+      if (!list.length) { box.appendChild(el('div', 'jg-vacio', 'Todavía nadie ganó una partida contra otra persona.')); continue; }
+      const l = el('div', 'jg-lista');
+      list.forEach((p, k2) => { const r = el('div', 'jg-fila jg-rank'); r.append(el('span', 'jg-pos', ['🥇', '🥈', '🥉'][k2] || String(k2 + 1)), avatar(p), el('span', 'jg-fnombre', p.nombre), el('span', 'jg-chip', `${p.ganadas} ${p.ganadas === 1 ? 'victoria' : 'victorias'}`)); l.appendChild(r); });
+      box.appendChild(l);
+    }
+  }
+  async function fbJoin(id) {
+    const r = await emit('funball:unirse', { id });
+    if (r.error) return toast(r.error, 'error');
+    go('fbMesa', r.id);
+  }
+
+  async function fbCrear() {
+    page.appendChild(head('Nueva partida de Funball'));
+    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
+    const f = el('div', 'jg-form'); b.appendChild(f);
+    const info = await emit('funball:inicio');
+    if (!page || !f.isConnected) return;
+    const tabs = (info && info.tableros) || [];
+    const data = { tablero: -1, arania: true, modo: 'abierta', nivel: 2, rival: null };
+    const seg = (label, key, opts, onChange) => {
+      const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
+      const s = el('div', 'jg-seg' + (opts.length > 3 ? ' fb-seg-varias' : ''));
+      for (const [v, l] of opts) {
+        const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', data[key] === v);
+        x.addEventListener('click', () => { data[key] = v; s.querySelectorAll('.jg-seg-op').forEach(y => y.classList.toggle('on', y === x)); if (onChange) onChange(); });
+        s.appendChild(x);
+      }
+      w.appendChild(s); f.appendChild(w); return w;
+    };
+    seg('Tablero', 'tablero', [[-1, 'Al azar'], ...tabs.map((t, i) => [i, t])]);
+    seg('La araña', 'arania', [[true, 'Sí, que venga'], [false, 'Sin araña']]);
+    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; });
+    const lvl = seg('Nivel de la compu', 'nivel', (info.niveles || ['Fácil', 'Normal', 'Difícil', 'Imposible']).map((n, i) => [i + 1, n]));
+    lvl.hidden = true;
+    const HINT = {
+      abierta: 'La mesa queda en la sala y la toma el primero que quiera jugar.',
+      desafio: 'Le mandás un mensaje directo con el enlace a la mesa.',
+      compu: 'La misma compu del juego original. No cuenta para el ranking.',
+    };
+    const hint = el('div', 'jg-ayuda', HINT.abierta); f.appendChild(hint);
+    const pick = el('div', 'jg-campo'); pick.hidden = true;
+    const sbox = el('label', 'jg-buscar'); sbox.insertAdjacentHTML('beforeend', svg(I.buscar, 20));
+    const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar a quién desafiar'; sbox.appendChild(q);
+    const list = el('div', 'jg-lista');
+    const chosen = el('div', 'jg-elegido');
+    pick.append(sbox, chosen, list); f.appendChild(pick);
+    let t = null, seq = 0;
+    q.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const my = ++seq;
+        let ps = [];
+        if (q.value.trim().length >= 2) {
+          try { ps = ((await (await fetch('/puente/api/mercado/personas?q=' + encodeURIComponent(q.value.trim()), { headers: { Authorization: 'Bearer ' + localStorage.getItem('haven_token') } })).json()).personas) || []; } catch { ps = []; }
+        }
+        if (my !== seq || !list.isConnected) return;
+        list.textContent = '';
+        for (const p of ps) {
+          const r = el('button', 'jg-fila'); r.type = 'button';
+          const tx = el('div', 'jg-ftexto'); tx.append(el('div', 'jg-fnombre', p.nombre), el('div', 'jg-fmeta', '@' + p.usuario));
+          r.append(avatar(p), tx);
+          r.addEventListener('click', () => { data.rival = p; chosen.textContent = 'Vas a desafiar a ' + p.nombre; list.textContent = ''; q.value = ''; err.textContent = ''; });
+          list.appendChild(r);
+        }
+      }, 300);
+    });
+    const err = el('div', 'jg-error'); f.appendChild(err);
+    const go2 = el('button', 'jg-btn jg-primario jg-ancho', 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
+    go2.addEventListener('click', async () => {
+      err.textContent = '';
+      if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
+      go2.disabled = true;
+      const r = await emit('funball:crear', { tablero: data.tablero, arania: data.arania, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id });
+      go2.disabled = false;
+      if (r.error) { err.textContent = r.error; return; }
+      if (data.modo === 'desafio') { fbChallenge(data.rival, r.id); return; }
+      stack.pop(); go('fbMesa', r.id);
+    });
+  }
+  function fbChallenge(p, id) {
+    const a = app();
+    const text = `¡Te desafío a un Funball! Entrá acá: ${location.origin}/app?funball=${id}`;
+    let done = false;
+    const fill = () => {
+      if (done) return; done = true;
+      setTimeout(() => { const box = byId('message-input'); if (!box) return; box.value = text; box.dispatchEvent(new Event('input', { bubbles: true })); box.focus(); }, 900);
+    };
+    a.socket.once('dm-opened', fill);
+    setTimeout(() => { if (!done) a.socket.off('dm-opened', fill); }, 8000);
+    toast('Mandale el mensaje para que entre a la mesa', 'success');
+    close();
+    a.socket.emit('start-dm', { targetUserId: p.id });
+  }
+
+  function fbReglas() {
+    page.appendChild(head('Cómo se juega'));
+    const b = el('div', 'jg-cuerpo fb-reglas'); page.appendChild(b);
+    for (const [t, d] of FB_REGLAS) { const x = el('div', 'fb-regla'); x.append(el('b', '', t), el('span', '', d)); b.appendChild(x); }
+    b.appendChild(el('div', 'jg-sub', 'Las bases'));
+    FB_BASES.forEach(([t, d], i) => {
+      const x = el('div', 'fb-regla fb-con-base');
+      const s = sv('svg', { viewBox: '0 0 40 30', class: 'fb-base-ico', 'aria-hidden': 'true' }); fbDefs(s); fbBase(sv('g', {}, s), i, 20, 20);
+      const tx = el('div'); tx.append(el('b', '', t), el('span', '', d));
+      x.append(s, tx); b.appendChild(x);
+    });
+  }
+
+  let fbMesa = null; // { id, s, sel, busy }
+  async function fbTable(id) {
+    fbMesa = { id, s: null, sel: null, busy: false };
+    mesa = { id: 'fb:' + id, s: null };
+    const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
+    page.appendChild(head('Funball', menu));
+    const b = el('div', 'jg-mesa fb-mesa'); page.appendChild(b);
+    b.appendChild(el('div', 'jg-estado', 'Cargando…'));
+    menu.addEventListener('click', () => {
+      const s = fbMesa && fbMesa.s;
+      if (!s) return;
+      if (s.estado === 'esperando' && s.soyCreador) { if (confirm('¿Cancelar la partida?')) emit('funball:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); return; }
+      if (s.estado === 'jugando' && s.soyJugador) { if (confirm('¿Abandonar la partida? La perdés.')) emit('funball:accion', { id, tipo: 'abandonar' }); return; }
+      fbShare(id);
+    });
+    const d = await emit('funball:ver', { id });
+    if (!page || !fbMesa || fbMesa.id !== id) return;
+    if (d.error) { b.textContent = ''; b.appendChild(el('div', 'jg-estado', d.error)); return; }
+    fbRender(d.partida);
+    tickT = setInterval(() => { const bar = page && page.querySelector('.jg-reloj > span'); if (bar && fbMesa && fbMesa.s && fbMesa.s.deadline) { const left = Math.max(0, fbMesa.s.deadline - Date.now()); bar.style.width = (100 * left / 60000) + '%'; const tx = page.querySelector('.jg-reloj-t'); if (tx) tx.textContent = Math.ceil(left / 1000) + ' s'; } }, 500);
+  }
+  function fbShare(id) {
+    const url = `${location.origin}/app?funball=${id}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => toast('Enlace de la mesa copiado', 'success'), () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+
+  // Dibuja el tablero (celdas: 64 x [base, color, tamanio, arania]); marca la seleccion y los destinos
+  function fbBoard(s, celdas, opts) {
+    const flip = s.yo && s.yo.color === 'R';
+    const svgEl = sv('svg', { viewBox: `0 0 ${FB_W} ${FB_H}`, class: 'fb-tablero', role: 'img', 'aria-label': 'Tablero de Funball' });
+    fbDefs(svgEl);
+    const order = [];
+    for (let c = 0; c < 8; c++) for (let r = 0; r < 8; r++) order.push([c, r, fbXY(c, r, flip)]);
+    order.sort((a, b) => a[2].y - b[2].y || a[2].x - b[2].x);
+    const sel = opts && opts.sel, targets = (opts && opts.targets) || [];
+    const isT = (c, r) => targets.some(t => t[0] === c && t[1] === r);
+    const layer = sv('g', {}, svgEl);
+    for (const [c, r, p] of order) {
+      const v = celdas[c * 8 + r];
+      const g = sv('g', { class: 'fb-celda', 'data-c': c, 'data-r': r }, layer);
+      if (c === 0 && r === 7) sv('ellipse', { cx: p.x, cy: p.y + 1, rx: 21, ry: 10, class: 'fb-meta fb-meta-r' }, g);
+      if (c === 7 && r === 0) sv('ellipse', { cx: p.x, cy: p.y + 1, rx: 21, ry: 10, class: 'fb-meta fb-meta-v' }, g);
+      fbBase(g, v[0], p.x, p.y);
+      if (isT(c, r)) sv('rect', { x: p.x - 19, y: p.y - 34, width: 38, height: 44, rx: 6, class: 'fb-destino' }, g);
+      if (sel && sel[0] === c && sel[1] === r) sv('rect', { x: p.x - 19, y: p.y - 34, width: 38, height: 44, rx: 6, class: 'fb-sel' }, g);
+      if (v[1] && v[2]) fbBall(g, v[1], v[2], p.x, p.y, true);
+      if (v[3]) fbSpider(g, p.x, p.y);
+      sv('rect', { x: p.x - 19, y: p.y - 30, width: 38, height: 40, fill: 'transparent', class: 'fb-toque' }, g);
+    }
+    return svgEl;
+  }
+
+  function fbRender(s, noAnim) {
+    if (!page || !fbMesa || fbMesa.id !== s.id) return;
+    const prev = fbMesa.s;
+    fbMesa.s = s; mesa.s = s;
+    if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && fbMesa && fbMesa.id === s.id) { stack.pop(); go('fbMesa', s.siguiente); } }, 600); }
+    const t = page.querySelector('.jg-titulo');
+    if (t) t.textContent = `Funball · ${s.tablero}`;
+    const b = page.querySelector('.fb-mesa');
+    if (s.estado === 'esperando') {
+      b.textContent = '';
+      const w = el('div', 'jg-espera');
+      w.append(el('div', 'jg-hero-cartas', '🟢'), el('div', 'jg-hero-t', s.invitado ? `Esperando a ${s.invitado.nombre}` : 'Esperando rival'),
+        el('div', 'jg-hero-s', s.invitado ? 'Cuando entre por el enlace, empieza la partida.' : 'La mesa está en la sala de Juegos: la toma el primero que quiera jugar.'));
+      const acts = el('div', 'jg-acciones');
+      const c = el('button', 'jg-btn', 'Copiar enlace'); c.type = 'button'; c.addEventListener('click', () => fbShare(s.id));
+      acts.appendChild(c);
+      if (!s.soyJugador) { const j = el('button', 'jg-btn jg-primario', 'Jugar'); j.type = 'button'; j.addEventListener('click', () => fbJoin(s.id)); acts.appendChild(j); }
+      else if (s.soyCreador) { const x = el('button', 'jg-btn jg-suave', 'Cancelar partida'); x.type = 'button'; x.addEventListener('click', () => emit('funball:cancelar', { id: s.id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); })); acts.appendChild(x); }
+      w.appendChild(acts); b.appendChild(w); return;
+    }
+    // Si llega una jugada nueva, primero se ve la animacion
+    if (!noAnim && prev && prev.celdas && s.ultima && s.ultima.n === (prev.jugadas || 0) + 1) { fbAnimate(prev, s); return; }
+    fbDraw(s);
+  }
+  function fbDraw(s) {
+    const b = page && page.querySelector('.fb-mesa');
+    if (!b) return;
+    b.textContent = '';
+    const score = el('div', 'jg-marcador fb-marcador');
+    const count = (k) => s.celdas.reduce((n, v) => n + (v[1] === k && v[2] ? 1 : 0), 0);
+    const side = (p, mine) => {
+      const x = el('div', 'jg-lado' + (mine ? ' mio' : ''));
+      const dot = el('span', 'fb-color fb-color-' + (p.color === 'R' ? 'r' : 'v'));
+      x.append(avatar(p), el('div', 'jg-lnombre', mine ? 'Vos' : p.nombre), dot, el('div', 'jg-lpuntos', String(count(p.color))));
+      return x;
+    };
+    score.append(side(s.rival, false), el('div', 'jg-meta', 'bolas'), side(s.yo, true));
+    b.appendChild(score);
+    if (s.estado === 'terminada') { b.appendChild(fbBoard(s, s.celdas)); return fbEnd(b, s); }
+    const sel = fbMesa.sel && s.teToca && s.jugadasPosibles && s.jugadasPosibles[fbMesa.sel.join(',')] ? fbMesa.sel : null;
+    if (!sel) fbMesa.sel = null;
+    const targets = sel ? s.jugadasPosibles[sel.join(',')] : [];
+    const board = fbBoard(s, s.celdas, { sel, targets });
+    board.addEventListener('click', (e) => {
+      const g = e.target instanceof Element && e.target.closest('.fb-celda');
+      if (!g || !fbMesa || !fbMesa.s || !fbMesa.s.teToca || fbMesa.busy) return;
+      const c = +g.dataset.c, r = +g.dataset.r, key = c + ',' + r, cur = fbMesa.s;
+      if (fbMesa.sel && fbMesa.sel[0] === c && fbMesa.sel[1] === r) { fbMesa.sel = null; return fbDraw(cur); }
+      if (fbMesa.sel && targets.some(t => t[0] === c && t[1] === r)) return fbPlay(cur, fbMesa.sel, [c, r]);
+      if (cur.jugadasPosibles[key]) { fbMesa.sel = [c, r]; beep(560, 50); return fbDraw(cur); }
+      fbMesa.sel = null; fbDraw(cur);
+    });
+    b.appendChild(board);
+    const st = el('div', 'jg-status');
+    const mine = s.teToca;
+    st.appendChild(el('div', 'jg-turno', mine ? `Te toca (${s.yo.color === 'R' ? 'rojas' : 'verdes'})` : `Juega ${s.rival.nombre}…`));
+    st.appendChild(el('div', 'jg-ultimo', mine ? (sel ? 'Tocá una casilla marcada (o la misma bola para elegir otra).' : 'Tocá una de tus bolas.') : ((s.log || []).slice(-1)[0] || '')));
+    if (s.deadline) { const r = el('div', 'jg-reloj' + (mine ? ' mio' : '')); r.appendChild(el('span')); r.appendChild(el('span', 'jg-reloj-t')); st.appendChild(r); }
+    b.appendChild(st);
+    const tip = el('div', 'fb-pie', 'Tu base es la marcada abajo a la derecha: defendela. Ganás si llegás con una bola a la del rival, arriba a la izquierda.');
+    b.appendChild(tip);
+  }
+  async function fbPlay(s, de, a) {
+    fbMesa.busy = true;
+    const r = await emit('funball:accion', { id: s.id, tipo: 'mover', de, a });
+    if (fbMesa) { fbMesa.busy = false; fbMesa.sel = null; }
+    if (r.error) { toast(r.error, 'error'); if (fbMesa && fbMesa.s) fbDraw(fbMesa.s); }
+  }
+  // Animacion de la ultima jugada: la bola viaja por cada tramo y se marcan los choques
+  function fbAnimate(prev, s) {
+    const evs = (s.ultima.ev || []).filter(e => ['mueve', 'teletransporta', 'explota', 'fusion', 'ataque', 'anulan', 'revienta', 'desagüe', 'desague', 'huevo', 'dispara'].includes(e.t)).slice(0, 14);
+    const cells = prev.celdas.map(v => v.slice());
+    fbDraw({ ...s, celdas: cells, teToca: false, deadline: s.deadline });
+    const svgEl = page && page.querySelector('.fb-tablero');
+    if (!svgEl || !evs.length) return fbDraw(s);
+    const flip = s.yo && s.yo.color === 'R';
+    const fx = sv('g', {}, svgEl);
+    // la bola que se mueve deja su casilla
+    const first = evs.find(e => e.t === 'mueve');
+    if (first) {
+      const g = svgEl.querySelector(`.fb-celda[data-c="${first.de[0]}"][data-r="${first.de[1]}"]`);
+      const ball = g && g.querySelector('.fb-bola');
+      if (ball) ball.style.opacity = '0';
+    }
+    let k = 0;
+    const step = () => {
+      if (!page || !fbMesa || fbMesa.id !== s.id) return;
+      if (k >= evs.length) return setTimeout(() => fbDraw(fbMesa.s && fbMesa.s.id === s.id ? fbMesa.s : s), 120);
+      const e = evs[k++];
+      fx.textContent = '';
+      if (e.t === 'mueve' || e.t === 'teletransporta') {
+        const p1 = fbXY(e.de[0], e.de[1], flip), p2 = fbXY(e.a[0], e.a[1], flip);
+        const g = sv('g', { class: 'fb-vuela' + (e.t === 'teletransporta' ? ' fb-tp' : '') }, fx);
+        fbBall(g, e.k || 'R', e.s || 5, 0, 0, true);
+        g.style.transform = `translate(${p1.x}px,${p1.y}px)`;
+        requestAnimationFrame(() => { g.style.transform = `translate(${p2.x}px,${p2.y - (e.t === 'mueve' ? 0 : 0)}px)`; });
+        beep(e.t === 'mueve' ? 480 : 700, 60);
+        return setTimeout(step, 330);
+      }
+      const p = fbXY(e.c, e.r, flip);
+      sv('circle', { cx: p.x, cy: p.y - 10, r: 6, class: 'fb-boom fb-boom-' + e.t }, fx);
+      beep(e.t === 'explota' || e.t === 'dispara' ? 160 : 300, 120);
+      setTimeout(step, 360);
+    };
+    step();
+  }
+  function fbEnd(b, s) {
+    const w = el('div', 'jg-fin');
+    const won = s.ganador === 'yo', draw = s.ganador === 'empate';
+    const why = { meta: 'llegó a la meta', bolas: 'se quedó con las únicas bolas', abandono: 'por abandono', 'sin-jugadas': 'el otro no tenía jugadas', empate: 'no quedó ninguna bola' }[s.motivo] || '';
+    w.append(el('div', 'jg-hero-cartas', draw ? '🤝' : won ? '🏆' : '🟢'), el('div', 'jg-hero-t', draw ? 'Empate' : won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`), el('div', 'jg-hero-s', why));
+    const acts = el('div', 'jg-acciones');
+    if (s.soyJugador && !s.siguiente) {
+      const r = el('button', 'jg-btn jg-primario', s.revancha && s.revancha.yo ? 'Esperando revancha…' : s.revancha && s.revancha.rival ? `${s.rival.nombre} quiere la revancha: ¡Dale!` : 'Revancha');
+      r.type = 'button'; r.disabled = !!(s.revancha && s.revancha.yo);
+      r.addEventListener('click', () => emit('funball:accion', { id: s.id, tipo: 'revancha' }).then(x => { if (x.error) toast(x.error, 'error'); else if (x.id) { stack.pop(); go('fbMesa', x.id); } }));
+      acts.appendChild(r);
+    }
+    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = []; go('inicio', 'funball'); });
+    acts.appendChild(v);
+    w.appendChild(acts);
+    const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
+    w.appendChild(log);
+    b.appendChild(w);
+  }
+
   // ── Icono y numerito ("te toca") ──
   function setBadge(n) {
     for (const x of document.querySelectorAll('.puente-jg-btn .puente-rail-badge')) { x.textContent = n ? String(n) : ''; x.style.display = n ? '' : 'none'; }
   }
   let badgeT = null;
-  function refreshBadge() { clearTimeout(badgeT); badgeT = setTimeout(async () => { const d = await emit('truco:inicio'); if (!d.error) setBadge(d.mias.filter(m => m.teToca).length); }, 400); }
+  function refreshBadge() {
+    clearTimeout(badgeT);
+    badgeT = setTimeout(async () => {
+      const [d, f] = await Promise.all([emit('truco:inicio'), emit('funball:inicio')]);
+      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length);
+      setBadge(n);
+    }, 400);
+  }
   function addButtons() {
     const mk = (cls) => {
       const b = el('button', cls + ' puente-jg-btn'); b.type = 'button'; b.title = 'Juegos'; b.setAttribute('aria-label', 'Juegos');
@@ -7495,7 +7944,12 @@ function sheetDrag(sheet, opts) {
     refreshBadge();
     a.socket.on('truco:estado', (s) => { if (page && mesa && mesa.id === s.id) render(s); refreshBadge(); });
     a.socket.on('truco:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio') show('inicio'); });
-    a.socket.on('connect', () => { if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida)); });
+    a.socket.on('funball:estado', (s) => { if (page && fbMesa && fbMesa.id === s.id) fbRender(s); refreshBadge(); });
+    a.socket.on('funball:cambio', () => { refreshBadge(); if (page && stack.length && stack[stack.length - 1][0] === 'inicio' && page.querySelector('.fb-hero')) show('inicio', 'funball'); });
+    a.socket.on('connect', () => {
+      if (page && fbMesa) emit('funball:ver', { id: fbMesa.id }).then(d => d.partida && fbRender(d.partida, true));
+      else if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida));
+    });
     if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
     document.addEventListener('click', (e) => {
       if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn')) close();
@@ -7505,13 +7959,17 @@ function sheetDrag(sheet, opts) {
       const l = e.target instanceof Element && e.target.closest('a[href]');
       if (!l || e.ctrlKey || e.metaKey) return;
       let u; try { u = new URL(l.href, location.href); } catch { return; }
-      const id = u.origin === location.origin && /^\/app/.test(u.pathname) && u.searchParams.get('truco');
+      const ok = u.origin === location.origin && /^\/app/.test(u.pathname);
+      const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball');
+      if (fid && /^[a-f0-9]{6,20}$/.test(fid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('fbMesa', fid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; go('mesa', id);
     }, true);
     const sp = new URLSearchParams(location.search).get('truco');
     if (sp && /^[a-f0-9]{6,20}$/.test(sp)) setTimeout(() => { stack = []; go('mesa', sp); }, 1500);
+    const fp = new URLSearchParams(location.search).get('funball');
+    if (fp && /^[a-f0-9]{6,20}$/.test(fp)) setTimeout(() => { stack = []; go('fbMesa', fp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();

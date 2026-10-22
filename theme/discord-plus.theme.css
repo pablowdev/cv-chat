@@ -2526,3 +2526,45 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
   30% { opacity: 1; transform: translateY(-0.125rem) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .puente-escribe-puntos i { animation-duration: 2.4s; } }
+
+/* Funball (funball.js): el tablero en perspectiva como el original, con bolas y bases
+   dibujadas de nuevo (aviso.js) */
+.puente-jg .fb-juegos { margin: 0 0.75rem 0.5rem; }
+.puente-jg .fb-hero { background: linear-gradient(160deg, #2b2f8f 0%, #1c1d4f 100%); }
+.puente-jg .fb-hero-dibujo svg { display: block; width: 7.5rem; height: auto; margin: 0 auto 0.25rem; }
+.puente-jg .fb-seg-varias { flex-wrap: wrap; }
+.puente-jg .fb-seg-varias .jg-seg-op { flex: 1 1 45%; }
+.puente-jg .fb-mesa { gap: 0.5rem; }
+.puente-jg .fb-tablero {
+  display: block; width: 100%; max-width: 38rem; height: auto; margin: 0 auto; border-radius: 1rem;
+  background: radial-gradient(120% 90% at 50% 40%, #3a3640 0%, #232126 70%, #19181b 100%);
+  -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.puente-jg .fb-celda { cursor: pointer; }
+.puente-jg .fb-num { font: 800 9.5px/1 Inter, system-ui, sans-serif; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2.2px; pointer-events: none; }
+.puente-jg .fb-destino { fill: rgba(185, 167, 255, 0.14); stroke: #b9a7ff; stroke-width: 2; stroke-dasharray: 5 3; animation: fb-titila 1.1s ease-in-out infinite; }
+.puente-jg .fb-sel { fill: rgba(240, 178, 50, 0.12); stroke: #f0b232; stroke-width: 2.5; }
+.puente-jg .fb-meta { stroke-width: 2; }
+.puente-jg .fb-meta-r { fill: rgba(242, 63, 67, 0.22); stroke: #f23f43; }
+.puente-jg .fb-meta-v { fill: rgba(35, 165, 90, 0.22); stroke: #23a55a; }
+.puente-jg .fb-vuela { transition: transform 0.3s cubic-bezier(0.3, 0.7, 0.4, 1); pointer-events: none; }
+.puente-jg .fb-vuela.fb-tp { transition-duration: 0.18s; opacity: 0.85; }
+.puente-jg .fb-boom { fill: none; stroke: #f0b232; stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: fb-boom 0.35s ease-out forwards; }
+.puente-jg .fb-boom-explota, .puente-jg .fb-boom-dispara { stroke: #ff6b2c; }
+.puente-jg .fb-boom-anulan, .puente-jg .fb-boom-revienta { stroke: #e0d4ff; }
+.puente-jg .fb-boom-huevo { stroke: #fff3c4; }
+.puente-jg .fb-arania { pointer-events: none; }
+.puente-jg .fb-marcador .jg-lpuntos { min-width: 1.5rem; }
+.puente-jg .fb-color { flex: 0 0 auto; width: 0.75rem; height: 0.75rem; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.3); }
+.puente-jg .fb-color-r { background: radial-gradient(circle at 35% 30%, #ffb3b0, #e5383b 45%, #7a0b12); }
+.puente-jg .fb-color-v { background: radial-gradient(circle at 35% 30%, #c3ffd9, #23a55a 45%, #05502a); }
+.puente-jg .fb-pie { text-align: center; font-size: 0.75rem; color: #80848e; padding: 0 1rem; }
+.puente-jg .fb-reglas { display: flex; flex-direction: column; gap: 0.5rem; }
+.puente-jg .fb-regla { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.625rem 0.75rem; border-radius: 0.75rem; background: #2e2d32; font-size: 0.875rem; color: #dbdee1; line-height: 1.35; }
+.puente-jg .fb-regla b { color: #f2f3f5; font-size: 0.9375rem; }
+.puente-jg .fb-con-base { flex-direction: row; align-items: center; gap: 0.75rem; }
+.puente-jg .fb-con-base > div { display: flex; flex-direction: column; gap: 0.125rem; }
+.puente-jg .fb-base-ico { flex: 0 0 auto; width: 3rem; height: auto; }
+@keyframes fb-titila { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.45; } }
+@keyframes fb-boom { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .puente-jg .fb-destino { animation: none; } .puente-jg .fb-vuela { transition-duration: 0.05s; } }

@@ -19,3 +19,6 @@ tools/puente/vendor/
 
 # Dibujos de las cartas del truco: propios de cada servidor
 tools/puente/web/cartas/
+
+# Tableros del Funball original: propios de cada servidor
+tools/puente/funball-tableros.json
