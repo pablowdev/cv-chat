@@ -6988,7 +6988,7 @@ function sheetDrag(sheet, opts) {
       const b = el('button', cls + ' puente-mk-btn'); b.type = 'button'; b.title = 'Marketplace'; b.setAttribute('aria-label', 'Marketplace');
       // el icono propio del servidor (/puente/icono-mercado.webp, no va al repositorio); si no esta, el dibujo
       b.innerHTML = svg(I.tienda, 24);
-      { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-mercado.webp?v=1'; }
+      { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-mercado.webp?v=2'; }
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
       // "NUEVO!" para que se vea, hasta que la persona entra por primera vez (o pasa un mes)
       if (isNew()) b.appendChild(el('span', 'puente-mk-nuevo', 'NUEVO!'));

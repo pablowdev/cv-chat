@@ -2368,6 +2368,14 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .con-icono .puente-ico-img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; transition: filter 0.15s, box-shadow 0.15s; }
 .con-icono:hover .puente-ico-img { filter: brightness(1.15); }
 .con-icono.active .puente-ico-img { box-shadow: 0 0 0 2px #f2f3f5; }
+/* Efecto lupa como el Dock de macOS: el icono bajo el mouse se agranda y los de al lado un poco */
+@media (hover: hover) and (pointer: fine) {
+  #server-bar > .server-icon, #puente-rail > .puente-rail-btn { transition: transform 0.18s cubic-bezier(0.3, 0.7, 0.4, 1.4); transform-origin: center; will-change: transform; }
+  #server-bar > .server-icon:hover, #puente-rail > .puente-rail-btn:hover { transform: scale(1.22); z-index: 2; }
+  #server-bar > .server-icon:has(+ .server-icon:hover), #server-bar > .server-icon:hover + .server-icon,
+  #puente-rail > .puente-rail-btn:has(+ .puente-rail-btn:hover), #puente-rail > .puente-rail-btn:hover + .puente-rail-btn { transform: scale(1.09); }
+}
+@media (prefers-reduced-motion: reduce) { #server-bar > .server-icon, #puente-rail > .puente-rail-btn { transition: none; } }
 #server-bar .puente-jg-btn { display: flex; align-items: center; justify-content: center; color: #dbdee1; background: #2b2a30; cursor: pointer; border: 0; }
 #server-bar .puente-jg-btn:hover, #server-bar .puente-jg-btn.active { background: #5865f2; color: #fff; border-radius: 16px; }
 #puente-rail .puente-jg-btn { color: #dbdee1; }
