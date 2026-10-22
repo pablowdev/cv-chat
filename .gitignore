@@ -22,3 +22,5 @@ tools/puente/web/cartas/
 
 # Tableros del Funball original: propios de cada servidor
 tools/puente/funball-tableros.json
+# Dibujos del Funball: propios de cada servidor
+tools/puente/web/funball/

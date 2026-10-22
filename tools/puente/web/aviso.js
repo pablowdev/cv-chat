@@ -7567,7 +7567,34 @@ function sheetDrag(sheet, opts) {
     sv('ellipse', { cx: x, cy: y, rx, ry, fill: 'none', stroke: fill, 'stroke-width': 5 }, g);
     sv('path', { d: `M${x - rx * 0.75} ${y - ry * 0.55}q${rx * 0.6} ${-ry * 0.6} ${rx * 1.2} ${-ry * 0.3}`, stroke: '#fff4c8', 'stroke-width': 1.3, fill: 'none', opacity: 0.9 }, g);
   }
+  // Dibujos propios del servidor (tools/puente/web/funball/, no van al repositorio): una hoja
+  // con las piezas y la piedra del piso. Si no estan, se dibuja todo con los graficos de abajo
+  const FB_ARTE = '/puente/funball/';
+  const FB_PIEZAS = {"normal":[0,0,114,77,57,38],"chica":[116,0,46,36,22,18],"tobogan":[164,0,114,72,57,34],"bomba":[280,0,115,72,57,34],"jabon":[397,0,112,72,56,36],"tele":[511,0,116,73,58,34],"resorte":[0,79,101,78,50,44],"blindada":[103,79,116,76,58,38],"arania":[221,79,164,104,82,65],"rojaB":[387,79,154,136,77,124,70],"verdeB":[0,217,121,118,60,104,55]};
+  const FB_HOJA = [640, 335];
+  const FB_BASE_PIEZA = { 0: 'normal', 2: 'chica', 3: 'bomba', 4: 'blindada', 5: 'tele', 7: 'resorte', 8: 'tobogan', 9: 'jabon' };
+  const FB_ESC = 0.33;
+  let fbArte = null; // null: sin probar, 1: probando, true: esta, false: no esta
+  function fbProbarArte() {
+    if (fbArte !== null) return;
+    fbArte = 1;
+    const i = new Image();
+    i.onload = () => { fbArte = true; };
+    i.onerror = () => { fbArte = false; if (page && fbMesa && fbMesa.s) fbDraw(fbMesa.s); };
+    i.src = FB_ARTE + 'piezas.webp';
+  }
+  function fbPieza(g, id, x, y, sc) {
+    const [px, py, w, h, ax, ay] = FB_PIEZAS[id];
+    const s = sv('svg', { x: x - ax * sc, y: y - ay * sc, width: w * sc, height: h * sc, viewBox: `${px} ${py} ${w} ${h}` }, g);
+    sv('image', { href: FB_ARTE + 'piezas.webp', width: FB_HOJA[0], height: FB_HOJA[1] }, s);
+  }
   function fbBase(g, b, x, y) {
+    fbProbarArte();
+    if (fbArte !== false && FB_BASE_PIEZA[b]) {
+      const [, , w] = FB_PIEZAS[FB_BASE_PIEZA[b]];
+      sv('ellipse', { cx: x - 3, cy: y + 4, rx: w * FB_ESC * 0.55, ry: w * FB_ESC * 0.3, fill: 'url(#fb-sombra)' }, g);
+      return fbPieza(g, FB_BASE_PIEZA[b], x, y, FB_ESC);
+    }
     switch (b) {
       case 1: // agujero
         sv('ellipse', { cx: x, cy: y, rx: 16, ry: 7.5, fill: 'url(#fb-pozo)' }, g);
@@ -7624,6 +7651,15 @@ function sheetDrag(sheet, opts) {
       [[-1.5, -8], [1.8, -5], [-0.5, -3.5], [2, -9]].forEach(([dx, dy]) => sv('circle', { cx: x + dx, cy: y + dy, r: 0.75, fill: '#8a7d55' }, g));
       return;
     }
+    if (fbArte !== false) {
+      const id = k === 'R' ? 'rojaB' : 'verdeB', pz = FB_PIEZAS[id];
+      const r = 8 + Math.min(15, s) * 0.95, sc = r / pz[6];
+      sv('ellipse', { cx: x - r * 0.25, cy: y + 3, rx: r * 1.05, ry: r * 0.45, fill: 'url(#fb-sombra)' }, g);
+      fbPieza(g, id, x, y + 2, sc);
+      const cy = y + 2 - (pz[5] - pz[3] * 0.45) * sc;
+      if (num) { const t = sv('text', { x, y: cy + 3.6, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(s); }
+      return;
+    }
     const r = fbSize(s), cy = y - r * 0.8;
     sv('ellipse', { cx: x + r * 0.3, cy: y + 2, rx: r * 1.1, ry: r * 0.42, fill: 'url(#fb-sombra)' }, g);
     sv('circle', { cx: x, cy, r, fill: k === 'R' ? 'url(#fb-roja)' : 'url(#fb-verde)' }, g);
@@ -7641,6 +7677,11 @@ function sheetDrag(sheet, opts) {
     if (num) { const t = sv('text', { x, y: cy + 3.6, 'text-anchor': 'middle', class: 'fb-num' }, g); t.textContent = String(s); }
   }
   function fbSpider(g, x, y) {
+    if (fbArte !== false) {
+      const a = sv('g', { class: 'fb-arania' }, g);
+      sv('ellipse', { cx: x - 3, cy: y + 4, rx: 22, ry: 8, fill: 'url(#fb-sombra)' }, a);
+      return fbPieza(a, 'arania', x, y, FB_ESC);
+    }
     const s = sv('g', { class: 'fb-arania', transform: `translate(${x} ${y - 6})` }, g);
     sv('ellipse', { cx: 2, cy: 7, rx: 14, ry: 4.5, fill: 'url(#fb-sombra)' }, s);
     for (const side of [-1, 1]) for (let k = 0; k < 4; k++) {
@@ -7841,6 +7882,8 @@ function sheetDrag(sheet, opts) {
     const svgEl = sv('svg', { viewBox: `0 0 ${FB_W} ${FB_H}`, class: 'fb-tablero', role: 'img', 'aria-label': 'Tablero de Funball' });
     fbDefs(svgEl);
     sv('rect', { width: FB_W, height: FB_H, filter: 'url(#fb-piedra)' }, svgEl);
+    fbProbarArte();
+    if (fbArte !== false) sv('image', { href: FB_ARTE + 'piedra.webp', width: FB_W, height: FB_H, preserveAspectRatio: 'none' }, svgEl);
     const order = [];
     for (let c = 0; c < 8; c++) for (let r = 0; r < 8; r++) order.push([c, r, fbXY(c, r, flip)]);
     order.sort((a, b) => a[2].y - b[2].y || a[2].x - b[2].x);

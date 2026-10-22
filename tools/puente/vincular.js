@@ -410,6 +410,15 @@ async function handle(req, res) {
     return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
+  // Dibujos del Funball: tools/puente/web/funball/piezas.webp y piedra.webp, propios de cada
+  // servidor (no van al repositorio); si no estan, el juego usa sus graficos dibujados
+  const fbArte = req.method === 'GET' && /^\/puente\/funball\/(piezas|piedra)\.webp$/.exec(p);
+  if (fbArte) {
+    const file = path.join(STATIC, 'funball', fbArte[1] + '.webp');
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin dibujo');
+    return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
     return send(res, 200, 'application/javascript', temaFijo.script(db));
   }
