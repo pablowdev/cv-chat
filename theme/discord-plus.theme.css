@@ -2390,6 +2390,9 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-btn.jg-envido-btn { background: #3b2f0b; color: #f0b232; }
 .puente-jg .jg-ancho { width: 100%; }
 .puente-jg .jg-hero { text-align: center; padding: 1.25rem 1rem; margin-bottom: 0.5rem; border-radius: 1rem; background: #1f4d36; }
+/* Banner propio del Truco (aviso.js): ocupa el ancho del recuadro, arriba */
+.puente-jg .jg-hero.jg-con-banner { padding: 0 0 1rem; overflow: hidden; background: #0d1410; }
+.puente-jg .jg-banner { display: block; width: 100%; height: auto; margin-bottom: 0.75rem; }
 .puente-jg .jg-hero-cartas { font-size: 2.75rem; line-height: 1; margin-bottom: 0.25rem; }
 .puente-jg .jg-hero-t { font-size: 1.5rem; font-weight: 800; color: #fff; }
 .puente-jg .jg-hero-s { font-size: 0.9375rem; color: #c9e6d4; margin-bottom: 0.875rem; }

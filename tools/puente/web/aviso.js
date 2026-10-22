@@ -7202,6 +7202,11 @@ function sheetDrag(sheet, opts) {
     const b = el('div', 'jg-cuerpo'); page.appendChild(b);
     const hero = el('div', 'jg-hero');
     hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
+    // el banner de este servidor (/puente/cartas/banner.webp, no va al repositorio); si no esta, el de siempre
+    const ban = el('img', 'jg-banner'); ban.alt = 'Truco'; ban.src = `/puente/cartas/banner.webp?v=${CARTAS_V}`;
+    ban.addEventListener('load', () => { hero.querySelector('.jg-hero-cartas')?.remove(); hero.querySelector('.jg-hero-t')?.remove(); hero.classList.add('jg-con-banner'); });
+    ban.addEventListener('error', () => ban.remove());
+    hero.prepend(ban);
     const btns = el('div', 'jg-acciones');
     const nb = el('button', 'jg-btn jg-primario', 'Crear partida'); nb.type = 'button'; nb.addEventListener('click', () => go('crear'));
     const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button';
