@@ -7092,6 +7092,7 @@ function sheetDrag(sheet, opts) {
   // Cada servidor puede tener su dibujo para cada carta (/puente/cartas/<palo>-<n>.webp,
   // no va al repositorio); si no esta, la carta simple con el numero y el palo
   let conDibujos = true;
+  const CARTAS_V = 2; // subir cuando se cambian los dibujos, para que no quede la version vieja guardada
   // Los palos dibujados como en la baraja española: el oro dorado, la copa roja con pie
   // dorado, la espada de hoja clara con empuñadura azul y el basto verde con nudos
   const PALO_SVG = {
@@ -7121,7 +7122,7 @@ function sheetDrag(sheet, opts) {
     const img = el('img', 'jg-dibujo');
     img.alt = ''; img.draggable = false; img.decoding = 'async';
     img.onerror = () => { conDibujos = false; d.classList.remove('con-dibujo'); plain(d, c); };
-    img.src = `/puente/cartas/${c.p}-${c.n}.webp`;
+    img.src = `/puente/cartas/${c.p}-${c.n}.webp?v=${CARTAS_V}`;
     const esq = (abajo) => { const e = el('span', 'jg-esq' + (abajo ? ' abajo' : '')); e.append(el('b', null, String(c.n)), palo(c.p, 'jg-esq-palo')); return e; };
     d.classList.add('con-dibujo');
     d.append(img, esq(false), esq(true));
