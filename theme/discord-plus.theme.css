@@ -2363,6 +2363,11 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 
 /* ── Juegos: Truco (aviso.js, truco.js) ── */
 .puente-jg-btn { position: relative; }
+/* Con el icono propio del servidor: la imagen redonda ocupa todo el boton */
+.puente-mk-btn.con-icono, .puente-jg-btn.con-icono, #server-bar .puente-mk-btn.con-icono, #server-bar .puente-jg-btn.con-icono, #puente-rail .con-icono.active { background: transparent !important; border-radius: 50% !important; padding: 0; }
+.con-icono .puente-ico-img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; transition: filter 0.15s, box-shadow 0.15s; }
+.con-icono:hover .puente-ico-img { filter: brightness(1.15); }
+.con-icono.active .puente-ico-img { box-shadow: 0 0 0 2px #f2f3f5; }
 #server-bar .puente-jg-btn { display: flex; align-items: center; justify-content: center; color: #dbdee1; background: #2b2a30; cursor: pointer; border: 0; }
 #server-bar .puente-jg-btn:hover, #server-bar .puente-jg-btn.active { background: #5865f2; color: #fff; border-radius: 16px; }
 #puente-rail .puente-jg-btn { color: #dbdee1; }

@@ -6986,7 +6986,9 @@ function sheetDrag(sheet, opts) {
   function addButtons() {
     const mk = (cls) => {
       const b = el('button', cls + ' puente-mk-btn'); b.type = 'button'; b.title = 'Marketplace'; b.setAttribute('aria-label', 'Marketplace');
+      // el icono propio del servidor (/puente/icono-mercado.webp, no va al repositorio); si no esta, el dibujo
       b.innerHTML = svg(I.tienda, 24);
+      { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-mercado.webp?v=1'; }
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
       // "NUEVO!" para que se vea, hasta que la persona entra por primera vez (o pasa un mes)
       if (isNew()) b.appendChild(el('span', 'puente-mk-nuevo', 'NUEVO!'));
@@ -8904,7 +8906,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   function addButtons() {
     const mk = (cls) => {
       const b = el('button', cls + ' puente-jg-btn'); b.type = 'button'; b.title = 'Juegos'; b.setAttribute('aria-label', 'Juegos');
+      // el icono propio del servidor (/puente/icono-juegos.webp, no va al repositorio); si no esta, el dibujo
       b.innerHTML = svg(I.cartas, 24);
+      { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-juegos.webp?v=1'; }
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
       b.addEventListener('click', (e) => { e.stopPropagation(); if (page) close(); else { stack = []; go('inicio'); } });
       return b;

@@ -395,6 +395,15 @@ async function handle(req, res) {
     return send(res, 200, 'image/png', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
+  // Iconos del Marketplace y Juegos en la columna de la izquierda: tools/puente/web/icono-<cual>.webp,
+  // propios de cada servidor (no van al repositorio); si no estan, aviso.js usa los dibujados
+  const icoCol = req.method === 'GET' && /^\/puente\/icono-(mercado|juegos)\.webp$/.exec(p);
+  if (icoCol) {
+    const file = path.join(STATIC, 'icono-' + icoCol[1] + '.webp');
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin icono');
+    return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
   if (p === '/puente/logo-carga.png' && req.method === 'GET') {
     const file = path.join(STATIC, 'logo-carga.png');
     if (!fs.existsSync(file)) { res.writeHead(302, { Location: '/puente/icono-512.png' }); return res.end(); }
