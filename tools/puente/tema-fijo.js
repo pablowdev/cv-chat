@@ -89,6 +89,10 @@ function publish(db, forma, valores) {
   const clean = {};
   for (const [k, v] of Object.entries(valores)) {
     if (UI_SET.has(k) && typeof v === 'string' && v.length <= 20000) clean[k] = v;
+    // __layouts: { Plugin: '0' | '1' } (prendido o apagado con Ctrl+Shift+B, Ctrl+Alt+C...)
+    if (k === '__layouts' && typeof v === 'string' && v.length <= 2000) {
+      try { const o = JSON.parse(v), lim = {}; for (const [p, on] of Object.entries(o)) if (/^[A-Za-z]{1,40}$/.test(p) && (on === '0' || on === '1')) lim[p] = on; clean[k] = JSON.stringify(lim); } catch { /* invalido */ }
+    }
   }
   db.prepare("INSERT INTO puente_ui_fija (forma, valores, actualizado) VALUES (?, ?, datetime('now')) ON CONFLICT(forma) DO UPDATE SET valores = excluded.valores, actualizado = excluded.actualizado")
     .run(forma, JSON.stringify(clean));
@@ -122,13 +126,16 @@ function script(db) {
       // Administrador: lo que elige se publica para todos
       `var timer=null,send=function(){clearTimeout(timer);timer=setTimeout(function(){var tk=ls.getItem('haven_token');if(!tk)return;` +
         `var v={};keys.forEach(function(k){var x=ls.getItem(k);if(x!==null)v[k]=x;});` +
+        `try{var pd=JSON.parse(ls.getItem('haven_plugin_data')||'{}'),lo={};['BraidLayout','CompactLayout','ChromeLayout','ChannelTabsLayout'].forEach(function(p){lo[p]=pd[p]&&pd[p].layoutOn==='0'?'0':'1';});v.__layouts=JSON.stringify(lo);}catch(e){}` +
         `fetch('/puente/api/ui-fija',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tk},body:JSON.stringify({forma:forma,valores:v})}).catch(function(){});},2000);};` +
-      `P.setItem=function(k,v){var r=set.call(this,k,v);if(this===ls&&lock[k])send();return r;};` +
+      `P.setItem=function(k,v){var r=set.call(this,k,v);if(this===ls&&(lock[k]||k==='haven_plugin_data'))send();return r;};` +
       `P.removeItem=function(k){var r=rem.call(this,k);if(this===ls&&lock[k])send();return r;};` +
       `if(keys.some(function(k){return ls.getItem(k)!==null;}))setTimeout(send,8000);` +
     `}else if(ui[forma]){var f=ui[forma];` +
       // Los demas: el diseño publicado, sin poder cambiarlo
       `keys.forEach(function(k){if(Object.prototype.hasOwnProperty.call(f,k))set.call(ls,k,f[k]);else rem.call(ls,k);});` +
+      // Los complementos de disposicion quedan prendidos o apagados como los tiene el administrador
+      `try{if(f.__layouts){var lo=JSON.parse(f.__layouts),pd=JSON.parse(ls.getItem('haven_plugin_data')||'{}');for(var p in lo){pd[p]=pd[p]||{};pd[p].layoutOn=lo[p];}set.call(ls,'haven_plugin_data',JSON.stringify(pd));}}catch(e){}` +
       `P.setItem=function(k,v){if(this===ls&&lock[k])return;return set.call(this,k,v);};` +
       `P.removeItem=function(k){if(this===ls&&lock[k])return;return rem.call(this,k);};` +
     `}}catch(e){}})();`;
