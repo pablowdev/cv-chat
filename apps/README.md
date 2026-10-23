@@ -27,6 +27,11 @@ Trusted Web Activity (androidbrowserhelper): la página a pantalla completa, con
    certificado, de `keytool -list -v`): con eso `/.well-known/assetlinks.json` deja abrir la
    página sin la barra del navegador.
 
+## Actualizaciones
+
+- **Windows** (desde la 1.0.1): la app se fija sola cada 6 horas en `/puente/descargas/latest.yml`, baja la versión nueva en segundo plano y ofrece "Reiniciar y actualizar". Hay que subir `latest.yml` y `CV-Chat-Windows.exe.blockmap` junto con el `.exe`.
+- **Android**: el aviso "Hay una versión nueva de la app" aparece dentro de CV Chat cuando la versión instalada (la app abre `/app?app=android&v=<versión>`) es más vieja que la de `versiones.json`; "Actualizar" baja el APK, que se instala encima. En `AndroidManifest.xml`, el `v=` del `DEFAULT_URL` tiene que ser igual a `versionName`.
+
 Para publicar una versión nueva: subir `versionCode`/`versionName` (Android) o `version`
 (Windows), armar, copiar el archivo a `tools/puente/web/descargas/` como `CV-Chat-Android.apk`
 o `CV-Chat-Windows.exe` y actualizar `tools/puente/web/descargas/versiones.json`.

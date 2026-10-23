@@ -476,12 +476,13 @@ async function handle(req, res) {
     for (const [k, archivo] of Object.entries(DESCARGAS)) { try { out[k] = { tam: fs.statSync(path.join(dir, archivo)).size, version: ver[k] || null }; } catch { /* no esta */ } }
     return json(res, 200, out);
   }
-  const bajar = req.method === 'GET' && /^\/puente\/descargas\/([A-Za-z0-9-]+\.(?:apk|exe))$/.exec(p);
-  if (bajar && Object.values(DESCARGAS).includes(bajar[1])) {
+  // (la app de Windows se actualiza sola con latest.yml y el .blockmap, de electron-builder)
+  const bajar = req.method === 'GET' && /^\/puente\/descargas\/([A-Za-z0-9-]+\.(?:apk|exe|exe\.blockmap|yml))$/.exec(p);
+  if (bajar && (Object.values(DESCARGAS).includes(bajar[1]) || bajar[1] === 'latest.yml' || bajar[1] === DESCARGAS.windows + '.blockmap')) {
     const file = path.join(STATIC, 'descargas', bajar[1]);
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Todavía no está disponible');
     const st = fs.statSync(file);
-    res.writeHead(200, { 'Content-Type': bajar[1].endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream', 'Content-Length': st.size, 'Content-Disposition': `attachment; filename="${bajar[1]}"`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+    res.writeHead(200, { 'Content-Type': bajar[1].endsWith('.apk') ? 'application/vnd.android.package-archive' : bajar[1].endsWith('.yml') ? 'text/yaml; charset=utf-8' : 'application/octet-stream', 'Content-Length': st.size, 'Content-Disposition': `attachment; filename="${bajar[1]}"`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     fs.createReadStream(file).pipe(res);
     return;
   }

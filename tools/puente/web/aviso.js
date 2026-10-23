@@ -10240,3 +10240,60 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     s.on('connect', () => setTimeout(revisar, 3000));
   })();
 })();
+
+// Version nueva de la app instalada (apps/): la pagina se actualiza sola, pero la app (el icono,
+// los permisos) solo cambia al reinstalarla. Si la app es mas vieja que la del servidor, un aviso
+// con "Actualizar": en Android baja el APK nuevo, que se instala encima sin perder nada; en Windows,
+// desde la version 1.0.1 la app se actualiza sola y este aviso solo le aparece a la 1.0.0.
+(() => {
+  const ver = (a) => String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+  const menor = (a, b) => { const x = ver(a), y = ver(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+  const ses = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch { return null; } return v; };
+  let plataforma = null, actual = null;
+  const w = navigator.userAgent.match(/CVChat\/([\d.]+)/);
+  if (w) { plataforma = 'windows'; actual = w[1]; }
+  else {
+    const q = new URLSearchParams(location.search);
+    if (q.get('app') === 'android') ses('puente_app_android', q.get('v') || '1.0.0');
+    // la 1.0.1 y anteriores no avisan su version: se las reconoce porque Android abre la pagina desde la app
+    else if (/^android-app:\/\/club\.circulovicioso\.chat/.test(document.referrer || '') && !ses('puente_app_android')) ses('puente_app_android', '1.0.0');
+    if (ses('puente_app_android')) { plataforma = 'android'; actual = ses('puente_app_android'); }
+  }
+  if (!plataforma) return;
+  if (plataforma === 'windows' && !menor(actual, '1.0.1')) return; // esa ya se actualiza sola
+  setTimeout(async () => {
+    const d = await fetch('/puente/descargas.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const ultima = d && d[plataforma] && d[plataforma].version;
+    if (!ultima || !menor(actual, ultima)) return;
+    const KEY = 'puente_app_luego_' + plataforma + '_' + ultima;
+    try { if (Number(localStorage.getItem(KEY) || 0) > Date.now()) return; } catch { /* sigue */ }
+    if (document.getElementById('puente-app-nueva')) return;
+    const box = document.createElement('div'); box.id = 'puente-app-nueva'; box.setAttribute('role', 'dialog');
+    const icon = document.createElement('div'); icon.className = 'pa-icono'; icon.textContent = '⬆️';
+    const txt = document.createElement('div'); txt.className = 'pa-texto';
+    const t1 = document.createElement('b'); t1.textContent = 'Hay una versión nueva de la app';
+    const t2 = document.createElement('span');
+    t2.textContent = plataforma === 'android' ? 'Tocá Actualizar, abrí el archivo cuando termine de bajar y tocá Instalar. No se pierde nada.' : 'Tocá Actualizar, abrí el instalador cuando termine y listo. Después se actualiza sola.';
+    txt.append(t1, t2);
+    const btns = document.createElement('div'); btns.className = 'pa-botones';
+    const yes = document.createElement('a'); yes.className = 'pa-si'; yes.textContent = 'Actualizar';
+    yes.href = plataforma === 'android' ? '/puente/descargas/CV-Chat-Android.apk' : '/puente/descargas/CV-Chat-Windows.exe';
+    yes.setAttribute('download', '');
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'pa-no'; no.textContent = 'Más tarde';
+    btns.append(yes, no); box.append(icon, txt, btns);
+    const cerrar = (dias) => { try { localStorage.setItem(KEY, String(Date.now() + dias * 864e5)); } catch { /* nada */ } box.remove(); };
+    no.addEventListener('click', () => cerrar(3));
+    yes.addEventListener('click', () => setTimeout(() => cerrar(1), 300));
+    const st = document.createElement('style');
+    st.textContent = `#puente-app-nueva{position:fixed;left:50%;top:calc(.75rem + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:100003;width:min(26rem,calc(100vw - 24px));box-sizing:border-box;display:grid;grid-template-columns:auto 1fr;gap:.25rem .75rem;align-items:center;padding:.875rem 1rem;border-radius:.875rem;background:#2b2a30;color:#dbdee1;box-shadow:0 10px 32px rgba(0,0,0,.5);animation:puente-fade .2s ease-out}
+#puente-app-nueva .pa-icono{grid-row:span 2;font-size:1.5rem}
+#puente-app-nueva .pa-texto{display:flex;flex-direction:column;gap:.125rem;font-size:.875rem;line-height:1.35;color:#b5bac1}
+#puente-app-nueva .pa-texto b{color:#f2f3f5;font-size:.9375rem}
+#puente-app-nueva .pa-botones{display:flex;gap:.5rem;justify-content:flex-end}
+#puente-app-nueva .pa-si,#puente-app-nueva .pa-no{display:inline-flex;align-items:center;min-height:2.25rem;padding:0 1rem;border:0;border-radius:.5rem;font:inherit;font-size:.875rem;font-weight:600;cursor:pointer;text-decoration:none}
+#puente-app-nueva .pa-si{background:#5865f2;color:#fff}
+#puente-app-nueva .pa-no{background:transparent;color:#b5bac1}`;
+    document.head.appendChild(st);
+    document.body.appendChild(box);
+  }, 8000);
+})();

@@ -1,6 +1,7 @@
 // CV Chat para Windows: una ventana propia que abre chat.circulovicioso.club/app.
 // La app es la misma pagina, asi que se actualiza sola con cada cambio del servidor.
-const { app, BrowserWindow, shell, Tray, Menu, session, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, session, nativeImage, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 const ORIGEN = 'https://chat.circulovicioso.club';
@@ -11,6 +12,7 @@ const ADENTRO = [ORIGEN, 'https://discord.com', 'https://www.discord.com'];
 let win = null, tray = null, saliendo = false;
 
 if (!app.requestSingleInstanceLock()) app.quit();
+app.commandLine.appendSwitch('lang', 'es-419'); // la pagina en castellano, aunque Windows este en ingles
 app.setAppUserModelId('club.circulovicioso.chat'); // para las notificaciones de Windows
 
 function crear() {
@@ -65,3 +67,22 @@ app.whenReady().then(() => {
   bandeja();
 });
 app.on('window-all-closed', () => {});
+
+// Actualizaciones: la app se fija sola si hay una version nueva en el servidor
+// (/puente/descargas/latest.yml), la baja en segundo plano y avisa para reiniciar
+let avisado = false;
+function buscarActualizacion() { autoUpdater.checkForUpdates().catch(() => {}); }
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.on('update-downloaded', async (info) => {
+  if (avisado) return;
+  avisado = true;
+  const opts = {
+    type: 'info', title: 'CV Chat', buttons: ['Reiniciar y actualizar', 'Más tarde'], defaultId: 0, cancelId: 1,
+    message: `Hay una versión nueva de CV Chat (${info.version}).`,
+    detail: 'Se instala en unos segundos y CV Chat se vuelve a abrir solo. Si elegís "Más tarde", se instala la próxima vez que salgas de la app.',
+  };
+  const r = win && win.isVisible() ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (r.response === 0) { saliendo = true; autoUpdater.quitAndInstall(true, true); }
+});
+app.whenReady().then(() => { setTimeout(buscarActualizacion, 15000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
