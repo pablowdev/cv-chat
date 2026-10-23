@@ -10185,6 +10185,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
 // nueva. Si cambio solo el tema, lo cambia en el momento, sin recargar. Si cambio el programa,
 // recarga cuando no molesta: con la app en segundo plano, o quieta y sin nada escrito, sin
 // llamada de voz ni ventanas abiertas. Nadie tiene que tocar Ctrl+Shift+R ni cerrar la app.
+// Tambien cuenta como programa nuevo un cambio de la llave de conexion (llave.js): una pestaña
+// vieja, sin la llave, se recarga sola antes de que se termine el tiempo en que todavia entra.
 (() => {
   let base = null, pendiente = false, ultimaAccion = Date.now();
   const leer = () => fetch('/puente/version', { cache: 'no-store', credentials: 'same-origin' }).then(r => (r.ok ? r.json() : null)).catch(() => null);

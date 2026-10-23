@@ -34,6 +34,7 @@ const path = require('path');
 const adjuntos = require('./adjuntos.js');
 const instalable = require('./instalable.js');
 const temaFijo = require('./tema-fijo.js');
+const llave = require('./llave.js');
 const email = require('./email.js');
 const nombres = require('./nombres.js');
 
@@ -75,6 +76,7 @@ function setup(ctx) {
   if (!clientSecret) warn('falta DISCORD_CLIENT_SECRET: la vinculacion de cuentas no funcionara hasta guardarlo');
 
   email.setup({ db, log, warn, publicUrl, appName, setPassword });
+  llave.setup({ db, io, log, appName, publicUrl });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();
@@ -303,7 +305,7 @@ function appVersion() {
   let haven = '';
   try { haven = require('/app/package.json').version || ''; } catch { /* fuera del contenedor */ }
   const v = {
-    js: huella([path.join(STATIC, 'aviso.js'), path.join(STATIC, 'instalar.js'), path.join(__dirname, 'tema-fijo.js')]) + '-' + haven,
+    js: huella([path.join(STATIC, 'aviso.js'), path.join(STATIC, 'instalar.js'), path.join(__dirname, 'tema-fijo.js'), path.join(__dirname, 'llave.js')]) + '-' + haven,
     css: huella(['/app/themes/discord-plus.theme.css']),
   };
   versionCache = { t: Date.now(), v };
@@ -565,7 +567,7 @@ async function handle(req, res) {
   }
 
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {
-    return send(res, 200, 'application/javascript', temaFijo.script(db));
+    return send(res, 200, 'application/javascript', llave.script() + temaFijo.script(db));
   }
 
   // Un administrador publica su diseño para todos (tema-fijo.js)
