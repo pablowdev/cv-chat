@@ -7394,17 +7394,46 @@ function sheetDrag(sheet, opts) {
   }
 
   // ── La mesa ──
+  // El boton de arriba a la derecha en una mesa: dice lo que hace segun el momento
+  function botonSalir(b, s) {
+    if (!b) return;
+    const t = s.estado === 'esperando' && s.soyCreador ? 'Cancelar partida' : s.estado === 'jugando' && s.soyJugador ? 'Abandonar partida' : 'Copiar enlace';
+    b.textContent = t; b.style.visibility = '';
+    b.classList.toggle('jg-peligro', t !== 'Copiar enlace');
+  }
+  // Un aviso dentro de CV Chat, en vez del cartel del navegador. Devuelve true si se acepta
+  function confirmar(titulo, texto, si, no) {
+    return new Promise((res) => {
+      const fondo = el('div', 'jg-aviso-fondo');
+      const box = el('div', 'jg-aviso'); box.setAttribute('role', 'alertdialog'); box.setAttribute('aria-modal', 'true');
+      const acc = el('div', 'jg-aviso-acc');
+      const bNo = el('button', 'jg-btn', no || 'Cancelar'); bNo.type = 'button';
+      const bSi = el('button', 'jg-btn jg-peligro', si || 'Aceptar'); bSi.type = 'button';
+      acc.append(bNo, bSi);
+      box.append(el('div', 'jg-aviso-t', titulo), el('div', 'jg-aviso-s', texto), acc);
+      fondo.appendChild(box);
+      const fin = (v) => { document.removeEventListener('keydown', kd, true); fondo.remove(); res(v); };
+      const kd = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(false); } };
+      document.addEventListener('keydown', kd, true);
+      bNo.addEventListener('click', () => fin(false));
+      bSi.addEventListener('click', () => fin(true));
+      fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(false); });
+      (page || document.body).appendChild(fondo);
+      bNo.focus();
+    });
+  }
   async function table(id) {
     mesa = { id, s: null };
-    const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
+    const menu = el('button', 'jg-btn jg-salir', ''); menu.type = 'button'; menu.style.visibility = 'hidden';
+    mesa.menu = menu;
     page.appendChild(head('Truco', menu));
     const b = el('div', 'jg-mesa jg-mesa2'); page.appendChild(b);
     b.appendChild(el('div', 'jg-estado', 'Cargando…'));
     menu.addEventListener('click', () => {
       const s = mesa && mesa.s;
       if (!s) return;
-      if (s.estado === 'esperando' && s.soyCreador) { if (confirm('¿Cancelar la partida?')) emit('truco:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); return; }
-      if (s.estado === 'jugando' && s.soyJugador) { if (confirm('¿Abandonar la partida? La perdés.')) emit('truco:accion', { id, tipo: 'abandonar' }); return; }
+      if (s.estado === 'esperando' && s.soyCreador) { confirmar('¿Cancelar la partida?', 'La mesa se cierra y nadie más puede entrar.', 'Cancelar partida', 'Volver').then(ok => { if (ok) emit('truco:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); }); return; }
+      if (s.estado === 'jugando' && s.soyJugador) { confirmar('¿Abandonar la partida?', 'Si abandonás, la perdés y gana tu rival.', 'Abandonar', 'Seguir jugando').then(ok => { if (ok) emit('truco:accion', { id, tipo: 'abandonar' }); }); return; }
       share(id);
     });
     const d = await emit('truco:ver', { id });
@@ -7423,6 +7452,7 @@ function sheetDrag(sheet, opts) {
     if (!page || !mesa || mesa.id !== s.id) return;
     const prev = mesa.s;
     mesa.s = s;
+    botonSalir(mesa.menu, s);
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && mesa && mesa.id === s.id) { stack.pop(); go('mesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Truco a ${s.puntos} · ${s.flor ? 'con flor' : 'sin flor'}`;
@@ -8187,15 +8217,16 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   async function fbTable(id) {
     fbMesa = { id, s: null, sel: null, busy: false };
     mesa = { id: 'fb:' + id, s: null };
-    const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
+    const menu = el('button', 'jg-btn jg-salir', ''); menu.type = 'button'; menu.style.visibility = 'hidden';
+    fbMesa.menu = menu;
     page.appendChild(head('Funball', menu));
     const b = el('div', 'jg-mesa fb-mesa fb-ui'); page.appendChild(b);
     b.appendChild(el('div', 'jg-estado', 'Cargando…'));
     menu.addEventListener('click', () => {
       const s = fbMesa && fbMesa.s;
       if (!s) return;
-      if (s.estado === 'esperando' && s.soyCreador) { if (confirm('¿Cancelar la partida?')) emit('funball:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); return; }
-      if (s.estado === 'jugando' && s.soyJugador) { if (confirm('¿Abandonar la partida? La perdés.')) emit('funball:accion', { id, tipo: 'abandonar' }); return; }
+      if (s.estado === 'esperando' && s.soyCreador) { confirmar('¿Cancelar la partida?', 'La mesa se cierra y nadie más puede entrar.', 'Cancelar partida', 'Volver').then(ok => { if (ok) emit('funball:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); }); return; }
+      if (s.estado === 'jugando' && s.soyJugador) { confirmar('¿Abandonar la partida?', 'Si abandonás, la perdés y gana tu rival.', 'Abandonar', 'Seguir jugando').then(ok => { if (ok) emit('funball:accion', { id, tipo: 'abandonar' }); }); return; }
       fbShare(id);
     });
     const d = await emit('funball:ver', { id });
@@ -8245,6 +8276,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (!page || !fbMesa || fbMesa.id !== s.id) return;
     const prev = fbMesa.s;
     fbMesa.s = s; mesa.s = s;
+    botonSalir(fbMesa.menu, s);
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && fbMesa && fbMesa.id === s.id) { stack.pop(); go('fbMesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Funball · ${s.tablero}`;

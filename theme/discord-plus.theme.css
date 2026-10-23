@@ -2402,6 +2402,17 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg input { -webkit-user-select: text; user-select: text; }
 .puente-jg .jg-head { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 0.5rem; height: 3.5rem; padding: 0 0.5rem 0 0.25rem; background: #1a191e; border-bottom: 1px solid #2e2d32; }
 .puente-jg .jg-titulo { flex: 1 1 auto; min-width: 0; font-size: 1.0625rem; font-weight: 700; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Boton de arriba a la derecha en las mesas (Abandonar / Cancelar / Copiar enlace) */
+.puente-jg .jg-head .jg-salir { flex: 0 0 auto; min-height: 2.25rem; padding: 0 0.875rem; font-size: 0.875rem; }
+.puente-jg .jg-btn.jg-peligro { background: #da373c; color: #fff; }
+.puente-jg .jg-btn.jg-peligro:hover { background: #a12829; }
+/* Aviso dentro de CV Chat (confirmar) */
+.puente-jg .jg-aviso-fondo { position: fixed; inset: 0; z-index: 100010; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,0.7); animation: puente-fade 0.15s ease-out; }
+.puente-jg .jg-aviso { width: 100%; max-width: 27rem; padding: 1.25rem 1.25rem 1rem; border-radius: 0.75rem; background: #242429; box-shadow: 0 0.5rem 2rem rgba(0,0,0,0.6); animation: jg-aviso-entra 0.18s cubic-bezier(0.3, 0.7, 0.4, 1.2); }
+.puente-jg .jg-aviso-t { font-size: 1.25rem; font-weight: 800; color: #f2f3f5; }
+.puente-jg .jg-aviso-s { margin-top: 0.5rem; font-size: 0.9375rem; line-height: 1.4; color: #b5bac1; }
+.puente-jg .jg-aviso-acc { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; }
+@keyframes jg-aviso-entra { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
 .puente-jg .jg-icono { flex: 0 0 auto; width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: #b5bac1; cursor: pointer; }
 .puente-jg .jg-icono:hover { background: #2e2d32; color: #fff; }
 .puente-jg .jg-cuerpo { max-width: 40rem; margin: 0 auto; padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
