@@ -75,6 +75,8 @@ function setup(ctx) {
   if (!clientSecret) warn('falta DISCORD_CLIENT_SECRET: la vinculacion de cuentas no funcionara hasta guardarlo');
 
   email.setup({ db, log, warn, publicUrl, appName, setPassword });
+  // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
+  io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();
   log('vinculacion de cuentas lista en /puente/vincular');
 }
@@ -85,6 +87,7 @@ function hookHttp() {
   http.Server.prototype.emit = function (event, req, res, ...rest) {
     if (event === 'request' && req && typeof req.url === 'string') {
       const url = req.url;
+      if (appHaven(req.headers['user-agent'])) { json(res, 403, { error: mensajeAppHaven(), message: mensajeAppHaven() }); return true; }
       if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg') || url.startsWith('/locales/')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
@@ -323,11 +326,21 @@ const PAGINAS_APP = new Set(['/', '/index.html', '/app', '/app.html']);
 // sobre un WebView (DuckDuckGo) tambien llevan esa marca, pero ahi CV Chat se ve como en cualquier
 // navegador: esos siguen entrando
 const NAVEGADOR_DE_RED = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Twitter|TikTok|musical_ly|Snapchat|Pinterest|LinkedInApp|GSA\/|WhatsApp|Telegram|Discord|DuckDuckGo/i;
+// Las apps propias de Haven (la de Android de Google Play, "Haven-Android/8.7.2 (...)", y la de
+// iPhone) no abren la pagina: arman su propio chat con los datos del servidor, sin nada de lo de
+// CV Chat. No entran (ni la conexion ni los pedidos), con un mensaje para bajar la app de CV Chat.
+// Las imagenes que bajan con el cliente generico de Android (Dalvik) no se tocan: ese lo usan
+// muchas otras apps para las vistas previas
+const APP_HAVEN = /^Haven-(?:Android|iOS)\/|HavenMobile/i;
+const appHaven = (ua) => APP_HAVEN.test(String(ua || ''));
+const mensajeAppHaven = () => `Esta app no es la de ${appName()}. Bajá la app de ${appName()} desde ${publicUrl || ''}/puente/descargar`;
 function appAjena(req) {
   const h = req.headers;
   if (h['sec-fetch-dest'] === 'iframe') return true;
   if (/haven/i.test(String(h['x-requested-with'] || ''))) return true; // el nombre de la app de Android que abre la pagina
   const ua = String(h['user-agent'] || '');
+  // La app de escritorio de Haven (Electron, como la de CV Chat, que se marca con "CVChat/")
+  if (/ Electron\//.test(ua) && !/ CVChat\//.test(ua)) return true;
   return /; wv\)/.test(ua) && !NAVEGADOR_DE_RED.test(ua);
 }
 
