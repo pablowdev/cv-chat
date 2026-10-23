@@ -10297,3 +10297,42 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     document.body.appendChild(box);
   }, 8000);
 })();
+
+// Leido en todos lados (leidos.js): lo que se lee en un dispositivo deja de estar en negrita en
+// los otros que estan abiertos. Ademas, al volver a la app (o al reconectarse) se pide la cuenta
+// del servidor, porque Haven se queda con la suya aunque el servidor ya tenga otra.
+(() => {
+  let t = 0;
+  function aplicar(counts) {
+    const a = window.app;
+    if (!a || !a.unreadCounts || !counts) return;
+    let cambio = false;
+    for (const [code, n] of Object.entries(counts)) {
+      const antes = a.unreadCounts[code] || 0;
+      // el canal que se esta viendo nunca vuelve a negrita por esto (lo lee este mismo dispositivo)
+      if (code === a.currentChannel && !document.hidden && n > antes) continue;
+      if (antes === n) continue;
+      a.unreadCounts[code] = n;
+      try { a._updateBadge && a._updateBadge(code); } catch { /* sigue */ }
+      cambio = true;
+    }
+    if (!cambio) return;
+    for (const f of ['_updateNestedIndicators', '_updateDmSectionBadge', '_updateTabTitle', '_updateDesktopBadge']) {
+      try { if (typeof a[f] === 'function') a[f](); } catch { /* sigue */ }
+    }
+  }
+  function pedir() {
+    const s = window.app && window.app.socket;
+    if (!s || !s.connected) return;
+    s.emit('puente-no-leidos', {}, (r) => { if (r && r.counts) aplicar(r.counts); });
+  }
+  (function enganchar() {
+    const s = window.app && window.app.socket;
+    if (!s || !window.app.unreadCounts) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    s.on('puente-leido', (d) => aplicar(d && d.counts));
+    s.on('connect', () => setTimeout(pedir, 2500));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(pedir, 800); });
+    addEventListener('focus', () => setTimeout(pedir, 800));
+    setTimeout(pedir, 5000);
+  })();
+})();

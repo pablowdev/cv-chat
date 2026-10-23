@@ -146,6 +146,7 @@ function start(deps) {
   require('./mercado.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });
   require('./funball.js').setup({ db, io, log, warn });
+  require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
