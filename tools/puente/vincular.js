@@ -268,6 +268,23 @@ function injectScript(req, res, src) {
   };
 }
 
+let versionCache = null;
+function appVersion() {
+  if (versionCache && Date.now() - versionCache.t < 5000) return versionCache.v;
+  const huella = (files) => {
+    const h = crypto.createHash('sha1');
+    for (const f of files) { try { const st = fs.statSync(f); h.update(f + ':' + st.size + ':' + st.mtimeMs + ';'); } catch { h.update(f + ':-;'); } }
+    return h.digest('hex').slice(0, 12);
+  };
+  let haven = '';
+  try { haven = require('/app/package.json').version || ''; } catch { /* fuera del contenedor */ }
+  const v = {
+    js: huella([path.join(STATIC, 'aviso.js'), path.join(STATIC, 'instalar.js'), path.join(__dirname, 'tema-fijo.js')]) + '-' + haven,
+    css: huella(['/app/themes/discord-plus.theme.css']),
+  };
+  versionCache = { t: Date.now(), v };
+  return v;
+}
 function send(res, status, type, body, headers = {}) {
   if (res.headersSent) return;
   res.writeHead(status, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -439,6 +456,12 @@ async function handle(req, res) {
     const file = path.join(STATIC, 'funball', 'sonidos', fbSon[1] + '.mp3');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin sonido');
     return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
+  // Version de lo que ve la app (web/aviso.js con el tema, y Haven): la app abierta la consulta
+  // cada tanto y se actualiza sola cuando cambia (aviso.js, "Actualizar sola")
+  if (p === '/puente/version' && req.method === 'GET') {
+    return json(res, 200, appVersion());
   }
 
   if (p === '/puente/tema-fijo.js' && req.method === 'GET') {

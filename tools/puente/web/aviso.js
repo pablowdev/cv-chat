@@ -10180,3 +10180,62 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   fix();
 })();
 
+// Actualizar sola: cada minuto (y al volver a la app o al reconectarse) se fija si hay una version
+// nueva. Si cambio solo el tema, lo cambia en el momento, sin recargar. Si cambio el programa,
+// recarga cuando no molesta: con la app en segundo plano, o quieta y sin nada escrito, sin
+// llamada de voz ni ventanas abiertas. Nadie tiene que tocar Ctrl+Shift+R ni cerrar la app.
+(() => {
+  let base = null, pendiente = false, ultimaAccion = Date.now();
+  const leer = () => fetch('/puente/version', { cache: 'no-store', credentials: 'same-origin' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  for (const ev of ['pointerdown', 'keydown', 'touchstart', 'wheel']) addEventListener(ev, () => { ultimaAccion = Date.now(); }, { capture: true, passive: true });
+  function temaNuevo() {
+    // Primero se baja el tema nuevo y despues se le cambia la direccion a cada copia (Haven a veces
+    // lo carga dos veces), asi no parpadea y Haven sigue manejando sus propios elementos
+    const url = '/themes/discord-plus.theme.css?_=' + Date.now();
+    const pre = document.createElement('link');
+    pre.rel = 'preload'; pre.as = 'style'; pre.href = url;
+    pre.addEventListener('load', () => {
+      for (const l of document.querySelectorAll('link[rel="stylesheet"]')) if (/\/themes\/discord-plus\.theme\.css/.test(l.getAttribute('href') || '')) l.href = url;
+      pre.remove();
+    }, { once: true });
+    pre.addEventListener('error', () => pre.remove(), { once: true });
+    document.head.appendChild(pre);
+  }
+  function tranquilo() {
+    const a = window.app;
+    if (a && a.voice && a.voice.inVoice) return false; // en una llamada, nunca
+    if (document.hidden) return true;
+    if (Date.now() - ultimaAccion < 45000) return false;
+    const escrito = [...document.querySelectorAll('textarea, input[type="text"], input:not([type]), [contenteditable="true"]')]
+      .some(x => x.offsetParent !== null && String(x.value != null ? x.value : x.textContent).trim());
+    if (escrito) return false;
+    if (document.getElementById('puente-juegos') || document.getElementById('puente-mercado')) return false; // jugando o en el Marketplace: espera a que salga
+    if ([...document.querySelectorAll('.modal-overlay, .jg-aviso-fondo')].some(x => x.offsetParent !== null && getComputedStyle(x).display !== 'none')) return false;
+    return true;
+  }
+  function intentar() {
+    if (!pendiente || !tranquilo()) return;
+    pendiente = false;
+    location.reload();
+  }
+  async function revisar() {
+    const v = await leer();
+    if (!v) return;
+    if (!base) { base = v; return; }
+    if (v.css !== base.css) { base.css = v.css; temaNuevo(); }
+    if (v.js !== base.js) { base.js = v.js; pendiente = true; }
+    intentar();
+  }
+  revisar();
+  setInterval(revisar, 60000);
+  setInterval(intentar, 10000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) intentar(); else revisar(); });
+  addEventListener('focus', revisar);
+  // al reconectarse (por ejemplo, despues de un reinicio del servidor)
+  let t = 0;
+  (function enganchar() {
+    const s = window.app && window.app.socket;
+    if (!s) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    s.on('connect', () => setTimeout(revisar, 3000));
+  })();
+})();
