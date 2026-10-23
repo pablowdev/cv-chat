@@ -7462,23 +7462,27 @@ function sheetDrag(sheet, opts) {
     b.appendChild(top);
     // El paño: las tres bazas (arriba la carta del rival, abajo la tuya)
     const felt = el('div', 'jg-pano jg-pano2');
+    // Cada baza es una pila, como en CyberJuegos: la carta del rival arriba a la derecha, la tuya
+    // abajo a la izquierda, una apoyada sobre la otra; la que gana queda encima
     const GIRO = { rival: [-7, 4, -3], yo: [5, -4, 7] };
-    const filas = { rival: el('div', 'jg-jugadas rival'), yo: el('div', 'jg-jugadas yo') };
     s.bazas.forEach((z, k) => {
+      const pila = el('div', 'jg-pila' + (k === s.baza ? ' actual' : ''));
+      const filas = { rival: pila, yo: pila };
       for (const quien of ['rival', 'yo']) {
         const c = z[quien];
         if (!c) continue;
         const x = card(c, 'jugada');
         x.style.setProperty('--giro', GIRO[quien][k] + 'deg');
-        x.style.zIndex = String(k + 1);
+        x.classList.add('de-' + quien);
+        x.style.zIndex = z.gana === quien ? '3' : z.gana && z.gana !== 'parda' ? '1' : quien === 'yo' ? '2' : '1';
         if (z.gana === quien) { x.classList.add('gano'); x.title = 'Ganó esta baza'; }
         if (z.gana === 'parda') x.classList.add('parda');
         const antes = prev && prev.bazas && prev.bazas[k];
         if (prev && prev.estado === 'jugando' && !(antes && antes[quien]) && prev.manos === s.manos) x.classList.add('jg-entra-' + quien);
         filas[quien].appendChild(x);
       }
+      felt.appendChild(pila);
     });
-    felt.append(filas.rival, filas.yo);
     b.appendChild(felt);
     // Que pasa ahora
     const st = el('div', 'jg-status');
