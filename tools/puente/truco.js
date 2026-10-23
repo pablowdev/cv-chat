@@ -335,7 +335,12 @@ function doAct(g, i, d) {
   }
   if (tipo === 'envido' || tipo === 'real' || tipo === 'falta') {
     if (h.env.pend) { h.env.cantos.push(tipo); h.env.pend = { de: i, para: o }; }
-    else { h.env.cantos = [tipo]; h.env.de = i; h.env.pend = { de: i, para: o }; }
+    else {
+      h.env.cantos = [tipo]; h.env.de = i; h.env.pend = { de: i, para: o };
+      // "El envido está primero": el truco que le habian cantado se cae; si el otro lo
+      // quiere, lo tiene que volver a cantar despues del envido
+      if (h.truco.pend && h.truco.pend.para === i) h.truco.pend = null;
+    }
     note(g, `${name}: ${NOMBRE[tipo]}`);
     tick(g); return null;
   }
@@ -371,7 +376,7 @@ function doAct(g, i, d) {
         h.env.mostrar = [a, b];
         if (addPoints(g, w, pts, 'envido')) { push(g, true); return null; }
       }
-      tick(g); return null; // si habia un truco esperando, sigue esperando
+      tick(g); return null;
     }
     if (h.truco.pend) {
       const p = h.truco.pend;
