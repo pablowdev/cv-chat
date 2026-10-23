@@ -7398,7 +7398,7 @@ function sheetDrag(sheet, opts) {
     mesa = { id, s: null };
     const menu = el('button', 'jg-icono'); menu.type = 'button'; menu.innerHTML = svg(I.puntos, 22); menu.setAttribute('aria-label', 'Más opciones');
     page.appendChild(head('Truco', menu));
-    const b = el('div', 'jg-mesa'); page.appendChild(b);
+    const b = el('div', 'jg-mesa jg-mesa2'); page.appendChild(b);
     b.appendChild(el('div', 'jg-estado', 'Cargando…'));
     menu.addEventListener('click', () => {
       const s = mesa && mesa.s;
@@ -7426,8 +7426,13 @@ function sheetDrag(sheet, opts) {
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && mesa && mesa.id === s.id) { stack.pop(); go('mesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Truco a ${s.puntos} · ${s.flor ? 'con flor' : 'sin flor'}`;
-    const b = page.querySelector('.jg-mesa');
-    b.textContent = '';
+    // La mesa es la parte de la izquierda (se arma de nuevo en cada cambio); el costado con el
+    // tanteador de fosforos y el chat se arma una sola vez, asi no se pierde lo que se esta escribiendo
+    const b0 = page.querySelector('.jg-mesa');
+    const vieja = b0.querySelector('.jg-juego'); if (vieja) vieja.remove();
+    b0.querySelector('.jg-estado')?.remove();
+    const b = el('div', 'jg-juego'); b0.prepend(b);
+    if (s.estado === 'esperando') b0.querySelector('.jg-lateral')?.remove(); else lateral(b0, s, prev);
     // Esperando rival
     if (s.estado === 'esperando') {
       const w = el('div', 'jg-espera');
@@ -7450,18 +7455,30 @@ function sheetDrag(sheet, opts) {
     // El rival: sus cartas boca abajo y lo que grita
     const top = el('div', 'jg-rival');
     const backs = el('div', 'jg-dorsos');
-    for (let k = 0; k < s.rivalCartas; k++) backs.appendChild(card(null, 'chica'));
+    const reparte = s.estado === 'jugando' && (!prev || prev.manos !== s.manos) && s.bazas.every(z => !z.yo && !z.rival);
+    for (let k = 0; k < s.rivalCartas; k++) { const x = card(null, 'rival'); if (reparte) { x.classList.add('jg-reparte'); x.style.setProperty('--d', (k * 2 + (s.mano ? 1 : 0)) * 0.14 + 's'); } backs.appendChild(x); }
     top.appendChild(backs);
     if (s.grito && !s.grito.mio) top.appendChild(el('div', 'jg-globo', s.grito.text));
     b.appendChild(top);
     // El paño: las tres bazas (arriba la carta del rival, abajo la tuya)
-    const felt = el('div', 'jg-pano');
+    const felt = el('div', 'jg-pano jg-pano2');
+    const GIRO = { rival: [-7, 4, -3], yo: [5, -4, 7] };
+    const filas = { rival: el('div', 'jg-jugadas rival'), yo: el('div', 'jg-jugadas yo') };
     s.bazas.forEach((z, k) => {
-      const col = el('div', 'jg-baza' + (k === s.baza ? ' actual' : '') + (z.gana ? ' gano-' + z.gana : ''));
-      col.append(z.rival ? card(z.rival, 'jugada') : el('div', 'jg-hueco'), z.yo ? card(z.yo, 'jugada') : el('div', 'jg-hueco'));
-      if (z.gana) col.appendChild(el('div', 'jg-bres', z.gana === 'yo' ? 'Tuya' : z.gana === 'rival' ? 'Suya' : 'Parda'));
-      felt.appendChild(col);
+      for (const quien of ['rival', 'yo']) {
+        const c = z[quien];
+        if (!c) continue;
+        const x = card(c, 'jugada');
+        x.style.setProperty('--giro', GIRO[quien][k] + 'deg');
+        x.style.zIndex = String(k + 1);
+        if (z.gana === quien) { x.classList.add('gano'); x.title = 'Ganó esta baza'; }
+        if (z.gana === 'parda') x.classList.add('parda');
+        const antes = prev && prev.bazas && prev.bazas[k];
+        if (prev && prev.estado === 'jugando' && !(antes && antes[quien]) && prev.manos === s.manos) x.classList.add('jg-entra-' + quien);
+        filas[quien].appendChild(x);
+      }
     });
+    felt.append(filas.rival, filas.yo);
     b.appendChild(felt);
     // Que pasa ahora
     const st = el('div', 'jg-status');
@@ -7480,6 +7497,7 @@ function sheetDrag(sheet, opts) {
     const hand = el('div', 'jg-mano' + (canPlay ? ' juega' : ''));
     s.cartas.forEach((c, k) => {
       const x = card(c, 'mia');
+      if (reparte) { x.classList.add('jg-reparte', 'mia-reparte'); x.style.setProperty('--d', (k * 2 + (s.mano ? 0 : 1)) * 0.14 + 's'); }
       if (canPlay) { x.tabIndex = 0; x.setAttribute('role', 'button'); x.addEventListener('click', () => play(s, { tipo: 'jugar', carta: k })); }
       hand.appendChild(x);
     });
@@ -7497,20 +7515,108 @@ function sheetDrag(sheet, opts) {
       x.addEventListener('click', () => { if (a === 'mazo' && !confirm('¿Irte al mazo? Le das los puntos de la mano.')) return; play(s, { tipo: a }); });
       acts.appendChild(x);
     }
-    const gr = el('button', 'jg-btn jg-suave', '💬'); gr.type = 'button'; gr.title = 'Decir algo';
-    gr.addEventListener('click', () => {
-      const old = page.querySelector('.jg-gritos'); if (old) { old.remove(); return; }
-      const list = el('div', 'jg-gritos');
-      (s.gritos || []).forEach((g, k) => { const o = el('button', 'jg-grito', g); o.type = 'button'; o.addEventListener('click', () => { list.remove(); emit('truco:accion', { id: s.id, tipo: 'grito', grito: k }); }); list.appendChild(o); });
-      b.appendChild(list);
-    });
-    acts.appendChild(gr);
     b.appendChild(acts);
     // Sonido cuando juega o canta el otro
     if (prev && prev.estado === 'jugando') {
       const prevCanto = prev.pendiente && prev.pendiente.canto, nowCanto = s.pendiente && s.pendiente.canto;
       if (s.pendiente && s.pendiente.de === 'rival' && nowCanto !== prevCanto) { beep(380, 160); setTimeout(() => beep(520, 160), 170); }
-      else if (JSON.stringify(prev.bazas) !== JSON.stringify(s.bazas)) beep(620, 70);
+      else if (prev.manos === s.manos && JSON.stringify(prev.bazas) !== JSON.stringify(s.bazas)) sonCarta('tira');
+    }
+    if (reparte) for (let k = 0; k < 6; k++) setTimeout(() => sonCarta('reparte'), 80 + k * 140);
+  }
+  // El sonido de las cartas (armado en el momento): un chasquido de naipe al repartir y un
+  // golpe seco sobre el paño al tirar una
+  function sonCarta(tipo) {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = actx.currentTime, dur = tipo === 'tira' ? 0.09 : 0.05;
+      const n = Math.ceil(actx.sampleRate * dur), buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, tipo === 'tira' ? 3 : 1.5);
+      const src = actx.createBufferSource(), fl = actx.createBiquadFilter(), g = actx.createGain();
+      src.buffer = buf; fl.type = 'bandpass'; fl.frequency.value = tipo === 'tira' ? 900 : 3200; fl.Q.value = tipo === 'tira' ? 0.7 : 1.2;
+      g.gain.value = tipo === 'tira' ? 0.9 : 0.5;
+      src.connect(fl); fl.connect(g); g.connect(actx.destination); src.start(t0);
+    } catch { /* sin sonido */ }
+  }
+  // Los fosforos del tanteador: de a cinco, los cuatro lados de un cuadrado y uno cruzado.
+  // A 30, una raya separa las malas de las buenas
+  function fosforos(n, max, nuevosDesde) {
+    const grupos = Math.ceil(max / 5), G = 30, gap = 6, sep = max > 15 ? 10 : 0;
+    const H = grupos * (G + gap) + sep;
+    const NS = 'http://www.w3.org/2000/svg';
+    const svgEl = document.createElementNS(NS, 'svg'); svgEl.setAttribute('viewBox', `0 0 ${G + 4} ${H}`); svgEl.setAttribute('class', 'jg-fosforos');
+    const lados = [[3, 3, 27, 3], [27, 3, 27, 27], [27, 27, 3, 27], [3, 27, 3, 3], [3, 3, 27, 27]];
+    let k = 0;
+    for (let gI = 0; gI < grupos; gI++) {
+      const y = gI * (G + gap) + (sep && gI >= 3 ? sep : 0);
+      for (let l = 0; l < 5; l++, k++) {
+        if (k >= n) break;
+        const [x1, y1, x2, y2] = lados[l];
+        const gEl = document.createElementNS(NS, 'g');
+        if (k >= nuevosDesde) gEl.setAttribute('class', 'jg-fosforo-nuevo');
+        const pal = document.createElementNS(NS, 'line');
+        for (const [a, b] of [['x1', x1 + 2], ['y1', y1 + y], ['x2', x2 + 2], ['y2', y2 + y]]) pal.setAttribute(a, b);
+        pal.setAttribute('class', 'jg-palito');
+        const cab = document.createElementNS(NS, 'circle');
+        cab.setAttribute('cx', x2 + 2); cab.setAttribute('cy', y2 + y); cab.setAttribute('r', 2.4); cab.setAttribute('class', 'jg-cabeza');
+        gEl.append(pal, cab); svgEl.appendChild(gEl);
+      }
+      if (sep && gI === 2) { const ln = document.createElementNS(NS, 'line'); ln.setAttribute('x1', 0); ln.setAttribute('x2', G + 4); ln.setAttribute('y1', y + G + gap / 2 + sep / 2); ln.setAttribute('y2', y + G + gap / 2 + sep / 2); ln.setAttribute('class', 'jg-malas'); svgEl.appendChild(ln); }
+    }
+    return svgEl;
+  }
+  // El costado: tanteador y chat con el rival
+  function lateral(b0, s, prev) {
+    let L = b0.querySelector('.jg-lateral');
+    if (!L || L.dataset.id !== String(s.id)) {
+      L?.remove();
+      L = el('div', 'jg-lateral'); L.dataset.id = String(s.id);
+      const tan = el('div', 'jg-tanteador');
+      L.appendChild(tan);
+      if (!s.compu && s.soyJugador !== false) {
+        const chat = el('div', 'jg-chat');
+        const lista = el('div', 'jg-chat-lista');
+        const rapidos = el('div', 'jg-chat-rapidos');
+        (s.gritos || []).forEach((g) => { const o = el('button', 'jg-grito', g); o.type = 'button'; o.addEventListener('click', () => mandar(g)); rapidos.appendChild(o); });
+        const form = el('form', 'jg-chat-form');
+        const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
+        inp.placeholder = `Mensaje a ${(s.rival && s.rival.nombre) || 'tu rival'}`;
+        const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
+        form.append(inp, send);
+        const mandar = (t) => emit('truco:accion', { id: mesa.id, tipo: 'chat', texto: t }).then(r => { if (r && r.error) toast(r.error, 'error'); });
+        form.addEventListener('submit', (e) => { e.preventDefault(); const t = inp.value.trim(); if (!t) return; inp.value = ''; mandar(t); });
+        chat.append(el('div', 'jg-chat-t', 'Chat'), lista, rapidos, form);
+        L.appendChild(chat);
+      }
+      b0.appendChild(L);
+    }
+    // tanteador
+    const tan = L.querySelector('.jg-tanteador');
+    const pts = [s.yo ? s.yo.puntos : 0, s.rival ? s.rival.puntos : 0];
+    const antes = mesa.pts && mesa.ptsId === s.id ? mesa.pts : pts;
+    tan.textContent = '';
+    const col = (nombre, n, a) => { const c = el('div', 'jg-tcol'); c.append(el('div', 'jg-tnombre', nombre), fosforos(n, s.puntos, a), el('div', 'jg-tnum', String(n))); return c; };
+    tan.append(col('Vos', pts[0], antes[0]), col((s.rival && s.rival.nombre) || 'Rival', pts[1], antes[1]));
+    mesa.pts = pts; mesa.ptsId = s.id;
+    // chat
+    const lista = L.querySelector('.jg-chat-lista');
+    if (lista) {
+      const msgs = s.chat || [];
+      const key = msgs.length ? msgs.length + ':' + msgs[msgs.length - 1].t : '0';
+      if (lista.dataset.key !== key) {
+        const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 40;
+        lista.textContent = '';
+        if (!msgs.length) lista.appendChild(el('div', 'jg-chat-vacio', 'Todavía no hay mensajes. ¡Saludá!'));
+        for (const m of msgs) {
+          const x = el('div', 'jg-msg' + (m.mio ? ' mio' : ''));
+          x.append(el('b', '', m.mio ? 'Vos' : ((s.rival && s.rival.nombre) || 'Rival')), document.createTextNode(': ' + m.text));
+          lista.appendChild(x);
+        }
+        const nuevoRival = prev && (prev.chat || []).length < msgs.length && !msgs[msgs.length - 1].mio;
+        if (nuevoRival) beep(760, 60);
+        if (abajo || !lista.dataset.key || (msgs.length && msgs[msgs.length - 1].mio)) lista.scrollTop = lista.scrollHeight;
+        lista.dataset.key = key;
+      }
     }
   }
   async function play(s, a) {

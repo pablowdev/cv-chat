@@ -278,6 +278,16 @@ function act(me, d) {
 
 function doAct(g, i, d) {
   const tipo = String(d.tipo || '');
+  if (tipo === 'chat') {
+    const text = String(d.texto || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
+    if (!text) return { error: 'Escribí algo.' };
+    const now = Date.now();
+    g.chatT = g.chatT || [0, 0];
+    if (now - g.chatT[i] < 700) return { error: 'Más despacio.' };
+    g.chatT[i] = now;
+    g.chat = (g.chat || []).concat({ de: i, text, t: now }).slice(-60);
+    push(g, false); return null;
+  }
   if (tipo === 'grito') {
     const k = Number(d.grito);
     if (!(k >= 0 && k < GRITOS.length)) return { error: 'grito' };
@@ -512,6 +522,7 @@ function view(g, me) {
     log: g.log.slice(-6).map(x => x.text), grito: g.grito && Date.now() - g.grito.t < 6000 ? { mio: g.grito.de === pov, text: g.grito.text } : null,
     gritos: GRITOS, ganador: g.estado === 'terminada' ? (g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     revancha: g.estado === 'terminada' ? { yo: !!g.revancha[pov], rival: !!g.revancha[o] } : null, siguiente: g.siguiente || null,
+    chat: (g.chat || []).map(x => ({ mio: x.de === pov, text: x.text, t: x.t })), manos: g.manos || 0,
   };
   if (g.estado === 'jugando' && g.h) {
     const h = g.h;
