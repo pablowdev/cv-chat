@@ -12,8 +12,9 @@
 // Haven escapa los nombres al mostrarlos (los de Discord ya llegaban asi en los
 // mensajes importados).
 
-// Antes que nada: sin Brotli para lo que llega de afuera (sin-brotli.js)
-require('./sin-brotli.js');
+// Antes que nada: sin Brotli para lo que llega de afuera (sin-brotli.js), solo con un Node.js que
+// todavia tiene la falla (anterior a 22.23.4; Haven 4.26.4 ya viene con uno corregido)
+if (require('./sin-brotli-hace-falta.js')()) require('./sin-brotli.js');
 
 const Module = require('module');
 const path = require('path');

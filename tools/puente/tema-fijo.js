@@ -126,7 +126,9 @@ function script(db) {
     `if(u&&u.isAdmin&&!app){document.documentElement.classList.add('puente-ui-admin');` +
       // Un administrador que abre la app en un lugar nuevo (otro navegador, la app de escritorio) arranca
       // con el diseño publicado, en vez de publicar el de fabrica de Haven para todos
-      `if(ui[forma]&&!keys.some(function(k){return ls.getItem(k)!==null;})){var f0=ui[forma];keys.forEach(function(k){if(Object.prototype.hasOwnProperty.call(f0,k))set.call(ls,k,f0[k]);});}` +
+      `if(ui[forma]&&!keys.some(function(k){return ls.getItem(k)!==null;})){var f0=ui[forma];keys.forEach(function(k){if(Object.prototype.hasOwnProperty.call(f0,k))set.call(ls,k,f0[k]);});` +
+        // Tambien los complementos de disposicion, como a los demas (si no, arranca con los de fabrica de Haven)
+        `try{if(f0.__layouts){var lo0=JSON.parse(f0.__layouts),pd0=JSON.parse(ls.getItem('haven_plugin_data')||'{}');for(var p0 in lo0){pd0[p0]=pd0[p0]||{};pd0[p0].layoutOn=lo0[p0];}set.call(ls,'haven_plugin_data',JSON.stringify(pd0));}}catch(e){}}` +
       // Administrador: lo que elige se publica para todos
       `var timer=null,send=function(){clearTimeout(timer);timer=setTimeout(function(){var tk=ls.getItem('haven_token');if(!tk)return;` +
         `var v={};keys.forEach(function(k){var x=ls.getItem(k);if(x!==null)v[k]=x;});` +
