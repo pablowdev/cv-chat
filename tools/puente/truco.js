@@ -21,7 +21,7 @@ const crypto = require('crypto');
 
 const BOT = -1;
 const BOT_NAME = 'La Compu';
-const TURNO_MS = 60 * 1000;
+const TURNO_MS = 2 * 60 * 1000;
 const PALOS = ['espada', 'basto', 'oro', 'copa'];
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
 const GRITOS = ['¡Mirá lo que tengo!', '¡Qué suerte!', 'Buena jugada', 'Jajaja', 'Dale que se enfría', 'Me voy a dormir', '¿Y ahora?', 'Uh, me la hiciste'];

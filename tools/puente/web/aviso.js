@@ -7411,7 +7411,7 @@ function sheetDrag(sheet, opts) {
     if (!page || !mesa || mesa.id !== id) return;
     if (d.error) { b.textContent = ''; b.appendChild(el('div', 'jg-estado', d.error)); return; }
     render(d.partida);
-    tickT = setInterval(() => { const bar = page && page.querySelector('.jg-reloj > span'); if (bar && mesa && mesa.s && mesa.s.deadline) { const left = Math.max(0, mesa.s.deadline - Date.now()); bar.style.width = (100 * left / 60000) + '%'; const tx = page.querySelector('.jg-reloj-t'); if (tx) tx.textContent = Math.ceil(left / 1000) + ' s'; } }, 500);
+    tickT = setInterval(() => { const bar = page && page.querySelector('.jg-reloj > span'); if (bar && mesa && mesa.s && mesa.s.deadline) { const left = Math.max(0, mesa.s.deadline - Date.now()); bar.style.width = (100 * left / 120000) + '%'; const tx = page.querySelector('.jg-reloj-t'); if (tx) { const sg = Math.ceil(left / 1000); tx.textContent = sg >= 60 ? `${Math.floor(sg / 60)}:${String(sg % 60).padStart(2, '0')}` : sg + ' s'; } } }, 500);
   }
   function share(id) {
     const url = `${location.origin}/app?truco=${id}`;
@@ -7516,7 +7516,7 @@ function sheetDrag(sheet, opts) {
       if (a === 'mazo' && !(s.acciones.length > 1 || s.turno === 'yo')) continue;
       const x = el('button', 'jg-btn ' + (a === 'quiero' || a === 'truco' || a === 'retruco' || a === 'vale4' ? 'jg-primario' : a === 'mazo' || a === 'noquiero' ? 'jg-suave' : 'jg-envido-btn'), BTN[a]);
       x.type = 'button';
-      x.addEventListener('click', () => { if (a === 'mazo' && !confirm('¿Irte al mazo? Le das los puntos de la mano.')) return; play(s, { tipo: a }); });
+      x.addEventListener('click', () => play(s, { tipo: a }));
       acts.appendChild(x);
     }
     b.appendChild(acts);
