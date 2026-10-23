@@ -7,6 +7,17 @@
   const todas = ['android', 'windows', 'ios', 'otros'];
   const ver = (id) => { document.getElementById(id).hidden = false; };
   ver(mio);
+  // Llegó desde otra app (la de Haven de Google Play, vincular.js): el aviso, y sin volver a esa app
+  if (new URLSearchParams(location.search).get('desde') === 'otra-app') {
+    ver('otra-app');
+    document.querySelector('.dl-volver').remove();
+    const dir = location.origin + '/puente/descargar';
+    document.querySelector('.dl-dir').textContent = dir;
+    document.getElementById('copiar').addEventListener('click', () => {
+      const listo = () => { document.querySelector('.dl-copiado').textContent = '¡Copiada!'; };
+      if (navigator.clipboard) navigator.clipboard.writeText(dir).then(listo, () => {});
+    });
+  }
   document.querySelectorAll('.dl-host').forEach((x) => { x.textContent = location.host; });
   const boton = document.getElementById('todas');
   boton.hidden = false;

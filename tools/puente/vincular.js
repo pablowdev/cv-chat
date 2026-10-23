@@ -95,6 +95,19 @@ function hookHttp() {
         json(res, 200, [{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: String(process.env.PUENTE_ANDROID_PAQUETE).replace(/[^a-zA-Z0-9_.]/g, ''), sha256_cert_fingerprints: huellas } }]);
         return true;
       }
+      if (req.method === 'GET') {
+        const ruta = url.split('?')[0];
+        // La app de Haven (la de Google Play) u otra app que meta CV Chat adentro de su propia
+        // ventana: se veia sin el diseño de CV Chat. Va a la pagina para bajar la app propia
+        if (PAGINAS_APP.has(ruta) && appAjena(req)) { redirect(res, '/puente/descargar?desde=otra-app'); return true; }
+        // /app.html (los enlaces para compartir un canal, la vuelta de "Conectar" de Haven): la
+        // misma pagina que /app, con el diseño de CV Chat. El #... lo conserva el navegador
+        if (ruta === '/app.html') { redirect(res, '/app' + url.slice(ruta.length)); return true; }
+        if (ruta === '/index.html') { redirect(res, '/' + url.slice(ruta.length)); return true; }
+        // Los temas de Haven que no son los de CV Chat (los publicados): no se sirven ni se listan
+        if (/^\/themes\/[^/]+\.theme\.css$/.test(ruta) && !temasPublicados().includes(ruta.slice('/themes/'.length))) { send(res, 404, 'text/plain', 'No encontrado'); return true; }
+        if (ruta === '/api/themes') soloTemasPublicados(res);
+      }
       // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
       if (req.method === 'POST' && (url === '/api/personas' || url.startsWith('/api/personas?'))) {
         const who = sessionUser(req);
@@ -299,6 +312,51 @@ function send(res, status, type, body, headers = {}) {
   res.end(body);
 }
 const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
+const redirect = (res, to) => send(res, 302, 'text/plain', '', { Location: to });
+
+// ── Solo la app de CV Chat ──
+// La app de Haven abre el servidor adentro de un marco (iframe) de su propia ventana, y otras apps
+// lo abren en un WebView propio (la marca "; wv)" del navegador). Las de CV Chat no: la de Android
+// es Chrome mismo (TWA) y la de Windows es su propia ventana.
+const PAGINAS_APP = new Set(['/', '/index.html', '/app', '/app.html']);
+// Los navegadores de adentro de las redes (Instagram, Facebook, TikTok...) y los que estan hechos
+// sobre un WebView (DuckDuckGo) tambien llevan esa marca, pero ahi CV Chat se ve como en cualquier
+// navegador: esos siguen entrando
+const NAVEGADOR_DE_RED = /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Twitter|TikTok|musical_ly|Snapchat|Pinterest|LinkedInApp|GSA\/|WhatsApp|Telegram|Discord|DuckDuckGo/i;
+function appAjena(req) {
+  const h = req.headers;
+  if (h['sec-fetch-dest'] === 'iframe') return true;
+  if (/haven/i.test(String(h['x-requested-with'] || ''))) return true; // el nombre de la app de Android que abre la pagina
+  const ua = String(h['user-agent'] || '');
+  return /; wv\)/.test(ua) && !NAVEGADOR_DE_RED.test(ua);
+}
+
+// Los temas que existen en CV Chat: los publicados (Configuracion -> temas del servidor)
+function temasPublicados() {
+  try {
+    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'published_themes'").get();
+    const lista = JSON.parse((row && row.value) || '[]');
+    return Array.isArray(lista) ? lista : [];
+  } catch { return []; }
+}
+// /api/themes de Haven lista todos los archivos de temas: solo quedan los publicados
+function soloTemasPublicados(res) {
+  const origEnd = res.end;
+  res.end = function (chunk, encoding, cb) {
+    try {
+      if (res.statusCode === 200 && chunk && !res.headersSent) {
+        const lista = JSON.parse(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk));
+        if (Array.isArray(lista)) {
+          const ok = temasPublicados();
+          const body = JSON.stringify(lista.filter(t => t && ok.includes(t.file)));
+          res.setHeader('Content-Length', Buffer.byteLength(body));
+          return origEnd.call(this, body, 'utf8', typeof encoding === 'function' ? encoding : cb);
+        }
+      }
+    } catch { /* se manda como venia */ }
+    return origEnd.call(this, chunk, encoding, cb);
+  };
+}
 
 // /api/link-preview?url=... de un enlace a un mensaje o canal de Discord, o a CV Chat mismo
 function isMessageLink(previewUrl) {

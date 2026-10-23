@@ -107,7 +107,11 @@ function script(db) {
   // La app de CV Chat (apps/windows) es Electron: Haven, al ver "Electron" en el navegador, se arma
   // como su propia app de escritorio (otra disposicion, barra de estado). Se le saca esa palabra para
   // que se vea igual que la web, y queda la marca window.puenteApp para reconocerla
-  return `(function(){try{var na=navigator.userAgent;if(/Electron\\/|CVChat\\//.test(na)){window.puenteApp=true;var limpio=na.replace(/ Electron\\/[^ ]+/,'');Object.defineProperty(navigator,'userAgent',{get:function(){return limpio;},configurable:true});}}catch(e){}})();` +
+  // Adentro de la ventana de otra app (la de Haven de Google Play: un marco de otro origen, o su puente
+  // Capacitor): a la pagina para bajar la app de CV Chat. Lo mismo hace el servidor (vincular.js, appAjena)
+  return `(function(){try{var ajena=!!window.Capacitor;if(window.top!==window){try{ajena=ajena||window.top.location.origin!==location.origin;}catch(e){ajena=true;}}` +
+    `if(ajena){location.replace('/puente/descargar?desde=otra-app');return;}}catch(e){}})();` +
+    `(function(){try{var na=navigator.userAgent;if(/Electron\\/|CVChat\\//.test(na)){window.puenteApp=true;var limpio=na.replace(/ Electron\\/[^ ]+/,'');Object.defineProperty(navigator,'userAgent',{get:function(){return limpio;},configurable:true});}}catch(e){}})();` +
     `(function(){try{var t=${t};` +
     `if(t){if(localStorage.getItem('haven_theme')!==t)localStorage.setItem('haven_theme',t);` +
     `if(localStorage.getItem('haven_effects')!=='auto')localStorage.setItem('haven_effects','auto');}` +
@@ -155,6 +159,8 @@ function pageHead(db, html) {
   // reacomodaba (se veia moverse apenas el chat al abrir)
   const fonts = ['inter-latin-wght-normal.woff2', 'inter-latin-ext-wght-normal.woff2']
     .map(f => `<link rel="preload" href="/themes/${f}" as="font" type="font/woff2" crossorigin>`).join('');
+  // Los temas que trae Haven (Haven, Discord, Matrix...) no existen en CV Chat: se sacan sus botones
+  html = html.replace(/[ \t]*<button class="theme-btn[^"]*" data-theme="[^"]*"[^>]*>.*?<\/button>\r?\n?/g, '');
   return html.replace(marker, `${fonts}<script src="/puente/tema-fijo.js"></script>${HIDE_CSS}${marker}`);
 }
 
