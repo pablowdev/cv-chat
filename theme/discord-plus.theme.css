@@ -745,10 +745,14 @@ html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name { visib
   }
   .puente-rail-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
   .puente-rail-server { background: transparent; }
-  .puente-rail-btn.active::before {
-    content: ''; position: absolute; left: -0.75rem; top: 50%; transform: translateY(-50%);
-    width: 0.25rem; height: 2.5rem; border-radius: 0 0.25rem 0.25rem 0; background: #fbfbfb;
+  .puente-rail-btn::before {
+    content: ''; position: absolute; left: -0.75rem; top: 50%; transform: translateY(-50%) scaleY(0); opacity: 0;
+    width: 0.25rem; height: 2.5rem; border-radius: 0 0.25rem 0.25rem 0; background: #fbfbfb; pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1.25), opacity 0.15s ease;
   }
+  .puente-rail-btn.active::before { transform: translateY(-50%) scaleY(1); opacity: 1; }
+  body:has(#puente-mercado, #puente-juegos) .puente-rail-dm::before,
+  body:has(#puente-mercado, #puente-juegos) .puente-rail-server::before { transform: translateY(-50%) scaleY(0); opacity: 0; }
   .puente-rail-dm.active { background: #5865f2; color: #fff; }
   .puente-rail-sep { width: 2rem; height: 2px; border-radius: 1px; background: #2e2d32; flex-shrink: 0; }
   .puente-rail-badge {
@@ -995,12 +999,23 @@ html body #user-context-menu.puente-user-sheet {
   .puente-pc-dm { color: #dbdee1; }
   .puente-pc-dm svg { width: 1.375rem; height: 1.375rem; }
   html body .server-bar .puente-pc-dm:hover, html body .server-bar .puente-pc-dm.active { background: #5865f2; color: #fff; border-radius: 0.75rem; }
-  /* Rayita blanca a la izquierda del que esta elegido */
-  html body .server-bar .puente-pc-dm.active::before,
-  html body .server-bar .server-icon.home:not(.puente-inactivo)::before {
-    content: ""; position: absolute; left: -1rem; top: 50%; transform: translateY(-50%);
-    width: 0.25rem; height: 2.5rem; border-radius: 0 0.25rem 0.25rem 0; background: #fbfbfb;
+  /* La rayita blanca de la izquierda, como Discord: con el mouse encima aparece cortita y en el
+     elegido crece hasta el alto del icono (se achica en el que se deja y crece en el nuevo).
+     Con el Marketplace o Juegos abiertos, el elegido es ese boton y no el servidor */
+  html body .server-bar .server-icon::before {
+    content: ""; position: absolute; left: -1rem; top: 50%; width: 0.25rem; height: 2.5rem; border-radius: 0 0.25rem 0.25rem 0; background: #fbfbfb;
+    transform: translateY(-50%) scaleY(0); opacity: 0; pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1.25), opacity 0.15s ease;
   }
+  html body .server-bar .server-icon:hover::before { transform: translateY(-50%) scaleY(0.5); opacity: 1; }
+  html body .server-bar .puente-pc-dm.active::before,
+  html body .server-bar .server-icon.home:not(.puente-inactivo)::before,
+  html body .server-bar .puente-mk-btn.active::before,
+  html body .server-bar .puente-jg-btn.active::before { transform: translateY(-50%) scaleY(1); opacity: 1; }
+  html body:has(#puente-mercado, #puente-juegos) .server-bar .server-icon.home:not(:hover)::before,
+  html body:has(#puente-mercado, #puente-juegos) .server-bar .puente-pc-dm:not(:hover)::before { transform: translateY(-50%) scaleY(0); opacity: 0; }
+  html body:has(#puente-mercado, #puente-juegos) .server-bar .server-icon.home:hover::before,
+  html body:has(#puente-mercado, #puente-juegos) .server-bar .puente-pc-dm:hover::before { transform: translateY(-50%) scaleY(0.5); }
   html body .server-bar .puente-rail-badge {
     position: absolute; right: -0.25rem; bottom: -0.25rem; min-width: 1rem; height: 1rem; padding: 0 0.25rem;
     border-radius: 0.5rem; border: 3px solid #121214; background: #f23f43; color: #fff;
@@ -2367,7 +2382,6 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-mk-btn.con-icono, .puente-jg-btn.con-icono, #server-bar .puente-mk-btn.con-icono, #server-bar .puente-jg-btn.con-icono, #puente-rail .con-icono.active { background: transparent !important; border-radius: 50% !important; padding: 0; }
 .con-icono .puente-ico-img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; transition: filter 0.15s, box-shadow 0.15s; }
 .con-icono:hover .puente-ico-img { filter: brightness(1.15); }
-.con-icono.active .puente-ico-img { box-shadow: 0 0 0 2px #f2f3f5; }
 /* Efecto lupa como el Dock de macOS: el icono bajo el mouse se agranda y los de al lado un poco */
 @media (hover: hover) and (pointer: fine) {
   #server-bar > .server-icon, #puente-rail > .puente-rail-btn { transition: transform 0.18s cubic-bezier(0.3, 0.7, 0.4, 1.4); transform-origin: center; will-change: transform; }
