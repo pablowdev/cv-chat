@@ -18,7 +18,7 @@
 
   const store = (s, fn) => { try { return fn(s === 'l' ? localStorage : sessionStorage); } catch { return null; } };
   const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches ||
-    navigator.standalone === true || /Electron/i.test(navigator.userAgent) || !!window.havenDesktop;
+    navigator.standalone === true || /Electron/i.test(navigator.userAgent) || !!window.puenteApp || !!window.havenDesktop;
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isMacSafari = !isIOS && /Macintosh/i.test(ua) && /Safari/i.test(ua) && !/Chrome|Chromium|Edg|Firefox/i.test(ua);

@@ -100,7 +100,11 @@ function script(db) {
   const t = JSON.stringify(defaultTheme(db));
   const ui = JSON.stringify(published(db));
   const keys = JSON.stringify(UI_KEYS);
-  return `(function(){try{var t=${t};` +
+  // La app de CV Chat (apps/windows) es Electron: Haven, al ver "Electron" en el navegador, se arma
+  // como su propia app de escritorio (otra disposicion, barra de estado). Se le saca esa palabra para
+  // que se vea igual que la web, y queda la marca window.puenteApp para reconocerla
+  return `(function(){try{var na=navigator.userAgent;if(/Electron\\/|CVChat\\//.test(na)){window.puenteApp=true;var limpio=na.replace(/ Electron\\/[^ ]+/,'');Object.defineProperty(navigator,'userAgent',{get:function(){return limpio;},configurable:true});}}catch(e){}})();` +
+    `(function(){try{var t=${t};` +
     `if(t){if(localStorage.getItem('haven_theme')!==t)localStorage.setItem('haven_theme',t);` +
     `if(localStorage.getItem('haven_effects')!=='auto')localStorage.setItem('haven_effects','auto');}` +
     `var ui=${ui},keys=${keys},lock={};keys.forEach(function(k){lock[k]=1;});` +
@@ -109,7 +113,7 @@ function script(db) {
     `var ls=localStorage,P=Storage.prototype,set=P.setItem,rem=P.removeItem;` +
     // En la app de escritorio (Electron) Haven elige el idioma por el del sistema, que ahi siempre es ingles: en castellano
     // y siempre con el diseño publicado, sin publicar nada (el diseño se arma desde el navegador)
-    `var app=/Electron/.test(navigator.userAgent);` +
+    `var app=!!window.puenteApp;` +
     `if(app&&ls.getItem('haven_locale')===null)set.call(ls,'haven_locale','es');` +
     `if(u&&u.isAdmin&&!app){document.documentElement.classList.add('puente-ui-admin');` +
       // Un administrador que abre la app en un lugar nuevo (otro navegador, la app de escritorio) arranca
