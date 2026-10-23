@@ -37,5 +37,4 @@ apps/android/local.properties
 apps/android/firma.properties
 *.keystore
 *.jks
-apps/android/app/src/main/res/mipmap-*/
-apps/android/app/src/main/res/drawable/
+apps/android/app/src/main/res/**/*.png

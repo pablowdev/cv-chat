@@ -9209,9 +9209,10 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     document.body.appendChild(box);
     no.addEventListener('click', () => { storage(() => localStorage.setItem(LATER_KEY, String(Date.now() + LATER_MS))); box.remove(); });
     yes.addEventListener('click', async () => {
-      yes.disabled = true;
-      try { await app._subscribePush(); } catch { /* Haven ya muestra el error */ }
+      // El cartel se va enseguida: el pedido de permiso puede tardar (o no volver nunca, en
+      // algunas apps), y no tiene que quedar trabado en la pantalla
       box.remove();
+      try { await Promise.race([app._subscribePush(), new Promise(r => setTimeout(r, 60000))]); } catch { /* Haven ya muestra el error */ }
       if (Notification.permission === 'granted' && app._showToast) app._showToast('Listo: te vamos a avisar cuando te mencionen', 'success');
       else if (Notification.permission === 'default') storage(() => localStorage.setItem(LATER_KEY, String(Date.now() + LATER_MS)));
     });

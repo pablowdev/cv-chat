@@ -49,10 +49,16 @@
             android:name="com.google.androidbrowserhelper.trusted.DelegationService"
             android:exported="true"
             android:enabled="true">
+            <meta-data android:name="android.support.customtabs.trusted.SMALL_ICON" android:resource="@drawable/ic_notificacion" />
             <intent-filter>
                 <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <!-- Android 13 o mas nuevo: pide el permiso de notificaciones cuando la pagina lo pide -->
+        <activity
+            android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity"
+            android:exported="false" />
     </application>
 </manifest>

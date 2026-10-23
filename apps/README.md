@@ -17,7 +17,7 @@ Electron con instalador NSIS (`CV-Chat-Windows.exe`). Cerrar la ventana la deja 
 
 Trusted Web Activity (androidbrowserhelper): la página a pantalla completa, con sus notificaciones.
 
-1. Poner los íconos en `app/src/main/res/mipmap-*/ic_launcher.png` y el de la pantalla de
+1. Poner los íconos en `app/src/main/res/mipmap-*/ic_launcher.png` (y `ic_launcher_foreground.png`, el logo al 80% sobre 108dp para el ícono adaptable) y el de la pantalla de
    carga en `app/src/main/res/drawable/splash.png`.
 2. Crear la clave: `keytool -genkeypair -keystore cvchat.keystore -alias cvchat -keyalg RSA -validity 36500`
    y un `firma.properties` al lado de `build.gradle` (raíz) con `archivo=`, `alias=` y `clave=`.
