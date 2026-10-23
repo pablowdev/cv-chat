@@ -24,3 +24,18 @@ tools/puente/web/cartas/
 tools/puente/funball-tableros.json
 # Dibujos del Funball: propios de cada servidor
 tools/puente/web/funball/
+
+# Apps: instaladores, firma, iconos y lo que arma cada herramienta
+tools/puente/web/descargas/
+tools/puente/web/icono-mercado.webp
+tools/puente/web/icono-juegos.webp
+apps/**/node_modules/
+apps/**/dist/
+apps/**/build/
+apps/**/.gradle/
+apps/android/local.properties
+apps/android/firma.properties
+*.keystore
+*.jks
+apps/android/app/src/main/res/mipmap-*/
+apps/android/app/src/main/res/drawable/

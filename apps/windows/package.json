@@ -1,0 +1,41 @@
+{
+  "name": "cv-chat",
+  "productName": "CV Chat",
+  "version": "1.0.0",
+  "description": "CV Chat, el chat de Circulo Vicioso",
+  "author": "Circulo Vicioso",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "armar": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "club.circulovicioso.chat",
+    "productName": "CV Chat",
+    "copyright": "Circulo Vicioso",
+    "files": [
+      "main.js",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CV Chat",
+      "artifactName": "CV-Chat-Windows.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

@@ -88,6 +88,13 @@ function hookHttp() {
       if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg') || url.startsWith('/locales/')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }
+      // App de Android (Trusted Web Activity): sin esto se ve la barra del navegador arriba.
+      // PUENTE_ANDROID_PAQUETE y PUENTE_ANDROID_SHA256 (la huella del certificado con que se firma)
+      if (url === '/.well-known/assetlinks.json' && process.env.PUENTE_ANDROID_PAQUETE && process.env.PUENTE_ANDROID_SHA256) {
+        const huellas = String(process.env.PUENTE_ANDROID_SHA256).split(',').map(x => x.trim().toUpperCase()).filter(x => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(x));
+        json(res, 200, [{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: String(process.env.PUENTE_ANDROID_PAQUETE).replace(/[^a-zA-Z0-9_.]/g, ''), sha256_cert_fingerprints: huellas } }]);
+        return true;
+      }
       // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
       if (req.method === 'POST' && (url === '/api/personas' || url.startsWith('/api/personas?'))) {
         const who = sessionUser(req);
@@ -268,6 +275,7 @@ function injectScript(req, res, src) {
   };
 }
 
+const DESCARGAS = { android: 'CV-Chat-Android.apk', windows: 'CV-Chat-Windows.exe' };
 let versionCache = null;
 function appVersion() {
   if (versionCache && Date.now() - versionCache.t < 5000) return versionCache.v;
@@ -380,8 +388,8 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css')) {
-    const file = p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css')) {
+    const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));
     // Titulo de la pestana (PUENTE_TITULO): se escribe en aviso.js y login.js al servirlos.
@@ -456,6 +464,26 @@ async function handle(req, res) {
     const file = path.join(STATIC, 'funball', 'sonidos', fbSon[1] + '.mp3');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin sonido');
     return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
+  // Las apps para descargar (pagina /puente/descargar): web/descargas/CV-Chat-Android.apk y
+  // CV-Chat-Windows.exe, propias de cada servidor (no van al repositorio), con su version en
+  // web/descargas/versiones.json ({ "android": "1.0.0", "windows": "1.0.0" })
+  if (p === '/puente/descargas.json' && req.method === 'GET') {
+    const dir = path.join(STATIC, 'descargas');
+    let ver = {}; try { ver = JSON.parse(fs.readFileSync(path.join(dir, 'versiones.json'), 'utf8')); } catch { /* sin versiones */ }
+    const out = {};
+    for (const [k, archivo] of Object.entries(DESCARGAS)) { try { out[k] = { tam: fs.statSync(path.join(dir, archivo)).size, version: ver[k] || null }; } catch { /* no esta */ } }
+    return json(res, 200, out);
+  }
+  const bajar = req.method === 'GET' && /^\/puente\/descargas\/([A-Za-z0-9-]+\.(?:apk|exe))$/.exec(p);
+  if (bajar && Object.values(DESCARGAS).includes(bajar[1])) {
+    const file = path.join(STATIC, 'descargas', bajar[1]);
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Todavía no está disponible');
+    const st = fs.statSync(file);
+    res.writeHead(200, { 'Content-Type': bajar[1].endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream', 'Content-Length': st.size, 'Content-Disposition': `attachment; filename="${bajar[1]}"`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+    fs.createReadStream(file).pipe(res);
+    return;
   }
 
   // Version de lo que ve la app (web/aviso.js con el tema, y Haven): la app abierta la consulta

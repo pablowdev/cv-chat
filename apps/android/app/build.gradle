@@ -1,0 +1,42 @@
+// CV Chat para Android: una Trusted Web Activity que abre chat.circulovicioso.club/app a
+// pantalla completa (sin barra del navegador), con las notificaciones de la pagina.
+plugins { id 'com.android.application' }
+
+def firma = new Properties()
+def archivoFirma = file('../firma.properties')
+if (archivoFirma.exists()) firma.load(new FileInputStream(archivoFirma))
+
+android {
+    namespace 'club.circulovicioso.chat'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'club.circulovicioso.chat'
+        minSdk 23
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+        resValue 'string', 'app_name', 'CV Chat'
+    }
+    signingConfigs {
+        release {
+            storeFile firma['archivo'] ? file(firma['archivo']) : null
+            storePassword firma['clave']
+            keyAlias firma['alias']
+            keyPassword firma['clave']
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
+}

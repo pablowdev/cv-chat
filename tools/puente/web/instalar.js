@@ -50,9 +50,12 @@
     return null;
   }
 
+  // En Android y Windows hay app para descargar (pagina /puente/descargar)
+  const descarga = !isIOS && /Android/i.test(ua) ? 'Android' : /Windows/i.test(ua) ? 'Windows' : null;
+
   function build() {
-    const steps = deferred ? null : manualSteps();
-    if (!deferred && !steps) return null; // navegador sin forma de instalar (por ejemplo Firefox en PC)
+    const steps = deferred || descarga ? null : manualSteps();
+    if (!deferred && !steps && !descarga) return null; // navegador sin forma de instalar (por ejemplo Firefox en Mac)
 
     overlay = el('div', 'modal-overlay');
     overlay.id = 'puente-instalar-modal';
@@ -84,7 +87,13 @@
     }
 
     const action = el('div', 'android-beta-form');
-    if (deferred) {
+    if (descarga) {
+      const a = el('a', 'btn btn-accent android-beta-submit', '⬇️ Descargar la app para ' + descarga);
+      a.href = '/puente/descargar';
+      a.style.cssText = 'display:block;text-align:center;text-decoration:none';
+      a.addEventListener('click', () => store('l', s => s.setItem(NEVER_KEY, '1')));
+      action.appendChild(a);
+    } else if (deferred) {
       const btn = el('button', 'btn btn-accent android-beta-submit', '📲 Instalar ' + TITLE);
       btn.type = 'button';
       btn.addEventListener('click', async () => {

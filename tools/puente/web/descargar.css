@@ -1,0 +1,18 @@
+/* Pagina de descarga de la app (descargar.html), con los colores de CV Chat */
+html, body { margin: 0; min-height: 100%; background: #121214; color: #dbdee1; font: 16px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.dl { max-width: 34rem; margin: 0 auto; padding: 2.5rem 1rem 3rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; }
+.dl-logo { width: 7rem; height: 7rem; }
+.dl h1 { margin: 0; font-size: 1.75rem; font-weight: 800; color: #f2f3f5; }
+.dl-sub { margin: 0 0 0.5rem; color: #b5bac1; }
+.dl-card { width: 100%; box-sizing: border-box; padding: 1.25rem; border-radius: 1rem; background: #1e1f22; border: 1px solid #2e2d32; text-align: left; }
+.dl-tit { display: flex; align-items: center; gap: 0.5rem; font-size: 1.25rem; font-weight: 800; color: #f2f3f5; margin-bottom: 0.75rem; }
+.dl-ico { font-size: 1.5rem; }
+.dl-btn { display: block; padding: 0.875rem 1rem; border-radius: 0.75rem; background: #5865f2; color: #fff; font-weight: 800; font-size: 1.0625rem; text-align: center; text-decoration: none; }
+.dl-btn:hover { background: #4752c4; }
+.dl-tam { margin: 0.375rem 0 0.25rem; font-size: 0.8125rem; color: #949ba4; text-align: center; }
+.dl-card ol { margin: 0.75rem 0 0; padding-left: 1.25rem; color: #b5bac1; font-size: 0.9375rem; }
+.dl-card li { margin: 0.375rem 0; }
+.dl-card b { color: #f2f3f5; }
+.dl-nota { margin: 0; color: #b5bac1; font-size: 0.9375rem; }
+.dl-todas { margin-top: 0.5rem; padding: 0.625rem 1rem; border: 0; border-radius: 0.625rem; background: #2e2d32; color: #f2f3f5; font: inherit; font-weight: 700; cursor: pointer; }
+.dl-volver { color: #00a8fc; text-decoration: none; font-size: 0.9375rem; }
