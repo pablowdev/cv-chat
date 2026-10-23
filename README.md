@@ -69,6 +69,8 @@ Los parches anteriores del importador (canales con hilos y leer 4 canales a la v
 
 **Al pasar de Haven 4.22 a 4.23:** antes de arrancar la 4.23 por primera vez hay que guardar `import_authors_cleared = 1` en la tabla `server_settings`. Esa migración de Haven le quita el dueño a todos los mensajes importados de Discord, y acá son del usuario `discord-historial` a propósito (de eso dependen la vinculación de cuentas y las reacciones de la gente sin vincular).
 
+**Al pasar a Haven 4.26:** en el primer arranque Haven revisa todos los archivos subidos para sacarles la ubicación, y los que no puede limpiar los saca de `uploads/` (dejan de verse en el chat). Con decenas de miles de imágenes traídas de Discord, que Discord ya publica sin ubicación, conviene saltear esa revisión: antes de arrancar la 4.26 por primera vez, guardar `privacy_sweep = {"done":true,"full":true}` en `server_settings`. Lo que se sube después igual se limpia al subirlo.
+
 ## Instalación (resumen)
 
 Requisitos: un servidor Linux con Docker, un dominio y una aplicación de Discord con su bot. En el [Developer Portal](https://discord.com/developers/applications):
