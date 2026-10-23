@@ -12,6 +12,9 @@
 // Haven escapa los nombres al mostrarlos (los de Discord ya llegaban asi en los
 // mensajes importados).
 
+// Antes que nada: sin Brotli para lo que llega de afuera (sin-brotli.js)
+require('./sin-brotli.js');
+
 const Module = require('module');
 const path = require('path');
 
