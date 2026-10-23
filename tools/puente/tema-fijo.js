@@ -107,14 +107,21 @@ function script(db) {
     `var forma=matchMedia('(pointer: coarse)').matches?'movil':'pc';` +
     `var u=null;try{u=JSON.parse(localStorage.getItem('haven_user')||'null');}catch(e){}` +
     `var ls=localStorage,P=Storage.prototype,set=P.setItem,rem=P.removeItem;` +
-    `if(u&&u.isAdmin){document.documentElement.classList.add('puente-ui-admin');` +
+    // En la app de escritorio (Electron) Haven elige el idioma por el del sistema, que ahi siempre es ingles: en castellano
+    // y siempre con el diseño publicado, sin publicar nada (el diseño se arma desde el navegador)
+    `var app=/Electron/.test(navigator.userAgent);` +
+    `if(app&&ls.getItem('haven_locale')===null)set.call(ls,'haven_locale','es');` +
+    `if(u&&u.isAdmin&&!app){document.documentElement.classList.add('puente-ui-admin');` +
+      // Un administrador que abre la app en un lugar nuevo (otro navegador, la app de escritorio) arranca
+      // con el diseño publicado, en vez de publicar el de fabrica de Haven para todos
+      `if(ui[forma]&&!keys.some(function(k){return ls.getItem(k)!==null;})){var f0=ui[forma];keys.forEach(function(k){if(Object.prototype.hasOwnProperty.call(f0,k))set.call(ls,k,f0[k]);});}` +
       // Administrador: lo que elige se publica para todos
       `var timer=null,send=function(){clearTimeout(timer);timer=setTimeout(function(){var tk=ls.getItem('haven_token');if(!tk)return;` +
         `var v={};keys.forEach(function(k){var x=ls.getItem(k);if(x!==null)v[k]=x;});` +
         `fetch('/puente/api/ui-fija',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tk},body:JSON.stringify({forma:forma,valores:v})}).catch(function(){});},2000);};` +
       `P.setItem=function(k,v){var r=set.call(this,k,v);if(this===ls&&lock[k])send();return r;};` +
       `P.removeItem=function(k){var r=rem.call(this,k);if(this===ls&&lock[k])send();return r;};` +
-      `setTimeout(send,8000);` +
+      `if(keys.some(function(k){return ls.getItem(k)!==null;}))setTimeout(send,8000);` +
     `}else if(ui[forma]){var f=ui[forma];` +
       // Los demas: el diseño publicado, sin poder cambiarlo
       `keys.forEach(function(k){if(Object.prototype.hasOwnProperty.call(f,k))set.call(ls,k,f[k]);else rem.call(ls,k);});` +
