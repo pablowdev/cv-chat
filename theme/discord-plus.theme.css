@@ -2268,6 +2268,8 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-mk .mk-btn.mk-suave { background: transparent; color: #949ba4; }
 .puente-mk .mk-btn.on { color: #f23f43; }
 .puente-mk .mk-publicar { min-height: 2.25rem; padding: 0 0.875rem; }
+/* Arriba a la derecha de la vidriera: el enlace para compartirla y Publicar */
+.puente-mk .mk-der { flex: 0 0 auto; display: flex; align-items: center; gap: 0.25rem; }
 .puente-mk .mk-buscar {
   display: flex; align-items: center; gap: 0.5rem; height: 3rem; padding: 0 0.25rem 0 0.875rem; margin-bottom: 0.75rem;
   border-radius: 0.75rem; background: #111114; border: 1px solid #2e2d32; color: #949ba4;

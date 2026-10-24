@@ -8,6 +8,30 @@
 // lo cierra para siempre en ese navegador. Nunca aparece dentro de la app ya
 // instalada. Se carga en el <head> para no perderse el aviso "se puede
 // instalar" del navegador, que llega temprano.
+// Enlaces directos (/app?mercado, ?juegos, ?truco=, ?funball=): si la persona todavia no inicio
+// sesion, Haven la manda a la pantalla de inicio y se pierde a donde iba. Aca (corre antes que Haven)
+// se guarda en la pestaña y, al volver a /app ya con la sesion, se repone en la direccion para que
+// aviso.js abra esa pantalla.
+(function () {
+  'use strict';
+  const CLAVES = ['mercado', 'juegos', 'truco', 'funball'];
+  try {
+    if (location.pathname !== '/app') return;
+    const q = new URLSearchParams(location.search);
+    const ir = new URLSearchParams();
+    for (const k of CLAVES) if (q.has(k)) ir.set(k, q.get(k).slice(0, 40));
+    const sesion = !!localStorage.getItem('haven_token');
+    if ([...ir.keys()].length) { if (!sesion) sessionStorage.setItem('puente_ir', ir.toString()); return; }
+    const guardado = sessionStorage.getItem('puente_ir');
+    if (!guardado || !sesion) return;
+    sessionStorage.removeItem('puente_ir');
+    const limpio = new URLSearchParams();
+    for (const [k, v] of new URLSearchParams(guardado)) if (CLAVES.includes(k)) limpio.set(k, v);
+    const qs = limpio.toString().replace(/=(?=&|$)/g, '');
+    if (qs) history.replaceState(history.state, '', '/app?' + qs + location.hash);
+  } catch { /* sin almacenamiento: el enlace abre CV Chat sin mas */ }
+})();
+
 (function () {
   'use strict';
   const TITLE = '__PUENTE_TITULO__';

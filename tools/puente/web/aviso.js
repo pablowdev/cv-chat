@@ -6408,6 +6408,7 @@ function sheetDrag(sheet, opts) {
     corazon: 'M12 21s-7.5-4.6-9.6-9.3C1 8.3 3.1 4.5 6.9 4.5c2 0 3.4 1.1 4.1 2.3.7-1.2 2.1-2.3 4.1-2.3 3.8 0 5.9 3.8 4.5 7.2C19.5 16.4 12 21 12 21Z',
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     filtro: 'M3 5h18v2l-7 7v5l-4 2v-7L3 7V5Z',
+    enlace: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z',
     foto: 'M9.4 4 8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3l-1.4-2H9.4ZM12 17.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
   };
   const MONEDA = { ARS: '$', USD: 'US$', USDT: 'USDT' };
@@ -6457,6 +6458,8 @@ function sheetDrag(sheet, opts) {
 
   function frame() {
     if (page) return page;
+    // Si estaba abierto Juegos (un enlace al Marketplace tocado desde ahi), se cierra
+    if (window.puenteJuegos && window.puenteJuegos.abierto()) { try { while (window.puenteJuegos.abierto()) window.puenteJuegos.atras(); } catch { /* sigue */ } }
     page = el('div', 'puente-mk');
     page.id = 'puente-mercado';
     const bar = byId('server-bar');
@@ -6492,7 +6495,12 @@ function sheetDrag(sheet, opts) {
       if (state && state.puedePublicar === false) { toast('Para publicar tenés que confirmar tu email (Configuración → Mi cuenta).', 'error'); return; }
       go('publicar');
     });
-    page.appendChild(head('Marketplace', { right: pub }));
+    const enlace = el('button', 'mk-icono'); enlace.type = 'button';
+    enlace.title = mobile() ? 'Compartir el Marketplace' : 'Copiar el enlace del Marketplace'; enlace.setAttribute('aria-label', enlace.title);
+    enlace.innerHTML = svg(I.enlace, 22);
+    enlace.addEventListener('click', () => compartir(location.origin + '/app?mercado', 'Marketplace · __PUENTE_APP__'));
+    const der = el('div', 'mk-der'); der.append(enlace, pub);
+    page.appendChild(head('Marketplace', { right: der }));
     const b = body(); page.appendChild(b);
     // Busqueda
     const sbox = el('label', 'mk-buscar');
@@ -6693,6 +6701,13 @@ function sheetDrag(sheet, opts) {
   }
 
   function linkOf(it) { return location.origin + '/app?mercado=' + it.id; }
+  // Enlace a la vidriera (/app?mercado), para pasarlo por un canal, WhatsApp o donde sea
+  function compartir(url, title) {
+    if (navigator.share && mobile()) { navigator.share({ title, url }).catch(() => {}); return; }
+    const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
   function share(it) {
     const url = linkOf(it), text = `${it.titulo} · ${money(it.precio, it.moneda)}`;
     if (navigator.share && mobile()) { navigator.share({ title: it.titulo, text, url }).catch(() => {}); return; }
@@ -7032,18 +7047,19 @@ function sheetDrag(sheet, opts) {
     document.addEventListener('click', (e) => {
       if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server')) close();
     }, true);
-    // Enlaces a una publicacion: se abre aca mismo
+    // Enlaces a una publicacion (/app?mercado=<id>) o a la vidriera (/app?mercado): se abren aca mismo
     document.addEventListener('click', (e) => {
       const a = e.target instanceof Element && e.target.closest('a[href]');
       if (!a || e.ctrlKey || e.metaKey) return;
       let u; try { u = new URL(a.href, location.href); } catch { return; }
-      const id = u.origin === location.origin && /^\/app/.test(u.pathname) && u.searchParams.get('mercado');
-      if (!id || !/^\d+$/.test(id)) return;
+      if (u.origin !== location.origin || !/^\/app/.test(u.pathname) || !u.searchParams.has('mercado')) return;
+      const id = u.searchParams.get('mercado');
+      if (id && !/^\d+$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
-      stack = []; go('item', id);
+      stack = []; if (id) go('item', id); else go('lista');
     }, true);
-    const sp = new URLSearchParams(location.search).get('mercado');
-    if (sp && /^\d+$/.test(sp)) setTimeout(() => { stack = []; go('item', sp); }, 1500);
+    const mq = new URLSearchParams(location.search), sp = mq.get('mercado');
+    if (mq.has('mercado') && (!sp || /^\d+$/.test(sp))) setTimeout(() => { stack = []; if (sp) go('item', sp); else go('lista'); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();
@@ -7055,7 +7071,8 @@ function sheetDrag(sheet, opts) {
 // desafiaron, tus partidas, las mesas que esperan rival, tu récord y el ranking
 // del mes. La mesa: las cartas del rival boca abajo, las tres bazas en el paño,
 // tus cartas abajo (se tocan para jugar) y los cantos que se pueden hacer en
-// ese momento (los decide el servidor). Un enlace /app?truco=<id> abre la mesa.
+// ese momento (los decide el servidor). Un enlace /app?truco=<id> abre la mesa, /app?juegos la
+// biblioteca y /app?juegos=truco la sala de ese juego (el boton del enlace, arriba a la derecha).
 (function () {
   'use strict';
   const mobile = () => matchMedia('(max-width: 768px)').matches;
@@ -7070,6 +7087,7 @@ function sheetDrag(sheet, opts) {
     buscar: 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5Zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z',
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
+    enlace: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z',
   };
   const BTN = {
     truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido',
@@ -7166,6 +7184,20 @@ function sheetDrag(sheet, opts) {
     return page;
   }
   function go(view, arg) { frame(); stack.push([view, arg]); show(view, arg); }
+  // Boton para pasar el enlace de la biblioteca (/app?juegos) o de un juego (/app?juegos=truco)
+  function botonEnlace(ruta, titulo) {
+    const b = el('button', 'jg-icono'); b.type = 'button';
+    b.title = mobile() ? 'Compartir' : 'Copiar enlace'; b.setAttribute('aria-label', b.title);
+    b.innerHTML = svg(I.enlace, 22);
+    b.addEventListener('click', () => {
+      const url = location.origin + ruta;
+      if (navigator.share && mobile()) { navigator.share({ title: titulo, url }).catch(() => {}); return; }
+      const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
+      else prompt('Copiá el enlace:', url);
+    });
+    return b;
+  }
   function head(title, right) {
     const h = el('div', 'jg-head');
     const b = el('button', 'jg-icono'); b.type = 'button';
@@ -7193,7 +7225,7 @@ function sheetDrag(sheet, opts) {
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
   ];
   async function biblioteca() {
-    page.appendChild(head('Juegos'));
+    page.appendChild(head('Juegos', botonEnlace('/app?juegos', 'Juegos · __PUENTE_APP__')));
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
     b.appendChild(el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.length})`));
@@ -7247,7 +7279,7 @@ function sheetDrag(sheet, opts) {
   async function inicio(which) {
     if (which === 'funball') return fbInicio();
     if (which !== 'truco') return biblioteca();
-    page.appendChild(head('Truco'));
+    page.appendChild(head('Truco', botonEnlace('/app?juegos=truco', 'Truco · __PUENTE_APP__')));
     const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero');
     hero.append(el('div', 'jg-hero-cartas', '🂡'), el('div', 'jg-hero-t', 'Truco'), el('div', 'jg-hero-s', 'Argentino, 1 contra 1'));
@@ -8003,7 +8035,7 @@ function sheetDrag(sheet, opts) {
   }
 
   async function fbInicio() {
-    page.appendChild(head('Funball'));
+    page.appendChild(head('Funball', botonEnlace('/app?juegos=funball', 'Funball · __PUENTE_APP__')));
     const b = el('div', 'jg-cuerpo fb-ui jg-inicio'); page.appendChild(b);
     const hero = el('div', 'jg-hero fb-hero');
     const mini = el('div', 'fb-hero-dibujo'); mini.innerHTML = '<svg viewBox="0 0 120 56" aria-hidden="true"><defs><radialGradient id="fbh-r" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffb3b0"/><stop offset=".3" stop-color="#ff4d4f"/><stop offset="1" stop-color="#7a0b12"/></radialGradient><radialGradient id="fbh-v" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#c3ffd9"/><stop offset=".3" stop-color="#33d17a"/><stop offset="1" stop-color="#05502a"/></radialGradient></defs><ellipse cx="34" cy="48" rx="20" ry="6" fill="#4a52d0"/><ellipse cx="86" cy="48" rx="20" ry="6" fill="#4a52d0"/><circle cx="34" cy="30" r="17" fill="url(#fbh-r)"/><circle cx="86" cy="34" r="12" fill="url(#fbh-v)"/></svg>';
@@ -9088,6 +9120,12 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (!l || e.ctrlKey || e.metaKey) return;
       let u; try { u = new URL(l.href, location.href); } catch { return; }
       const ok = u.origin === location.origin && /^\/app/.test(u.pathname);
+      // La biblioteca (/app?juegos) o la sala de un juego (/app?juegos=truco)
+      if (ok && u.searchParams.has('juegos')) {
+        const j = u.searchParams.get('juegos');
+        if (j && !JUEGOS.some(x => x.id === j)) return;
+        e.preventDefault(); e.stopPropagation(); stack = []; go('inicio', j || undefined); return;
+      }
       const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball');
       if (fid && /^[a-f0-9]{6,20}$/.test(fid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('fbMesa', fid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
@@ -9096,6 +9134,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }, true);
     const sp = new URLSearchParams(location.search).get('truco');
     if (sp && /^[a-f0-9]{6,20}$/.test(sp)) setTimeout(() => { stack = []; go('mesa', sp); }, 1500);
+    const jq = new URLSearchParams(location.search), jp = jq.get('juegos');
+    if (jq.has('juegos') && (!jp || JUEGOS.some(x => x.id === jp))) setTimeout(() => { stack = []; go('inicio', jp || undefined); }, 1500);
     const fp = new URLSearchParams(location.search).get('funball');
     if (fp && /^[a-f0-9]{6,20}$/.test(fp)) setTimeout(() => { stack = []; go('fbMesa', fp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
