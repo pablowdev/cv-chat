@@ -387,7 +387,9 @@ html #message-context-menu.puente-sheet {
   z-index: 99999;
   width: 100%;
   max-width: 37.5rem;
-  max-height: 85vh;
+  /* Como Discord: abre hasta un poco mas de la mitad (Responder queda a mano) y
+     deslizando para arriba se agranda (sheetDrag, aviso.js) */
+  max-height: 60vh;
   margin: 0 auto;
   padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;

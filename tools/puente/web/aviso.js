@@ -760,8 +760,8 @@ function sheetDrag(sheet, opts) {
       document.body.appendChild(back);
     }
 
-    // Manija: hacia arriba se agranda, hacia abajo se cierra
-    sheetDrag(menu, { close: () => hide(app) });
+    // Manija: hacia arriba se agranda del todo, hacia abajo se cierra
+    sheetDrag(menu, { close: () => hide(app), snap: true });
   }
 
   let tries = 0;
