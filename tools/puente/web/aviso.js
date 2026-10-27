@@ -1717,6 +1717,10 @@ function sheetDrag(sheet, opts) {
       const d = h - height;
       height = h;
       if (!d || Date.now() - used > 3000) { gap = gapNow(); return; }
+      // La barra solo mueve el chat si se estaba leyendo el final. Si la persona
+      // subio a leer mas arriba, escribir o que aparezca la barra de "respondiendo
+      // a" no le mueve nada de lo que esta mirando (antes se corria lo que crecia).
+      if (gap > 40) { gap = gapNow(); return; }
       if (d > 0) msgs.scrollTop = Math.max(0, msgs.scrollTop + d);
       else msgs.scrollTop = Math.max(0, msgs.scrollHeight - msgs.clientHeight - Math.max(0, gap));
       gap = gapNow();
