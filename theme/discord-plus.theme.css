@@ -2780,3 +2780,11 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 @keyframes fb-titila { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.45; } }
 @keyframes fb-boom { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .puente-jg .fb-vuela { transition-duration: 0.05s; } }
+
+/* Editar en el celu como en Discord (aviso.js, puente-editando): el texto se edita en el cuadro
+   de escribir; en el mensaje queda escondida la edicion de Haven y se ve el mensaje como era,
+   marcado. Arriba del cuadro, "Editando mensaje" con la X. */
+html body #messages .puente-editando-msg { background: rgba(88, 101, 242, 0.1); box-shadow: inset 2px 0 0 #5865f2; }
+html body #messages .puente-editando-msg .message-content { padding-top: 0; }
+html body #messages .puente-editando-msg :is(.edit-textarea, .edit-actions, .edit-resizer) { display: none !important; }
+html body #puente-editando .reply-bar-text { font-weight: 600; color: #dbdee1; }

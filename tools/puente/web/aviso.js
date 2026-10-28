@@ -10614,3 +10614,151 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     };
   })();
 })();
+
+// Lo que se escribe queda como se escribio, como en Discord: una linea de solo guiones o guiones
+// bajos (Haven la volvia una raya casi invisible y el mensaje parecia vacio) y los asteriscos
+// sueltos, separados por espacios (Haven los tomaba como negrita o cursiva y se comia varios:
+// "**********" quedaba mas corto). Se cambian por unos caracteres que Haven no toca y se
+// devuelven al final. (puente-texto-tal-cual)
+(function () {
+  'use strict';
+  let t = 0;
+  const AST = '\uE000', GUION = '\uE001', BAJO = '\uE002';
+  const proteger = (str) => str
+    .replace(/^([ \t]*)(-{3,}|_{3,})([ \t]*)$/gm, (m, a, r, b) => a + (r[0] === '-' ? GUION : BAJO).repeat(r.length) + b)
+    .replace(/(^|\s)(\*+)(?=\s|$)/g, (m, a, r) => a + AST.repeat(r.length));
+  const devolver = (html) => html.replace(/\uE000/g, '*').replace(/\uE001/g, '-').replace(/\uE002/g, '_');
+  (function enganchar() {
+    const app = window.app;
+    if (!app || typeof app._formatContent !== 'function') { if (++t < 120) setTimeout(enganchar, 500); return; }
+    const original = app._formatContent;
+    app._formatContent = function (str) {
+      if (typeof str !== 'string' || /[\uE000-\uE002]/.test(str) || !/[-_*]/.test(str)) return original.apply(this, arguments);
+      const p = proteger(str);
+      if (p === str) return original.apply(this, arguments);
+      const out = original.call(this, p);
+      return typeof out === 'string' ? devolver(out) : out;
+    };
+  })();
+})();
+
+// Editar un mensaje en el celu como en Discord: el texto pasa al mismo cuadro de escribir, arriba
+// aparece "Editando mensaje" con una X para cancelar, el mensaje se marca en el chat y el cambio se
+// guarda con el mismo boton de enviar. Por dentro sigue siendo la edicion de Haven (la abre en el
+// mensaje, escondida, y al enviar le pasa el texto y aprieta su Guardar), asi que guarda igual que
+// siempre: mensajes cifrados, fotos que van juntas, borrar si queda vacio. Lo que se estaba
+// escribiendo antes vuelve al terminar. Solo en el chat principal; en hilos y en la ventanita de
+// mensajes directos sigue como estaba. (puente-editando)
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  let t = 0, ed = null;
+  const root = document.documentElement;
+  function barra() {
+    let b = document.getElementById('puente-editando');
+    if (b) return b;
+    const rb = document.getElementById('reply-bar');
+    if (!rb) return null;
+    b = document.createElement('div');
+    b.id = 'puente-editando';
+    b.className = 'reply-bar puente-editando-bar';
+    b.style.display = 'none';
+    b.innerHTML = '<span class="reply-bar-text">Editando mensaje</span><button type="button" class="reply-bar-close puente-editando-x" aria-label="Cancelar la edición" title="Cancelar">&times;</button>';
+    b.querySelector('button').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); cancelar(); });
+    rb.after(b);
+    return b;
+  }
+  const input = () => document.getElementById('message-input');
+  function poner(v) {
+    const i = input();
+    if (!i) return;
+    i.value = v;
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  // Se termino (guardada, cancelada, el mensaje se redibujo o se cambio de canal)
+  function terminar(restaurar) {
+    if (!ed) return;
+    const e = ed; ed = null;
+    try { e.obs.disconnect(); } catch { /* nada */ }
+    e.msgEl.classList.remove('puente-editando-msg');
+    root.classList.remove('puente-editando');
+    const b = document.getElementById('puente-editando');
+    if (b) b.style.display = 'none';
+    if (restaurar && window.app && window.app.currentChannel === e.canal) poner(e.borrador);
+  }
+  function cancelar() {
+    if (!ed) return;
+    const e = ed;
+    const btn = e.msgEl.querySelector('.edit-cancel-btn');
+    terminar(true);
+    if (btn) btn.click();
+  }
+  function guardar() {
+    const e = ed;
+    const ta = e.msgEl.querySelector('textarea.edit-textarea');
+    const btn = e.msgEl.querySelector('.edit-save-btn');
+    const i = input();
+    if (!ta || !btn || !i) { terminar(true); return; }
+    ta.value = i.value;
+    terminar(true);
+    btn.click();
+  }
+  (function enganchar() {
+    const app = window.app;
+    if (!app || typeof app._startEditMessage !== 'function' || typeof app._sendMessage !== 'function' || !input() || !document.getElementById('reply-bar')) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    const empezar = app._startEditMessage;
+    app._startEditMessage = function (msgEl) {
+      const enChat = msgEl && msgEl.closest && msgEl.closest('#messages');
+      if (!enChat || msgEl.classList.contains('editing')) return empezar.apply(this, arguments);
+      if (ed) cancelar();
+      const contentEl = msgEl.querySelector('.message-content');
+      const antes = contentEl ? contentEl.innerHTML : '';
+      const r = empezar.apply(this, arguments);
+      const ta = msgEl.querySelector('textarea.edit-textarea');
+      if (!ta || !msgEl.classList.contains('editing') || !barra()) return r; // Haven no la abrio (mensaje protegido)
+      // Mientras tanto el mensaje se sigue viendo como era (Haven lo vuelve a dibujar al terminar)
+      const vista = document.createElement('div');
+      vista.className = 'puente-editando-vista';
+      vista.innerHTML = antes;
+      contentEl.insertBefore(vista, contentEl.firstChild);
+      if (this._activeEditTextarea === ta) this._activeEditTextarea = null; // los emojis van al cuadro de abajo
+      const i = input();
+      ed = { msgEl, canal: this.currentChannel, borrador: i.value, obs: new MutationObserver(() => { if (ed && (!msgEl.isConnected || !msgEl.classList.contains('editing'))) terminar(false); }) };
+      ed.obs.observe(msgEl, { attributes: true, attributeFilter: ['class'] });
+      ed.obs.observe(msgEl.parentNode || document.body, { childList: true });
+      msgEl.classList.add('puente-editando-msg');
+      root.classList.add('puente-editando');
+      document.getElementById('puente-editando').style.display = '';
+      poner(ta.value);
+      try { ta.blur(); } catch { /* nada */ }
+      i.focus();
+      try { i.setSelectionRange(i.value.length, i.value.length); } catch { /* nada */ }
+      // El mensaje que se edita queda a la vista (la barra de arriba del cuadro achica el chat)
+      const verlo = () => {
+        const sc = document.getElementById('messages');
+        if (!sc || !msgEl.isConnected) return;
+        const r1 = msgEl.getBoundingClientRect(), r2 = sc.getBoundingClientRect();
+        if (r1.bottom > r2.bottom) sc.scrollTop += r1.bottom - r2.bottom + 8;
+        else if (r1.top < r2.top) sc.scrollTop -= r2.top - r1.top + 8;
+      };
+      requestAnimationFrame(verlo); setTimeout(verlo, 350); // y otra vez cuando sube el teclado
+      return r;
+    };
+    const enviar = app._sendMessage;
+    app._sendMessage = function () {
+      if (ed) {
+        if (ed.msgEl.isConnected && ed.msgEl.classList.contains('editing') && this.currentChannel === ed.canal) { guardar(); return; }
+        terminar(false);
+      }
+      return enviar.apply(this, arguments);
+    };
+    // Otro canal: la edicion se deja (como en Discord), sin pisar lo que haya en el cuadro del otro canal
+    if (typeof app.switchChannel === 'function') {
+      const cambiar = app.switchChannel;
+      app.switchChannel = function () {
+        if (ed) { const e = ed; terminar(false); const btn = e.msgEl.querySelector('.edit-cancel-btn'); if (btn) btn.click(); if (input()) poner(e.borrador); }
+        return cambiar.apply(this, arguments);
+      };
+    }
+  })();
+})();
