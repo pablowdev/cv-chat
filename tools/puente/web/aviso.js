@@ -2573,6 +2573,32 @@ function leido(sc) {
     window.app && window.app._closeComposerMenu && window.app._closeComposerMenu();
     if (byId('puente-adjuntar')) close(); else open();
   }, true);
+
+  // Al lado del +, un boton de fotos: un toque y se abre el selector de fotos del telefono (una
+  // pagina no puede mostrar la galeria adentro, como la app de Discord). El + sigue abriendo la
+  // hoja con todo lo demas. Mientras se escribe se esconde, para dejarle lugar al texto (como
+  // Discord), y no aparece donde no se pueden subir archivos.
+  (function botonFotos() {
+    const plus = byId('composer-plus-btn'), area = byId('message-input-area'), input = byId('message-input');
+    if (!plus || !area || !input) { setTimeout(botonFotos, 1000); return; }
+    if (byId('puente-fotos-btn')) return;
+    const b = el('button', 'puente-fotos-btn', svg(I.fotos, 24));
+    b.id = 'puente-fotos-btn';
+    b.type = 'button';
+    b.title = 'Fotos';
+    b.setAttribute('aria-label', 'Mandar fotos o videos');
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); run('galeria'); });
+    plus.after(b);
+    const ver = () => {
+      const escribe = !!(input.value && input.value.trim());
+      const ok = shown(byId('upload-btn')) && !input.disabled && !area.classList.contains('puente-sin-permiso');
+      b.hidden = escribe || !ok;
+    };
+    input.addEventListener('input', ver);
+    document.addEventListener('selectionchange', ver);
+    setInterval(ver, 700); // Haven vacia el cuadro al mandar, cambia de canal, etc.
+    ver();
+  })();
 })();
 
 // Pantallas tactiles: el selector de emojis y stickers del cuadro de escribir

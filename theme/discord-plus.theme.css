@@ -2792,3 +2792,14 @@ html body #puente-editando .reply-bar-text { font-weight: 600; color: #dbdee1; }
 /* En los MD las fotos y videos ya salen sin la ubicacion (aviso.js, puente-md-sin-ubicacion):
    sin el aviso de Haven que pedia sacarla a mano */
 html.puente-md-sin-ubicacion .dm-safety-notice[data-kind="gps"] { display: none !important; }
+
+/* Celu: el boton de fotos al lado del + (aviso.js), del mismo estilo; en la PC no existe */
+@media (max-width: 768px) {
+  html body #message-input-area > #puente-fotos-btn {
+    flex: 0 0 3rem; width: 3rem; height: 3rem; min-width: 3rem; margin-left: -0.25rem; padding: 0; border: 0; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center; background: #252429; color: #dbdee1; cursor: pointer; position: relative; z-index: 1;
+  }
+  html body #message-input-area > #puente-fotos-btn[hidden] { display: none; }
+  html body #message-input-area > #puente-fotos-btn:active { background: #3f3e44; }
+}
+@media (min-width: 769px) { html body #puente-fotos-btn { display: none !important; } }
