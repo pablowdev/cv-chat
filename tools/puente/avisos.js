@@ -16,6 +16,25 @@ function setup(ctx) {
   ({ db, io, log, warn } = ctx);
   try { webpush = require('/app/node_modules/web-push'); } catch { warn('avisos: sin web-push, no hay notificaciones de Discord'); }
   brand();
+  // La app de la PC (aviso.js) dice cual es su suscripcion: mientras esta conectada (aunque este
+  // escondida junto al reloj) ya avisa ella, con su sonido y un cartel de Windows sin sonido, como
+  // Discord. Si ademas llegaba la notificacion del servidor, sonaba dos veces lo mismo.
+  io.on('connection', (socket) => {
+    socket.on('puente-push-propio', (data) => {
+      if (!socket.user || !data || typeof data.endpoint !== 'string' || data.endpoint.length > 2000) return;
+      try {
+        const mio = db.prepare('SELECT 1 FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').get(data.endpoint, socket.user.id);
+        socket.puentePushPropio = mio ? data.endpoint : null;
+      } catch { /* sin la tabla */ }
+    });
+  });
+}
+
+// Esa suscripcion es de una app de la PC abierta ahora
+function avisaLaApp(endpoint) {
+  if (!endpoint || !io) return false;
+  for (const [, s] of io.sockets.sockets) if (s.connected && s.puentePushPropio === endpoint) return true;
+  return false;
 }
 
 // Todas las notificaciones (las de Haven tambien: usan este mismo modulo) salen
@@ -31,6 +50,7 @@ function brand() {
   const send = webpush.sendNotification.bind(webpush);
   webpush.sendNotification = function (sub, payload, ...rest) {
     try {
+      if (sub && avisaLaApp(sub.endpoint)) return Promise.resolve(); // ya aviso la app abierta
       if (typeof payload === 'string' && payload.startsWith('{')) {
         const p = JSON.parse(payload);
         if (p.__puente) delete p.__puente; // de onInbound: ya viene filtrado

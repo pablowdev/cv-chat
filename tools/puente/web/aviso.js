@@ -11066,3 +11066,38 @@ var puenteSinUbicacion = (function () {
   setInterval(revisar, 2000); // por si Chrome no avisa del cambio
   setTimeout(revisar, 1000);
 })();
+
+// App de la PC: un solo aviso por mensaje, como Discord. Abierta (aunque este escondida junto al
+// reloj) suena CV Chat y sale el cartel de Windows sin sonido. Antes, ademas, llegaba la
+// notificacion del servidor un par de segundos despues, con el sonido de Windows: dos avisos de lo
+// mismo. Ahora la app le dice al servidor cual es su suscripcion (avisos.js no le manda nada
+// mientras este conectada) y el cartel lo muestra ella, solo si no se esta mirando CV Chat.
+// (puente-un-aviso)
+(function () {
+  'use strict';
+  if (!window.puenteApp || /Android|iPhone|iPad/i.test(navigator.userAgent)) return; // puenteApp: la de la PC (tema-fijo.js)
+  let t = 0;
+  function decir() {
+    const so = window.app && window.app.socket;
+    if (!so || !so.connected || !navigator.serviceWorker) return;
+    navigator.serviceWorker.ready
+      .then((r) => r.pushManager.getSubscription())
+      .then((sub) => { if (sub && sub.endpoint) so.emit('puente-push-propio', { endpoint: sub.endpoint }); })
+      .catch(() => {});
+  }
+  (function enganchar() {
+    const app = window.app, so = app && app.socket;
+    if (!so || typeof app._fireNativeNotification !== 'function') { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    so.on('connect', () => setTimeout(decir, 500));
+    setTimeout(decir, 500);
+    setInterval(decir, 5 * 60 * 1000); // por si se activaron las notificaciones despues
+    const original = app._fireNativeNotification;
+    app._fireNativeNotification = function () {
+      if (!document.hidden && document.hasFocus()) return; // se esta mirando CV Chat: alcanza con el sonido
+      // Haven no muestra el cartel si hay suscripcion (esperaba la del servidor): que lo muestre
+      const sub = this._pushSubscription;
+      this._pushSubscription = null;
+      try { return original.apply(this, arguments); } finally { this._pushSubscription = sub; }
+    };
+  })();
+})();
