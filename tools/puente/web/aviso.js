@@ -9291,19 +9291,19 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
 // están escribiendo…", "A, B y C están escribiendo…", "Varias personas están
 // escribiendo…". Junta a los que escriben en la app y en Discord (desde Discord
 // dura 10 segundos, como alla); el de cada uno se va cuando llega su mensaje.
+// Desde Haven 4.26 Haven lleva la cuenta de quien escribe en cada canal (app-typing.js) y la
+// dibuja con _typingRender como texto solo: se dibuja encima con los puntitos, junto con los de
+// Discord, abajo del chat y en la ventanita de mensajes directos.
 (function () {
   'use strict';
   const typers = new Map(); // clave -> { nombre, hasta }
   let timer = null;
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const DOTS = '<span class="puente-escribe-puntos" aria-hidden="true"><i></i><i></i><i></i></span>';
-  function render() {
-    const box = document.getElementById('typing-indicator');
+  // Los que escriben segun Haven en ese canal (4.26: app-typing.js)
+  const deHaven = (code) => { try { const a = window.app; return code && a && typeof a._typingNames === 'function' ? a._typingNames(code) : []; } catch { return []; } };
+  function pintar(box, names) {
     if (!box) return;
-    const now = Date.now();
-    for (const [k, v] of typers) if (v.hasta <= now) typers.delete(k);
-    clearTimeout(timer);
-    const names = [...new Set([...typers.values()].map(v => v.nombre))];
     if (!names.length) { box.innerHTML = ''; box.classList.remove('puente-escribe'); return; }
     const b = n => `<b>${esc(n)}</b>`;
     const text = names.length === 1 ? `${b(names[0])} está escribiendo…`
@@ -9312,6 +9312,25 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
           : 'Varias personas están escribiendo…';
     box.innerHTML = DOTS + `<span class="puente-escribe-texto">${text}</span>`;
     box.classList.add('puente-escribe');
+  }
+  function render() {
+    const box = document.getElementById('typing-indicator');
+    if (!box) return;
+    const now = Date.now();
+    for (const [k, v] of typers) if (v.hasta <= now) typers.delete(k);
+    clearTimeout(timer);
+    const app = window.app;
+    if (app && app._activeDMPip) { const pip = document.getElementById('dm-pip-typing'); pintar(pip, [...new Set(deHaven(app._activeDMPip))]); }
+    const names = [...new Set([...deHaven(app && app.currentChannel), ...[...typers.values()].map(v => v.nombre)])];
+    if (!names.length) { box.innerHTML = ''; box.classList.remove('puente-escribe'); return; }
+    const b = n => `<b>${esc(n)}</b>`;
+    const text = names.length === 1 ? `${b(names[0])} está escribiendo…`
+      : names.length === 2 ? `${b(names[0])} y ${b(names[1])} están escribiendo…`
+        : names.length === 3 ? `${b(names[0])}, ${b(names[1])} y ${b(names[2])} están escribiendo…`
+          : 'Varias personas están escribiendo…';
+    box.innerHTML = DOTS + `<span class="puente-escribe-texto">${text}</span>`;
+    box.classList.add('puente-escribe');
+    if (!typers.size) return; // los de Haven: Haven vuelve a dibujar cuando se vencen
     const next = Math.min(...[...typers.values()].map(v => v.hasta));
     timer = setTimeout(render, Math.max(200, next - now + 50));
   }
@@ -9332,11 +9351,20 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   let tries = 0;
   (function wait() {
     const app = window.app;
-    if (!app || !app.socket || typeof app._showTyping !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
-    const orig = app._showTyping;
-    app._showTyping = function (username) {
-      try { add(this, username, 5000); } catch (err) { console.warn('[puente] escribiendo:', err); return orig.apply(this, arguments); }
-    };
+    if (!app || !app.socket || (typeof app._typingRender !== 'function' && typeof app._showTyping !== 'function')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    if (typeof app._typingRender === 'function') {
+      const dibujar = app._typingRender;
+      app._typingRender = function () {
+        const r = dibujar.apply(this, arguments);
+        try { render(); } catch (err) { console.warn('[puente] escribiendo:', err); }
+        return r;
+      };
+    } else {
+      const orig = app._showTyping;
+      app._showTyping = function (username) {
+        try { add(this, username, 5000); } catch (err) { console.warn('[puente] escribiendo:', err); return orig.apply(this, arguments); }
+      };
+    }
     app.socket.on('puente-escribiendo', (d) => { if (d && d.channelCode === app.currentChannel) add(app, d.username, d.ms || 10000); });
     app.socket.on('new-message', (d) => { if (d && d.message && d.channelCode === app.currentChannel) remove(d.message.username); });
     if (typeof app.switchChannel === 'function') {
