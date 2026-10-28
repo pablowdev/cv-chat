@@ -3549,6 +3549,48 @@ document.addEventListener('pointerdown', (ev) => {
     document.getElementById('puente-who-backdrop')?.remove();
   }
 
+  // La lista completa (con las fotos) se pide apenas se apoya el dedo en la reaccion: para cuando
+  // se abre la ventana (medio segundo despues) ya llego, y las fotos ya estan bajadas. Se guarda
+  // un minuto por mensaje; si cambian sus reacciones, se vuelve a pedir.
+  const guardadas = new Map(); // mensaje -> { at, promesa, datos }
+  const fotos = new Set();
+  function precargar(datos) {
+    for (const r of datos) for (const u of r.users || []) {
+      if (!u.avatar || fotos.has(u.avatar)) continue;
+      fotos.add(u.avatar);
+      const im = new Image(); im.decoding = 'async'; im.src = u.avatar;
+    }
+  }
+  function pedir(msgId) {
+    const g = guardadas.get(msgId);
+    if (g && Date.now() - g.at < 60000) return g.promesa;
+    const tk = token();
+    if (!tk) return Promise.resolve(null);
+    const e = { at: Date.now(), datos: null, promesa: null };
+    e.promesa = fetch('/puente/api/reacciones?mensaje=' + msgId, { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { const l = d && Array.isArray(d.reacciones) ? d.reacciones : null; if (l) { e.datos = l; precargar(l); } else guardadas.delete(msgId); return l; })
+      .catch(() => { guardadas.delete(msgId); return null; });
+    guardadas.set(msgId, e);
+    return e.promesa;
+  }
+  const idDe = (badge) => { const m = badge.closest('.message, .message-compact'); return m && parseInt(m.dataset.msgId, 10); };
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.target instanceof Element && e.target.closest('.reaction-badge');
+    const id = b && idDe(b);
+    if (id) pedir(id);
+  }, { capture: true, passive: true });
+  // Mientras llega: la foto de los que ya conoce la app (los de la lista de miembros)
+  function fotoConocida(app, nombre) {
+    const n = String(nombre || '').toLowerCase();
+    for (const l of [app._lastOnlineUsers, app.channelMembers, app.users]) {
+      if (!Array.isArray(l)) continue;
+      const u = l.find(x => x && [x.displayName, x.display_name, x.username].some(v => v && String(v).toLowerCase() === n));
+      if (u && (u.avatar || u.avatarUrl)) return u.avatar || u.avatarUrl;
+    }
+    return null;
+  }
+
   function emojiNode(app, emoji, cls) {
     const m = /^:([a-zA-Z0-9_-]+):$/.exec(emoji || '');
     const ce = m && Array.isArray(app.customEmojis) ? app.customEmojis.find(e => e.name === m[1]) : null;
@@ -3577,9 +3619,10 @@ document.addEventListener('pointerdown', (ev) => {
     const fromBadges = [...msgEl.querySelectorAll('.reaction-badge')].map(b => {
       let users = [];
       try { users = JSON.parse(b.dataset.users || '[]'); } catch { /* sin datos */ }
-      return { emoji: b.dataset.emoji, users: users.map(n => ({ name: n })) };
+      return { emoji: b.dataset.emoji, users: users.map(n => ({ name: n, avatar: fotoConocida(app, n) })) };
     });
-    let data = fromBadges;
+    const ya = guardadas.get(msgId);
+    let data = ya && ya.datos && Date.now() - ya.at < 60000 ? ya.datos : fromBadges;
     let current = badge.dataset.emoji;
 
     function render() {
@@ -3601,7 +3644,7 @@ document.addEventListener('pointerdown', (ev) => {
       for (const u of r.users) {
         const row = el('div', 'puente-who-row');
         const av = el('div', 'puente-who-avatar');
-        if (u.avatar) { const img = el('img'); img.src = u.avatar; img.alt = ''; img.loading = 'lazy'; av.appendChild(img); }
+        if (u.avatar) { const img = el('img'); img.src = u.avatar; img.alt = ''; av.appendChild(img); }
         else av.textContent = (u.name || '?').trim().charAt(0).toUpperCase();
         row.append(av, el('span', 'puente-who-name', u.name || '?'));
         if (u.discord) row.appendChild(el('span', 'puente-who-tag', 'DISCORD'));
@@ -3617,17 +3660,19 @@ document.addEventListener('pointerdown', (ev) => {
     }
     render();
 
-    const tk = token();
-    if (tk) {
-      fetch('/puente/api/reacciones?mensaje=' + msgId, { headers: { Authorization: 'Bearer ' + tk } })
-        .then(r => (r.ok ? r.json() : null))
-        .then(d => { if (d && Array.isArray(d.reacciones) && document.getElementById('puente-who-sheet') === sheet) { data = d.reacciones; render(); } })
-        .catch(() => {});
+    if (data === fromBadges) {
+      pedir(msgId).then(l => { if (l && document.getElementById('puente-who-sheet') === sheet) { data = l; render(); } });
     }
 
     // Manija: hacia arriba se agranda, hacia abajo se cierra
     sheetDrag(sheet, { close, scroller: list });
   }
+
+  (function olvidar() {
+    const so = window.app && window.app.socket;
+    if (!so) { setTimeout(olvidar, 1000); return; }
+    so.on('reactions-updated', (d) => { if (d && d.messageId != null) guardadas.delete(parseInt(d.messageId, 10)); });
+  })();
 
   // Al soltar despues de mantener apretado, que no cuente como toque (pondria o sacaria la reaccion)
   let ignoreClickUntil = 0;
@@ -10025,6 +10070,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   // Lo que se puede cerrar, de lo mas "arriba" a lo mas "abajo": [esta abierto, cerrarlo]
   const LAYERS = [
     [() => byId('puente-medalla-globo'), () => byId('puente-medalla-globo').remove()],
+    [() => byId('puente-who-sheet'), () => { byId('puente-who-sheet')?.remove(); byId('puente-who-backdrop')?.remove(); }], // quien reacciono
     [() => shown(byId('image-lightbox')), (app) => app._closeLightbox ? app._closeLightbox() : (byId('image-lightbox').style.display = 'none')],
     [() => byId('puente-tema-hoja'), () => { byId('puente-tema-hoja')?.remove(); byId('puente-tema-fondo')?.remove(); }],
     [() => byId('puente-perfil-capa'), () => byId('puente-perfil-capa').remove()],
