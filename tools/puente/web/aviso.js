@@ -11025,3 +11025,44 @@ var puenteSinUbicacion = (function () {
     setTimeout(pedir, 1500);
   })();
 })();
+
+// Telefonos plegables (Galaxy Z Fold y otros): si se abre CV Chat con la pantalla grande y despues
+// se cierra el telefono, Chrome a veces se queda con el ancho de la pantalla grande y achica todo
+// para que entre (se ve la version de PC en chiquito). Cuando la pagina quedo mas ancha que la
+// pantalla, o achicada, se le vuelve a pasar a Chrome el ancho de la pantalla para que la acomode,
+// como si se abriera de nuevo. Una ventana nunca es mas ancha que la pantalla, y CV Chat no deja
+// alejar el zoom, asi que en cualquier otro caso no hace nada. (puente-plegable)
+(function () {
+  'use strict';
+  if (!/Android/i.test(navigator.userAgent)) return;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (!meta) return;
+  const base = meta.getAttribute('content') || 'width=device-width, initial-scale=1';
+  let ocupado = false, ultimo = 0;
+  function revisar() {
+    if (ocupado || document.hidden) return;
+    const vv = window.visualViewport;
+    const pantalla = Math.round((screen && screen.width) || 0);
+    const ancha = pantalla > 0 && window.innerWidth > pantalla + 8;
+    const achicada = !!vv && vv.scale > 0 && vv.scale < 0.95;
+    if (!ancha && !achicada) return;
+    if (Date.now() - ultimo < 1000) return; // una vez por segundo como mucho
+    ultimo = Date.now();
+    ocupado = true;
+    const ancho = pantalla > 0 ? pantalla : 'device-width';
+    meta.setAttribute('content', base.replace(/width=device-width/, 'width=' + ancho).replace(/initial-scale=[\d.]+/, 'initial-scale=1') +
+      (/minimum-scale/.test(base) ? '' : ', minimum-scale=1'));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      meta.setAttribute('content', base);
+      ocupado = false;
+      setTimeout(revisar, 400);
+    }));
+  }
+  const luego = (ms) => () => setTimeout(revisar, ms);
+  addEventListener('resize', luego(150));
+  if (window.visualViewport) visualViewport.addEventListener('resize', luego(150));
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', luego(300));
+  document.addEventListener('visibilitychange', luego(300));
+  setInterval(revisar, 2000); // por si Chrome no avisa del cambio
+  setTimeout(revisar, 1000);
+})();
