@@ -297,17 +297,13 @@ function recomputeUnlinked(havenUserId) {
 }
 
 // Para escribir en los canales de Discord sin tener Discord vinculado: email
-// confirmado y la cuenta con unos minutos (frena cuentas hechas al voleo)
-const NEW_ACCOUNT_MIN = 10;
+// confirmado (sin esperar minutos de cuenta: nadie tiene que esperar para escribir)
 function unlinkedWriteProblem(havenUserId) {
   if (!OPEN_UNLINKED) return null;
   if (db.prepare('SELECT 1 FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId)) return null;
   let ok = false;
   try { ok = !!db.prepare('SELECT 1 FROM puente_emails WHERE haven_user_id = ? AND confirmado = 1').get(havenUserId); } catch { ok = true; /* sin email en este servidor */ }
   if (!ok) return 'Para escribir en este canal confirmá tu email (te mandamos un enlace).';
-  const u = db.prepare('SELECT created_at FROM users WHERE id = ?').get(havenUserId);
-  const age = u ? Date.now() - Date.parse(String(u.created_at).replace(' ', 'T') + 'Z') : 0;
-  if (age < NEW_ACCOUNT_MIN * 60 * 1000) return `Tu cuenta es nueva: vas a poder escribir en este canal en ${Math.max(1, Math.ceil(NEW_ACCOUNT_MIN - age / 60000))} minuto${Math.ceil(NEW_ACCOUNT_MIN - age / 60000) === 1 ? '' : 's'}.`;
   return null;
 }
 
