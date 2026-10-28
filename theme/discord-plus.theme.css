@@ -372,6 +372,19 @@ html .reaction-badge:hover { background: #2f2f34; border-color: #3f3f46; }
 html .reaction-badge.own { background: rgba(88, 101, 242, 0.15); border-color: #5865f2; color: #dee0fc; }
 html .reaction-badge .reaction-custom-emoji { width: 1.375rem; height: 1.375rem; object-fit: contain; }
 html .reaction-badge .puente-reaction-emoji { font-size: 1.25rem; line-height: 1; }
+/* El numero que cambia (aviso.js): el nuevo entra desde abajo y el viejo se va para arriba (al bajar,
+   al reves), recortados por su cajita, como en Discord */
+html .reaction-badge .puente-rc { position: relative; display: inline-block; overflow: hidden; vertical-align: top; line-height: inherit; }
+html .reaction-badge .puente-rc > span { display: inline-block; }
+html .reaction-badge .puente-rc[data-antes]::before { content: attr(data-antes); position: absolute; left: 0; top: 0; opacity: 0; }
+html .reaction-badge .puente-rc-sube > span { animation: puente-rc-desde-abajo 0.25s ease-out; }
+html .reaction-badge .puente-rc-sube[data-antes]::before { animation: puente-rc-hacia-arriba 0.25s ease-out; }
+html .reaction-badge .puente-rc-baja > span { animation: puente-rc-desde-arriba 0.25s ease-out; }
+html .reaction-badge .puente-rc-baja[data-antes]::before { animation: puente-rc-hacia-abajo 0.25s ease-out; }
+@keyframes puente-rc-desde-abajo { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes puente-rc-desde-arriba { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes puente-rc-hacia-arriba { from { transform: none; opacity: 1; } to { transform: translateY(-100%); opacity: 1; } }
+@keyframes puente-rc-hacia-abajo { from { transform: none; opacity: 1; } to { transform: translateY(100%); opacity: 1; } }
 
 /* Menu de un mensaje en pantallas tactiles: hoja que sube desde abajo, como
    en la app de Discord (la arma tools/puente/web/aviso.js con las opciones

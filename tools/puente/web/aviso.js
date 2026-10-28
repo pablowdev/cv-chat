@@ -10555,3 +10555,62 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     });
   })();
 })();
+
+// Reacciones: cuando cambia la cantidad, el numero se mueve como en Discord. Si sube, el que estaba
+// se va para arriba y el nuevo entra desde abajo; si baja, al reves. Solo cuando cambia en vivo
+// (Haven redibuja la fila de reacciones del mensaje), no al cargar los mensajes. El numero queda
+// como texto del boton igual que antes; el viejo es solo un dibujo (::before) mientras se mueve.
+(function () {
+  'use strict';
+  let t = 0;
+  const quieto = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // El texto con el numero del boton (despues del emoji)
+  const textoNumero = (b) => [...b.childNodes].reverse().find((n) => n.nodeType === 3 && /\d/.test(n.nodeValue));
+  const cantidad = (b) => { const n = b.querySelector(':scope > .puente-rc') || textoNumero(b); const m = n && /\d+/.exec(n.textContent); return m ? +m[0] : 0; };
+  function mover(b, antes) {
+    const ahora = cantidad(b);
+    if (ahora === antes || b.querySelector(':scope > .puente-rc')) return;
+    const tx = textoNumero(b);
+    if (!tx) return;
+    const m = /^(\s*)(\d+)(\s*)$/.exec(tx.nodeValue);
+    if (!m) return;
+    const rc = document.createElement('span');
+    rc.className = 'puente-rc ' + (ahora > antes ? 'puente-rc-sube' : 'puente-rc-baja');
+    if (antes > 0) rc.dataset.antes = String(antes);
+    const num = document.createElement('span');
+    num.textContent = m[2];
+    rc.appendChild(num);
+    tx.nodeValue = m[1];
+    tx.after(rc);
+    if (m[3]) rc.after(document.createTextNode(m[3]));
+    num.addEventListener('animationend', () => rc.classList.remove('puente-rc-sube', 'puente-rc-baja'), { once: true });
+  }
+  (function enganchar() {
+    const app = window.app;
+    if (!app || typeof app._updateMessageReactions !== 'function') { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    const original = app._updateMessageReactions;
+    app._updateMessageReactions = function (messageId) {
+      let antes = null;
+      if (!quieto()) {
+        try {
+          antes = new Map();
+          for (const el of document.querySelectorAll(`[data-msg-id="${messageId}"]`)) {
+            const c = new Map(); antes.set(el, c);
+            for (const b of el.querySelectorAll('.reactions-row .reaction-badge')) c.set(b.dataset.emoji, cantidad(b));
+          }
+        } catch { antes = null; }
+      }
+      const r = original.apply(this, arguments);
+      // Despues de que se separa el emoji del numero (splitReaction, mas arriba)
+      if (antes) setTimeout(() => {
+        for (const [el, c] of antes) {
+          if (!el.isConnected) continue;
+          for (const b of el.querySelectorAll('.reactions-row .reaction-badge')) {
+            try { mover(b, c.has(b.dataset.emoji) ? c.get(b.dataset.emoji) : 0); } catch { /* queda sin animar */ }
+          }
+        }
+      }, 0);
+      return r;
+    };
+  })();
+})();
