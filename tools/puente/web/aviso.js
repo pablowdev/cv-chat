@@ -1728,6 +1728,110 @@ function sheetDrag(sheet, opts) {
   })();
 })();
 
+// El mensaje que se esta leyendo: el primero que empieza dentro de la pantalla. El de mas arriba,
+// cortado por el borde, casi no se ve: si se toma ese y le crece algo (una imagen que termina de
+// cargar, una vista previa, un video), empuja para abajo justo lo que se esta leyendo. Si ninguno
+// empieza adentro (uno muy alto ocupa toda la pantalla), el que se ve.
+function leido(sc) {
+  'use strict';
+  const top = sc.getBoundingClientRect().top, bottom = top + sc.clientHeight;
+  let first = null;
+  for (const el of sc.querySelectorAll(':scope > [data-msg-id]')) {
+    const r = el.getBoundingClientRect();
+    if (r.height <= 0 || r.bottom <= top + 1) continue;
+    if (!first) first = el;
+    if (r.top >= top - 1) return r.top < bottom ? el : first;
+  }
+  return first;
+}
+
+// Anclaje del chat (scroll anchoring): lo que se esta leyendo no se mueve solo. Haven le apaga al
+// chat el del navegador (se peleaba con su manera de cargar los mensajes viejos) y trae uno propio
+// (app-feed-anchor.js) que mira cada mensaje y corrige cuando alguno cambia de alto. Este es el
+// mismo, con una diferencia: se queda quieto el mensaje que se esta leyendo (leido(), arriba), no
+// el que esta cortado por el borde de arriba. Quien esta leyendo lo ultimo sigue pegado abajo.
+// Se apaga el de Haven y queda este, con sus mismas reglas (pegado abajo, la edicion que se
+// agranda, los mensajes viejos que carga Haven).
+(function () {
+  'use strict';
+  let tries = 0;
+  (function wait() {
+    const app = window.app, sc = document.getElementById('messages');
+    const listo = app && sc && app._feedAnchor && app._feedAnchor.ro && typeof app._feedShouldStick === 'function' && typeof app._feedGapBefore === 'function';
+    if (!listo || typeof ResizeObserver !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    try { app._feedAnchor.ro.disconnect(); app._feedAnchor.mo.disconnect(); } catch { return; }
+    // El que acomoda cuando termina de cargar una imagen (app-media.js) tiene su propia nota del
+    // mensaje de arriba: que sea la misma, asi las dos correcciones no se suman
+    if (typeof app._lazyRecordAnchor === 'function') {
+      const lazy = app._lazyRecordAnchor;
+      app._lazyRecordAnchor = function (box) {
+        const L = this._lazyMedia;
+        if (box !== sc || !L || !L.anchors) return lazy.call(this, box);
+        const el = leido(sc);
+        if (el) L.anchors.set(sc, { el, top: el.getBoundingClientRect().top }); else L.anchors.delete(sc);
+      };
+      try { app._lazyRecordAnchor(sc); } catch { /* sigue */ }
+    }
+    const heights = new WeakMap();
+    let anc = null, ancTop = 0, st = sc.scrollTop;
+    const record = () => {
+      st = sc.scrollTop;
+      anc = leido(sc);
+      ancTop = anc ? anc.getBoundingClientRect().top : 0;
+    };
+    const stick = () => { sc.scrollTop = sc.scrollHeight; st = sc.scrollTop; };
+    const hold = (grew) => {
+      // Un mensaje que se edita y se agranda a mano crece para abajo (como en Haven)
+      const pin = app._feedPinnedEdit;
+      if (pin && pin.el && pin.el.isConnected && sc.contains(pin.el)) {
+        const d = pin.el.getBoundingClientRect().top - pin.top;
+        if (Math.abs(d) >= 1) sc.scrollTop += d;
+        st = sc.scrollTop;
+        return;
+      }
+      if (app._suppressCoupleCheck) return; // Haven esta cargando mensajes viejos y acomoda solo
+      const gapBefore = app._feedGapBefore(sc, grew, st);
+      const live = app._noMoreFuture !== false && !(app._isForumFeed && app._isForumFeed());
+      if (app._feedShouldStick({ live, coupled: app._coupledToBottom, gapBefore, startsAtEnd: true })) {
+        app._coupledToBottom = true;
+        stick();
+        return;
+      }
+      if (!anc || !anc.isConnected || !sc.contains(anc)) { record(); return; }
+      const drift = anc.getBoundingClientRect().top - ancTop;
+      st = sc.scrollTop;
+      if (Math.abs(drift) < 1) return;
+      sc.scrollTop += drift;
+      st = sc.scrollTop;
+      ancTop = anc.getBoundingClientRect().top;
+    };
+    // Corre despues de acomodar la pagina y antes de dibujarla: no se llega a ver el salto
+    const ro = new ResizeObserver((entries) => {
+      if (sc.clientHeight <= 0) { for (const e of entries) heights.delete(e.target); return; }
+      let grew = 0, changed = false;
+      for (const e of entries) {
+        const h = e.borderBoxSize && e.borderBoxSize[0] ? e.borderBoxSize[0].blockSize : e.contentRect.height;
+        const before = heights.get(e.target);
+        heights.set(e.target, h);
+        if (before !== undefined && Math.abs(before - h) >= 0.5) { changed = true; grew += h - before; }
+      }
+      if (changed) hold(grew);
+    });
+    const watch = (n) => { if (n.nodeType === 1 && n.dataset && n.dataset.msgId) ro.observe(n); };
+    [...sc.children].forEach(watch);
+    new MutationObserver((muts) => {
+      for (const m of muts) {
+        m.removedNodes.forEach((n) => { if (n.nodeType === 1) ro.unobserve(n); });
+        m.addedNodes.forEach(watch);
+      }
+      st = sc.scrollTop;
+    }).observe(sc, { childList: true });
+    sc.addEventListener('scroll', () => { if (app._suppressCoupleCheck) { st = sc.scrollTop; return; } record(); }, { passive: true });
+    addEventListener('resize', record);
+    record();
+  })();
+})();
+
 // El chat nunca baja solo hasta el final si la persona subio a leer. Haven lo
 // bajaba al volver a la app (recarga el canal), cuando llegaba un mensaje y se
 // estaba "cerca" del final (a menos de 150 px), o cuando terminaban de cargar
@@ -1748,14 +1852,11 @@ function sheetDrag(sheet, opts) {
     const dist = () => msgs.scrollHeight - msgs.clientHeight - msgs.scrollTop;
     const userScrolling = () => touching || Date.now() < gestureUntil;
 
-    // El primer mensaje que se ve y a que altura esta
+    // El mensaje que se esta leyendo y a que altura esta (el mismo que usa el anclaje, abajo)
     function saveAnchor() {
       const top = msgs.getBoundingClientRect().top;
-      for (const m of msgs.querySelectorAll('.message[data-msg-id], .message-compact[data-msg-id]')) {
-        const r = m.getBoundingClientRect();
-        if (r.bottom > top + 1) { anchor = { id: m.dataset.msgId, top: r.top - top }; return; }
-      }
-      anchor = null;
+      const m = leido(msgs);
+      anchor = m ? { id: m.dataset.msgId, top: m.getBoundingClientRect().top - top } : null;
     }
     function restoreAnchor() {
       if (!anchor) return;
