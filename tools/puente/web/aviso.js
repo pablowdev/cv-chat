@@ -10762,3 +10762,206 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }
   })();
 })();
+
+// Mensajes directos: las fotos y videos salen sin la ubicacion, como en los canales. En los canales
+// la quita el servidor, pero en un MD el archivo llega cifrado y el servidor no lo puede abrir; asi
+// que se quita aca, en el telefono o la PC de quien lo manda, justo antes de cifrarlo. Sin volver a
+// comprimir nada (la foto queda igual): JPEG, PNG y WebP pierden los datos de la camara como en
+// Haven (src/imageMetadata.js; se deja solo la orientacion); en HEIC y otros con EXIF se borran los
+// datos de GPS; en los videos (MP4, MOV) se borra la ubicacion que guarda el telefono. Lo que no se
+// reconoce o no se puede leer bien queda como estaba. (puente-md-sin-ubicacion)
+var puenteSinUbicacion = (function () {
+  'use strict';
+  const latin = (b, a, z) => { let t = ''; for (let i = a; i < z && i < b.length; i++) t += String.fromCharCode(b[i]); return t; };
+  const cat = (parts) => { let n = 0; for (const p of parts) n += p.length; const o = new Uint8Array(n); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o; };
+  const u16be = (b, o) => (b[o] << 8) | b[o + 1];
+  const u32be = (b, o) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+  const u32le = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16)) + ((b[o + 3] << 24) >>> 0);
+
+  // ── JPEG: fuera APP1 (EXIF, XMP), APP13 (IPTC) y comentarios; la orientacion se vuelve a poner
+  function orientacion(seg) {
+    if (seg.length < 14 || latin(seg, 0, 6) !== 'Exif\0\0') return 0;
+    const t = seg.subarray(6), le = latin(t, 0, 2) === 'II';
+    if (!le && latin(t, 0, 2) !== 'MM') return 0;
+    const r16 = (o) => (le ? t[o] | (t[o + 1] << 8) : u16be(t, o));
+    const r32 = (o) => (le ? u32le(t, o) : u32be(t, o));
+    const ifd = r32(4);
+    if (ifd + 2 > t.length) return 0;
+    const n = r16(ifd);
+    for (let i = 0; i < n; i++) {
+      const e = ifd + 2 + i * 12;
+      if (e + 12 > t.length) return 0;
+      if (r16(e) === 0x0112) { const v = r16(e + 8); return v >= 1 && v <= 8 ? v : 0; }
+    }
+    return 0;
+  }
+  function app1Orientacion(o) {
+    return new Uint8Array([0xFF, 0xE1, 0x00, 0x22, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x4D, 0x4D, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x08,
+      0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, o, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+  }
+  function jpeg(b) {
+    if (b[0] !== 0xFF || b[1] !== 0xD8) return null;
+    const out = [b.subarray(0, 2)];
+    let ori = 0, fuera = false, p = 2;
+    while (p + 4 <= b.length) {
+      if (b[p] !== 0xFF) return null;
+      const m = b[p + 1];
+      if (m === 0xFF) { p++; continue; }
+      if (m === 0xDA || m === 0xD9) break;
+      const len = u16be(b, p + 2);
+      if (len < 2 || p + 2 + len > b.length) return null;
+      if (m === 0xE1 || m === 0xED || m === 0xFE) {
+        if (m === 0xE1 && !ori) ori = orientacion(b.subarray(p + 4, p + 2 + len));
+        fuera = true;
+      } else out.push(b.subarray(p, p + 2 + len));
+      p += 2 + len;
+    }
+    if (!fuera) return null;
+    if (ori > 1) out.splice(out.length > 1 && out[1][1] === 0xE0 ? 2 : 1, 0, app1Orientacion(ori));
+    out.push(b.subarray(p));
+    return cat(out);
+  }
+  // ── PNG: fuera eXIf y los textos
+  const PNG_FUERA = new Set(['eXIf', 'tEXt', 'iTXt', 'zTXt', 'tIME']);
+  function png(b) {
+    if (b.length < 8 || latin(b, 0, 8) !== '\x89PNG\r\n\x1a\n') return null;
+    const out = [b.subarray(0, 8)];
+    let fuera = false, p = 8;
+    while (p + 12 <= b.length) {
+      const len = u32be(b, p), fin = p + 12 + len;
+      if (fin > b.length) return null;
+      const tipo = latin(b, p + 4, p + 8);
+      if (PNG_FUERA.has(tipo)) fuera = true; else out.push(b.subarray(p, fin));
+      p = fin;
+      if (tipo === 'IEND') break;
+    }
+    return fuera ? cat(out) : null;
+  }
+  // ── WebP: fuera EXIF y XMP
+  function webp(b) {
+    if (b.length < 12 || latin(b, 0, 4) !== 'RIFF' || latin(b, 8, 12) !== 'WEBP') return null;
+    const partes = [];
+    let fuera = false, p = 12;
+    while (p + 8 <= b.length) {
+      const cc = latin(b, p, p + 4), size = u32le(b, p + 4), fin = p + 8 + size + (size & 1);
+      if (p + 8 + size > b.length) return null;
+      if (cc === 'EXIF' || cc === 'XMP ') fuera = true; else partes.push(b.slice(p, Math.min(fin, b.length)));
+      p = fin;
+    }
+    if (!fuera) return null;
+    const x = partes.find((c) => latin(c, 0, 4) === 'VP8X');
+    if (x) x[8] &= ~0x0C;
+    const cuerpo = cat(partes), hdr = new Uint8Array(12);
+    hdr.set([0x52, 0x49, 0x46, 0x46], 0);
+    const n = cuerpo.length + 4;
+    hdr.set([n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255], 4);
+    hdr.set([0x57, 0x45, 0x42, 0x50], 8);
+    return cat([hdr, cuerpo]);
+  }
+  // ── Otros con EXIF (HEIC, TIFF...): se vacia el bloque de GPS ahi mismo, sin mover nada
+  const TAM = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8 };
+  function gpsTiff(b, base) {
+    const le = b[base] === 0x49;
+    const r16 = (o) => (le ? b[o] | (b[o + 1] << 8) : u16be(b, o));
+    const r32 = (o) => (le ? u32le(b, o) : u32be(b, o));
+    const ifd0 = base + r32(base + 4);
+    if (ifd0 + 2 > b.length) return false;
+    const n = r16(ifd0);
+    for (let i = 0; i < n; i++) {
+      const e = ifd0 + 2 + i * 12;
+      if (e + 12 > b.length) return false;
+      if (r16(e) !== 0x8825) continue;
+      const g = base + r32(e + 8);
+      if (g + 2 > b.length) return false;
+      const m = r16(g);
+      if (g + 2 + m * 12 > b.length) return false;
+      for (let j = 0; j < m; j++) {
+        const f = g + 2 + j * 12;
+        const largo = (TAM[r16(f + 2)] || 1) * r32(f + 4);
+        if (largo > 4) { const o = base + r32(f + 8); if (o + largo <= b.length) b.fill(0, o, o + largo); }
+        b.fill(0, f, f + 12);
+      }
+      return true;
+    }
+    return false;
+  }
+  function exifSuelto(b) {
+    let cambio = false, desde = 0;
+    for (let k = 0; k < 8; k++) {
+      let i = -1;
+      for (let p = desde; p + 10 <= b.length; p++) {
+        if (b[p] === 0x45 && b[p + 1] === 0x78 && b[p + 2] === 0x69 && b[p + 3] === 0x66 && b[p + 4] === 0 && b[p + 5] === 0 &&
+            ((b[p + 6] === 0x4D && b[p + 7] === 0x4D && b[p + 8] === 0 && b[p + 9] === 0x2A) || (b[p + 6] === 0x49 && b[p + 7] === 0x49 && b[p + 8] === 0x2A && b[p + 9] === 0))) { i = p; break; }
+      }
+      if (i < 0) break;
+      try { if (gpsTiff(b, i + 6)) cambio = true; } catch { /* sigue */ }
+      desde = i + 10;
+    }
+    return cambio;
+  }
+  // ── Videos (MP4, MOV, 3GP): la ubicacion vive en moov. El cuadro ©xyz / loci pasa a ser "free"
+  // (relleno que los reproductores saltean) con los datos en cero, y la de los iPhone (ISO 6709,
+  // "+34.6037-058.3816/") queda en ceros. Mismo tamano: no se mueve nada del video.
+  function video(b) {
+    if (b.length < 16 || latin(b, 4, 8) !== 'ftyp') return false;
+    // Se recorre la estructura (no se buscan bytes sueltos): los cuadros hijos de [a, z)
+    const hijos = (a, z) => {
+      const out = [];
+      let p = a;
+      while (p + 8 <= z) {
+        let size = u32be(b, p), h = 8;
+        if (size === 1) { if (p + 16 > z) break; size = u32be(b, p + 8) * 4294967296 + u32be(b, p + 12); h = 16; }
+        else if (size === 0) size = z - p;
+        if (size < h || p + size > z) break;
+        out.push({ tipo: latin(b, p + 4, p + 8), p, datos: p + h, fin: p + size });
+        p += size;
+      }
+      return out;
+    };
+    const moov = hijos(0, b.length).find((x) => x.tipo === 'moov');
+    if (!moov) return false;
+    let cambio = false;
+    const borrar = (x) => { b.set([0x66, 0x72, 0x65, 0x65], x.p + 4); b.fill(0, x.datos, x.fin); cambio = true; };
+    // La de los iPhone (ISO 6709, "+34.6037-058.3816/") en un cuadro meta: los numeros en cero
+    const iso = (x) => {
+      const txt = latin(b, x.datos, x.fin);
+      const re = /[+-]\d{1,3}\.\d+[+-]\d{1,3}\.\d+(?:[+-]\d+(?:\.\d+)?)?(?:CRS[^/]{0,40})?\//g;
+      let m;
+      while ((m = re.exec(txt))) {
+        for (let k = 0; k < m[0].length; k++) { const ch = m[0].charCodeAt(k); if (ch >= 48 && ch <= 57) b[x.datos + m.index + k] = 0x30; }
+        cambio = true;
+      }
+    };
+    const udta = (x) => { for (const y of hijos(x.datos, x.fin)) { if (y.tipo === '\xA9xyz' || y.tipo === 'loci') borrar(y); else if (y.tipo === 'meta') iso(y); } };
+    for (const x of hijos(moov.datos, moov.fin)) {
+      if (x.tipo === 'udta') udta(x);
+      else if (x.tipo === 'meta') iso(x);
+      else if (x.tipo === 'trak') for (const y of hijos(x.datos, x.fin)) { if (y.tipo === 'udta') udta(y); else if (y.tipo === 'meta') iso(y); }
+    }
+    return cambio;
+  }
+  // Recibe los bytes del archivo y devuelve los mismos o los limpios
+  return function (buf) {
+    try {
+      const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      const limpio = jpeg(b) || png(b) || webp(b);
+      if (limpio) return limpio.buffer.slice(limpio.byteOffset, limpio.byteOffset + limpio.byteLength);
+      const copia = new Uint8Array(b);
+      if (video(copia) || exifSuelto(copia)) return copia.buffer;
+    } catch (err) { console.warn('[puente] ubicacion del archivo:', err); }
+    return buf;
+  };
+})();
+(function () {
+  'use strict';
+  let t = 0;
+  (function enganchar() {
+    const app = window.app;
+    if (!app || typeof app._e2eEncryptBytes !== 'function') { if (++t < 120) setTimeout(enganchar, 500); return; }
+    const cifrar = app._e2eEncryptBytes;
+    app._e2eEncryptBytes = function (partner, buf) {
+      return cifrar.call(this, partner, puenteSinUbicacion(buf));
+    };
+    document.documentElement.classList.add('puente-md-sin-ubicacion');
+  })();
+})();
