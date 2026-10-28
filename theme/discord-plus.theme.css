@@ -537,6 +537,13 @@ html #emoji-picker.puente-emoji-sheet {
   content: ''; position: absolute; left: 50%; top: 0.625rem; width: 3rem; height: 0.3125rem; margin-left: -1.5rem; border-radius: 3px; background: #4a4950;
 }
 .puente-emoji-sheet .emoji-section-row, .puente-emoji-sheet .emoji-search-row, .puente-emoji-sheet .emoji-tab-row { touch-action: pan-x; }
+/* Con una hoja abierta (emojis o GIFs) el cuadro de escribir sube y queda arriba de ella, como en
+   Discord: el chat se achica y nada tapa lo que se escribe. El fondo para cerrarla tocando afuera
+   queda solo sobre el chat, sin oscurecer. */
+html.puente-hoja-abierta #message-input-area { margin-bottom: var(--puente-hoja-alto, 50vh) !important; }
+html.puente-hoja-abierta #puente-emoji-backdrop, html.puente-hoja-abierta #puente-gif-backdrop {
+  bottom: calc(var(--puente-hoja-alto, 50vh) + var(--puente-cuadro-alto, 0px)); background: transparent; animation: none;
+}
 
 /* Ventanita de GIFs en pantallas tactiles: hoja desde abajo como la de los emojis (aviso.js) */
 #puente-gif-backdrop { position: fixed; inset: 0; z-index: 100028; background: rgba(0, 0, 0, 0.45); animation: puente-fade 0.14s ease-out; }

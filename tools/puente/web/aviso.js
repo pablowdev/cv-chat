@@ -2583,6 +2583,37 @@ function leido(sc) {
 // la cierra. Es el mismo selector de Haven (emojis, stickers, buscador, tono de
 // piel); solo cambia donde y como se muestra. El teclado no aparece mientras
 // esta abierta, como en Discord, y el emoji se escribe donde estaba el cursor.
+// Las hojas de emojis y de GIFs en el celu se abren debajo del cuadro de escribir, como en Discord:
+// el cuadro sube y queda arriba de la hoja (el chat se achica), asi se ve lo que se va escribiendo.
+// vh: el alto de la hoja; null: se cerro (si no quedo abierta la otra, que la reemplaza).
+function puenteHojaAlto(vh) {
+  'use strict';
+  const root = document.documentElement, sc = document.getElementById('messages'), area = document.getElementById('message-input-area');
+  const e = document.getElementById('emoji-picker'), g = document.getElementById('gif-picker');
+  const abierta = (e && e.style.display === 'flex') || (g && g.classList.contains('puente-gif-sheet') && g.style.display && g.style.display !== 'none');
+  if (vh == null && abierta) return;
+  const abajo = !!sc && sc.scrollHeight - sc.clientHeight - sc.scrollTop <= 40;
+  if (vh == null) {
+    root.classList.remove('puente-hoja-abierta');
+    root.style.removeProperty('--puente-hoja-alto');
+  } else {
+    root.style.setProperty('--puente-hoja-alto', vh + 'vh');
+    if (area) root.style.setProperty('--puente-cuadro-alto', area.offsetHeight + 'px');
+    root.classList.add('puente-hoja-abierta');
+  }
+  // Si se estaba leyendo lo ultimo, sigue viendose (el chat se achico o se agrando por abajo)
+  if (abajo) requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
+}
+// Tocar el cuadro de escribir con una hoja abierta: se cierra y aparece el teclado, como en Discord
+document.addEventListener('pointerdown', (ev) => {
+  if (!document.documentElement.classList.contains('puente-hoja-abierta')) return;
+  if (!(ev.target instanceof Element) || !ev.target.closest('#message-input')) return;
+  const app = window.app;
+  const e = document.getElementById('emoji-picker'), g = document.getElementById('gif-picker');
+  if (e && e.style.display === 'flex' && app && typeof app._toggleEmojiPicker === 'function') app._toggleEmojiPicker();
+  if (g && g.style.display && g.style.display !== 'none') { if (app && typeof app._closeGifPicker === 'function') app._closeGifPicker(); else g.style.display = 'none'; }
+}, true);
+
 (function () {
   'use strict';
   if (!matchMedia('(pointer: coarse)').matches) return;
@@ -2592,7 +2623,10 @@ function leido(sc) {
 
   const picker = () => document.getElementById('emoji-picker');
   const isOpen = (p) => p && p.style.display === 'flex';
-  const setHeight = (p, vh) => { p.style.setProperty('--puente-emojis-alto', vh + 'vh'); };
+  const setHeight = (p, vh) => {
+    p.style.setProperty('--puente-emojis-alto', vh + 'vh');
+    if (document.documentElement.classList.contains('puente-hoja-abierta')) document.documentElement.style.setProperty('--puente-hoja-alto', vh + 'vh'); // el cuadro sigue a la manija
+  };
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
 
   function loadFrequent() {
@@ -2703,6 +2737,7 @@ function leido(sc) {
     p.classList.add('puente-emoji-sheet');
     if (document.documentElement.classList.contains('puente-hoja-cambio')) p.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
     setHeight(p, height);
+    puenteHojaAlto(height);
     if (!p.querySelector(':scope > .puente-sheet-handle')) {
       const h = document.createElement('div');
       h.className = 'puente-sheet-handle puente-emoji-handle';
@@ -2796,7 +2831,7 @@ function leido(sc) {
     // Haven lo cierra solo (tocar afuera, enviar, cambiar de canal): sacar el fondo oscuro
     new MutationObserver(() => {
       const el = picker();
-      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); }
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); puenteHojaAlto(null); }
       else if (!el.querySelector(':scope > .puente-sheet-handle')) { try { decorate(app); } catch { /* se reintenta en el proximo cambio */ } }
     }).observe(p, { attributes: true, attributeFilter: ['style'], childList: true });
   })();
@@ -2814,7 +2849,10 @@ function leido(sc) {
   let height = DEFAULT_VH;
   const picker = () => document.getElementById('gif-picker');
   const isOpen = (p) => !!p && p.style.display !== 'none' && p.style.display !== '';
-  const setHeight = (p, vh) => p.style.setProperty('--puente-gifs-alto', vh + 'vh');
+  const setHeight = (p, vh) => {
+    p.style.setProperty('--puente-gifs-alto', vh + 'vh');
+    if (document.documentElement.classList.contains('puente-hoja-abierta')) document.documentElement.style.setProperty('--puente-hoja-alto', vh + 'vh');
+  };
   function closeBackdrop() { document.getElementById('puente-gif-backdrop')?.remove(); }
   function close(app) {
     const p = picker();
@@ -2854,6 +2892,7 @@ function leido(sc) {
     p.classList.add('puente-gif-sheet');
     if (document.documentElement.classList.contains('puente-hoja-cambio')) p.classList.add('puente-sin-subir'); // cambio de pestaña: aparece sin subir
     setHeight(p, height);
+    puenteHojaAlto(height);
     if (!p.querySelector(':scope > .puente-gif-handle')) {
       const h = document.createElement('div');
       h.className = 'puente-sheet-handle puente-gif-handle';
@@ -2917,7 +2956,7 @@ function leido(sc) {
     // Haven la abre y la cierra cambiando su display: se acomoda cada vez que se abre
     new MutationObserver(() => {
       const el = picker();
-      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); }
+      if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); puenteHojaAlto(null); }
       else { try { decorate(app); } catch (err) { console.warn('[puente] selector de GIFs:', err); } }
     }).observe(p, { attributes: true, attributeFilter: ['style'] });
   })();
