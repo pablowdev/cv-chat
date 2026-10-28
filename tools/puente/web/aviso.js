@@ -10522,3 +10522,36 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     setTimeout(pedir, 5000);
   })();
 })();
+
+// Visor de fotos en el celu (puente-visor-borde): al deslizar, Haven corre la foto con el dedo y al
+// soltar pasa a la siguiente. En la ultima (o en la primera hacia atras) no hay a donde pasar y la foto
+// quedaba corrida a la mitad. Ahi se resiste un poco al arrastrarla, como en Discord, y al soltar
+// vuelve a su lugar.
+(function () {
+  'use strict';
+  let t = 0;
+  (function enganchar() {
+    const app = window.app, lb = document.getElementById('image-lightbox'), img = document.getElementById('lightbox-img');
+    if (!app || !lb || !img || !app._iz || typeof app._lightboxNavigate !== 'function' || typeof app._izApply !== 'function') { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    // Hacia donde no hay otra foto: 1 despues de la ultima, -1 antes de la primera
+    const sinOtra = (dir) => {
+      const imgs = typeof app._getLightboxImages === 'function' ? app._getLightboxImages() : [];
+      const i = app._lightboxIndex + dir;
+      return !(app._lightboxIndex >= 0) || i < 0 || i >= imgs.length;
+    };
+    const navegar = app._lightboxNavigate;
+    app._lightboxNavigate = function (dir) {
+      const antes = this._lightboxIndex;
+      const r = navegar.apply(this, arguments);
+      if (this._lightboxIndex === antes) { try { this._izApply(true); } catch { /* sigue */ } }
+      return r;
+    };
+    // Despues del de Haven (se agrega mas tarde): solo cambia cuanto se corre en el borde
+    lb.addEventListener('pointermove', (e) => {
+      const g = app._iz && app._iz.gesture;
+      if (!g || !g.swiping || g.pinch) return;
+      const dx = e.clientX - g.x0;
+      if (dx && sinOtra(dx < 0 ? 1 : -1)) img.style.transform = `translateX(${dx / 3}px)`;
+    });
+  })();
+})();
