@@ -10965,3 +10965,63 @@ var puenteSinUbicacion = (function () {
     document.documentElement.classList.add('puente-md-sin-ubicacion');
   })();
 })();
+
+// Mensajes directos ordenados como en Discord: arriba la conversacion con el ultimo mensaje,
+// mandado o recibido. Haven tiene ese orden ("recientes") pero viene apagado y sin datos (nunca
+// sabe cuando fue el ultimo mensaje): la fecha la da leidos.js al conectarse y despues se pone al
+// dia con cada mensaje que llega. Si alguien eligio orden alfabetico en Haven, se respeta.
+// (puente-dm-recientes)
+(function () {
+  'use strict';
+  let t = 0, timer = null;
+  const modo = () => { try { return localStorage.getItem('haven_dm_sort_mode'); } catch { return null; } };
+  const recientes = () => { try { if (modo() !== 'alpha') localStorage.setItem('haven_dm_sort_mode', 'recent'); } catch { /* sin almacenamiento */ } };
+  const dms = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels.filter((c) => c && c.is_dm) : []);
+  // Primero el que tiene el ultimo mensaje (lo que mira Haven para ordenar)
+  const primero = () => dms().reduce((a, c) => (!a || (c.last_activity || 0) > (a.last_activity || 0) ? c : a), null);
+  const redibujar = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { try { recientes(); window.app._renderChannels(); } catch (err) { console.warn('[puente] orden de los MD:', err); } }, 150);
+  };
+  function pedir() {
+    const app = window.app, so = app && app.socket;
+    if (!so || !so.connected) return;
+    so.emit('puente-dm-recientes', {}, (r) => {
+      if (!r || !r.dms) return;
+      let cambio = false;
+      for (const c of dms()) {
+        const v = r.dms[c.code];
+        if (v && v > (c.last_activity || 0)) { c.last_activity = v; cambio = true; }
+      }
+      if (cambio) redibujar();
+    });
+  }
+  (function enganchar() {
+    const app = window.app, so = app && app.socket;
+    if (!so || typeof app._renderChannels !== 'function' || !Array.isArray(app.channels)) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    recientes();
+    // Cada vez que Haven redibuja la lista, ordena por recientes (salvo que se haya elegido alfabetico)
+    const dibujar = app._renderChannels;
+    // Si Haven volvio a traer la lista de canales, las fechas se perdieron: se piden de nuevo
+    let pedido = 0;
+    app._renderChannels = function () {
+      recientes();
+      const l = dms();
+      if (l.length && !l.some((c) => c.last_activity) && Date.now() - pedido > 5000) { pedido = Date.now(); setTimeout(pedir, 300); }
+      return dibujar.apply(this, arguments);
+    };
+    so.on('new-message', (d) => {
+      const c = d && dms().find((x) => x.code === d.channelCode);
+      if (!c || (d.message && d.message.thread_id)) return;
+      const antes = primero();
+      c.last_activity = Date.now();
+      if (antes !== c) redibujar();
+    });
+    so.on('dm-opened', (d) => {
+      const c = d && dms().find((x) => x.code === d.code);
+      if (c && !c.last_activity) { c.last_activity = Date.now(); redibujar(); }
+    });
+    so.on('connect', () => setTimeout(pedir, 1500));
+    setTimeout(pedir, 1500);
+  })();
+})();

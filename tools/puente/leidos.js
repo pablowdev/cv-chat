@@ -6,6 +6,9 @@
 //    otros dispositivos de esa persona cuántos le quedan sin leer en ese canal;
 //  - puente-no-leidos: la app pide la cuenta de todos sus canales al volver a primer plano o
 //    al reconectarse (aviso.js), con la misma cuenta que usa Haven para la lista de canales.
+//  - puente-dm-recientes: cuando fue el ultimo mensaje de cada conversacion privada, para
+//    ordenarlas como Discord (la mas reciente arriba). Haven tiene ese orden pero nunca le
+//    manda a la app la fecha, asi que no ordenaba nada.
 
 const READ_EVENTS = new Set(['mark-read', 'mark-read-channel', 'mark-all-read']);
 
@@ -15,6 +18,8 @@ function setup({ db, io, warn }) {
   const countQ = db.prepare("SELECT COUNT(*) AS cnt FROM (SELECT 1 FROM messages WHERE channel_id = ? AND id > ? AND (user_id IS NULL OR user_id != ?) AND thread_id IS NULL AND COALESCE(type, 'user') != 'notice' LIMIT 1000)");
   const readQ = db.prepare('SELECT last_read_message_id AS r FROM read_positions WHERE user_id = ? AND channel_id = ?');
   const chanQ = db.prepare('SELECT id FROM channels WHERE code = ?');
+  const dmsQ = db.prepare("SELECT c.code, c.created_at AS creado, (SELECT m.created_at FROM messages m WHERE m.channel_id = c.id AND m.thread_id IS NULL ORDER BY m.id DESC LIMIT 1) AS ultimo FROM channel_members cm JOIN channels c ON c.id = cm.channel_id WHERE cm.user_id = ? AND c.is_dm = 1");
+  const ms = (t) => { const v = t ? Date.parse(String(t).replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(String(t)) ? '' : 'Z')) : NaN; return Number.isFinite(v) ? v : 0; };
   const mineQ = db.prepare('SELECT c.id, c.code FROM channel_members cm JOIN channels c ON c.id = cm.channel_id WHERE cm.user_id = ?');
   const unread = (userId, channelId) => {
     const row = readQ.get(userId, channelId);
@@ -58,6 +63,15 @@ function setup({ db, io, warn }) {
         for (const c of mineQ.all(socket.user.id)) counts[c.code] = unread(socket.user.id, c.id);
         ack({ counts });
       } catch (err) { warn('leidos:', err.message); ack({ error: true }); }
+    });
+
+    socket.on('puente-dm-recientes', (data, ack) => {
+      if (typeof ack !== 'function' || !socket.user) return;
+      try {
+        const dms = {};
+        for (const d of dmsQ.all(socket.user.id)) dms[d.code] = ms(d.ultimo) || ms(d.creado);
+        ack({ dms });
+      } catch (err) { warn('dm recientes:', err.message); ack({ error: true }); }
     });
   });
 }
