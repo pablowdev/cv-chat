@@ -29,8 +29,8 @@ Trusted Web Activity (androidbrowserhelper): la página a pantalla completa, con
 
 ## Actualizaciones
 
-- **Windows** (desde la 1.0.1): la app se fija sola cada 6 horas en `/puente/descargas/latest.yml`, baja la versión nueva en segundo plano y ofrece "Reiniciar y actualizar". Hay que subir `latest.yml` y `CV-Chat-Windows.exe.blockmap` junto con el `.exe`.
-- **Android**: el aviso "Hay una versión nueva de la app" aparece dentro de CV Chat cuando la versión instalada (la app abre `/app?app=android&v=<versión>`) es más vieja que la de `versiones.json`; "Actualizar" baja el APK, que se instala encima. En `AndroidManifest.xml`, el `v=` del `DEFAULT_URL` tiene que ser igual a `versionName`.
+- **Windows** (desde la 1.0.2): al abrir, como Discord, una ventanita con el logo busca una versión nueva en `/puente/descargas/latest.yml`; si hay, la baja mostrando el avance, la instala sin preguntar y CV Chat se vuelve a abrir solo. Sin internet o si tarda, abre igual. Con la app abierta se fija cada 6 horas y ofrece "Reiniciar y actualizar". Hay que subir `latest.yml` y `CV-Chat-Windows.exe.blockmap` junto con el `.exe`.
+- **Android** (desde la 1.0.4): al abrir se fija en `/puente/descargas.json` (la versión de `versiones.json`); si hay una más nueva que la instalada, muestra el logo con "Descargando la actualización..." y el avance, y abre el instalador de Android (que pide tocar "Actualizar"; la primera vez, además, permitir que CV Chat instale sus actualizaciones). Sin internet o si tarda más de 2,5 s, abre igual. Adentro de CV Chat sigue el aviso "Hay una versión nueva de la app" (la app abre `/app?app=android&v=<versión>`). En `AndroidManifest.xml`, el `v=` del `DEFAULT_URL` tiene que ser igual a `versionName`.
 
 Para publicar una versión nueva: subir `versionCode`/`versionName` (Android) o `version`
 (Windows), armar, copiar el archivo a `tools/puente/web/descargas/` como `CV-Chat-Android.apk`
