@@ -47,7 +47,7 @@
   function cargar() {
     return api('/puente/api/cuenta/perfil').then(function (d) {
       $('cargando').hidden = true; $('cuenta').hidden = false;
-      document.title = d.nombre + ' · Tu cuenta - Círculo Vicioso';
+      document.title = d.nombre + ' · Tu cuenta - Circulo Vicioso Club';
       var av = $('c-avatar'); av.textContent = '';
       if (d.avatar) { var i = document.createElement('img'); i.src = d.avatar; i.alt = ''; i.className = 'cuenta__avatar'; av.replaceWith(i); i.id = 'c-avatar'; }
       else av.textContent = (d.nombre || '?').charAt(0).toUpperCase();

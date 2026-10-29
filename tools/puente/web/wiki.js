@@ -36,7 +36,7 @@
   var fechaCorta = function (t) { return new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }); };
   var entrar = function () { return CHAT + '/?volver=' + encodeURIComponent(location.href); };
   var urlEntrada = function (slug) { return '/wiki/' + encodeURIComponent(slug); };
-  function titulo(t) { document.title = (t ? t + ' · ' : '') + 'Wiki - Círculo Vicioso'; }
+  function titulo(t) { document.title = (t ? t + ' · ' : '') + 'Wiki - Circulo Vicioso Club'; }
   function aviso(texto, tipo) { return h('p', { class: 'aviso' + (tipo ? ' aviso--' + tipo : '') }, texto); }
   function cargando() { return h('p', { class: 'chico wk-cargando' }, 'Cargando…'); }
   function frag() { var f = document.createDocumentFragment(); for (var i = 0; i < arguments.length; i++) { var x = arguments[i]; if (x != null) f.appendChild(typeof x === 'string' ? document.createTextNode(x) : x); } return f; }

@@ -45,7 +45,7 @@
   // reconoce por el nombre "cv-ventana" y abre los mensajes directos): se abre y se cierra sin
   // dejar la pagina. Al cerrarla queda cargada, para volver a abrirla al toque.
   let ventana = null, alCerrar = null;
-  function abrirVentana(desde) {
+  function armarVentana() {
     if (!ventana) {
       ventana = el('div', 'cv-ventana'); ventana.setAttribute('role', 'dialog'); ventana.setAttribute('aria-label', 'Mensajes');
       const cab = el('div', 'cv-ventana__cab');
@@ -53,13 +53,22 @@
       const x = el('button', 'cv-ventana__btn cv-ventana__x', '×'); x.type = 'button'; x.title = 'Cerrar'; x.setAttribute('aria-label', 'Cerrar');
       x.addEventListener('click', cerrarVentana);
       cab.append(el('b', null, 'Mensajes'), grande, x);
-      const marco = el('iframe', 'cv-ventana__marco'); marco.name = 'cv-ventana'; marco.title = 'Mensajes'; marco.src = CHAT + '/app';
+      const marco = el('iframe', 'cv-ventana__marco'); marco.name = 'cv-ventana'; marco.title = 'Mensajes'; marco.src = CHAT + '/app?ventana=1';
       ventana.append(cab, marco);
       ventana.addEventListener('click', (e) => e.stopPropagation());
       document.body.appendChild(ventana);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ventana.classList.contains('es-abierta')) cerrarVentana(); });
       void ventana.offsetHeight; // para que se vea bajar
     }
+  }
+  // Con la sesion abierta, el chat de la ventanita se va cargando escondido apenas se puede: al tocar
+  // "Mensajes" ya esta listo, sin esperar
+  function precargar() {
+    const ya = () => { try { armarVentana(); } catch { /* */ } };
+    setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(ya, { timeout: 4000 }); else ya(); }, 1200);
+  }
+  function abrirVentana(desde) {
+    armarVentana();
     if (ventana.classList.contains('es-abierta')) { cerrarVentana(); return; }
     const r = desde && desde.getBoundingClientRect();
     ventana.style.top = Math.max(0, Math.round(r ? r.bottom : 0)) + 'px';
@@ -101,19 +110,23 @@
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });
-    // Los mensajes privados (los de CV Chat, para todo el sistema), con cuantas conversaciones hay sin leer
-    if (!enForo) {
-      const m = el('a', 'cv-barra__mensajes'); m.href = CHAT + '/app?mensajes=1'; m.title = 'Mensajes'; m.setAttribute('aria-label', 'Mensajes');
-      m.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"/></svg><span>Mensajes</span>';
-      const contar = (n) => { const c = m.querySelector('.cv-barra__contador'); if (c) c.remove(); if (n) m.appendChild(el('b', 'cv-barra__contador', String(n > 99 ? '99+' : n))); };
-      contar(yo.mensajes);
-      m.addEventListener('click', (e) => { if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); e.stopPropagation(); abrirVentana(bar()); });
-      // Al cerrar la ventanita, cuantas quedaron sin leer
-      alCerrar = () => fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).then(d => contar(d && d.mensajes)).catch(() => {});
-      box.appendChild(m);
-      box.appendChild(campanita(yo));
-    }
+    if (!enForo) box.appendChild(accesos(yo, bar));
     box.appendChild(b); box.appendChild(menu);
+    return box;
+  }
+  // Los mensajes privados (los de CV Chat, para todo el sistema), con cuantas conversaciones hay sin leer,
+  // y la campanita: los mismos en la web y en el foro. desde(): de donde baja la ventanita
+  function accesos(yo, desde) {
+    const box = el('div', 'cv-barra__accesos');
+    const m = el('a', 'cv-barra__mensajes'); m.href = CHAT + '/app?mensajes=1'; m.title = 'Mensajes'; m.setAttribute('aria-label', 'Mensajes');
+    m.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"/></svg><span>Mensajes</span>';
+    const contar = (n) => { const c = m.querySelector('.cv-barra__contador'); if (c) c.remove(); if (n) m.appendChild(el('b', 'cv-barra__contador', String(n > 99 ? '99+' : n))); };
+    contar(yo.mensajes);
+    m.addEventListener('click', (e) => { if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); e.stopPropagation(); abrirVentana(desde()); });
+    // Al cerrar la ventanita, cuantas quedaron sin leer
+    alCerrar = () => fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).then(d => contar(d && d.mensajes)).catch(() => {});
+    box.append(m, campanita(yo));
+    precargar();
     return box;
   }
 
@@ -187,8 +200,12 @@
     // Unir: con sesion en CV Chat, directo; sin sesion, entrando (ahi esta "Entrar con el foro")
     const unirUrl = yo && yo.conectado ? CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]) : entrar;
     const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
-    // La campanita tambien en el foro (los avisos del foro y del chat, y los mensajes privados que esperan)
-    if (cont && yo && yo.conectado && !cont.querySelector('.cv-barra__campana')) { const c = campanita(yo); c.classList.add('cv-barra__campana--foro'); cont.appendChild(c); }
+    // Mensajes y campanita tambien en el foro, igual que en la web (en lugar del "Mensajes" del foro)
+    if (cont && unida && !cont.querySelector('.cv-barra__accesos')) {
+      const lista = cont.querySelector('ul.b-top-menu--user') || cont.querySelector('ul');
+      const li = el('li', 'b-top-menu__item cv-barra__foro-accesos'); li.appendChild(accesos(yo, arriba));
+      if (lista) lista.insertBefore(li, lista.firstChild); else cont.appendChild(li);
+    }
     // A la izquierda, si la cuenta esta unida (y a "Mi cuenta"), o para unirla
     const nav = cont && cont.querySelector('.cv-barra__links');
     if (nav && vbId && yo && !nav.querySelector('.cv-barra__unida')) {
@@ -201,9 +218,14 @@
     if (cont && (unida || sinUnir)) {
       for (const li of cont.querySelectorAll('li')) {
         const t = li.querySelector('.b-comp-menu-dropdown__trigger, a');
-        if (t && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
+        if (t && !li.closest('.cv-barra__foro-accesos') && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
           li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); mensajes(); }, true);
+          // Con la cuenta unida, lo reemplazan los accesos de la barra (los mismos que en la web)
+          if (unida) li.style.display = 'none';
         }
+        // Y las notificaciones del foro: con la cuenta unida estan en la campanita (con las del chat)
+        const tr = li.querySelector('.b-comp-menu-dropdown__trigger') || t;
+        if (unida && tr && !li.closest('.cv-barra__foro-accesos') && /^\s*notificaciones\b/i.test(tr.textContent || '')) li.style.display = 'none';
       }
     }
     document.addEventListener('click', (e) => {

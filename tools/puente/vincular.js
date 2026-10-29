@@ -338,7 +338,7 @@ function injectScript(req, res, src) {
         // mientras se conecta y se acomoda todo, con el logo grande girando como las
         // agujas del reloj; aviso.js la saca con un fundido cuando ya cargaron los canales y los
         // mensajes. Si algo falla, se va sola a los 8 s.
-        if (html.includes('id="no-channel-msg"') && !html.includes('puente-carga')) {
+        if (html.includes('id="no-channel-msg"') && !html.includes('puente-carga') && !/[?&]ventana=1(&|$)/.test(req.url)) {
           const size = 'min(62vmin,520px)';
           html = html.replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image">' +
             '<style id="puente-carga">' +
