@@ -114,6 +114,7 @@ function setup(ctx) {
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
   campana.setup({ db, io, log, warn, publicUrl });
+  require('./cifrado.js').setup({ db, io, log, warn, publicUrl, email, campana, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) });
   foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a), campana } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion

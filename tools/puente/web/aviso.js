@@ -11642,3 +11642,223 @@ var puenteSinUbicacion = (function () {
     })();
   }
 })();
+// El cifrado de los mensajes directos para todos, sin que nadie tenga que hacer nada (cifrado.js):
+//  - Quien no tiene claves (entro con Discord, con el foro o desde la pagina, sin escribir la contraseña):
+//    se le crean en su dispositivo, protegidas con un secreto al azar que queda solo en sus dispositivos.
+//  - Un dispositivo nuevo recibe ese secreto de otro de sus dispositivos abiertos, cifrado para el (el
+//    servidor solo lo pasa de uno al otro, sin poder leerlo). Si no hay otro abierto, se reintenta solo.
+//  - Ningun mensaje directo sale sin cifrar: si la otra persona todavia no tiene claves, el mensaje queda
+//    esperando en este dispositivo y se manda cifrado apenas ella entra; a ella le llega el aviso.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const ls = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } } };
+  const b64 = (buf) => { let s = ''; for (const b of new Uint8Array(buf)) s += String.fromCharCode(b); return btoa(s); };
+  const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const hex = (u8) => Array.from(u8, (b) => b.toString(16).padStart(2, '0')).join('');
+  const ECDH = { name: 'ECDH', namedCurve: 'P-256' };
+  const app = () => window.app;
+  const listo = () => !!(app() && app().e2e && app().e2e.ready);
+  const secreto = () => { const a = app(); const s = (a && a._e2eWrappingKey) || ls.get('haven_sync_key'); return /^[0-9a-f]{64}$/.test(s || '') ? s : null; };
+  const chans = () => (app() && Array.isArray(app().channels) ? app().channels : []);
+
+  const st = el('style');
+  st.textContent = '.puente-espera{margin:8px 16px;padding:10px 14px;border-radius:8px;border-left:3px solid #faa61a;background:rgba(250,166,26,.08);color:#e9cd8f;font-size:13px;line-height:1.45}'
+    + '.puente-espera .pe-msj{display:flex;gap:8px;align-items:flex-start;margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.18);color:#dbdee1;font-size:14px;white-space:pre-wrap;word-break:break-word}'
+    + '.puente-espera .pe-msj span{flex:1}.puente-espera .pe-x{border:0;background:none;color:#96969e;font-size:16px;cursor:pointer;padding:0 2px}'
+    + '.puente-llave-aviso{margin:8px 16px;padding:10px 14px;border-radius:8px;border-left:3px solid #5865f2;background:#222327;color:#b5bac1;font-size:13px;line-height:1.45}'
+    + '.puente-llave-aviso button{margin-top:6px;border:0;background:none;padding:0;color:#949cf7;font:inherit;text-decoration:underline;cursor:pointer}';
+  document.head.appendChild(st);
+
+  // ── Las claves ──
+  async function iniciar(secretoHex) {
+    try { sessionStorage.setItem('haven_e2e_wrap', secretoHex); } catch { /* sin almacenamiento */ }
+    try { await app()._initE2E(); } catch (err) { console.warn('[puente] cifrado:', err); }
+    if (listo()) { ls.set('haven_sync_key', secretoHex); quitarAvisoLlave(); setTimeout(mandarEsperando, 500); }
+    return listo();
+  }
+  let asegurando = false, esperandoOtro = false;
+  async function asegurar() {
+    const a = app();
+    if (asegurando || !a || !a.socket || !a.socket.connected || typeof a._initE2E !== 'function' || typeof window.HavenE2E === 'undefined') return;
+    if (listo()) { esperandoOtro = false; return; }
+    asegurando = true;
+    try {
+      // Este dispositivo ya tenia el secreto
+      const s = secreto();
+      if (s && await iniciar(s)) return;
+      // ¿Hay claves de esta cuenta en algun lado?
+      const probe = await new window.HavenE2E()._fetchBackupWithState(a.socket).catch(() => ({ status: 'unknown' }));
+      if (probe.status === 'none') {
+        // La primera vez: las claves se crean aca, con un secreto al azar que no sale de sus dispositivos
+        await iniciar(hex(crypto.getRandomValues(new Uint8Array(32))));
+      } else if (probe.status === 'present') {
+        // Ya tiene claves (de otro dispositivo): se las pide a ese
+        esperandoOtro = true;
+        await pedirLlave();
+        mostrarAvisoLlave();
+      }
+    } finally { asegurando = false; }
+  }
+
+  // ── Pasar el secreto entre los dispositivos de la misma cuenta (cifrado para el que lo pide) ──
+  let efimera = null;
+  async function pedirLlave() {
+    efimera = await crypto.subtle.generateKey(ECDH, true, ['deriveKey']);
+    app().socket.emit('puente-llave-pedir', { pub: await crypto.subtle.exportKey('jwk', efimera.publicKey) });
+  }
+  async function claveCon(mia, suPub, uso) {
+    const otra = await crypto.subtle.importKey('jwk', suPub, ECDH, false, []);
+    return crypto.subtle.deriveKey({ name: 'ECDH', public: otra }, mia, { name: 'AES-GCM', length: 256 }, false, [uso]);
+  }
+  async function alPedido(d) {
+    const s = secreto();
+    if (!listo() || !s || !d || !d.de || !d.pub) return;
+    try {
+      const mia = await crypto.subtle.generateKey(ECDH, true, ['deriveKey']);
+      const k = await claveCon(mia.privateKey, d.pub, 'encrypt');
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, new TextEncoder().encode(s));
+      app().socket.emit('puente-llave-dar', { para: d.de, pub: await crypto.subtle.exportKey('jwk', mia.publicKey), iv: b64(iv), ct: b64(ct) });
+    } catch (err) { console.warn('[puente] cifrado: no se pudo pasar la clave:', err); }
+  }
+  async function alRecibir(d) {
+    if (!efimera || !d) return;
+    try {
+      const k = await claveCon(efimera.privateKey, d.pub, 'decrypt');
+      const s = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(d.iv) }, k, unb64(d.ct)));
+      if (!/^[0-9a-f]{64}$/.test(s)) return;
+      efimera = null;
+      if (await iniciar(s)) esperandoOtro = false;
+    } catch (err) { console.warn('[puente] cifrado: no se pudo usar la clave recibida:', err); }
+  }
+
+  // Sin otro dispositivo abierto: el aviso en la conversacion (y empezar de cero, si ya no hay otro)
+  function quitarAvisoLlave() { document.querySelectorAll('.puente-llave-aviso').forEach(n => n.remove()); }
+  function mostrarAvisoLlave() {
+    const a = app(), msgs = byId('messages');
+    const ch = a && chans().find(c => c && c.code === a.currentChannel);
+    if (!esperandoOtro || listo() || !msgs || !ch || !ch.is_dm || msgs.querySelector('.puente-llave-aviso')) return;
+    const box = el('div', 'puente-llave-aviso', '🔐 Para ver tus mensajes privados acá, abrí CV Chat un momento en otro celular o compu donde ya lo usás (o entrá con tu contraseña de CV Chat). Se pasan solos.');
+    const cero = el('button', null, '¿Ya no tenés otro? Empezar de cero en este');
+    cero.type = 'button';
+    cero.addEventListener('click', async () => {
+      if (!confirm('Se crean claves nuevas en este dispositivo. Los mensajes privados cifrados de antes no se van a poder leer más. ¿Seguir?')) return;
+      cero.disabled = true;
+      try {
+        const nuevo = hex(crypto.getRandomValues(new Uint8Array(32)));
+        const e = a.e2e || new window.HavenE2E();
+        if (!a.e2e) await e._openDB();
+        await e.resetKeys(a.socket, nuevo);
+        await e.publishKey(a.socket, true).catch(() => {});
+        ls.set('haven_sync_key', nuevo);
+        esperandoOtro = false;
+        await iniciar(nuevo);
+      } catch (err) { console.warn('[puente] cifrado: no se pudo empezar de cero:', err); cero.disabled = false; }
+    });
+    box.appendChild(el('br')); box.appendChild(cero);
+    msgs.appendChild(box);
+  }
+
+  // ── Los mensajes que esperan a que la otra persona tenga claves ──
+  const clave = () => 'puente_pm_espera:' + ((app() && app().user && app().user.id) || '');
+  const leerEspera = () => { try { return JSON.parse(ls.get(clave()) || '[]'); } catch { return []; } };
+  const guardarEspera = (l) => ls.set(clave(), JSON.stringify(l));
+  let captura = null, encolado = false;
+
+  async function socio(ch) {
+    const a = app();
+    let p = a._getE2EPartnerFor(ch.code);
+    if (!p && listo() && ch.dm_target) {
+      try { const jwk = await a.e2e.requestPartnerKey(a.socket, ch.dm_target.id); if (jwk) { a._dmPublicKeys[ch.dm_target.id] = jwk; p = a._getE2EPartnerFor(ch.code); } } catch { /* sin clave */ }
+    }
+    return p;
+  }
+  async function mandarEsperando() {
+    const a = app();
+    if (!a || !a.socket || !a.socket.connected || !listo()) return;
+    const l = leerEspera();
+    if (!l.length) return;
+    const quedan = [];
+    for (const m of l) {
+      const ch = chans().find(c => c && c.code === m.code);
+      if (!ch) continue; // ya no esta esa conversacion
+      const p = await socio(ch);
+      if (!p) { quedan.push(m); continue; }
+      try {
+        const content = await a._e2eEncryptText(p, m.texto);
+        a.socket.emit('send-message', { code: m.code, content, encrypted: true, replyTo: m.reply || null });
+      } catch (err) { console.warn('[puente] cifrado: no se pudo mandar uno que esperaba:', err); quedan.push(m); }
+    }
+    guardarEspera(quedan);
+    pintarEspera();
+  }
+  function pintarEspera() {
+    const a = app(), msgs = byId('messages');
+    if (!a || !msgs) return;
+    msgs.querySelectorAll('.puente-espera').forEach(n => n.remove());
+    const ch = chans().find(c => c && c.code === a.currentChannel);
+    const mios = leerEspera().filter(m => ch && m.code === ch.code);
+    if (!mios.length) return;
+    const nombre = (ch.dm_target && ch.dm_target.username) || 'la otra persona';
+    const box = el('div', 'puente-espera', `⏳ ${nombre} todavía no entró a CV Chat desde que los mensajes privados son cifrados. ${mios.length === 1 ? 'Este mensaje se manda' : 'Estos mensajes se mandan'} cifrado${mios.length === 1 ? '' : 's'} apenas entre (ya le avisamos por email y con una notificación).`);
+    for (const m of mios) {
+      const r = el('div', 'pe-msj'); r.appendChild(el('span', null, m.texto));
+      const x = el('button', 'pe-x', '×'); x.type = 'button'; x.title = 'No mandarlo';
+      x.addEventListener('click', () => { guardarEspera(leerEspera().filter(z => z.id !== m.id)); pintarEspera(); });
+      r.appendChild(x); box.appendChild(r);
+    }
+    msgs.appendChild(box);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  let t = 0;
+  (function enganchar() {
+    const a = app();
+    if (!a || !a.socket || typeof a._dmSendGateAsk !== 'function' || typeof a._sendMessage !== 'function' || !byId('messages')) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    // Nada sale sin cifrar: sin la clave de la otra persona (o sin las propias todavia), el texto espera
+    const preguntar = a._dmSendGateAsk;
+    a._dmSendGateAsk = async function (ch) {
+      const p = ch ? await socio(ch) : null;
+      if (p) return preguntar.apply(this, arguments);
+      if (ch && !ch.is_group && captura && captura.code === ch.code && captura.texto) {
+        const l = leerEspera();
+        l.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), code: ch.code, texto: captura.texto, reply: captura.reply, t: Date.now() });
+        guardarEspera(l);
+        encolado = true;
+        if (!listo()) asegurar(); else this.socket.emit('puente-pm-espera', { code: ch.code }, () => {});
+        setTimeout(pintarEspera, 50);
+      } else if (typeof this._showToast === 'function') {
+        this._showToast(listo() ? 'Las fotos y archivos se pueden mandar cuando la otra persona entre a CV Chat (sus mensajes privados son cifrados).' : 'Un momento: se están preparando tus mensajes cifrados en este dispositivo.', 'info');
+      }
+      return null;
+    };
+    const enviar = a._sendMessage;
+    a._sendMessage = async function () {
+      const i = byId('message-input');
+      captura = { code: this.currentChannel, texto: i ? i.value.trim() : '', reply: this.replyingTo ? this.replyingTo.id : null };
+      try { return await enviar.apply(this, arguments); }
+      finally {
+        if (encolado && i) { i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); if (typeof this._clearReply === 'function') this._clearReply(); }
+        encolado = false; captura = null;
+      }
+    };
+    a.socket.on('puente-llave-pedido', alPedido);
+    a.socket.on('puente-llave-recibida', alRecibir);
+    a.socket.on('connect', () => setTimeout(() => { asegurar(); if (esperandoOtro && !listo()) pedirLlave().catch(() => {}); mandarEsperando(); }, 2500));
+    // Al cambiar de conversacion: lo que espera y el aviso
+    const cambiar = a.switchChannel;
+    a.switchChannel = function () { const r = cambiar.apply(this, arguments); setTimeout(() => { pintarEspera(); quitarAvisoLlave(); mostrarAvisoLlave(); }, 300); return r; };
+    new MutationObserver(() => {
+      const msgs = byId('messages');
+      if (!msgs) return;
+      const e = msgs.querySelector('.puente-espera');
+      if (leerEspera().length && (!e || e !== msgs.lastElementChild)) { if (e) msgs.appendChild(e); else pintarEspera(); }
+    }).observe(byId('messages'), { childList: true });
+    // Despues de que el chat intento lo suyo con el cifrado
+    setTimeout(asegurar, 6000);
+    setInterval(() => { asegurar(); mandarEsperando(); if (esperandoOtro && !listo()) pedirLlave().catch(() => {}); }, 45000);
+    setTimeout(mandarEsperando, 9000);
+  })();
+})();

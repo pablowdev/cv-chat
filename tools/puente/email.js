@@ -281,4 +281,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, status, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, status, sendMail, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
