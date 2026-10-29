@@ -1,8 +1,10 @@
 <div class="inicio">
     <section class="caja inicio__intro">
-      <div class="caja__cuerpo">
+      <div class="inicio__intro-texto">
         <p class="rotulo">el club</p>
         <h1 class="inicio__lema">Círculo Vicioso es un club de amigos con un podcast.</h1>
+      </div>
+      <div class="inicio__intro-vivo">
         <p class="inicio__cuando">Nos vemos todos los <b>miércoles a las 20:00</b> (GMT-3) en <a href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">youtube.com/circulovicioso</a></p>
         <div class="inicio__vivo" id="vivo" aria-live="polite">
           <span class="inicio__punto" aria-hidden="true"></span><span id="vivo-texto">el próximo en vivo es el miércoles a las 20:00</span>
@@ -14,7 +16,6 @@
       </div>
       <img class="inicio__conejo" src="/images/rabbit.png" alt="" width="300" height="270" loading="lazy">
     </section>
-
     <section class="caja inicio__episodio">
       <div class="caja__cab"><p class="rotulo">último episodio</p><a class="rotulo" href="https://www.youtube.com/@CirculoVicioso8/videos" target="_blank" rel="noopener">[+] todos los episodios</a></div>
       <div class="inicio__video">
@@ -22,20 +23,7 @@
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
       </div>
     </section>
-
-    <section class="inicio__accesos" aria-label="La comunidad">
-      <a class="caja acceso" href="https://foro.circulovicioso.club/">
-        <p class="rotulo">foro</p>
-        <h2 class="titulo-2">El foro</h2>
-        <p>Temas, debates y años de historia del club. Con la misma cuenta que el chat.</p>
-        <span class="acceso__ir flecha">entrar al foro</span>
-      </a>
-      <a class="caja acceso" href="https://chat.circulovicioso.club/app">
-        <p class="rotulo">chat</p>
-        <h2 class="titulo-2">CV Chat</h2>
-        <p>El chat del club, en vivo durante el programa y todo el resto de la semana.</p>
-        <span class="acceso__ir flecha">abrir el chat</span>
-      </a>
+    <div class="inicio__lado">
       <form class="caja acceso acceso--buscar" action="/full-fat-search" method="get" role="search">
         <p class="rotulo">full fat search</p>
         <h2 class="titulo-2">¿En qué episodio se dijo…?</h2>
@@ -48,12 +36,19 @@
         <ul class="lista-limpia acceso__wiki" id="wiki-ultimas"><li class="chico">Cargando…</li></ul>
         <a class="acceso__ir flecha" href="/wiki">ver la wiki</a>
       </div>
-    </section>
-
-    <section class="caja inicio__foto">
-      <img src="/images/gordos_cv.png" srcset="/images/gordos_cv-p-500.png 500w, /images/gordos_cv.png 784w" sizes="(max-width: 720px) 100vw, 60vw" alt="Los integrantes de Círculo Vicioso" loading="lazy" width="784" height="541">
-    </section>
-
+    </div>
+      <a class="caja acceso" href="https://foro.circulovicioso.club/">
+        <p class="rotulo">foro</p>
+        <h2 class="titulo-2">El foro</h2>
+        <p>Temas, debates y años de historia del club. Con la misma cuenta que el chat.</p>
+        <span class="acceso__ir flecha">entrar al foro</span>
+      </a>
+      <a class="caja acceso" href="https://chat.circulovicioso.club/app">
+        <p class="rotulo">chat</p>
+        <h2 class="titulo-2">CV Chat</h2>
+        <p>El chat del club, en vivo durante el programa y todo el resto de la semana.</p>
+        <span class="acceso__ir flecha">abrir el chat</span>
+      </a>
     <section class="caja inicio__redes">
       <div class="caja__cab"><p class="rotulo">redes</p></div>
       <ul class="lista-limpia redes">
@@ -63,7 +58,10 @@
         <li><a href="mailto:circuloviciosomedia@gmail.com"><span>Mail</span><span class="chico">circuloviciosomedia@gmail.com</span></a></li>
       </ul>
     </section>
-  </div>
+    <section class="caja inicio__foto">
+      <img src="/images/gordos_cv.png" srcset="/images/gordos_cv-p-500.png 500w, /images/gordos_cv.png 784w" sizes="(max-width: 720px) 100vw, 60vw" alt="Los integrantes de Círculo Vicioso" loading="lazy" width="784" height="541">
+    </section>
+</div>
 <script>
 // El proximo en vivo (miercoles 20:00 en Argentina, 23:00 UTC) y si es ahora
 (function () {

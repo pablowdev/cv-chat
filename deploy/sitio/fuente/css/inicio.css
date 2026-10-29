@@ -1,57 +1,63 @@
-/* Portada */
+/* Portada: el club arriba; el ultimo episodio con la busqueda y la wiki al lado; el foro, el chat y
+   las redes; la foto */
 .inicio { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-top: 16px; }
-.inicio__intro { grid-column: span 5; position: relative; overflow: hidden; display: flex; flex-direction: column; }
-.inicio__intro .caja__cuerpo { position: relative; z-index: 1; padding: 24px; }
-.inicio__lema { font: 400 clamp(26px, 3.2vw, 40px)/1.08 var(--display-2); text-transform: uppercase; margin: 10px 0 16px; }
-.inicio__cuando { margin: 0 0 18px; color: var(--fg-2); }
+
+.inicio__intro { grid-column: 1 / -1; display: grid; grid-template-columns: 1.15fr 1fr auto; gap: 28px; align-items: center; padding: 26px 28px; }
+.inicio__lema { font: 400 clamp(28px, 3.3vw, 44px)/1.06 var(--display-2); text-transform: uppercase; margin: 10px 0 0; }
+.inicio__cuando { margin: 0 0 14px; color: var(--fg-2); }
 .inicio__cuando b { color: var(--fg); font-weight: 700; }
-.inicio__vivo { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line-soft); font-size: 13px; margin-bottom: 20px; }
+.inicio__vivo { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line-soft); font-size: 13px; margin-bottom: 16px; }
 .inicio__punto { width: 9px; height: 9px; border-radius: 50%; background: var(--fg-3); flex: 0 0 auto; }
 .inicio__vivo.es-ahora { border-color: var(--accent); color: var(--accent); }
 .inicio__vivo.es-ahora .inicio__punto { background: var(--accent); animation: latido 1.2s ease-in-out infinite; }
 @keyframes latido { 50% { opacity: .25; } }
 .inicio__acciones { display: flex; flex-wrap: wrap; gap: 10px; }
-.inicio__conejo { width: 62%; max-width: 300px; margin: auto 18px 18px auto; opacity: .9; }
-.inicio__episodio { grid-column: span 7; display: flex; flex-direction: column; }
-.inicio__video { position: relative; flex: 1; min-height: 280px; aspect-ratio: 16 / 9; }
-.inicio__video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.inicio__conejo { width: 170px; height: auto; opacity: .9; }
 
-.inicio__accesos { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.acceso { display: flex; flex-direction: column; gap: 10px; padding: 20px; text-decoration: none; margin: 0; transition: background .15s; }
+.inicio__episodio { grid-column: span 8; align-self: start; }
+.inicio__video { position: relative; aspect-ratio: 16 / 9; }
+.inicio__video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.inicio__lado { grid-column: span 4; display: grid; gap: 16px; align-content: start; }
+
+.acceso { grid-column: span 4; display: flex; flex-direction: column; gap: 10px; padding: 20px; text-decoration: none; margin: 0; transition: background .15s; }
+.inicio__lado .acceso { grid-column: auto; }
 a.acceso:hover { background: var(--bg-2); color: var(--fg); }
 a.acceso:hover .acceso__ir { color: var(--accent); }
 .acceso p { margin: 0; color: var(--fg-2); }
 .acceso .rotulo { color: var(--accent); }
 .acceso__ir { margin-top: auto; padding-top: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; text-decoration: none; }
-.acceso__busca { display: flex; margin-top: auto; }
+.acceso__busca { display: flex; margin-top: 4px; }
 .acceso__busca .input { min-width: 0; border-right: 0; padding: 10px 12px; }
 .acceso__busca .btn { flex: 0 0 auto; }
 .acceso__wiki li { padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
 .acceso__wiki a { text-decoration: none; }
 .acceso h2 a { text-decoration: none; }
 
-.inicio__foto { grid-column: span 8; }
-.inicio__foto img { width: 100%; height: 100%; object-fit: cover; }
 .inicio__redes { grid-column: span 4; }
 .redes li + li { border-top: 1px solid var(--line-soft); }
-.redes a { display: flex; flex-direction: column; gap: 2px; padding: 14px 18px; text-decoration: none; text-transform: uppercase; }
+.redes a { display: flex; flex-direction: column; gap: 2px; padding: 12px 18px; text-decoration: none; text-transform: uppercase; }
 .redes a:hover { background: var(--fg); color: var(--bg); }
 .redes a:hover .chico { color: var(--bg); }
 .redes .chico { text-transform: none; word-break: break-all; }
+.inicio__foto { grid-column: 1 / -1; }
+.inicio__foto img { width: 100%; max-height: 440px; object-fit: cover; object-position: center 35%; }
 
-@media (max-width: 1000px) {
-  .inicio__intro, .inicio__episodio { grid-column: 1 / -1; }
-  .inicio__intro { flex-direction: row; }
-  .inicio__conejo { width: 34%; margin: auto 18px 18px 0; }
-  .inicio__accesos { grid-template-columns: repeat(2, 1fr); }
-  .inicio__foto, .inicio__redes { grid-column: 1 / -1; }
+@media (max-width: 1100px) {
+  .inicio__intro { grid-template-columns: 1fr 1fr; }
+  .inicio__conejo { display: none; }
+  .inicio__episodio { grid-column: span 7; }
+  .inicio__lado { grid-column: span 5; }
+}
+@media (max-width: 900px) {
+  .inicio__intro { grid-template-columns: 1fr; gap: 16px; }
+  .inicio__episodio, .inicio__lado { grid-column: 1 / -1; }
+  .inicio__lado { grid-template-columns: 1fr 1fr; }
+  .acceso, .inicio__redes { grid-column: span 6; }
+  .inicio__redes { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
   .inicio { gap: 12px; margin-top: 12px; }
-  .inicio__intro { flex-direction: column; }
-  .inicio__intro .caja__cuerpo { padding: 18px; }
-  .inicio__conejo { display: none; }
-  .inicio__video { min-height: 0; }
-  .inicio__accesos { grid-template-columns: 1fr; gap: 12px; }
-  .acceso { padding: 16px; }
+  .inicio__intro { padding: 18px; }
+  .inicio__lado { grid-template-columns: 1fr; gap: 12px; }
+  .acceso { grid-column: 1 / -1; padding: 16px; }
 }
