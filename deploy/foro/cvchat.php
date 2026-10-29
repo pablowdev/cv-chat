@@ -247,6 +247,50 @@ if ($modo === 'sso')
 	$aca = '?' . http_build_query(['sso' => $_REQUEST['sso'], 's' => $_REQUEST['s']]);
 	$nombre = (string) $pedido['nombre'];
 
+	// La cuenta del foro con el mismo usuario (si esta tomado, con un numero al final)
+	$crear = function () use ($pedido, $email) {
+		$base_usuario = (string) $pedido['usuario'];
+		for ($i = 1; $i < 50; $i++)
+		{
+			$prueba = $i === 1 ? $base_usuario : $base_usuario . $i;
+			if (vB::getDbAssertor()->getRow('user', ['username' => $prueba])) continue;
+			try
+			{
+				$nuevo = (int) vB_Library::instance('user')->save(0, bin2hex(random_bytes(24)),
+					['username' => $prueba, 'email' => $email, 'usergroupid' => 2],
+					[], [], ['skipactivationemail' => true]);
+				if ($nuevo) return ['id' => $nuevo, 'error' => ''];
+			}
+			catch (Throwable $e)
+			{
+				$m = $e->getMessage();
+				if (stripos($m, 'email') !== false) return ['id' => 0, 'error' => 'Ya hay una cuenta del foro con tu email: entrá con ella acá arriba y se unen.'];
+				error_log('cvchat: no se pudo crear la cuenta del foro: ' . $m);
+			}
+		}
+		return ['id' => 0, 'error' => 'No se pudo crear la cuenta del foro. Probá de nuevo más tarde.'];
+	};
+
+	// Cuenta nueva (creada desde que hay cuenta unica): sirve para todo, la del foro se crea sola, sin
+	// preguntar. Solo se pregunta si en el foro ya hay alguien con ese usuario (puede ser la misma persona)
+	// o si ya hay una sesion del foro con otra cuenta. Sin email confirmado todavia, se crea cuando lo confirme.
+	if (!empty($pedido['nueva']) && !$userid && ($_POST['accion'] ?? '') === '')
+	{
+		if ($email === '') cv_ir($volver);
+		if (!vB::getDbAssertor()->getRow('user', ['username' => (string) $pedido['usuario']]))
+		{
+			if (!cv_usar_pedido($pedido['n'])) cv_ir($volver);
+			$r = $crear();
+			if ($r['id'])
+			{
+				cv_entrar_como($r['id']);
+				$avisar($r['id'], 'nueva');
+			}
+			error_log('cvchat: cuenta nueva sin cuenta del foro: ' . $r['error']);
+			cv_ir($volver);
+		}
+	}
+
 	// Crear la cuenta del foro con el mismo usuario
 	$error = '';
 	if (($_POST['accion'] ?? '') === 'crear' && hash_equals(cv_clave_form($pedido['n']), (string) ($_POST['clave'] ?? '')))
@@ -257,31 +301,13 @@ if ($modo === 'sso')
 		}
 		else if (cv_usar_pedido($pedido['n']))
 		{
-			$base_usuario = (string) $pedido['usuario'];
-			$nuevo = 0;
-			for ($i = 1; $i < 50 AND !$nuevo; $i++)
+			$r = $crear();
+			if ($r['id'])
 			{
-				$prueba = $i === 1 ? $base_usuario : $base_usuario . $i;
-				if (vB::getDbAssertor()->getRow('user', ['username' => $prueba])) continue;
-				try
-				{
-					$nuevo = (int) vB_Library::instance('user')->save(0, bin2hex(random_bytes(24)),
-						['username' => $prueba, 'email' => $email, 'usergroupid' => 2],
-						[], [], ['skipactivationemail' => true]);
-				}
-				catch (Throwable $e)
-				{
-					$m = $e->getMessage();
-					if (stripos($m, 'email') !== false) { $error = 'Ya hay una cuenta del foro con tu email: entrá con ella acá arriba y se unen.'; break; }
-					error_log('cvchat: no se pudo crear la cuenta del foro: ' . $m);
-				}
+				cv_entrar_como($r['id']);
+				$avisar($r['id'], 'nueva');
 			}
-			if ($nuevo)
-			{
-				cv_entrar_como($nuevo);
-				$avisar($nuevo, 'nueva');
-			}
-			if (!$error) $error = 'No se pudo crear la cuenta del foro. Probá de nuevo más tarde.';
+			$error = $r['error'];
 		}
 		else
 		{

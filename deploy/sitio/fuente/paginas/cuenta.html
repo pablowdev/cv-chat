@@ -16,7 +16,15 @@
     <p class="aviso cuenta__mensaje" id="c-mensaje" hidden></p>
 
     <section class="caja">
-      <div class="caja__cab"><p class="rotulo">tus cuentas vinculadas</p></div>
+      <div class="caja__cab"><p class="rotulo">tu cuenta en todo el sistema</p></div>
+      <div class="vinculo" id="v-web">
+        <div class="vinculo__icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.9 8ZM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96ZM4.26 14a8.2 8.2 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26Zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.99 7.99 0 0 1 5.08 16Zm2.95-8H5.08a7.99 7.99 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.03 8ZM12 19.96A14.1 14.1 0 0 1 10.09 16h3.82A14.1 14.1 0 0 1 12 19.96ZM14.34 14H9.66a14.7 14.7 0 0 1 0-4h4.68a14.7 14.7 0 0 1 0 4Zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56ZM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.2 8.2 0 0 1 0 4h-3.38Z"/></svg></div>
+        <div><p class="vinculo__que">Página</p><p class="vinculo__estado es-bien">Esta es tu cuenta</p></div>
+      </div>
+      <div class="vinculo" id="v-chat">
+        <div class="vinculo__icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.94 2 11.8c0 2.4 1.1 4.57 2.88 6.16-.17 1.2-.7 2.36-1.6 3.27a.5.5 0 0 0 .4.86c1.9-.1 3.5-.8 4.66-1.62 1.13.33 2.35.52 3.66.52 5.52 0 10-3.94 10-8.8S17.52 3 12 3Z"/></svg></div>
+        <div><p class="vinculo__que">CV Chat</p><p class="vinculo__estado es-bien"></p></div>
+      </div>
       <div class="vinculo" id="v-discord">
         <div class="vinculo__icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52c-.21.38-.44.87-.61 1.25a18.3 18.3 0 0 0-5.49 0 12.6 12.6 0 0 0-.62-1.25 19.7 19.7 0 0 0-4.89 1.52C.53 9.05-.32 13.58.1 18.06a19.9 19.9 0 0 0 6.07 3.06c.46-.63.87-1.3 1.23-1.99a13 13 0 0 1-1.9-.92l.38-.3c3.93 1.8 8.18 1.8 12.06 0l.38.3c-.6.36-1.24.66-1.9.92.36.7.77 1.36 1.22 1.99a19.8 19.8 0 0 0 6.06-3.06c.5-5.18-.84-9.67-3.55-13.69ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.96-2.42 2.16-2.42 2.18 1.1 2.16 2.42c0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42s.95-2.42 2.15-2.42 2.18 1.1 2.16 2.42c0 1.34-.95 2.42-2.16 2.42Z"/></svg></div>
         <div><p class="vinculo__que">Discord</p><p class="vinculo__estado"></p></div>
@@ -27,6 +35,11 @@
         <div><p class="vinculo__que">Foro</p><p class="vinculo__estado"></p></div>
         <button class="btn btn--chico" type="button"></button>
       </div>
+    </section>
+
+    <section class="caja">
+      <div class="caja__cab"><p class="rotulo">verificación en dos pasos</p></div>
+      <div class="caja__cuerpo chico" id="c-dos-pasos"></div>
     </section>
 
     <section class="caja">

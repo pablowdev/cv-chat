@@ -13,6 +13,7 @@
 //  POST /editar   {nodo, id, titulo, texto}      lo cambia (solo temas propios de compra/venta)
 //  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat), con nombres y fotos
 //  GET  /privados-nuevos?desde=&ids=  los privados que les llegaron a esas cuentas desde esa fecha (ms)
+//  POST /unidas   {ids}            las cuentas del foro unidas con verificacion en dos pasos (entran solo por CV Chat, cvpuerta.php)
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -226,6 +227,25 @@ if ($ruta === '/privados-nuevos') {
 		}
 	}
 	salir(['mensajes' => $out, 'hasta' => $hasta * 1000]);
+}
+
+// Las cuentas del foro unidas a CV Chat con verificacion en dos pasos: entran solo por CV Chat (cvpuerta.php lee esta lista). Se guarda
+// en la cache del foro, en un archivo oculto (el foro no deja bajar archivos que empiezan con punto), con el
+// usuario y el email resumidos (sha256), para reconocer con que cuenta se quiere entrar
+if ($ruta === '/unidas' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+	$lista = array_values(array_unique(array_filter(array_map('intval', (array) ($cuerpo['ids'] ?? [])))));
+	$h = function ($s) { return hash('sha256', mb_strtolower(trim((string) $s), 'UTF-8')); };
+	$out = ['ids' => [], 'claves' => [], 'hasta' => time()];
+	foreach (array_chunk($lista, 200) as $grupo) {
+		foreach ((array) $db->getRows('user', ['userid' => $grupo]) as $u) {
+			$out['ids'][] = (int) $u['userid'];
+			foreach ([$u['username'], texto($u['username']), $u['email']] as $x) if (trim((string) $x) !== '') $out['claves'][] = $h($x);
+		}
+	}
+	$out['claves'] = array_values(array_unique($out['claves']));
+	$archivo = '/var/www/html/cache/.cv_unidas.json';
+	if (file_put_contents($archivo . '.tmp', json_encode($out)) === false || !rename($archivo . '.tmp', $archivo)) salir(['error' => 'no se pudo guardar'], 500);
+	salir(['ok' => true, 'cuentas' => count($out['ids'])]);
 }
 
 salir(['error' => 'no esta'], 404);

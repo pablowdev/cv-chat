@@ -34,7 +34,7 @@
         api('/puente/api/cuenta/desconectar', { con: con }).then(function () { mensaje('Cuenta ' + nombre + ' desvinculada.'); cargar(); }).catch(function (e) { mensaje(e.message, true); btn.disabled = false; });
       };
     } else {
-      est.textContent = disponible ? 'Sin vincular' : 'No disponible ahora';
+      est.textContent = !disponible ? 'No disponible ahora' : con === 'foro' ? 'Sin unir · si no tenés cuenta en el foro, se crea sola la primera vez que entrás' : 'Sin vincular';
       est.className = 'vinculo__estado';
       btn.textContent = 'Conectar'; btn.className = 'btn btn--chico'; btn.disabled = !disponible;
       btn.onclick = function () {
@@ -53,6 +53,13 @@
       else av.textContent = (d.nombre || '?').charAt(0).toUpperCase();
       $('c-nombre').textContent = d.nombre;
       $('c-usuario').textContent = '@' + d.usuario + (d.admin ? ' · administrador' : '') + (d.email ? (d.email.confirmado ? ' · email confirmado' : ' · email sin confirmar') : ' · sin email');
+      // CV Chat y la pagina son la misma cuenta
+      var ec = $('v-chat').querySelector('.vinculo__estado'); ec.textContent = 'La misma cuenta: @' + d.usuario + ' · ';
+      var ab = document.createElement('a'); ab.href = CHAT + '/app'; ab.textContent = 'abrir'; ec.appendChild(ab);
+      var dp = $('c-dos-pasos'); dp.textContent = '';
+      dp.appendChild(document.createTextNode(d.dosPasos ? '✓ Activada. Vale para todo: la página, el foro y el chat te piden el código al entrar. ' : 'Desactivada. Si la activás en los ajustes del chat, vale para todo: la página, el foro y el chat. '));
+      var cf = document.createElement('a'); cf.href = CHAT + '/app'; cf.textContent = d.dosPasos ? 'Cambiarla en el chat' : 'Activarla en el chat'; dp.appendChild(cf);
+      if (d.dosPasos) dp.classList.add('es-bien');
       vinculo('v-discord', d.discord, d.disponible.discord, 'discord', 'de Discord');
       vinculo('v-foro', d.foro, d.disponible.foro, 'foro', 'del foro');
       $('c-salir').href = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(location.origin + '/');

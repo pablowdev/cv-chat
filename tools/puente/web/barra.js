@@ -72,12 +72,12 @@
   }
 
   // En el foro, a quien tiene solo cuenta del foro: los mensajes privados son los de CV Chat
-  function avisoUnir() {
+  function avisoUnir(unirUrl) {
     if (document.querySelector('.cv-unir')) return;
     const o = el('div', 'cv-unir'), box = el('div', 'cv-unir__caja');
     o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Mensajes privados');
     const x = el('button', 'cv-unir__x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
-    const ir = el('a', 'cv-unir__btn', 'Unir mis cuentas'); ir.href = CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]);
+    const ir = el('a', 'cv-unir__btn', 'Unir mis cuentas'); ir.href = unirUrl;
     box.append(x, el('b', null, 'Mensajes privados'),
       el('p', null, 'Los mensajes privados ahora son los de CV Chat: los mismos en la página, el foro y el chat, y cifrados.'),
       el('p', null, 'Para usarlos, uní tu cuenta del foro con la de la página. Tus mensajes del foro de antes siguen ahí.'), ir);
@@ -184,7 +184,17 @@
     const unida = !!(vbId && yo && yo.conectado && Number(yo.foro) === vbId);
     const sinUnir = !!(vbId && yo && !unida);
     const arriba = () => document.querySelector('nav.js-top-menu-user') || cont;
-    const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir());
+    // Unir: con sesion en CV Chat, directo; sin sesion, entrando (ahi esta "Entrar con el foro")
+    const unirUrl = yo && yo.conectado ? CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]) : entrar;
+    const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
+    // A la izquierda, si la cuenta esta unida (y a "Mi cuenta"), o para unirla
+    const nav = cont && cont.querySelector('.cv-barra__links');
+    if (nav && vbId && yo && !nav.querySelector('.cv-barra__unida')) {
+      const a = el('a', 'cv-barra__link cv-barra__unida', unida ? '✓ Cuenta unida' : 'Unir mi cuenta');
+      a.href = unida ? WEB + '/cuenta' : unirUrl;
+      a.title = unida ? 'Tu cuenta del foro es la misma de la página y CV Chat' : 'Uní tu cuenta del foro con la de la página y CV Chat';
+      nav.appendChild(a);
+    }
     if ((unida || sinUnir) && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
     if (cont && (unida || sinUnir)) {
       for (const li of cont.querySelectorAll('li')) {

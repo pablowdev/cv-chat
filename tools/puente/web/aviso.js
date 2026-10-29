@@ -10309,7 +10309,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   }
   function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
 
-  // "Mi cuenta": email de recuperacion y Discord vinculado
+  // "Mi cuenta": la misma cuenta en la pagina y el foro, email de recuperacion y Discord vinculado
   async function fillLinks() {
     const box = refs.links;
     box.textContent = '';
@@ -10321,6 +10321,14 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       const b = el('button', 'pas-boton', label); b.type = 'button'; b.addEventListener('click', fn);
       r.append(t, b); box.appendChild(r);
     };
+    // La pagina y el foro: la misma cuenta (en el foro, la cuenta del foro unida; si no hay, se crea sola al entrar)
+    const web = 'https://' + location.hostname.replace(/^chat\./, '');
+    row('🌐', 'Página', 'La misma cuenta: con esta entrás a la página del club.', 'Ver', () => { window.open(web + '/cuenta', '_blank', 'noopener'); });
+    const fo = await fetch('/puente/api/foro/estado', { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (fo && fo.disponible) {
+      row('💬', 'Foro', fo.vinculado ? `La misma cuenta: en el foro sos ${fo.foro && fo.foro.usuario}.` : 'Sin unir: si ya tenías cuenta en el foro, unila. Si no, se crea sola la primera vez que entrás.',
+        fo.vinculado ? 'Ver' : 'Unir', () => { location.href = '/puente/vincular'; });
+    }
     if (st && st.disponible) {
       row('🔗', 'Discord', st.vinculado ? `Vinculada con @${st.discord && st.discord.usuario}` : 'Sin vincular: vinculala para recuperar tu historial y verificar tu nombre.',
         st.vinculado ? 'Administrar' : 'Vincular', () => { location.href = '/puente/vincular'; });

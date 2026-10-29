@@ -179,6 +179,8 @@ async function handle(req, res, p, u) {
       email: em && em.email ? { confirmado: !!em.confirmado } : null,
       discord: h.discord.info(user.id), foro: h.foro.info(user.id),
       disponible: { discord: h.discord.on(), foro: h.foro.on() },
+      // La verificacion en dos pasos de CV Chat vale para todo (el foro entra solo por CV Chat, cvpuerta.php)
+      dosPasos: !!(db.prepare('SELECT totp_enabled FROM users WHERE id = ?').get(user.id) || {}).totp_enabled,
     });
   }
   if ((p === '/puente/api/cuenta/conectar' || p === '/puente/api/cuenta/desconectar') && req.method === 'POST') {

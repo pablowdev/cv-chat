@@ -58,8 +58,22 @@ async function vuelta() {
   try { await sincronizar(); } catch (err) { warn('foro: avatar y nombre:', err.message); }
   try { await avisos(); } catch (err) { warn('foro: avisos:', err.message); }
   try { await privadosNuevos(); } catch (err) { warn('foro: privados nuevos:', err.message); }
+  try { await unidas(); } catch (err) { warn('foro: cuentas unidas:', err.message); }
   andando = false;
 }
+
+// ── Las cuentas unidas con verificacion en dos pasos: en el foro entran solo por CV Chat (cvpuerta.php), que
+// pide el codigo; la contraseña del foro ya no les sirve. Sin verificacion, el foro sigue como siempre ──
+let unidasYaMandadas = null, unidasCuando = 0;
+async function unidas(ya) {
+  const ids = db.prepare('SELECT p.foro_user_id FROM puente_foro p JOIN users u ON u.id = p.haven_user_id WHERE u.totp_enabled = 1').all().map(r => r.foro_user_id).sort((a, b) => a - b);
+  const k = ids.join(',');
+  if (!ya && k === unidasYaMandadas && Date.now() - unidasCuando < 10 * 60 * 1000) return;
+  await servicio('/unidas', { ids });
+  unidasYaMandadas = k; unidasCuando = Date.now();
+}
+// Recien unidas o separadas (foro.js): enseguida
+const unidasYa = () => { if (on()) unidas(true).catch(err => warn('foro: cuentas unidas:', err.message)); };
 
 // ── Avatar y nombre ──
 const nombreCv = u => u.display_name || u.username;
@@ -225,4 +239,4 @@ async function handle(req, res, p, u) {
   return json(res, 200, { unida: true, conversaciones });
 }
 
-module.exports = { setup, on, servicio, handle };
+module.exports = { setup, on, servicio, handle, unidasYa };

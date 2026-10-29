@@ -120,3 +120,6 @@
 .cv-unir__x { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: #939190; font-size: 22px; cursor: pointer; }
 .cv-unir__x:hover { color: #f2f2f2; }
 .cv-unir__btn { display: inline-block; margin-top: 6px; padding: 9px 16px; border-radius: 6px; background: #ee2d6f; color: #fff !important; font-weight: 700; text-decoration: none !important; }
+
+/* En el foro: si la cuenta esta unida a la de la pagina y el chat */
+.cv-barra__unida { color: #57c785 !important; }

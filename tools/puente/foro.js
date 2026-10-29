@@ -39,6 +39,9 @@ const path = require('path');
 const STATE_TTL_MS = 10 * 60 * 1000, SIGNUP_TTL_MS = 15 * 60 * 1000, HANDOFF_TTL_MS = 2 * 60 * 1000;
 const BANNED_GROUP = 8;             // "Banned Users" de vBulletin
 const UNCONFIRMED_GROUPS = [3, 4];  // esperando confirmar el email / moderacion
+// Las cuentas de CV Chat creadas desde aca sirven para todo de entrada: la del foro se crea sola (cvchat.php).
+// Unir cuentas queda para quien ya tenia cuenta en algun lado antes.
+const NUEVAS_DESDE = Date.parse('2026-10-29T18:15:00Z');
 const AVATAR_DIR = path.join(path.dirname(process.env.PUENTE_ADJUNTOS_DIR || '/data/uploads/discord'), 'foro');
 
 const states = new Map();   // estado -> { para, userId, exp }
@@ -135,7 +138,10 @@ function saveLink(havenUserId, f) {
               ON CONFLICT(haven_user_id) DO UPDATE SET foro_user_id = excluded.foro_user_id, foro_username = excluded.foro_username,
                 foro_avatar = excluded.foro_avatar, vinculado = CURRENT_TIMESTAMP`)
     .run(havenUserId, f.id, f.usuario, typeof f.foto === 'string' ? f.foto : null);
+  avisarUnidas();
 }
+// Al foro, enseguida: las cuentas unidas entran solo por CV Chat (foro-servicio.js, cvpuerta.php)
+const avisarUnidas = () => setImmediate(() => { try { require('./foro-servicio.js').unidasYa(); } catch { /* sin servicio del foro */ } });
 
 // El usuario del foro, adaptado a las reglas de CV Chat y libre
 function proposeUsername(f) {
@@ -166,7 +172,7 @@ function info(havenUserId) {
 }
 function unlink(havenUserId) {
   const n = db.prepare('DELETE FROM puente_foro WHERE haven_user_id = ?').run(havenUserId).changes;
-  if (n) log(`desvinculado del foro: Haven #${havenUserId}`);
+  if (n) { log(`desvinculado del foro: Haven #${havenUserId}`); avisarUnidas(); }
   return n;
 }
 
@@ -295,8 +301,10 @@ async function handle(req, res, p, u) {
     const user = on() ? cuenta.userFromCookie(req) : null;
     if (!user) return send(res, 302, 'text/plain', '', { Location: volver });
     const l = db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(user.id);
+    const creada = Date.parse(String((db.prepare('SELECT created_at FROM users WHERE id = ?').get(user.id) || {}).created_at || '').replace(' ', 'T') + 'Z');
     const d = b64({
       accion: 'sso', haven: user.id, foro: l ? l.foro_user_id : null, usuario: user.username, nombre: user.display_name || user.username,
+      nueva: Number.isFinite(creada) && creada >= NUEVAS_DESDE,
       email: h.confirmedEmail(user.id), volver, t: Math.floor(Date.now() / 1000), n: crypto.randomBytes(12).toString('hex'),
     });
     return send(res, 302, 'text/plain', '', { Location: `${foroUrl}/cvchat.php?${new URLSearchParams({ sso: d, s: sign(d) })}` });
