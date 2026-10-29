@@ -123,3 +123,9 @@
 
 /* En el foro: si la cuenta esta unida a la de la pagina y el chat */
 .cv-barra__unida { color: #57c785 !important; }
+
+/* La campanita en la barra del foro */
+.cv-barra__campana--foro { float: right; height: 100%; margin-right: 8px; }
+.cv-barra__campana--foro .cv-barra__icono { color: inherit; opacity: .8; }
+.cv-barra__campana--foro .cv-barra__avisos { top: 100%; right: 0; }
+@media (max-width: 560px) { .cv-barra__campana--foro .cv-barra__avisos { position: fixed; top: 48px; left: 8px; right: 8px; width: auto; } }

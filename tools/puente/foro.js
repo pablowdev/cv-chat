@@ -218,7 +218,9 @@ async function handle(req, res, p, u) {
       const f = readReturn(u);
       if (f && f.estado === estado && entry.exp >= Date.now() && f.para === 'entrar') {
         const r = login(f);
-        if (r.listo) cuenta.open(req, res, h.takeHandoff(r.listo));
+        // En un dispositivo nuevo no entra sola: pide el codigo al iniciar sesion (dospasos.js)
+        const dp = require('./dospasos.js');
+        if (r.listo) { const uid = h.takeHandoff(r.listo); if (uid && (!dp.on() || dp.confiable(req, uid))) cuenta.open(req, res, uid); }
       }
       return go(entry.volver);
     }
@@ -271,6 +273,8 @@ async function handle(req, res, p, u) {
     await avatarIfMissing(r.user.id, f);
     if (emailConfirmed(f)) h.emailIfMissing(r.user.id, f.email);
     log(`cuenta nueva con el foro: ${username} (Haven #${r.user.id}) <-> foro ${f.usuario} (#${f.id})`);
+    const dp = require('./dospasos.js');
+    if (dp.on()) res.setHeader('Set-Cookie', [].concat(res.getHeader('Set-Cookie') || [], dp.recordar(req, r.user.id)));
     return json(res, 200, h.sessionFor(r.user.id));
   }
 

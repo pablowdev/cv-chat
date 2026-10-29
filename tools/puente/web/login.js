@@ -1,3 +1,5 @@
+// El codigo por email al entrar desde un dispositivo nuevo (codigo.js, dospasos.js)
+(function () { if (window.__puenteCodigo) return; const c = document.createElement('script'); c.src = '/puente/codigo.js'; document.head.appendChild(c); })();
 // Enlace "¿Olvidaste tu contraseña? Recuperala con Discord" en la pantalla de
 // inicio de sesion de Haven (la pagina "/").
 (function () {

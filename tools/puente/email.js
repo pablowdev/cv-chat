@@ -82,6 +82,12 @@ function takenByOther(email, userId) {
   return !!db.prepare('SELECT 1 FROM puente_emails WHERE email = ? AND confirmado = 1 AND haven_user_id != ?').get(email, userId);
 }
 
+// El email queda confirmado sin el enlace: la persona puso el codigo que le llego ahi (dospasos.js)
+function confirmarDirecto(userId, rawEmail) {
+  const e = String(rawEmail || '').trim().toLowerCase();
+  db.prepare(`INSERT INTO puente_emails (haven_user_id, email, confirmado, origen, token_hash, token_vence) VALUES (?, ?, 1, 'codigo', NULL, NULL)
+              ON CONFLICT(haven_user_id) DO UPDATE SET email = excluded.email, confirmado = 1, token_hash = NULL, token_vence = NULL, actualizado = CURRENT_TIMESTAMP`).run(userId, e);
+}
 function status(userId) {
   const r = db.prepare('SELECT email, confirmado FROM puente_emails WHERE haven_user_id = ?').get(userId);
   return { email: r ? r.email : null, confirmado: !!(r && r.confirmado) };
@@ -281,4 +287,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, status, sendMail, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, status, sendMail, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };

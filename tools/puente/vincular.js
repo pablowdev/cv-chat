@@ -36,6 +36,7 @@ const instalable = require('./instalable.js');
 const temaFijo = require('./tema-fijo.js');
 const llave = require('./llave.js');
 const email = require('./email.js');
+const dospasos = require('./dospasos.js');
 const nombres = require('./nombres.js');
 const foro = require('./foro.js');
 const cuenta = require('./cuenta.js');
@@ -114,6 +115,7 @@ function setup(ctx) {
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
   campana.setup({ db, io, log, warn, publicUrl });
+  dospasos.setup({ db, log, warn, email, dominio: () => cuenta.dominio(), appName });
   require('./cifrado.js').setup({ db, io, log, warn, publicUrl, email, campana, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) });
   foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a), campana } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
@@ -158,6 +160,14 @@ function hookHttp() {
         const who = sessionUser(req);
         const admin = who && db.prepare('SELECT is_admin FROM users WHERE id = ?').get(who.id);
         if (!admin || !admin.is_admin) { send(res, 403, 'application/json', JSON.stringify({ error: 'Las personas son solo para administradores.' })); return true; }
+      }
+      // Codigo por email en cada dispositivo nuevo (dospasos.js): al iniciar sesion; el codigo de la app
+      // (TOTP) y registrarse dejan recordado el dispositivo
+      if (req.method === 'POST' && dospasos.on()) {
+        const ruta = url.split('?')[0];
+        if (ruta === '/api/auth/login') dospasos.alEntrar(req, res);
+        else if (ruta === '/api/auth/totp/validate') dospasos.alTotp(req, res);
+        else if (ruta === '/api/auth/register') dospasos.alRegistrar(req, res);
       }
       // Registro con email obligatorio (email.js)
       if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on() && req.headers['x-puente-interno'] !== INTERNAL) {
@@ -521,8 +531,12 @@ const STATIC = path.join(__dirname, 'web');
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
+  if (p.startsWith('/puente/api/auth/codigo')) {
+    const r = await dospasos.handle(req, res, p, { json, readJson });
+    if (r !== false) return;
+  }
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/wiki.js' || p === '/puente/wiki.css')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js')) {
     const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));
@@ -922,6 +936,7 @@ async function handle(req, res) {
     const h = handoffs.get(code);
     handoffs.delete(code); // un solo uso
     if (!h || h.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
+    if (dospasos.on() && !dospasos.confiable(req, h.user.id)) return json(res, 200, await dospasos.pedir(req, h.user.id, { token: h.token, user: h.user }));
     return json(res, 200, { token: h.token, user: h.user });
   }
   if (p === '/puente/api/entrar/nuevo' && req.method === 'GET') {
@@ -951,6 +966,7 @@ async function handle(req, res) {
     try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
     try { email.fromDiscordIfMissing(r.user.id, me); } catch (err) { warn('email de Discord:', err.message); }
     log(`cuenta nueva con Discord: ${username} (Haven #${r.user.id}) <-> Discord ${me.username} (${me.id}); ${moved} mensajes historicos pasados a su cuenta`);
+    if (dospasos.on()) res.setHeader('Set-Cookie', [].concat(res.getHeader('Set-Cookie') || [], dospasos.recordar(req, r.user.id)));
     return json(res, 200, sessionFor(r.user.id));
   }
 

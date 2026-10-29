@@ -187,6 +187,8 @@
     // Unir: con sesion en CV Chat, directo; sin sesion, entrando (ahi esta "Entrar con el foro")
     const unirUrl = yo && yo.conectado ? CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]) : entrar;
     const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
+    // La campanita tambien en el foro (los avisos del foro y del chat, y los mensajes privados que esperan)
+    if (cont && yo && yo.conectado && !cont.querySelector('.cv-barra__campana')) { const c = campanita(yo); c.classList.add('cv-barra__campana--foro'); cont.appendChild(c); }
     // A la izquierda, si la cuenta esta unida (y a "Mi cuenta"), o para unirla
     const nav = cont && cont.querySelector('.cv-barra__links');
     if (nav && vbId && yo && !nav.querySelector('.cv-barra__unida')) {
