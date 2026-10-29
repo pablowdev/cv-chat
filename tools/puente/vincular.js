@@ -313,6 +313,8 @@ function injectScript(req, res, src) {
       if (isHtml() && !res.headersSent) {
         let html = body.toString('utf8');
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
+        // La lista de mensajes directos aparece ya ordenada (aviso.js le pone puente-ordenada); si no, igual a los 3 s
+        if (src === '/puente/aviso.js' && html.includes('</head>') && !html.includes('puente-ordenada')) html = html.replace('</head>', '<style>@keyframes puente-ver{to{visibility:visible}}#dm-list:not(.puente-ordenada){visibility:hidden;animation:puente-ver 0s 3s forwards}</style></head>');
         // Pantalla de inicio de sesion ("/"): el logo y el nombre del servidor en vez
         // de "HAVEN" y su lema, con el aspecto de la app (login.css). "by Haven" queda
         // chiquito abajo, junto a la version.

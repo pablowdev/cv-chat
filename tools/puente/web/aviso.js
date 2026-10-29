@@ -11095,6 +11095,18 @@ var puenteSinUbicacion = (function () {
   const dms = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels.filter((c) => c && c.is_dm) : []);
   // Primero el que tiene el ultimo mensaje (lo que mira Haven para ordenar)
   const primero = () => dms().reduce((a, c) => (!a || (c.last_activity || 0) > (a.last_activity || 0) ? c : a), null);
+  const MEMORIA = 'puente_dm_ultimos';
+  let memoria = {};
+  try { memoria = JSON.parse(localStorage.getItem(MEMORIA) || '{}') || {}; } catch { memoria = {}; }
+  let guardarT = null;
+  const anotar = (code, ms) => {
+    if (!code || !ms || (memoria[code] || 0) >= ms) return;
+    memoria[code] = ms;
+    clearTimeout(guardarT);
+    guardarT = setTimeout(() => { try { localStorage.setItem(MEMORIA, JSON.stringify(memoria)); } catch { /* sin almacenamiento */ } }, 1000);
+  };
+  // Lo que ya se sabe, antes de que Haven dibuje
+  const completar = () => { for (const c of dms()) { const m = memoria[c.code]; if (m && m > (c.last_activity || 0)) c.last_activity = m; else if (c.last_activity) anotar(c.code, c.last_activity); } };
   const redibujar = () => {
     clearTimeout(timer);
     timer = setTimeout(() => { try { recientes(); window.app._renderChannels(); } catch (err) { console.warn('[puente] orden de los MD:', err); } }, 150);
@@ -11107,9 +11119,11 @@ var puenteSinUbicacion = (function () {
       let cambio = false;
       for (const c of dms()) {
         const v = r.dms[c.code];
+        if (v) anotar(c.code, v);
         if (v && v > (c.last_activity || 0)) { c.last_activity = v; cambio = true; }
       }
       if (cambio) redibujar();
+      setTimeout(() => { const l = document.getElementById('dm-list'); if (l) l.classList.add('puente-ordenada'); }, cambio ? 200 : 0);
     });
   }
   (function enganchar() {
@@ -11122,20 +11136,26 @@ var puenteSinUbicacion = (function () {
     let pedido = 0;
     app._renderChannels = function () {
       recientes();
+      completar();
       const l = dms();
       if (l.length && !l.some((c) => c.last_activity) && Date.now() - pedido > 5000) { pedido = Date.now(); setTimeout(pedir, 300); }
       return dibujar.apply(this, arguments);
     };
+    // Con lo recordado, ya en el orden bueno (sin esperar a las fechas del servidor); la lista se muestra
+    // recien ordenada (vincular.js la tiene oculta hasta ahi, o hasta 3 s)
+    const mostrar = () => { const l = document.getElementById('dm-list'); if (l) l.classList.add('puente-ordenada'); };
+    if (Object.keys(memoria).length && dms().length) { completar(); try { app._renderChannels(); } catch (err) { console.warn('[puente] orden de los MD:', err); } mostrar(); }
     so.on('new-message', (d) => {
       const c = d && dms().find((x) => x.code === d.channelCode);
       if (!c || (d.message && d.message.thread_id)) return;
       const antes = primero();
       c.last_activity = Date.now();
+      anotar(c.code, c.last_activity);
       if (antes !== c) redibujar();
     });
     so.on('dm-opened', (d) => {
       const c = d && dms().find((x) => x.code === d.code);
-      if (c && !c.last_activity) { c.last_activity = Date.now(); redibujar(); }
+      if (c && !c.last_activity) { c.last_activity = Date.now(); anotar(c.code, c.last_activity); redibujar(); }
     });
     so.on('connect', () => setTimeout(pedir, 1500));
     setTimeout(pedir, 1500);
@@ -11385,12 +11405,18 @@ var puenteSinUbicacion = (function () {
 
   const st = el('style');
   st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
-    + '#dm-list .puente-dm-foro{display:flex;align-items:center;min-height:3.5rem;gap:.875rem;padding:.375rem .75rem;cursor:pointer}'
-    + '#dm-list .puente-dm-foro .channel-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    // (las mismas medidas que las conversaciones del chat, discord-plus.theme.css)
+    + '#dm-list .puente-dm-foro{display:flex;align-items:center;cursor:pointer;min-height:2.75rem;gap:.75rem;margin:1px .5rem;padding:.25rem .5rem;border-radius:.375rem}'
+    + '#dm-list .puente-dm-foro:hover{background:#29292e}'
+    + '#dm-list .puente-dm-foro .channel-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9375rem;font-weight:500;color:#96969e}'
+    + '#dm-list .puente-dm-foro:hover .channel-name,#dm-list .puente-dm-foro.active .channel-name{color:#fbfbfb}'
     + '#dm-list .puente-dm-foro .channel-hash{display:none}'
-    + '#dm-list .puente-dm-foro .puente-dm-avatar{display:flex;flex-shrink:0;width:2.5rem;height:2.5rem;border-radius:50%;overflow:hidden;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.0625rem}'
+    + '#dm-list .puente-dm-foro .puente-dm-avatar{display:flex;flex-shrink:0;width:2rem;height:2rem;border-radius:50%;overflow:hidden;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.875rem}'
     + '#dm-list .puente-dm-foro .puente-dm-avatar img{width:100%;height:100%;object-fit:cover}'
     + '#dm-list .puente-dm-foro.active{background:#343338}'
+    + '@media (max-width:768px){#dm-list .puente-dm-foro{min-height:3.5rem;gap:.875rem;margin:0;padding:.375rem .75rem;border-radius:0}'
+    + '#dm-list .puente-dm-foro .channel-name{font-size:1.0625rem;color:#dbdee1}'
+    + '#dm-list .puente-dm-foro .puente-dm-avatar{width:2.5rem;height:2.5rem;font-size:1.0625rem}}'
     + '.puente-dm-foro-tag{flex:0 0 auto;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:#96969e;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}'
     + '.puente-foro-hist{padding:8px 0}'
     + '.pfh-aviso,.pfh-cifrado,.pfv-pie{margin:8px 16px;padding:10px 14px;border-radius:8px;border-left:3px solid;font-size:13px;line-height:1.45}'
