@@ -149,6 +149,8 @@ async function avisos() {
       title: `${a.de} ${a.que}${a.tema ? ': ' + a.tema : ''}`.slice(0, 120),
       body: a.texto || 'En el foro', url: a.url, tag: 'puente-foro-' + a.id,
     });
+    // Y en la campanita de la barra de la web (campana.js)
+    if (h.campana) h.campana.registrar(uid, { origen: 'foro', titulo: `${a.de} ${a.que}${a.tema ? ' en "' + a.tema + '"' : ''}`, texto: a.texto, url: a.url, clave: 'foro-' + a.id });
   }
   if (d.hasta > Number(desde)) estado('avisos_desde', d.hasta);
 }

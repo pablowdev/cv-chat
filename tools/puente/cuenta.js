@@ -17,6 +17,7 @@
 //  GET  /puente/api/cuenta/perfil   "Mi cuenta" en la web (circulovicioso.club/cuenta): quien es y que tiene vinculado
 //  POST /puente/api/cuenta/conectar { con: 'discord' | 'foro', volver } -> { url } (y despues vuelve a "volver")
 //  POST /puente/api/cuenta/desconectar { con }
+//  GET  /puente/api/cuenta/avisos   la campanita (campana.js); POST .../avisos/leer las marca vistas
 
 const crypto = require('crypto');
 
@@ -144,7 +145,7 @@ const absolute = p => (!p ? null : /^https?:\/\//.test(p) ? p : `${publicUrl}${p
 async function handle(req, res, p, u) {
   const { json, send, sessionUser } = h;
 
-  if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar'].includes(p)) {
+  if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar', '/puente/api/cuenta/avisos', '/puente/api/cuenta/avisos/leer'].includes(p)) {
     cors(req, res);
     if (req.method === 'OPTIONS') {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
@@ -163,6 +164,7 @@ async function handle(req, res, p, u) {
       avatar: absolute(user.avatar), admin: !!user.is_admin, foro: foro ? foro.foro_user_id : null,
       wikiPendientes: user.is_admin ? wikiPendientes() : 0,
       mensajes: dmSinLeer(user.id),
+      avisos: require('./campana.js').sinLeer(user.id),
     });
   }
 
@@ -198,6 +200,22 @@ async function handle(req, res, p, u) {
     }
     if (!h.foro.on()) return json(res, 503, { error: 'La vinculación con el foro no está disponible ahora.' });
     return json(res, 200, { url: h.foro.start(res, 'vincular', user, volver) });
+  }
+
+  // ── La campanita ──
+  if (p === '/puente/api/cuenta/avisos' && req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const user = userFromCookie(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const c = require('./campana.js');
+    return json(res, 200, { sinLeer: c.sinLeer(user.id), avisos: c.lista(user.id) });
+  }
+  if (p === '/puente/api/cuenta/avisos/leer' && req.method === 'POST') {
+    if (!req.headers.origin || !origins().includes(req.headers.origin)) return json(res, 403, { error: 'no' });
+    const user = userFromCookie(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    require('./campana.js').leer(user.id);
+    return json(res, 200, { ok: true });
   }
 
   if (p === '/puente/api/cuenta/sesion' && req.method === 'POST') {

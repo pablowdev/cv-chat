@@ -54,3 +54,42 @@
 .cv-barra__mensajes:hover { color: #f2f2f2 !important; }
 .cv-barra__contador { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ee2d6f; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
 @media (max-width: 560px) { .cv-barra__mensajes span { display: none; } }
+
+/* La barra de la web, mas alta: la foto, los botones y la campanita mas grandes */
+.cv-barra { height: 44px; font-size: 14px; line-height: 44px; }
+.cv-barra__in { height: 44px; }
+.cv-barra .cv-barra__link { font-size: 13px; line-height: 44px; }
+.cv-barra .cv-barra__yo { height: 44px; gap: 8px; font-size: 14px; line-height: 44px; }
+.cv-barra .cv-barra__avatar { width: 30px; height: 30px; border-radius: 4px; }
+.cv-barra .cv-barra__avatar--letra { font-size: 14px; }
+.cv-barra .cv-barra__entrar { font-size: 13px; }
+.cv-barra .cv-barra__menu { top: 44px; }
+.cv-barra .cv-barra__menu a { line-height: 36px; font-size: 14px; }
+.cv-barra .cv-barra__mensajes { font-size: 13px; gap: 6px; }
+.cv-barra .cv-barra__mensajes svg { width: 20px; height: 20px; }
+.cv-barra .cv-barra__user { gap: 14px; }
+.cv-barra .cv-barra__contador { min-width: 18px; height: 18px; line-height: 18px; font-size: 11px; border-radius: 9px; }
+/* La campanita */
+.cv-barra__campana { position: relative; display: flex; align-items: center; }
+.cv-barra__icono { position: relative; display: inline-flex; align-items: center; padding: 6px; border: 0; background: none; color: #939190; cursor: pointer; line-height: 1; }
+.cv-barra__icono:hover { color: #f2f2f2; }
+.cv-barra__icono .cv-barra__contador { position: absolute; top: 0; right: -4px; }
+.cv-barra__avisos { position: absolute; right: -60px; top: 44px; width: min(380px, calc(100vw - 16px)); max-height: min(70vh, 520px); display: flex; flex-direction: column;
+  background: #2b2d2c; border: 1px solid #3a3c3b; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); z-index: 1001; line-height: 1.4; }
+.cv-barra__avisos[hidden] { display: none; }
+.cv-barra__avisos-cab { padding: 10px 14px; border-bottom: 1px solid #3a3c3b; color: #f2f2f2; font-weight: 700; font-size: 13px; }
+.cv-barra__avisos-lista { overflow-y: auto; }
+.cv-barra__avisos-vacio { padding: 16px 14px; color: #9a9999; font-size: 13px; }
+.cv-barra__aviso { display: flex; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #333534; color: #c9c7c6 !important; text-decoration: none !important; }
+.cv-barra__aviso:hover { background: #333534; }
+.cv-barra__aviso.es-nuevo { background: rgba(238, 45, 111, .08); }
+.cv-barra__aviso-origen { flex: 0 0 auto; align-self: flex-start; padding: 1px 6px; border-radius: 3px; background: #3a3c3b; color: #c9c7c6; font-size: 10px; text-transform: uppercase !important; letter-spacing: .05em !important; }
+.cv-barra__aviso.es-nuevo .cv-barra__aviso-origen { background: #ee2d6f; color: #fff; }
+.cv-barra__aviso-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.cv-barra__aviso-texto b { color: #f2f2f2; font-weight: 700; }
+.cv-barra__aviso-texto span { color: #9a9999; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cv-barra__aviso-texto small { color: #7c7a79; font-size: 11px; }
+@media (max-width: 560px) {
+  .cv-barra .cv-barra__user { gap: 6px; }
+  .cv-barra__avisos { position: fixed; left: 8px; right: 8px; top: 44px; width: auto; }
+}

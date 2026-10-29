@@ -63,9 +63,54 @@
       m.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"/></svg><span>Mensajes</span>';
       if (yo.mensajes) m.appendChild(el('b', 'cv-barra__contador', String(yo.mensajes > 99 ? '99+' : yo.mensajes)));
       box.appendChild(m);
+      box.appendChild(campanita(yo));
     }
     box.appendChild(b); box.appendChild(menu);
     return box;
+  }
+
+  // La campanita: respuestas, citas y menciones del foro y de CV Chat (campana.js)
+  function hace(t) {
+    const s = Math.max(1, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return 'recién'; if (s < 3600) return 'hace ' + Math.round(s / 60) + ' min'; if (s < 86400) return 'hace ' + Math.round(s / 3600) + ' h';
+    return new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+  }
+  function campanita(yo) {
+    const wrap = el('div', 'cv-barra__campana');
+    const b = el('button', 'cv-barra__icono'); b.type = 'button'; b.title = 'Avisos'; b.setAttribute('aria-label', 'Avisos'); b.setAttribute('aria-haspopup', 'true');
+    b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>';
+    let contador = null;
+    const pintar = (n) => { if (contador) contador.remove(); contador = null; if (n) { contador = el('b', 'cv-barra__contador', n > 99 ? '99+' : String(n)); b.appendChild(contador); } };
+    pintar(yo.avisos);
+    const panel = el('div', 'cv-barra__avisos'); panel.hidden = true;
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    async function abrir() {
+      panel.textContent = '';
+      panel.appendChild(el('div', 'cv-barra__avisos-cab', 'Avisos'));
+      const lista = el('div', 'cv-barra__avisos-lista'); panel.appendChild(lista);
+      lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'Cargando…'));
+      try {
+        const d = await fetch(CHAT + '/puente/api/cuenta/avisos', { credentials: 'include', cache: 'no-store' }).then(r => r.json());
+        lista.textContent = '';
+        if (!d.avisos || !d.avisos.length) { lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'Cuando te respondan, te citen o te mencionen en el foro o en el chat, aparece acá.')); }
+        for (const a of d.avisos || []) {
+          const it = el('a', 'cv-barra__aviso' + (a.leido ? '' : ' es-nuevo')); it.href = a.url || '#';
+          if (a.origen === 'foro') { it.target = '_blank'; it.rel = 'noopener'; }
+          it.appendChild(el('span', 'cv-barra__aviso-origen', a.origen === 'foro' ? 'foro' : 'chat'));
+          const tx = el('span', 'cv-barra__aviso-texto');
+          tx.appendChild(el('b', null, a.titulo));
+          if (a.texto) tx.appendChild(el('span', null, a.texto));
+          tx.appendChild(el('small', null, hace(a.fecha)));
+          it.appendChild(tx);
+          lista.appendChild(it);
+        }
+        if (d.sinLeer) { fetch(CHAT + '/puente/api/cuenta/avisos/leer', { method: 'POST', credentials: 'include' }).catch(() => {}); pintar(0); }
+      } catch { lista.textContent = ''; lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'No se pudieron cargar.')); }
+    }
+    b.addEventListener('click', (e) => { e.stopPropagation(); panel.hidden = !panel.hidden; if (!panel.hidden) abrir(); });
+    document.addEventListener('click', () => { panel.hidden = true; });
+    wrap.append(b, panel);
+    return wrap;
   }
 
   function webBar(yo) {
