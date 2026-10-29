@@ -11,6 +11,8 @@
 //  GET  /tejemanejes?desde=         los avisos de compra/venta (tema, texto entero, fotos)
 //  POST /tema     {id, titulo, texto}            publica un tema en compra/venta como esa cuenta
 //  POST /editar   {nodo, id, titulo, texto}      lo cambia (solo temas propios de compra/venta)
+//  GET  /tejemanejes-vivos?nodos=1,2   cuales de esos temas de compra/venta siguen (sin borrar)
+//  POST /borrar   {nodo}            borra un tema de compra/venta (como un moderador: se puede recuperar)
 //  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat), con nombres y fotos
 //  GET  /privados-nuevos?desde=&ids=  los privados que les llegaron a esas cuentas desde esa fecha (ms)
 //  POST /unidas   {ids}            las cuentas del foro unidas con verificacion en dos pasos (entran solo por CV Chat, cvpuerta.php)
@@ -155,6 +157,28 @@ if ($ruta === '/tejemanejes') {
 			'fotos' => fotosDe($n['nodeid']), 'url' => $base . '/node/' . (int) $n['nodeid']];
 	}
 	salir(['temas' => $out]);
+}
+
+if ($ruta === '/tejemanejes-vivos') {
+	$vivos = [];
+	foreach (array_chunk(ids($_GET['nodos'] ?? ''), 200) as $grupo) {
+		foreach ((array) $db->getRows('vBForum:node', ['nodeid' => $grupo]) as $n) {
+			if ((int) $n['parentid'] === TEJEMANEJES && (int) $n['showpublished'] === 1 && empty($n['deleteuserid'])) $vivos[] = (int) $n['nodeid'];
+		}
+	}
+	salir(['vivos' => $vivos]);
+}
+
+if ($ruta === '/borrar' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+	$nodo = (int) ($cuerpo['nodo'] ?? 0);
+	$n = $nodo ? $db->getRow('vBForum:node', ['nodeid' => $nodo]) : null;
+	if (!$n) salir(['error' => 'no esta'], 404);
+	// Solo temas de compra/venta
+	if ((int) $n['parentid'] !== TEJEMANEJES || (int) $n['starter'] !== $nodo) salir(['error' => 'no es de compra/venta'], 403);
+	if (!empty($n['deleteuserid'])) salir(['ok' => true, 'ya' => true]);
+	como(1);
+	vB_Library::instance('node')->deleteNodes([$nodo], false, 'Se borró en el Marketplace de CV Chat');
+	salir(['ok' => true]);
 }
 
 if (($ruta === '/tema' || $ruta === '/editar') && $_SERVER['REQUEST_METHOD'] === 'POST') {

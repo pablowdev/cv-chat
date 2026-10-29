@@ -295,7 +295,12 @@ function injectScript(req, res, src) {
     // Los mensajes en una ventanita de la web y del foro (barra.js): el chat se puede abrir
     // adentro de esas paginas propias, y de ninguna otra
     if (n === 'x-frame-options') return this;
-    if (n === 'content-security-policy' && typeof value === 'string') value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
+    if (n === 'content-security-policy' && typeof value === 'string') {
+      value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
+      // Y el foro adentro del chat (el boton del foro, aviso.js)
+      const foroOrigen = cuenta.origins().find(o => /^https:\/\/foro\./.test(o));
+      if (foroOrigen) value = value.replace("frame-src 'self'", "frame-src 'self' " + foroOrigen);
+    }
     return origSetHeader.call(this, name, value);
   };
   res.write = function (chunk, encoding, cb) {
@@ -1216,8 +1221,9 @@ function loginWithDiscord(me) {
   const user = db.prepare('SELECT id, username, is_admin, totp_enabled FROM users WHERE id = ?').get(l.haven_user_id);
   if (!user) return { error: 'discord' };
   // Como en la recuperacion: los admins y las cuentas con verificacion en dos pasos, con contraseña
-  if (user.is_admin) return { error: 'admin' };
-  if (user.totp_enabled) return { error: '2fa' };
+  // Admins y cuentas con la app de codigos: tambien, con el codigo por email en un dispositivo nuevo (dospasos.js)
+  if (!dospasos.on() && user.is_admin) return { error: 'admin' };
+  if (!dospasos.on() && user.totp_enabled) return { error: '2fa' };
   if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) return { error: 'ban' };
   handoffs.set(code, { ...sessionFor(user.id), exp: now + HANDOFF_TTL_MS });
   log(`entro con Discord: ${user.username} (Haven #${user.id})`);

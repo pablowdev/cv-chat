@@ -18,6 +18,8 @@
   const WEB = 'https://' + DOM, FORO = 'https://foro.' + DOM;
   if (enForo && location.pathname.startsWith('/cvchat.php')) return;
   const aca = location.href;
+  // El foro adentro de CV Chat (el boton del foro): sin la barra (ya esta la de CV Chat)
+  const enChat = enForo && window.name === 'cv-foro' && window.top !== window;
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
   const registrarse = CHAT + '/?registro=1&volver=' + encodeURIComponent(aca);
   const salir = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(enForo ? FORO + '/' : aca);
@@ -241,7 +243,8 @@
     const arriba = () => bar() || cont;
     // Unir: con sesion en CV Chat, directo; sin sesion, entrando (ahi esta "Entrar con el foro")
     const unirUrl = yo && yo.conectado ? CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]) : entrar;
-    const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
+    // (adentro de CV Chat, los mensajes directos son los de ahi mismo)
+    const mensajes = () => (enChat && unida ? window.parent.postMessage({ cv: 'mensajes' }, CHAT) : unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
     if ((unida || sinUnir) && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
     if (cont && (unida || sinUnir)) {
       for (const li of cont.querySelectorAll('li')) {
@@ -280,12 +283,24 @@
   }
 
   function start() {
-    // En el foro, la barra del foro queda escondida (barra.css): esta va en su lugar
-    if (enForo) document.documentElement.classList.add('cv-en-foro');
-    webBar(null);
+    // En el foro, la barra del foro queda escondida (barra.css): esta va en su lugar. Adentro de CV Chat,
+    // ninguna de las dos (arriba ya esta la de CV Chat)
+    if (enForo) document.documentElement.classList.add(enChat ? 'cv-foro-en-chat' : 'cv-en-foro');
+    if (!enChat) webBar(null);
     fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' })
       .then(r => r.json()).catch(() => null)
-      .then(yo => { webBar(yo); if (enForo) foroBar(yo); });
+      .then(yo => { if (!enChat) webBar(yo); if (enForo) foroBar(yo); });
+    // Adentro de CV Chat: lo que lleva al chat se abre en el chat (no un chat adentro del chat)
+    if (enChat) {
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a[href]');
+        if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        let u; try { u = new URL(a.href, location.href); } catch { return; }
+        if (u.origin !== CHAT) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        window.top.location.href = u.href;
+      }, true);
+    }
   }
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();

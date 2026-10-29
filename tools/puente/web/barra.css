@@ -162,3 +162,6 @@ html.cv-en-foro .cv-barra a, html.cv-en-foro .cv-barra button { font-family: Hel
   .cv-barra .cv-barra__entrar::after { content: "Entrar"; font-size: 12px; }
   .cv-barra .cv-barra__links { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); padding-right: 18px; }
 }
+
+/* El foro adentro de CV Chat: sin barras arriba (la de CV Chat ya esta), ni la del foro */
+html.cv-foro-en-chat nav.js-top-menu-user { display: none !important; }

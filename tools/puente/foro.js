@@ -184,8 +184,11 @@ function login(f) {
   if (!l) { signups.set(code, { f, exp: Date.now() + SIGNUP_TTL_MS }); return { nuevo: code }; }
   const user = db.prepare('SELECT id, username, is_admin, totp_enabled FROM users WHERE id = ?').get(l.haven_user_id);
   if (!user) return { error: 'foro' };
-  if (user.is_admin) return { error: 'admin' };
-  if (user.totp_enabled) return { error: '2fa' };
+  // Admins y cuentas con la app de codigos: tambien, con el codigo por email en un dispositivo nuevo (dospasos.js).
+  // (las que tienen la app de codigos solo entran al foro por CV Chat, cvpuerta.php)
+  const dp = require('./dospasos.js');
+  if (!dp.on() && user.is_admin) return { error: 'admin' };
+  if (!dp.on() && user.totp_enabled) return { error: '2fa' };
   if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(user.id)) return { error: 'ban' };
   saveLink(user.id, f); // nombre y foto del foro al dia
   h.handoff(code, user.id);

@@ -11888,3 +11888,175 @@ var puenteSinUbicacion = (function () {
     setTimeout(mandarEsperando, 9000);
   })();
 })();
+// El foro adentro de CV Chat: un boton debajo del Marketplace y los Juegos (en la columna de la izquierda)
+// lo abre aca mismo, como esas dos paginas. El foro se ve sin la barra de la web (barra.js lo reconoce por
+// el nombre "cv-foro"); "Mensajes" del foro abre los mensajes directos de aca.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const FORO = 'https://foro.' + location.hostname.replace(/^chat\./, '');
+  const mobile = () => window.matchMedia('(max-width: 768px)').matches;
+  const ICONO = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M4 3h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V14H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm15 5h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-1v3l-3.5-3H11a2 2 0 0 1-2-2v-1h6a4 4 0 0 0 4-4V8Z"/></svg>';
+  const st = el('style');
+  st.textContent = '#puente-foro-app{display:flex;flex-direction:column;overflow:hidden}#puente-foro-app[hidden]{display:none}'
+    + '#puente-foro-app .jg-head a{color:#b5bac1;font-size:.875rem;text-decoration:none;padding:0 .5rem}#puente-foro-app .jg-head a:hover{color:#fff}'
+    + '#puente-foro-app iframe{flex:1 1 auto;width:100%;border:0;background:#1a191e}'
+    + '#server-bar .puente-fo-btn:hover,#server-bar .puente-fo-btn.active{background:#5865f2;color:#fff;border-radius:16px}'
+    + '#puente-rail .puente-fo-btn{color:#dbdee1}#puente-rail .puente-fo-btn.active{background:#5865f2;color:#fff}';
+  document.head.appendChild(st);
+
+  let page = null;
+  const abierto = () => !!(page && !page.hidden);
+  function cerrar() {
+    if (page) page.hidden = true;
+    document.querySelectorAll('.puente-fo-btn').forEach(b => b.classList.remove('active'));
+  }
+  function abrir(ruta) {
+    // Una sola pagina de las de la izquierda a la vez
+    try { if (window.puenteJuegos && window.puenteJuegos.abierto()) { let n = 0; while (window.puenteJuegos.abierto() && n++ < 20) window.puenteJuegos.atras(); } } catch { /* sigue */ }
+    try { if (window.puenteMercado && window.puenteMercado.abierto()) { let n = 0; while (window.puenteMercado.abierto() && n++ < 20) window.puenteMercado.atras(); } } catch { /* sigue */ }
+    if (!page) {
+      page = el('div', 'puente-jg'); page.id = 'puente-foro-app';
+      const head = el('div', 'jg-head');
+      const x = el('button', 'jg-icono'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+      x.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>';
+      x.addEventListener('click', cerrar);
+      const afuera = el('a', null, 'Abrir en el navegador ↗'); afuera.href = FORO + '/'; afuera.target = '_blank'; afuera.rel = 'noopener';
+      head.append(x, el('div', 'jg-titulo', 'Foro'), afuera);
+      const marco = el('iframe'); marco.name = 'cv-foro'; marco.title = 'Foro'; marco.src = FORO + (ruta || '/');
+      page.append(head, marco);
+      document.body.appendChild(page);
+    } else if (ruta) page.querySelector('iframe').src = FORO + ruta;
+    const bar = byId('server-bar');
+    page.style.left = !mobile() && bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0';
+    page.hidden = false;
+    document.querySelectorAll('.puente-fo-btn').forEach(b => b.classList.add('active'));
+  }
+  window.puenteForo = { abierto, abrir, cerrar };
+
+  function botones() {
+    const mk = (cls) => {
+      const b = el('button', cls + ' puente-fo-btn'); b.type = 'button'; b.title = 'Foro'; b.setAttribute('aria-label', 'Foro');
+      b.innerHTML = ICONO;
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (abierto()) cerrar(); else abrir(); });
+      return b;
+    };
+    const after = (a, b, c) => document.querySelector(a) || document.querySelector(b) || document.querySelector(c);
+    const r = after('#puente-rail .puente-jg-btn', '#puente-rail .puente-mk-btn', '#puente-rail .puente-rail-server');
+    if (r && !document.querySelector('#puente-rail .puente-fo-btn')) r.after(mk('puente-rail-btn'));
+    const s = after('#server-bar .puente-jg-btn', '#server-bar .puente-mk-btn', '#server-bar #home-server');
+    if (s && !document.querySelector('#server-bar .puente-fo-btn')) s.after(mk('server-icon'));
+    return !!(r || s);
+  }
+  let t = 0;
+  (function esperar() {
+    if (window.name === 'cv-ventana' || !botones()) { if (window.name !== 'cv-ventana' && ++t < 120) setTimeout(esperar, 1000); return; }
+    setInterval(botones, 2000);
+    // Otra cosa de la izquierda (mensajes, el servidor, el Marketplace, los Juegos) o cambiar de canal: se cierra
+    document.addEventListener('click', (e) => {
+      if (abierto() && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn, .puente-jg-btn')) cerrar();
+    }, true);
+    const a = window.app;
+    if (a && typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function () { cerrar(); return sw.apply(this, arguments); }; }
+    // El foro pide abrir los mensajes directos (su "Mensajes")
+    window.addEventListener('message', (e) => {
+      if (e.origin !== FORO || !e.data || e.data.cv !== 'mensajes') return;
+      cerrar();
+      const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click();
+    });
+    // /app?foro (o ?foro=/node/123): abre el foro aca
+    const q = new URLSearchParams(location.search);
+    if (q.has('foro')) { const r = q.get('foro'); setTimeout(() => abrir(r && r.startsWith('/') ? r : '/'), 1500); }
+  })();
+})();
+// Crear un canal desde su categoria, como en Discord: un "+" al lado del nombre de la categoria (solo para
+// administradores), que pide el nombre y si es privado, y lo crea ya adentro de esa categoria.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const st = el('style');
+  st.textContent = '#channel-list .category-label .puente-cat-mas{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;background:none;color:#b5bac1;font-size:18px;line-height:1;cursor:pointer;opacity:0;transition:opacity .1s}'
+    + '#channel-list .category-label:hover .puente-cat-mas,#channel-list .category-label .puente-cat-mas:focus{opacity:1}#channel-list .category-label .puente-cat-mas:hover{color:#fff}'
+    + '@media (hover:none){#channel-list .category-label .puente-cat-mas{opacity:1}}'
+    + '#puente-canal-nuevo{position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.7)}'
+    + '#puente-canal-nuevo .pcn{position:relative;width:100%;max-width:460px;padding:22px 22px 18px;border-radius:10px;background:#313338;color:#dbdee1;font-size:14px}'
+    + '#puente-canal-nuevo h2{margin:0 0 2px;color:#f2f3f5;font-size:20px}#puente-canal-nuevo .pcn-sub{margin:0 0 18px;color:#b5bac1;font-size:12px}'
+    + '#puente-canal-nuevo .pcn-x{position:absolute;top:14px;right:14px;border:0;background:none;color:#b5bac1;font-size:22px;cursor:pointer}'
+    + '#puente-canal-nuevo .pcn-et{margin:0 0 8px;color:#b5bac1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}'
+    + '#puente-canal-nuevo .pcn-tipo{display:flex;gap:12px;align-items:center;width:100%;margin:0 0 8px;padding:10px 12px;border:0;border-radius:6px;background:#2b2d31;color:inherit;font:inherit;text-align:left;cursor:pointer}'
+    + '#puente-canal-nuevo .pcn-tipo.es-elegido{background:#404249}#puente-canal-nuevo .pcn-tipo b{display:block;color:#f2f3f5}#puente-canal-nuevo .pcn-tipo small{color:#b5bac1}'
+    + '#puente-canal-nuevo .pcn-tipo i{flex:0 0 auto;font-style:normal;font-size:20px;width:24px;text-align:center}'
+    + '#puente-canal-nuevo .pcn-nombre{display:flex;align-items:center;gap:6px;margin:10px 0 16px;padding:0 10px;border-radius:6px;background:#1e1f22}'
+    + '#puente-canal-nuevo .pcn-nombre span{color:#b5bac1;font-size:18px}#puente-canal-nuevo .pcn-nombre input{flex:1;min-width:0;height:40px;border:0;background:none;color:#f2f3f5;font:inherit;outline:none}'
+    + '#puente-canal-nuevo .pcn-priv{display:flex;align-items:center;gap:10px;margin:0 0 18px;cursor:pointer}#puente-canal-nuevo .pcn-priv span{flex:1}#puente-canal-nuevo .pcn-priv small{display:block;color:#b5bac1;font-size:12px}'
+    + '#puente-canal-nuevo .pcn-pie{display:flex;gap:10px;justify-content:flex-end}#puente-canal-nuevo .pcn-pie button{padding:10px 18px;border:0;border-radius:4px;font:inherit;font-weight:600;cursor:pointer}'
+    + '#puente-canal-nuevo .pcn-cancelar{background:none;color:#dbdee1}#puente-canal-nuevo .pcn-crear{background:#5865f2;color:#fff}#puente-canal-nuevo .pcn-crear:disabled{opacity:.5;cursor:default}';
+  document.head.appendChild(st);
+
+  const admin = () => !!(window.app && window.app.user && window.app.user.isAdmin);
+  function crear(cat) {
+    const viejo = byId('puente-canal-nuevo'); if (viejo) viejo.remove();
+    const o = el('div'); o.id = 'puente-canal-nuevo';
+    const box = el('div', 'pcn'); o.appendChild(box);
+    const x = el('button', 'pcn-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+    box.append(x, el('h2', null, 'Crear canal'), el('p', 'pcn-sub', 'en ' + cat), el('p', 'pcn-et', 'Tipo de canal'));
+    let foro = false;
+    const tipo = (icono, titulo, texto, esForo) => {
+      const b = el('button', 'pcn-tipo' + (esForo === foro ? ' es-elegido' : '')); b.type = 'button';
+      const t = el('span'); t.append(el('b', null, titulo), el('small', null, texto));
+      b.append(el('i', null, icono), t);
+      b.addEventListener('click', () => { foro = esForo; box.querySelectorAll('.pcn-tipo').forEach(n => n.classList.toggle('es-elegido', n === b)); });
+      return b;
+    };
+    box.append(tipo('#', 'Texto', 'Mensajes, fotos, GIFs, emojis y opiniones (y charla de voz)', false), tipo('💬', 'Foro', 'Temas organizados, cada uno con su conversación', true));
+    box.appendChild(el('p', 'pcn-et', 'Nombre del canal'));
+    const fila = el('label', 'pcn-nombre'), nombre = el('input'); nombre.maxLength = 50; nombre.placeholder = 'nuevo-canal';
+    fila.append(el('span', null, '#'), nombre); box.appendChild(fila);
+    const priv = el('label', 'pcn-priv'), cb = el('input'); cb.type = 'checkbox';
+    const pt = el('span'); pt.append('🔒 Canal privado', el('small', null, 'Solo las personas y roles que elijas lo van a poder ver.'));
+    priv.append(pt, cb); box.appendChild(priv);
+    const pie = el('div', 'pcn-pie'), no = el('button', 'pcn-cancelar', 'Cancelar'), si = el('button', 'pcn-crear', 'Crear canal');
+    no.type = 'button'; si.type = 'button'; si.disabled = true; pie.append(no, si); box.appendChild(pie);
+    document.body.appendChild(o);
+    setTimeout(() => nombre.focus(), 30);
+    const cerrar = () => o.remove();
+    x.addEventListener('click', cerrar); no.addEventListener('click', cerrar);
+    o.addEventListener('click', (e) => { if (e.target === o) cerrar(); });
+    nombre.addEventListener('input', () => { si.disabled = !nombre.value.trim(); });
+    nombre.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !si.disabled) si.click(); if (e.key === 'Escape') cerrar(); });
+    si.addEventListener('click', () => {
+      const so = window.app && window.app.socket;
+      const n = nombre.value.trim().replace(/\s+/g, '-').toLowerCase();
+      if (!so || !n) return;
+      si.disabled = true;
+      // Se crea, y apenas existe se pone en la categoria
+      const listo = (ch) => {
+        if (!ch || !ch.code) return;
+        so.emit('set-channel-category', { code: ch.code, category: cat });
+        cerrar();
+        setTimeout(() => { try { window.app.switchChannel(ch.code); } catch { /* */ } }, 600);
+      };
+      so.once('channel-created', listo);
+      setTimeout(() => { so.off('channel-created', listo); si.disabled = false; }, 8000);
+      so.emit('create-channel', { name: n, isPrivate: cb.checked, isForum: foro, addAllMembers: !cb.checked });
+    });
+  }
+  function poner() {
+    if (!admin()) return;
+    for (const lab of document.querySelectorAll('#channel-list .category-label[data-category]')) {
+      if (lab.querySelector('.puente-cat-mas')) continue;
+      const b = el('button', 'puente-cat-mas', '+'); b.type = 'button'; b.title = 'Crear canal'; b.setAttribute('aria-label', 'Crear canal en ' + lab.dataset.category);
+      b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); crear(lab.dataset.category); });
+      lab.appendChild(b);
+    }
+  }
+  let t = 0;
+  (function esperar() {
+    const list = byId('channel-list');
+    if (!list || !window.app || !window.app.user) { if (++t < 120) setTimeout(esperar, 1000); return; }
+    poner();
+    new MutationObserver(poner).observe(list, { childList: true, subtree: true });
+  })();
+})();

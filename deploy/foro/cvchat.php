@@ -21,7 +21,8 @@ $secret = (string) getenv('CV_PUENTE_SECRETO');
 $chat = rtrim((string) getenv('CV_CHAT_URL'), '/');
 
 header('Cache-Control: no-store');
-header('X-Frame-Options: DENY');
+// Solo adentro de las paginas propias del foro o de CV Chat (el foro adentro del chat), nunca de otra
+header("Content-Security-Policy: frame-ancestors 'self'" . ($chat ? ' ' . $chat : ''));
 header('Referrer-Policy: no-referrer');
 header('X-Content-Type-Options: nosniff');
 

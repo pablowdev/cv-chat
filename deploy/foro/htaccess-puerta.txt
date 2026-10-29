@@ -3,3 +3,14 @@
 # recuperar la contraseña pasan por cvpuerta.php (las cuentas unidas a CV Chat entran solo por CV Chat)
 	# CV: iniciar sesion y recuperar la contraseña, por la cuenta unica (cvpuerta.php)
 	RewriteRule ^(auth/(?:ajax-login|login-external|login-and-associate|lostpw|reset-password))/?$ cvpuerta.php?routestring=$1 [L,QSA]
+
+# Y al final del .htaccess: el foro se puede mostrar adentro de CV Chat (el boton del foro), menos los paneles
+# de control (que siguen solo dentro del foro). vBulletin manda "frame-ancestors 'self'" y X-Frame-Options.
+<IfModule mod_headers.c>
+	<If "! %{THE_REQUEST} =~ m#^[A-Z]+ /(core/|admincp|modcp)#">
+		Header always edit Content-Security-Policy "frame-ancestors 'self'" "frame-ancestors 'self' https://chat.circulovicioso.club"
+		Header edit Content-Security-Policy "frame-ancestors 'self'" "frame-ancestors 'self' https://chat.circulovicioso.club"
+		Header always unset X-Frame-Options
+		Header unset X-Frame-Options
+	</If>
+</IfModule>

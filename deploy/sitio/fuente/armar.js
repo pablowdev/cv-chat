@@ -58,7 +58,7 @@ ${cuerpo.trim()}
 }
 
 // Las paginas de antes que ya no estan: van a donde corresponde
-const redirige = (to, title) => `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>${title} - Circulo Vicioso Club</title>
+const redirige = (to, title) => `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>${title} - Círculo Vicioso Club</title>
 <meta http-equiv="refresh" content="0;url=${to}"><script>location.replace(${JSON.stringify(to)} + (${JSON.stringify(to)}.indexOf('?') < 0 ? location.search : ''))</script></head>
 <body style="background:#211c1f;color:#f3f7e2;font-family:monospace;padding:2rem"><p><a href="${to}" style="color:#ee2d6f">${title}</a></p></body></html>\n`;
 const VIEJAS = {
@@ -86,6 +86,6 @@ for (const [archivo, [to, t]] of Object.entries(VIEJAS)) {
   fs.writeFileSync(path.join(out, archivo), redirige(to, t));
 }
 // ediciones.html?articulo=x -> /wiki/x?editar=1
-fs.writeFileSync(path.join(out, 'ediciones.html'), `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Wiki - Circulo Vicioso Club</title>
+fs.writeFileSync(path.join(out, 'ediciones.html'), `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Wiki - Círculo Vicioso Club</title>
 <script>var a=new URLSearchParams(location.search).get('articulo');location.replace(a?'/wiki/'+encodeURIComponent(a)+'?editar=1':'/wiki')</script></head><body></body></html>\n`);
 console.log('listo:', Object.keys(PAGINAS).length, 'paginas y', Object.keys(VIEJAS).length + 1, 'direcciones viejas en', out);

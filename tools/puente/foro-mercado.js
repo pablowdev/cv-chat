@@ -3,10 +3,13 @@
 //  - Los temas de tejemanejes estan en el Marketplace con su fecha, sus fotos, el precio (si se lee en el
 //    titulo o el texto) y un enlace al tema. Si quien lo publico tiene la cuenta unida, es suyo.
 //  - Lo que publica en el Marketplace alguien con la cuenta del foro unida sale tambien como tema en
-//    tejemanejes, como esa persona, con las fotos y un enlace al Marketplace. Vendido o borrado: el tema
-//    lo dice en el titulo.
+//    tejemanejes, como esa persona, con las fotos y un enlace al Marketplace. Vendido: el tema lo dice en el
+//    titulo.
 //  - Si se cambia de un lado, se cambia del otro (gana el ultimo: primero lo de CV Chat).
-// foro_hash: como estaba el aviso de CV Chat la ultima vez que se paso; foro_editado: la ultima edicion del foro.
+//  - Si se borra de un lado, se borra del otro: el tema del foro queda borrado como los que borra un
+//    moderador (se puede recuperar desde el foro); el aviso de CV Chat, como con su boton de borrar.
+// foro_hash: como estaba el aviso de CV Chat la ultima vez que se paso ('borrado': ya borrado de los dos
+// lados); foro_editado: la ultima edicion del foro.
 
 const crypto = require('crypto');
 
@@ -123,7 +126,7 @@ function textoForo(r) {
 const tituloForo = r => (r.estado === 'vendida' ? '[VENDIDO] ' : r.estado === 'borrada' ? '[YA NO ESTÁ] ' : '') + r.titulo;
 async function llevar() {
   const filas = db.prepare(`SELECT m.* FROM puente_mercado m JOIN puente_foro f ON f.haven_user_id = m.user_id
-    WHERE (m.foro_nodo IS NULL AND m.origen = 'cv' AND m.estado = 'activa' AND m.oculta = 0) OR (m.foro_nodo IS NOT NULL AND (m.foro_hash IS NULL OR m.foro_hash != ''))`).all();
+    WHERE (m.foro_nodo IS NULL AND m.origen = 'cv' AND m.estado = 'activa' AND m.oculta = 0) OR (m.foro_nodo IS NOT NULL AND m.estado != 'borrada' AND (m.foro_hash IS NULL OR m.foro_hash != ''))`).all();
   for (const r of filas) {
     const h = hashDe(r);
     if (r.foro_nodo && r.foro_hash === h) continue;
@@ -146,12 +149,44 @@ async function llevar() {
   }
 }
 
+// ── Borrado de un lado, borrado del otro ──
+// En CV Chat: el tema del foro se borra (como los que borra un moderador)
+async function borrarEnForo() {
+  const filas = db.prepare("SELECT id, titulo, foro_nodo FROM puente_mercado WHERE estado = 'borrada' AND foro_nodo IS NOT NULL AND (foro_hash IS NULL OR foro_hash != 'borrado')").all();
+  for (const r of filas) {
+    try {
+      await servicio.servicio('/borrar', { nodo: r.foro_nodo });
+      log(`foro: marketplace -> tejemanejes: borrado "${r.titulo}"`);
+    } catch (err) {
+      if (!/403|404/.test(err.message)) { warn(`foro: borrar en tejemanejes "${r.titulo}":`, err.message); continue; }
+    }
+    db.prepare("UPDATE puente_mercado SET foro_hash = 'borrado' WHERE id = ?").run(r.id);
+  }
+}
+// En el foro: el aviso de CV Chat se borra
+async function borrarAca() {
+  const filas = db.prepare("SELECT * FROM puente_mercado WHERE estado != 'borrada' AND foro_nodo IS NOT NULL").all();
+  for (let i = 0; i < filas.length; i += 200) {
+    const grupo = filas.slice(i, i + 200);
+    const d = await servicio.servicio('/tejemanejes-vivos?nodos=' + grupo.map(r => r.foro_nodo).join(','));
+    const vivos = new Set((d.vivos || []).map(Number));
+    for (const r of grupo) {
+      if (vivos.has(Number(r.foro_nodo))) continue;
+      mercado.borrarAviso(r);
+      db.prepare("UPDATE puente_mercado SET foro_hash = 'borrado' WHERE id = ?").run(r.id);
+      log(`foro: tejemanejes -> marketplace: borrado "${r.titulo}" (se borro en el foro)`);
+    }
+  }
+}
+
 async function vuelta() {
   if (andando) return;
   andando = true;
   try {
     const d = await servicio.servicio('/tejemanejes?desde=0');
     await traer(d.temas);
+    await borrarAca();
+    await borrarEnForo();
     await llevar();
   } catch (err) { warn('foro: marketplace y tejemanejes:', err.message); }
   andando = false;

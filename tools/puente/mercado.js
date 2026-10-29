@@ -181,6 +181,13 @@ function full(r, me) {
   return c;
 }
 
+// Se marca borrada (las ventas y opiniones siguen valiendo); las fotos se van. Tambien cuando se borra
+// el tema en el foro (foro-mercado.js)
+function borrarAviso(r) {
+  db.prepare("UPDATE puente_mercado SET estado = 'borrada', fotos = '[]' WHERE id = ?").run(r.id);
+  removeFiles(fotosOf(r));
+  db.prepare('DELETE FROM puente_mercado_guardados WHERE item_id = ?').run(r.id);
+}
 function removeFiles(names) {
   for (const n of names) {
     if (!/^[\w-]+\.webp$/.test(n)) continue;
@@ -356,10 +363,7 @@ async function handle(req, res, p, u, h) {
   if (p === '/puente/api/mercado/borrar' && req.method === 'POST') {
     const r = item(body.id);
     if (!r || (r.user_id !== me && !isAdmin(me))) return h.json(res, 404, { error: 'Esa publicación no es tuya o ya no está.' });
-    // Se marca borrada (las ventas y opiniones siguen valiendo); las fotos se van
-    db.prepare("UPDATE puente_mercado SET estado = 'borrada', fotos = '[]' WHERE id = ?").run(r.id);
-    removeFiles(fotosOf(r));
-    db.prepare('DELETE FROM puente_mercado_guardados WHERE item_id = ?').run(r.id);
+    borrarAviso(r);
     return h.json(res, 200, { ok: true });
   }
 
@@ -486,4 +490,4 @@ function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary };
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso };
