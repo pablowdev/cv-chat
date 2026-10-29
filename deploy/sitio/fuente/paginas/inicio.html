@@ -2,13 +2,10 @@
     <section class="caja inicio__intro">
       <div class="inicio__intro-texto">
         <p class="rotulo">el club</p>
-        <h1 class="inicio__lema">Círculo Vicioso es un club de amigos con un podcast.</h1>
+        <h1 class="inicio__lema">Club de amigos, comunidad online, rejunto de gordos</h1>
       </div>
       <div class="inicio__intro-vivo">
-        <p class="inicio__cuando">Nos vemos todos los <b>miércoles a las 20:00</b> (GMT-3) en <a href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">youtube.com/circulovicioso</a></p>
-        <div class="inicio__vivo" id="vivo" aria-live="polite">
-          <span class="inicio__punto" aria-hidden="true"></span><span id="vivo-texto">el próximo en vivo es el miércoles a las 20:00</span>
-        </div>
+        <p class="inicio__cuando">El podcast se encuentra en pausa indefinida, podés ver los episodios en <a href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">youtube.com/circulovicioso</a></p>
         <div class="inicio__acciones">
           <a class="btn btn--rosa" href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">Ir al canal</a>
           <a class="btn" href="https://chat.circulovicioso.club/app">Entrar al chat</a>
@@ -63,21 +60,11 @@
     </section>
 </div>
 <script>
-// El proximo en vivo (miercoles 20:00 en Argentina, 23:00 UTC) y si es ahora
+// El conejo gira al pasar el mouse
 (function () {
-  var t = document.getElementById('vivo-texto'), box = document.getElementById('vivo');
-  function pintar() {
-    // El ultimo miercoles 23:00 UTC que ya empezo; el programa dura unas 3 horas
-    var now = new Date(), s = new Date(now);
-    s.setUTCHours(23, 0, 0, 0);
-    s.setUTCDate(s.getUTCDate() - (s.getUTCDay() - 3 + 7) % 7);
-    if (s > now) s.setUTCDate(s.getUTCDate() - 7);
-    if (now - s < 3 * 36e5) { box.classList.add('es-ahora'); t.textContent = '¡estamos en vivo ahora!'; return; }
-    box.classList.remove('es-ahora');
-    var d = new Date(s.getTime() + 7 * 864e5);
-    var ms = d - now, h = Math.floor(ms / 36e5), m = Math.floor(ms % 36e5 / 6e4);
-    t.textContent = h < 24 ? 'próximo en vivo en ' + h + ' h ' + m + ' min' : 'próximo en vivo: ' + d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) + ', 20:00 (GMT-3)';
-  }
-  pintar(); setInterval(pintar, 30000);
+  var c = document.querySelector(".inicio__conejo");
+  if (!c) return;
+  c.addEventListener("mouseenter", function () { c.classList.add("gira"); });
+  c.addEventListener("animationend", function () { c.classList.remove("gira"); });
 })();
 </script>

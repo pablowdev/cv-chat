@@ -9,7 +9,7 @@ const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', '
   ['foro', 'Foro', FORO + '/', true], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice }) {
-  const desc = descripcion || 'Círculo Vicioso es un club social y podcast. Miranos todos los miércoles a las 20.00 horas (GMT-3).';
+  const desc = descripcion || 'Círculo Vicioso: club de amigos, comunidad online, rejunto de gordos.';
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -48,8 +48,8 @@ ${NAV.map(([k, t, href, ext]) => `      <a href="${href}"${k === actual ? ' aria
 ${cuerpo.trim()}
   </main>
   <footer class="pie">
-    <span>Círculo Vicioso · club social &amp; podcast</span>
-    <nav><a href="/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a><a href="https://postdigitalist.xyz" target="_blank" rel="noopener">Diseño original: PostdigitalisT</a></nav>
+    <span>Círculo Vicioso Club</span>
+    <nav><a href="/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a></nav>
   </footer>
 </div>
 </body>

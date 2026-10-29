@@ -98,7 +98,6 @@
     const menu = el('div', 'cv-barra__menu'); menu.hidden = true;
     const item = (t, href) => { const a = el('a', null, t); a.href = href; menu.appendChild(a); return a; };
     item('Mi cuenta', WEB + '/cuenta');
-    item('Abrir el chat', CHAT + '/app');
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });

@@ -13,6 +13,10 @@
 @keyframes latido { 50% { opacity: .25; } }
 .inicio__acciones { display: flex; flex-wrap: wrap; gap: 10px; }
 .inicio__conejo { width: 170px; height: auto; opacity: .9; }
+/* Al pasar el mouse, gira rapido sobre su eje (la vuelta termina aunque el mouse se vaya) */
+.inicio__conejo.gira { animation: conejo-gira .7s cubic-bezier(.2, .7, .3, 1); }
+@keyframes conejo-gira { to { transform: rotateY(720deg); } }
+@media (prefers-reduced-motion: reduce) { .inicio__conejo.gira { animation: none; } }
 
 .inicio__episodio { grid-column: span 8; align-self: start; }
 .inicio__video { position: relative; aspect-ratio: 16 / 9; }

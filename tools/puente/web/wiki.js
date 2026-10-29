@@ -96,13 +96,11 @@
   function portada() {
     titulo('');
     var n = lista.entradas.length;
-    var ult = lista.entradas.slice().sort(function (a, b) { return b.actualizada - a.actualizada; });
     principal.appendChild(h('section', { class: 'caja wk-portada' },
       h('div', { class: 'caja__cuerpo' },
         cabecera('wiki', 'La wiki del Círculo', 'La enciclopedia del club: el lore, los efectos, los personajes y todo lo que hay que saber. La escribe la comunidad.'),
         h('p', { class: 'wk-portada__n' }, (n === 1 ? '1 artículo' : n + ' artículos') + (lista.categorias.length ? ' · ' + lista.categorias.length + (lista.categorias.length === 1 ? ' categoría' : ' categorías') : '')),
         h('div', { class: 'wk-portada__acciones' }, h('a', { class: 'btn btn--degrade', href: '/wiki?aportar=1' }, 'Aportar un artículo'), h('a', { class: 'btn', href: '/wiki?todas=1' }, 'Ver todas')))));
-    if (ult[0]) principal.appendChild(h('section', { class: 'wk-bloque' }, h('h2', { class: 'wk-bloque__t' }, 'Lo último'), grilla(ult.slice(0, 6))));
     lista.categorias.forEach(function (c) {
       var de = lista.entradas.filter(function (w) { return w.categoriaSlug === c.slug; });
       principal.appendChild(h('section', { class: 'wk-bloque' },
