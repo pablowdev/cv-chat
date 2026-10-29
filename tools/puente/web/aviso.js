@@ -3930,6 +3930,9 @@ document.addEventListener('pointerdown', (ev) => {
     srv.appendChild(img);
     rail.append(dm, el('div', 'puente-rail-sep'), srv);
     sb.insertBefore(rail, sb.firstChild);
+    // El icono propio de los mensajes (/puente/icono-mensajes.webp, no va al repositorio); si no esta, el dibujo
+    const iconoPropio = (b) => { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-mensajes.webp?v=1'; };
+    iconoPropio(dm);
 
     // En la PC, el mismo boton arriba de todo en la columna de servidores de Haven
     const bar = document.getElementById('server-bar');
@@ -3941,6 +3944,7 @@ document.addEventListener('pointerdown', (ev) => {
       pcDm.innerHTML = CHAT_ICON;
       pcBadge = el('span', 'puente-rail-badge');
       pcDm.appendChild(pcBadge);
+      iconoPropio(pcDm);
       bar.insertBefore(pcDm, home);
       bar.insertBefore(el('div', 'server-separator puente-pc-sep'), home);
     }
@@ -11903,7 +11907,9 @@ var puenteSinUbicacion = (function () {
     + '#puente-foro-app .jg-head a{color:#b5bac1;font-size:.875rem;text-decoration:none;padding:0 .5rem}#puente-foro-app .jg-head a:hover{color:#fff}'
     + '#puente-foro-app iframe{flex:1 1 auto;width:100%;border:0;background:#1a191e}'
     + '#server-bar .puente-fo-btn:hover,#server-bar .puente-fo-btn.active{background:#5865f2;color:#fff;border-radius:16px}'
-    + '#puente-rail .puente-fo-btn{color:#dbdee1}#puente-rail .puente-fo-btn.active{background:#5865f2;color:#fff}';
+    + '#puente-rail .puente-fo-btn{color:#dbdee1}#puente-rail .puente-fo-btn.active{background:#5865f2;color:#fff}'
+    // Con su icono propio: redondo y sin fondo, como el Marketplace y los Juegos
+    + '.puente-fo-btn.con-icono,#server-bar .puente-fo-btn.con-icono,.puente-pc-dm.con-icono,#server-bar .puente-pc-dm.con-icono,.puente-rail-dm.con-icono{background:transparent!important;border-radius:50%!important;padding:0}';
   document.head.appendChild(st);
 
   let page = null;
@@ -11939,6 +11945,8 @@ var puenteSinUbicacion = (function () {
     const mk = (cls) => {
       const b = el('button', cls + ' puente-fo-btn'); b.type = 'button'; b.title = 'Foro'; b.setAttribute('aria-label', 'Foro');
       b.innerHTML = ICONO;
+      // el icono propio del foro (/puente/icono-foro.webp, no va al repositorio); si no esta, el dibujo
+      { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-foro.webp?v=1'; }
       b.addEventListener('click', (e) => { e.stopPropagation(); if (abierto()) cerrar(); else abrir(); });
       return b;
     };
