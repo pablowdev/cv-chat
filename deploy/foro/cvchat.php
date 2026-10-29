@@ -139,7 +139,7 @@ vB5_Frontend_Application::init(__DIR__);
 $api = Api_InterfaceAbstract::instance();
 $yo = vB5_User::instance();
 $userid = (int) $yo['userid'];
-$token = (string) $yo['securitytoken']; // el de vBulletin (cambia en cada pedido): solo para su inicio de sesion
+$token = (string) $yo['securitytoken']; // el de vBulletin: lo revisa el foro mismo en cada envio (cambia en cada pedido)
 // El de los formularios de esta pagina: firmado, para esta cuenta del foro y este pedido de CV Chat
 function cv_clave_form($que) { global $userid; return cv_firmar("form|$userid|$que"); }
 $base = rtrim((string) vB5_Template_Options::instance()->get('options.frontendurl'), '/');
@@ -305,7 +305,7 @@ if ($modo === 'sso')
 		. '<h2>¿Ya tenés cuenta en el foro?</h2><p class="chico">Entrá con ella y quedan unidas: vas a usar una sola cuenta para todo.</p>'
 		. str_replace('location.reload()', 'location.href=' . json_encode($aca . '&entro=1'), cv_form_entrar($token, $base, ''))
 		. '<h2>¿No tenés?</h2>'
-		. '<form method="post" action="' . cv_e($aca) . '"><input type="hidden" name="clave" value="' . cv_e(cv_clave_form($pedido['n'])) . '">'
+		. '<form method="post" action="' . cv_e($aca) . '"><input type="hidden" name="securitytoken" value="' . cv_e($token) . '"><input type="hidden" name="clave" value="' . cv_e(cv_clave_form($pedido['n'])) . '">'
 		. '<button name="accion" value="crear">Crear mi cuenta del foro como ' . cv_e($pedido['usuario']) . '</button></form>'
 		. '<a class="btn sec" href="' . cv_e($volver) . '">Ahora no</a>');
 }
@@ -354,7 +354,7 @@ cv_pagina('Seguir a CV Chat', '<h1>CV Chat</h1><p>' . $que . '</p>'
 	. '<div class="perfil">' . ($f['foto'] ? '<img src="' . cv_e($f['foto']) . '" alt="">' : '<img alt="">') . '<div><b>' . cv_e($f['usuario']) . '</b>'
 	. '<div class="chico">Cuenta del foro</div></div></div>'
 	. '<p class="chico">CV Chat va a recibir tu usuario, tu foto y tu email del foro. Tu contraseña no sale del foro.</p>'
-	. '<form method="post">' . $ocultos . '<input type="hidden" name="clave" value="' . cv_e(cv_clave_form($estado)) . '">'
+	. '<form method="post">' . $ocultos . '<input type="hidden" name="securitytoken" value="' . cv_e($token) . '"><input type="hidden" name="clave" value="' . cv_e(cv_clave_form($estado)) . '">'
 	. '<button name="accion" value="seguir">Seguir como ' . cv_e($f['usuario']) . '</button>'
 	. '<button class="sec" name="accion" value="cancelar">Cancelar</button></form>'
 	. '<p class="chico">¿No sos vos? <a href="' . cv_e($salir) . '">Cerrar sesión en el foro</a></p>');
