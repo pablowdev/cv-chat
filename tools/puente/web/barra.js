@@ -21,7 +21,8 @@
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
   const registrarse = CHAT + '/?registro=1&volver=' + encodeURIComponent(aca);
   const salir = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(enForo ? FORO + '/' : aca);
-  const LINKS = enForo ? [['Círculo Vicioso', WEB + '/'], ['Chat', CHAT + '/app'], ['Wiki', WEB + '/wiki'], ['Full Fat Search', WEB + '/full-fat-search']] : [['Círculo Vicioso', WEB + '/']];
+  // La misma en la web y en el foro: el nombre del club a la izquierda
+  const LINKS = [['Círculo Vicioso', WEB + '/']];
   const ss = { get: k => { try { return sessionStorage.getItem(k); } catch { return '1'; } }, set: k => { try { sessionStorage.setItem(k, '1'); } catch { /* */ } }, del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } } };
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -31,7 +32,7 @@
       const a = el('a', 'cv-barra__link', t); a.href = href;
       // Los administradores ven cuantas propuestas de la wiki hay por revisar
       if (t === 'Wiki' && yo && yo.wikiPendientes) { a.textContent = `Wiki (${yo.wikiPendientes})`; a.href = WEB + '/wiki?revisar=1'; }
-      if (!enForo) a.classList.add('cv-barra__marca');
+      a.classList.add('cv-barra__marca');
       nav.appendChild(a);
     }
     return nav;
@@ -95,8 +96,33 @@
     x.addEventListener('click', cerrar); o.addEventListener('click', (e) => { if (e.target === o) cerrar(); });
   }
 
+  // Lo del foro que estaba en su barra (que queda escondida): perfil, ajustes y panel
+  const delForo = (sel) => { const a = enForo && document.querySelector('nav.js-top-menu-user ' + sel); return a && a.href ? a.href : null; };
+  function itemsForo(item) {
+    if (!enForo) return;
+    for (const [t, sel] of [['Mi perfil del foro', 'a[href*="/member/"]'], ['Ajustes del foro', 'a[href*="/settings"]'], ['Panel del foro', 'a[href*="admincp"]']]) {
+      const h = delForo(sel); if (h) item(t, h);
+    }
+  }
   function usuario(yo) {
     const box = el('div', 'cv-barra__user');
+    const vbId = enForo ? Number((window.pageData && window.pageData.userid) || 0) : 0;
+    if ((!yo || !yo.conectado) && vbId) {
+      const nombre = String((window.pageData && (window.pageData.musername || window.pageData.username)) || 'Mi cuenta').replace(/<[^>]*>/g, '');
+      const b = el('button', 'cv-barra__yo'); b.type = 'button'; b.setAttribute('aria-haspopup', 'true');
+      const foto = document.querySelector('nav.js-top-menu-user img');
+      b.appendChild(foto && foto.src ? Object.assign(el('img', 'cv-barra__avatar'), { src: foto.src, alt: '' }) : el('span', 'cv-barra__avatar cv-barra__avatar--letra', nombre.charAt(0).toUpperCase()));
+      b.appendChild(el('span', 'cv-barra__nombre', nombre)); b.appendChild(el('span', 'cv-barra__flecha'));
+      const menu = el('div', 'cv-barra__menu'); menu.hidden = true;
+      const item = (t, href) => { const a = el('a', null, t); a.href = href; menu.appendChild(a); return a; };
+      item('Unir mi cuenta', CHAT + '/?volver=' + encodeURIComponent(aca));
+      itemsForo(item);
+      item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
+      b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+      document.addEventListener('click', () => { menu.hidden = true; });
+      box.append(b, menu);
+      return box;
+    }
     if (!yo || !yo.conectado) {
       const a = el('a', 'cv-barra__entrar', 'Inicio de Sesión o Registro'); a.href = entrar;
       box.appendChild(a);
@@ -107,10 +133,11 @@
     const menu = el('div', 'cv-barra__menu'); menu.hidden = true;
     const item = (t, href) => { const a = el('a', null, t); a.href = href; menu.appendChild(a); return a; };
     item('Mi cuenta', WEB + '/cuenta');
+    itemsForo(item);
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });
-    if (!enForo) box.appendChild(accesos(yo, bar));
+    box.appendChild(accesos(yo, bar));
     box.appendChild(b); box.appendChild(menu);
     return box;
   }
@@ -188,7 +215,6 @@
   // En el foro: los accesos a la izquierda de la barra del foro, y entrar y salir por la cuenta unica
   function foroBar(yo) {
     const cont = document.querySelector('nav.js-top-menu-user .b-top-menu__container');
-    if (cont && !cont.querySelector('.cv-barra__links')) cont.insertBefore(links(yo), cont.firstChild);
     const vbId = Number((window.pageData && window.pageData.userid) || 0);
     // Los mensajes privados son los de CV Chat (cifrados), los mismos en la web, el foro y el chat. Con la
     // cuenta del foro unida: el "Mensajes" del foro y sus paginas de privados abren la ventanita ahi mismo.
@@ -196,24 +222,10 @@
     // (si no se pudo saber quien es, no se toca nada)
     const unida = !!(vbId && yo && yo.conectado && Number(yo.foro) === vbId);
     const sinUnir = !!(vbId && yo && !unida);
-    const arriba = () => document.querySelector('nav.js-top-menu-user') || cont;
+    const arriba = () => bar() || cont;
     // Unir: con sesion en CV Chat, directo; sin sesion, entrando (ahi esta "Entrar con el foro")
     const unirUrl = yo && yo.conectado ? CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]) : entrar;
     const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir(unirUrl));
-    // Mensajes y campanita tambien en el foro, igual que en la web (en lugar del "Mensajes" del foro)
-    if (cont && unida && !cont.querySelector('.cv-barra__accesos')) {
-      const lista = cont.querySelector('ul.b-top-menu--user') || cont.querySelector('ul');
-      const li = el('li', 'b-top-menu__item cv-barra__foro-accesos'); li.appendChild(accesos(yo, arriba));
-      if (lista) lista.insertBefore(li, lista.firstChild); else cont.appendChild(li);
-    }
-    // A la izquierda, si la cuenta esta unida (y a "Mi cuenta"), o para unirla
-    const nav = cont && cont.querySelector('.cv-barra__links');
-    if (nav && vbId && yo && !nav.querySelector('.cv-barra__unida')) {
-      const a = el('a', 'cv-barra__link cv-barra__unida', unida ? '✓ Cuenta unida' : 'Unir mi cuenta');
-      a.href = unida ? WEB + '/cuenta' : unirUrl;
-      a.title = unida ? 'Tu cuenta del foro es la misma de la página y CV Chat' : 'Uní tu cuenta del foro con la de la página y CV Chat';
-      nav.appendChild(a);
-    }
     if ((unida || sinUnir) && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
     if (cont && (unida || sinUnir)) {
       for (const li of cont.querySelectorAll('li')) {
@@ -252,10 +264,12 @@
   }
 
   function start() {
-    if (!enForo) webBar(null);
+    // En el foro, la barra del foro queda escondida (barra.css): esta va en su lugar
+    if (enForo) document.documentElement.classList.add('cv-en-foro');
+    webBar(null);
     fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' })
       .then(r => r.json()).catch(() => null)
-      .then(yo => { if (enForo) foroBar(yo); else webBar(yo); });
+      .then(yo => { webBar(yo); if (enForo) foroBar(yo); });
   }
   if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();
