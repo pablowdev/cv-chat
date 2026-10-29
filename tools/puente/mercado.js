@@ -17,6 +17,11 @@
 //
 // Las fotos se guardan achicadas (hasta 1280 px, WebP) en /data/uploads/puente-mercado.
 //
+// Con la compra/venta del foro ("tejemanejes", foro-mercado.js): los avisos del foro estan aca con su
+// fecha (origen 'foro'; no vencen a los 30 dias) y lo que se publica aca sale tambien en el foro. Si quien
+// lo publico en el foro no tiene cuenta unida, es del usuario discord-historial y se muestra con su
+// nombre del foro (foro_autor) y "Ver en el foro" en vez de escribirle.
+//
 //  GET  /puente/api/mercado/lista?q&tipo&estado&moneda&min&max&zona&orden&ver=mias|guardados&desde
 //  GET  /puente/api/mercado/item?id
 //  POST /puente/api/mercado/foto        { imagen: data:image/...;base64 }  -> { foto }
@@ -110,6 +115,12 @@ function setup(ctx) {
       PRIMARY KEY (item_id, user_id)
     );
   `);
+  // Con el foro (foro-mercado.js)
+  const cols = new Set(db.prepare('PRAGMA table_info(puente_mercado)').all().map(c => c.name));
+  for (const [c, t] of [['origen', "TEXT NOT NULL DEFAULT 'cv'"], ['foro_nodo', 'INTEGER'], ['foro_url', 'TEXT'], ['foro_autor', 'TEXT'], ['foro_hash', 'TEXT'], ['foro_editado', 'INTEGER']]) {
+    if (!cols.has(c)) db.exec(`ALTER TABLE puente_mercado ADD COLUMN ${c} ${t}`);
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_puente_mercado_foro ON puente_mercado(foro_nodo) WHERE foro_nodo IS NOT NULL');
   try { sharp = require('./vendor/node_modules/sharp'); } catch { warn('mercado: sin sharp, no se pueden subir fotos'); }
   // Fotos subidas que nunca se publicaron: afuera al dia
   setInterval(cleanup, 6 * 3600e3).unref();
@@ -130,6 +141,9 @@ const person = id => {
 };
 const fotosOf = r => { try { return JSON.parse(r.fotos || '[]').filter(f => typeof f === 'string'); } catch { return []; } };
 const vence = r => r.renovado + DURA;
+const delForoSinCuenta = r => r.origen === 'foro' && r.foro_autor && (db.prepare('SELECT username FROM users WHERE id = ?').get(r.user_id) || {}).username === 'discord-historial';
+// El aviso del foro: { url, autor, sinCuenta } (sinCuenta: quien lo publico no tiene cuenta en CV Chat)
+const foroDe = r => (r.foro_url ? { url: r.foro_url, autor: r.foro_autor || null, sinCuenta: delForoSinCuenta(r) } : null);
 
 function reputation(userId) {
   const rows = db.prepare('SELECT rol, positiva FROM puente_mercado_opiniones WHERE para_id = ?').all(userId);
@@ -145,8 +159,9 @@ function card(r, me) {
   return {
     id: r.id, tipo: r.tipo, condicion: r.condicion, titulo: r.titulo, precio: r.precio, moneda: r.moneda, zona: r.zona,
     foto: f[0] ? URL_DIR + f[0] : null, creado: r.creado, renovado: r.renovado, vence: vence(r),
-    estado: r.estado, oculta: !!r.oculta, vencida: vence(r) < now(), mia: r.user_id === me,
-    vendedor: s ? { id: s.id, nombre: s.nombre, avatar: s.avatar } : null,
+    estado: r.estado, oculta: !!r.oculta, vencida: r.origen !== 'foro' && vence(r) < now(), mia: r.user_id === me,
+    vendedor: delForoSinCuenta(r) ? { id: null, nombre: r.foro_autor, avatar: null } : s ? { id: s.id, nombre: s.nombre, avatar: s.avatar } : null,
+    foro: foroDe(r),
   };
 }
 
@@ -154,8 +169,10 @@ function full(r, me) {
   const c = card(r, me);
   c.descripcion = r.descripcion;
   c.fotos = fotosOf(r).map(f => URL_DIR + f);
-  c.vendedor = person(r.user_id);
-  if (c.vendedor) c.vendedor.reputacion = reputation(r.user_id);
+  if (!delForoSinCuenta(r)) {
+    c.vendedor = person(r.user_id);
+    if (c.vendedor) c.vendedor.reputacion = reputation(r.user_id);
+  }
   c.guardada = !!db.prepare('SELECT 1 FROM puente_mercado_guardados WHERE user_id = ? AND item_id = ?').get(me, r.id);
   c.denunciada = !!db.prepare('SELECT 1 FROM puente_mercado_denuncias WHERE user_id = ? AND item_id = ?').get(me, r.id);
   if (c.mia || isAdmin(me)) c.denuncias = db.prepare('SELECT COUNT(*) n FROM puente_mercado_denuncias WHERE item_id = ?').get(r.id).n;
@@ -247,7 +264,7 @@ async function handle(req, res, p, u, h) {
     const cond = [], params = [];
     if (ver === 'mias') { cond.push("m.user_id = ? AND m.estado != 'borrada'"); params.push(me); }
     else {
-      cond.push("m.estado = 'activa' AND m.renovado >= ?"); params.push(now() - DURA);
+      cond.push("m.estado = 'activa' AND (m.renovado >= ? OR m.origen = 'foro')"); params.push(now() - DURA);
       if (!isAdmin(me)) { cond.push('(m.oculta = 0 OR m.user_id = ?)'); params.push(me); }
       if (ver === 'guardados') { cond.push('m.id IN (SELECT item_id FROM puente_mercado_guardados WHERE user_id = ?)'); params.push(me); }
     }
@@ -453,8 +470,20 @@ async function handle(req, res, p, u, h) {
 }
 
 // Para la tarjeta de perfil (logros.js): la reputacion y la medalla
+// Guardar una foto (la de un aviso del foro): achicada a WebP como las que se suben aca
+async function guardarFoto(buf, userId) {
+  if (!sharp) throw new Error('sin sharp');
+  const out = await sharp(buf, { limitInputPixels: 60e6 }).rotate()
+    .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 80, effort: 3 }).toBuffer();
+  await fs.promises.mkdir(DIR, { recursive: true });
+  const name = `${userId}-${crypto.randomBytes(8).toString('hex')}.webp`;
+  await fs.promises.writeFile(path.join(DIR, name), out);
+  db.prepare('INSERT INTO puente_mercado_fotos (nombre, user_id, creado) VALUES (?, ?, ?)').run(name, userId, now());
+  return name;
+}
+
 function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { setup, handle, summary };
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary };

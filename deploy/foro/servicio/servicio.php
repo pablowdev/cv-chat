@@ -63,7 +63,7 @@ function fotosDe($nodo)
 {
 	global $db, $base;
 	$out = [];
-	foreach ((array) $db->getRows('vBForum:node', ['parentid' => (int) $nodo, 'contenttypeid' => [16, 17]]) as $h) {
+	foreach ((array) $db->getRows('vBForum:node', ['parentid' => (int) $nodo, 'contenttypeid' => [15, 16]]) as $h) {
 		$out[] = $base . '/filedata/fetch?id=' . (int) $h['nodeid'];
 	}
 	return $out;

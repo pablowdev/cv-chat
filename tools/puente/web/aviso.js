@@ -6868,14 +6868,22 @@ document.addEventListener('pointerdown', (ev) => {
       txt.append(el('div', 'mk-vnombre', it.vendedor.nombre), el('div', 'mk-vrep', repLine(it.vendedor.reputacion)));
       s.append(avatar(it.vendedor), txt);
       s.insertAdjacentHTML('beforeend', svg('M9.4 18 8 16.6l4.6-4.6L8 7.4 9.4 6l6 6-6 6Z', 20));
-      s.addEventListener('click', () => go('perfil', it.vendedor.id));
+      if (it.vendedor.id) s.addEventListener('click', () => go('perfil', it.vendedor.id));
+      else { s.disabled = true; s.querySelector('svg')?.remove(); }
       b.appendChild(s);
+    }
+    // Tambien en la compra/venta del foro
+    if (it.foro && it.foro.url) {
+      const fo = el('a', 'mk-foro', it.foro.sinCuenta ? 'Publicado en el foro: escribile por ahí ↗' : 'También está en el foro ↗');
+      fo.href = it.foro.url; fo.target = '_blank'; fo.rel = 'noopener';
+      b.appendChild(fo);
     }
 
     const acts = el('div', 'mk-acciones');
     const btn = (label, cls, fn, icon) => { const x = el('button', 'mk-btn ' + (cls || '')); x.type = 'button'; if (icon) x.innerHTML = svg(icon, 18); x.appendChild(el('span', '', label)); x.addEventListener('click', fn); acts.appendChild(x); return x; };
     if (!it.mia) {
-      if (it.estado === 'activa') btn('Escribir al vendedor', 'mk-primario', () => writeTo(it), I.msj);
+      if (it.estado === 'activa' && it.foro && it.foro.sinCuenta) btn('Ver en el foro', 'mk-primario', () => window.open(it.foro.url, '_blank', 'noopener'), I.msj);
+      else if (it.estado === 'activa') btn('Escribir al vendedor', 'mk-primario', () => writeTo(it), I.msj);
       const g = btn(it.guardada ? 'Guardado' : 'Guardar', it.guardada ? 'on' : '', async () => {
         const si = !g.classList.contains('on');
         const r = await api('guardar', { id: it.id, si });
