@@ -11584,8 +11584,38 @@ var puenteSinUbicacion = (function () {
   // ── En la ventanita de mensajes de la web y del foro ──
   if (window.name === 'cv-ventana' && window.top !== window) {
     document.documentElement.classList.add('puente-ventana');
-    // Solo los mensajes: sin la columna de servidores, juegos y compraventa
-    const v = el('style'); v.textContent = 'html.puente-ventana #puente-rail{display:none!important}html.puente-ventana .sidebar{padding-left:0!important;width:min(340px,92vw)!important}html.puente-ventana .channel-header #search-container{display:none!important}'; document.head.appendChild(v);
+    // Solo los mensajes: la lista ocupa toda la ventanita (sin servidores, canales ni la barra de abajo), y
+    // detras nunca se ve un canal: el lugar de la conversacion solo aparece con un mensaje directo abierto
+    const v = el('style');
+    v.textContent = 'html.puente-ventana #puente-rail,html.puente-ventana .sidebar-bottom,html.puente-ventana .sidebar-resize-handle,html.puente-ventana .channel-header #search-container{display:none!important}'
+      + 'html.puente-ventana .sidebar{padding-left:0!important;width:100%!important;max-width:none!important}'
+      + 'html.puente-ventana:not(.pv-conv) [data-haven-region="main"]{visibility:hidden}';
+    document.head.appendChild(v);
+    const enDm = () => { const a = window.app, ch = a && chans().find(c => c && c.code === a.currentChannel); return !!(ch && ch.is_dm) || !!byId('puente-foro-vista'); };
+    // Sin un mensaje directo abierto, la lista queda a la vista
+    const mantener = () => {
+      const dm = enDm(), body = byId('app-body');
+      document.documentElement.classList.toggle('pv-conv', dm);
+      if (!dm && body && !body.classList.contains('mobile-sidebar-open')) { const m = byId('mobile-menu-btn'); if (m) m.click(); }
+    };
+    let toque = 0;
+    document.addEventListener('pointerdown', (e) => { if (e.isTrusted) toque = Date.now(); }, true);
+    let tv = 0;
+    (function vigilar() {
+      const app = window.app, body = byId('app-body');
+      if (!app || typeof app.switchChannel !== 'function' || !body) { if (++tv < 120) setTimeout(vigilar, 500); return; }
+      new MutationObserver(() => setTimeout(mantener, 0)).observe(body, { attributes: true, attributeFilter: ['class'] });
+      const cambiar = app.switchChannel;
+      app.switchChannel = function (code) {
+        // Un canal (un enlace en un mensaje): en el chat completo, en otra pestaña
+        const ch = chans().find(c => c && c.code === code);
+        if (ch && !ch.is_dm && Date.now() - toque < 1500) { window.open(location.origin + '/app?channel=' + encodeURIComponent(code), '_blank', 'noopener'); return; }
+        const r = cambiar.apply(this, arguments);
+        setTimeout(mantener, 80);
+        return r;
+      };
+      setInterval(mantener, 1500);
+    })();
     // Los mensajes directos, y la lista de conversaciones (no la ultima abierta), como un mensajero.
     // Se insiste hasta que se ven (el chat termina de armarse de a poco)
     let n = 0, toco = false;
