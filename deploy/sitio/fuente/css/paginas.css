@@ -1,0 +1,51 @@
+/* Paginas de texto (privacidad), el 404 y la cuenta */
+.texto-largo { margin-top: 16px; max-width: 860px; }
+.texto-largo .caja__cuerpo { padding: 28px; }
+.texto-largo h1 { margin: 8px 0 12px; }
+.texto-largo h2 { font: 400 20px/1.25 var(--display); text-transform: uppercase; margin: 28px 0 8px; }
+.texto-largo p, .texto-largo li { color: var(--fg-2); max-width: 72ch; }
+.texto-largo ul { padding-left: 1.2em; }
+
+.no-esta { margin-top: 16px; display: grid; grid-template-columns: 1fr auto; align-items: end; }
+.no-esta .caja__cuerpo { padding: 32px; }
+.no-esta h1 { margin: 8px 0 12px; }
+.no-esta p { color: var(--fg-2); }
+.no-esta img { width: 240px; margin: 20px; }
+.no-esta__acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+
+/* Mi cuenta */
+.cuenta { display: grid; grid-template-columns: 320px 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+.cuenta__yo { text-align: center; }
+.cuenta__yo .caja__cuerpo { padding: 28px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.cuenta__avatar { width: 112px; height: 112px; object-fit: cover; border: 1px solid var(--line); background: var(--bg-3); display: flex; align-items: center; justify-content: center; font: 400 44px/1 var(--display); }
+.cuenta__nombre { font: 400 26px/1.1 var(--display); text-transform: uppercase; margin: 6px 0 0; word-break: break-word; }
+.cuenta__acciones { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 10px; }
+.cuenta__acciones .btn { width: 100%; }
+.cuenta__lado { display: grid; gap: 16px; }
+.vinculo { display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center; padding: 16px 18px; }
+.vinculo + .vinculo { border-top: 1px solid var(--line-soft); }
+.vinculo__icono { width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-soft); overflow: hidden; }
+.vinculo__icono img { width: 100%; height: 100%; object-fit: cover; }
+.vinculo__icono svg { width: 28px; height: 28px; }
+.vinculo__que { font: 400 18px/1.2 var(--display); text-transform: uppercase; margin: 0; }
+.vinculo__estado { margin: 2px 0 0; font-size: 13px; color: var(--fg-2); }
+.vinculo__estado.es-bien { color: var(--ok); }
+.cuenta__mensaje { margin: 0; }
+.mis-aportes li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--line-soft); }
+.mis-aportes li:first-child { border-top: 0; }
+.estado-chip { flex: 0 0 auto; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border: 1px solid var(--line-soft); align-self: center; }
+.estado-chip.aprobada { border-color: var(--ok); color: var(--ok); }
+.estado-chip.rechazada { border-color: var(--accent); color: var(--accent); }
+
+@media (max-width: 860px) {
+  .cuenta { grid-template-columns: 1fr; }
+  .no-esta { grid-template-columns: 1fr; }
+  .no-esta img { display: none; }
+}
+@media (max-width: 720px) {
+  .texto-largo .caja__cuerpo, .no-esta .caja__cuerpo { padding: 18px; }
+  .vinculo { grid-template-columns: 44px 1fr; }
+  .vinculo__icono { width: 44px; height: 44px; }
+  .vinculo .btn { grid-column: 1 / -1; width: 100%; }
+}
+.mis-aportes li.chico { display: block; }

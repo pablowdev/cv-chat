@@ -1,13 +1,15 @@
-# La web (paginas fijas, exportadas de Webflow). Las direcciones de antes sin ".html"
-# siguen andando, y la wiki usa sus paginas para cada entrada y categoria (la llena
-# tools/puente/web/wiki.js con lo que guarda CV Chat).
+# La web (paginas fijas). La wiki es una sola pagina para todas sus direcciones (la llena
+# tools/puente/web/wiki.js con lo que guarda CV Chat); las direcciones sin ".html" andan
+# igual (/cuenta, /legal, /full-fat-search...), y lo que no existe muestra el 404 propio.
 :80 {
 	root * /srv
-	@entrada path_regexp ^/wiki/[^/]+/?$
-	rewrite @entrada /detail_wiki.html
-	@categoria path_regexp ^/wiki-categorias/[^/]+/?$
-	rewrite @categoria /detail_wiki-categorias.html
-	rewrite /wiki/ /wiki.html
+	@wiki path /wiki /wiki/ /wiki/* /wiki-categorias/*
+	rewrite @wiki /wiki.html
 	try_files {path} {path}.html
 	file_server
+	handle_errors {
+		@noesta expression {err.status_code} == 404
+		rewrite @noesta /404.html
+		file_server
+	}
 }

@@ -1,0 +1,85 @@
+<div class="inicio">
+    <section class="caja inicio__intro">
+      <div class="caja__cuerpo">
+        <p class="rotulo">el club</p>
+        <h1 class="inicio__lema">Círculo Vicioso es un club de amigos con un podcast.</h1>
+        <p class="inicio__cuando">Nos vemos todos los <b>miércoles a las 20:00</b> (GMT-3) en <a href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">youtube.com/circulovicioso</a></p>
+        <div class="inicio__vivo" id="vivo" aria-live="polite">
+          <span class="inicio__punto" aria-hidden="true"></span><span id="vivo-texto">el próximo en vivo es el miércoles a las 20:00</span>
+        </div>
+        <div class="inicio__acciones">
+          <a class="btn btn--rosa" href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener">Ir al canal</a>
+          <a class="btn" href="https://chat.circulovicioso.club/app">Entrar al chat</a>
+        </div>
+      </div>
+      <img class="inicio__conejo" src="/images/rabbit.png" alt="" width="300" height="270" loading="lazy">
+    </section>
+
+    <section class="caja inicio__episodio">
+      <div class="caja__cab"><p class="rotulo">último episodio</p><a class="rotulo" href="https://www.youtube.com/@CirculoVicioso8/videos" target="_blank" rel="noopener">[+] todos los episodios</a></div>
+      <div class="inicio__video">
+        <iframe src="https://www.youtube-nocookie.com/embed?listType=playlist&amp;list=PLoj_HzcrWWO_lTtmQ3HLFr_3kjJ174Phj" title="Último episodio de Círculo Vicioso" loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+    </section>
+
+    <section class="inicio__accesos" aria-label="La comunidad">
+      <a class="caja acceso" href="https://foro.circulovicioso.club/">
+        <p class="rotulo">foro</p>
+        <h2 class="titulo-2">El foro</h2>
+        <p>Temas, debates y años de historia del club. Con la misma cuenta que el chat.</p>
+        <span class="acceso__ir flecha">entrar al foro</span>
+      </a>
+      <a class="caja acceso" href="https://chat.circulovicioso.club/app">
+        <p class="rotulo">chat</p>
+        <h2 class="titulo-2">CV Chat</h2>
+        <p>El chat del club, en vivo durante el programa y todo el resto de la semana.</p>
+        <span class="acceso__ir flecha">abrir el chat</span>
+      </a>
+      <form class="caja acceso acceso--buscar" action="/full-fat-search" method="get" role="search">
+        <p class="rotulo">full fat search</p>
+        <h2 class="titulo-2">¿En qué episodio se dijo…?</h2>
+        <p>Buscá cualquier palabra en todo lo que se habló en el programa.</p>
+        <div class="acceso__busca"><input class="input" name="q" type="search" placeholder="enano invisible" aria-label="Qué buscar" required><button class="btn btn--degrade" type="submit">Buscar</button></div>
+      </form>
+      <div class="caja acceso acceso--wiki">
+        <p class="rotulo">wiki</p>
+        <h2 class="titulo-2"><a href="/wiki">La wiki del club</a></h2>
+        <ul class="lista-limpia acceso__wiki" id="wiki-ultimas"><li class="chico">Cargando…</li></ul>
+        <a class="acceso__ir flecha" href="/wiki">ver la wiki</a>
+      </div>
+    </section>
+
+    <section class="caja inicio__foto">
+      <img src="/images/gordos_cv.png" srcset="/images/gordos_cv-p-500.png 500w, /images/gordos_cv.png 784w" sizes="(max-width: 720px) 100vw, 60vw" alt="Los integrantes de Círculo Vicioso" loading="lazy" width="784" height="541">
+    </section>
+
+    <section class="caja inicio__redes">
+      <div class="caja__cab"><p class="rotulo">redes</p></div>
+      <ul class="lista-limpia redes">
+        <li><a href="https://www.youtube.com/@CirculoVicioso8" target="_blank" rel="noopener"><span>YouTube</span><span class="chico">@CirculoVicioso8</span></a></li>
+        <li><a href="https://twitter.com/circulovicioso8" target="_blank" rel="noopener"><span>Twitter / X</span><span class="chico">@circulovicioso8</span></a></li>
+        <li><a href="https://www.tiktok.com/@circulovicioso" target="_blank" rel="noopener"><span>TikTok</span><span class="chico">@circulovicioso</span></a></li>
+        <li><a href="mailto:circuloviciosomedia@gmail.com"><span>Mail</span><span class="chico">circuloviciosomedia@gmail.com</span></a></li>
+      </ul>
+    </section>
+  </div>
+<script>
+// El proximo en vivo (miercoles 20:00 en Argentina, 23:00 UTC) y si es ahora
+(function () {
+  var t = document.getElementById('vivo-texto'), box = document.getElementById('vivo');
+  function pintar() {
+    // El ultimo miercoles 23:00 UTC que ya empezo; el programa dura unas 3 horas
+    var now = new Date(), s = new Date(now);
+    s.setUTCHours(23, 0, 0, 0);
+    s.setUTCDate(s.getUTCDate() - (s.getUTCDay() - 3 + 7) % 7);
+    if (s > now) s.setUTCDate(s.getUTCDate() - 7);
+    if (now - s < 3 * 36e5) { box.classList.add('es-ahora'); t.textContent = '¡estamos en vivo ahora!'; return; }
+    box.classList.remove('es-ahora');
+    var d = new Date(s.getTime() + 7 * 864e5);
+    var ms = d - now, h = Math.floor(ms / 36e5), m = Math.floor(ms % 36e5 / 6e4);
+    t.textContent = h < 24 ? 'próximo en vivo en ' + h + ' h ' + m + ' min' : 'próximo en vivo: ' + d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) + ', 20:00 (GMT-3)';
+  }
+  pintar(); setInterval(pintar, 30000);
+})();
+</script>

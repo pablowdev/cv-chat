@@ -1,0 +1,56 @@
+<div class="cuenta" id="cuenta" hidden>
+  <section class="caja cuenta__yo">
+    <div class="caja__cuerpo">
+      <div class="cuenta__avatar" id="c-avatar"></div>
+      <h1 class="cuenta__nombre" id="c-nombre"></h1>
+      <p class="chico" id="c-usuario"></p>
+      <div class="cuenta__acciones">
+        <a class="btn btn--degrade" id="c-chat" href="https://chat.circulovicioso.club/app">Abrir el chat</a>
+        <a class="btn" href="/">Volver a la web</a>
+        <a class="btn btn--peligro" id="c-salir" href="#">Salir</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="cuenta__lado">
+    <p class="aviso cuenta__mensaje" id="c-mensaje" hidden></p>
+
+    <section class="caja">
+      <div class="caja__cab"><p class="rotulo">tus cuentas vinculadas</p></div>
+      <div class="vinculo" id="v-discord">
+        <div class="vinculo__icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52c-.21.38-.44.87-.61 1.25a18.3 18.3 0 0 0-5.49 0 12.6 12.6 0 0 0-.62-1.25 19.7 19.7 0 0 0-4.89 1.52C.53 9.05-.32 13.58.1 18.06a19.9 19.9 0 0 0 6.07 3.06c.46-.63.87-1.3 1.23-1.99a13 13 0 0 1-1.9-.92l.38-.3c3.93 1.8 8.18 1.8 12.06 0l.38.3c-.6.36-1.24.66-1.9.92.36.7.77 1.36 1.22 1.99a19.8 19.8 0 0 0 6.06-3.06c.5-5.18-.84-9.67-3.55-13.69ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.96-2.42 2.16-2.42 2.18 1.1 2.16 2.42c0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42s.95-2.42 2.15-2.42 2.18 1.1 2.16 2.42c0 1.34-.95 2.42-2.16 2.42Z"/></svg></div>
+        <div><p class="vinculo__que">Discord</p><p class="vinculo__estado"></p></div>
+        <button class="btn btn--chico" type="button"></button>
+      </div>
+      <div class="vinculo" id="v-foro">
+        <div class="vinculo__icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V14H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm15 5h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-1v3l-3.5-3H11a2 2 0 0 1-2-2v-1h6a4 4 0 0 0 4-4V8Z"/></svg></div>
+        <div><p class="vinculo__que">Foro</p><p class="vinculo__estado"></p></div>
+        <button class="btn btn--chico" type="button"></button>
+      </div>
+    </section>
+
+    <section class="caja">
+      <div class="caja__cab"><p class="rotulo">tus aportes a la wiki</p><a class="rotulo" href="/wiki?aportar=1">[+] aportar</a></div>
+      <ul class="lista-limpia mis-aportes" id="c-aportes"><li class="chico">Cargando…</li></ul>
+    </section>
+
+    <section class="caja">
+      <div class="caja__cab"><p class="rotulo">más opciones</p></div>
+      <div class="caja__cuerpo chico">Tu foto, tu nombre, la contraseña y la verificación en dos pasos se cambian desde los ajustes del chat. <a href="https://chat.circulovicioso.club/app">Abrir el chat</a></div>
+    </section>
+  </div>
+</div>
+
+<section class="caja no-esta" id="sin-sesion" hidden>
+  <div class="caja__cuerpo">
+    <p class="rotulo">tu cuenta</p>
+    <h1 class="titulo">Entrá a tu cuenta</h1>
+    <p>Una sola cuenta para la web, el chat y el foro.</p>
+    <div class="no-esta__acciones">
+      <a class="btn btn--degrade" id="s-entrar" href="#">Iniciar sesión</a>
+      <a class="btn" id="s-registro" href="#">Crear una cuenta</a>
+    </div>
+  </div>
+  <img src="/images/rabbit.png" alt="" width="300" height="270" loading="lazy">
+</section>
+<p class="chico" id="cargando">Cargando…</p>

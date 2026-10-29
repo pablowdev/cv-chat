@@ -1,7 +1,7 @@
-// La barra de arriba de la web y del foro (cuenta.js): accesos a la web, el foro,
-// el chat, la wiki y los episodios, y a la derecha quien entro (nombre y foto), como
-// la del foro. En la web la barra es entera; en el foro se agregan los accesos a la
-// barra del foro, que ya muestra quien entro.
+// La barra de arriba de la web y del foro (cuenta.js), como la del foro: a la derecha
+// quien entro (nombre y foto) y su menu. En la web no repite el menu de la pagina (solo
+// el nombre del club); en el foro se le agregan a la barra del foro los accesos a la web,
+// el chat, la wiki y Full Fat Search, que el foro no tiene.
 //
 // Cuenta unica en el foro: si hay sesion en CV Chat y no en el foro, entra solo
 // (/puente/foro/sso); si hay sesion en el foro y no en CV Chat, entra tambien a CV
@@ -21,7 +21,7 @@
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
   const registrarse = CHAT + '/?registro=1&volver=' + encodeURIComponent(aca);
   const salir = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(enForo ? FORO + '/' : aca);
-  const LINKS = [['Inicio', WEB + '/'], ['Foro', FORO + '/'], ['Chat', CHAT + '/app'], ['Wiki', WEB + '/wiki'], ['Episodios', WEB + '/full-fat-search.html']];
+  const LINKS = enForo ? [['Círculo Vicioso', WEB + '/'], ['Chat', CHAT + '/app'], ['Wiki', WEB + '/wiki'], ['Full Fat Search', WEB + '/full-fat-search']] : [['Círculo Vicioso', WEB + '/']];
   const ss = { get: k => { try { return sessionStorage.getItem(k); } catch { return '1'; } }, set: k => { try { sessionStorage.setItem(k, '1'); } catch { /* */ } }, del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } } };
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -30,10 +30,8 @@
     for (const [t, href] of LINKS) {
       const a = el('a', 'cv-barra__link', t); a.href = href;
       // Los administradores ven cuantas propuestas de la wiki hay por revisar
-      if (t === 'Wiki' && yo && yo.wikiPendientes) { a.textContent = `Wiki (${yo.wikiPendientes})`; a.href = WEB + '/wiki?pendientes=1'; }
-      const actual = (t === 'Foro' && enForo) || (!enForo && t === 'Inicio' && /^\/(index\.html)?$/.test(location.pathname)) ||
-        (!enForo && t === 'Wiki' && location.pathname.startsWith('/wiki')) || (!enForo && t === 'Episodios' && location.pathname.startsWith('/full-fat-search'));
-      if (actual) a.classList.add('is-actual');
+      if (t === 'Wiki' && yo && yo.wikiPendientes) { a.textContent = `Wiki (${yo.wikiPendientes})`; a.href = WEB + '/wiki?revisar=1'; }
+      if (!enForo) a.classList.add('cv-barra__marca');
       nav.appendChild(a);
     }
     return nav;
@@ -54,8 +52,8 @@
     b.appendChild(avatar(yo)); b.appendChild(el('span', 'cv-barra__nombre', yo.nombre)); b.appendChild(el('span', 'cv-barra__flecha'));
     const menu = el('div', 'cv-barra__menu'); menu.hidden = true;
     const item = (t, href) => { const a = el('a', null, t); a.href = href; menu.appendChild(a); return a; };
+    item('Mi cuenta', WEB + '/cuenta');
     item('Abrir el chat', CHAT + '/app');
-    item('Mi cuenta', CHAT + '/puente/vincular');
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });

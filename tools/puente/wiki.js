@@ -16,6 +16,9 @@
 //  POST /puente/api/wiki/volver       (administradores) { id }: vuelve a esa version
 //  POST /puente/api/wiki/borrar       (administradores) { slug }: la saca de la wiki (se puede volver)
 //  GET  /puente/api/wiki/mias         mis propuestas y como quedaron
+//  GET  /puente/api/wiki/buscar       ?q= en los titulos y el texto, con un pedacito de donde aparece
+//  GET  /puente/api/wiki/cambios      los ultimos cambios publicados
+//  POST /puente/api/wiki/vista        { contenido } -> como queda (la vista previa del editor)
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -280,6 +283,38 @@ async function handle(req, res, p, u) {
     log(`wiki: ${yo.usuario} propuso ${w ? 'una edicion de' : 'la entrada'} "${titulo}" (#${id})`);
     try { h.avisarAdmins && h.avisarAdmins(`📚 ${yo.nombre} propuso ${w ? `una edición de "${w.titulo}"` : `una entrada nueva: "${titulo}"`} en la wiki. Revisala en https://${cuenta.dominio()}/wiki?pendientes=1`); } catch (err) { warn('wiki: aviso:', err.message); }
     return json(res, 200, { ok: true, estado: 'pendiente' });
+  }
+
+  if (p === '/puente/api/wiki/buscar' && req.method === 'GET') {
+    const t = limpio(u.searchParams.get('q'), 80).toLowerCase();
+    if (t.length < 2) return json(res, 200, { resultados: [] });
+    // Sin tildes ni mayusculas (la misma cantidad de letras: los pedacitos se cortan en el mismo lugar)
+    const norm = x => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const nt = norm(t);
+    const rows = db.prepare("SELECT * FROM puente_wiki WHERE estado = 'publicada'").all();
+    const out = [];
+    for (const w of rows) {
+      const enTitulo = norm(w.titulo).includes(nt);
+      const plano = w.contenido.normalize('NFC').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[#*_`>~]+/g, ' ').replace(/\s+/g, ' ');
+      const i = norm(plano).indexOf(nt);
+      if (!enTitulo && i < 0) continue;
+      const desde = Math.max(0, i - 70);
+      out.push({ ...entradaPublica(w, false), puntaje: (enTitulo ? 2 : 0) + (i >= 0 ? 1 : 0),
+        pedazo: i >= 0 ? (desde > 0 ? '…' : '') + plano.slice(desde, i + nt.length + 110) + (i + nt.length + 110 < plano.length ? '…' : '') : null });
+    }
+    out.sort((a, b) => b.puntaje - a.puntaje || a.titulo.localeCompare(b.titulo, 'es'));
+    return json(res, 200, { resultados: out.slice(0, 50) });
+  }
+
+  if (p === '/puente/api/wiki/cambios' && req.method === 'GET') {
+    const rows = db.prepare("SELECT r.id, r.autor_id, r.creada, r.revisada, r.base_rev_id, r.nota, w.slug, w.titulo, w.estado FROM puente_wiki_rev r JOIN puente_wiki w ON w.id = r.wiki_id WHERE r.estado = 'aprobada' ORDER BY COALESCE(r.revisada, r.creada) DESC LIMIT 40").all();
+    return json(res, 200, { cambios: rows.filter(r => r.estado === 'publicada').map(r => ({ id: r.id, slug: r.slug, titulo: r.titulo, autor: nombreDe(r.autor_id) || 'el archivo',
+      fecha: r.revisada || r.creada, nueva: !r.base_rev_id, nota: r.nota })) });
+  }
+
+  if (p === '/puente/api/wiki/vista' && req.method === 'POST') {
+    const body = await readJson(req, MAX_CONTENIDO * 4) || {};
+    return json(res, 200, markdown(limpio(body.contenido, MAX_CONTENIDO)));
   }
 
   if (p === '/puente/api/wiki/mias' && req.method === 'GET') {

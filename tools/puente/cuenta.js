@@ -14,6 +14,9 @@
 //                                   tambien la proxima vez que se abre (cookie cv_salio)
 //  GET  /puente/cuenta/salir        corta la sesion, sale del foro y vuelve a ?volver=
 //  GET  /puente/barra.js|css        la barra de arriba de la web y del foro (web/barra.*)
+//  GET  /puente/api/cuenta/perfil   "Mi cuenta" en la web (circulovicioso.club/cuenta): quien es y que tiene vinculado
+//  POST /puente/api/cuenta/conectar { con: 'discord' | 'foro', volver } -> { url } (y despues vuelve a "volver")
+//  POST /puente/api/cuenta/desconectar { con }
 
 const crypto = require('crypto');
 
@@ -133,10 +136,11 @@ const absolute = p => (!p ? null : /^https?:\/\//.test(p) ? p : `${publicUrl}${p
 async function handle(req, res, p, u) {
   const { json, send, sessionUser } = h;
 
-  if (p === '/puente/api/cuenta/yo' || p === '/puente/api/cuenta/salir') {
+  if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar'].includes(p)) {
     cors(req, res);
     if (req.method === 'OPTIONS') {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       return send(res, 204, 'text/plain', '');
     }
   }
@@ -151,6 +155,40 @@ async function handle(req, res, p, u) {
       avatar: absolute(user.avatar), admin: !!user.is_admin, foro: foro ? foro.foro_user_id : null,
       wikiPendientes: user.is_admin ? wikiPendientes() : 0,
     });
+  }
+
+  // ── "Mi cuenta" en la web ──
+  if (p === '/puente/api/cuenta/perfil' && req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const user = userFromCookie(req);
+    if (!user) return json(res, 401, { error: 'sin sesion', chat: publicUrl });
+    const em = h.email ? h.email(user.id) : {};
+    return json(res, 200, {
+      chat: publicUrl, usuario: user.username, nombre: user.display_name || user.username, avatar: absolute(user.avatar), admin: !!user.is_admin,
+      email: em && em.email ? { confirmado: !!em.confirmado } : null,
+      discord: h.discord.info(user.id), foro: h.foro.info(user.id),
+      disponible: { discord: h.discord.on(), foro: h.foro.on() },
+    });
+  }
+  if ((p === '/puente/api/cuenta/conectar' || p === '/puente/api/cuenta/desconectar') && req.method === 'POST') {
+    // Solo desde las paginas propias, y en JSON: otra pagina no lo puede mandar
+    if (!req.headers.origin || !origins().includes(req.headers.origin) || !/^application\/json/.test(String(req.headers['content-type'] || ''))) return json(res, 403, { error: 'no' });
+    const user = userFromCookie(req);
+    if (!user) return json(res, 401, { error: 'Iniciá sesión de nuevo.' });
+    const body = await h.readJson(req) || {};
+    const con = body.con === 'foro' ? 'foro' : body.con === 'discord' ? 'discord' : null;
+    if (!con) return json(res, 400, { error: 'con' });
+    if (p === '/puente/api/cuenta/desconectar') {
+      if (con === 'discord') h.discord.unlink(user.id); else h.foro.unlink(user.id);
+      return json(res, 200, { ok: true });
+    }
+    const volver = safeReturn(body.volver, `https://${dominio}/cuenta`);
+    if (con === 'discord') {
+      if (!h.discord.on()) return json(res, 503, { error: 'La vinculación con Discord no está disponible ahora.' });
+      return json(res, 200, { url: h.discord.start(user.id, volver) });
+    }
+    if (!h.foro.on()) return json(res, 503, { error: 'La vinculación con el foro no está disponible ahora.' });
+    return json(res, 200, { url: h.foro.start(res, 'vincular', user, volver) });
   }
 
   if (p === '/puente/api/cuenta/sesion' && req.method === 'POST') {

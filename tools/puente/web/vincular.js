@@ -158,6 +158,10 @@
     e.target.disabled = false;
   });
 
+  // "Volver a la web" (la cuenta unica: chat.ejemplo.com -> ejemplo.com/cuenta)
+  const dom = location.hostname.split('.').slice(1).join('.');
+  if (dom.includes('.')) { const v = $('volver-web'); v.querySelector('a').href = 'https://' + dom + '/cuenta'; v.hidden = false; }
+
   load();
   loadForo();
 })();

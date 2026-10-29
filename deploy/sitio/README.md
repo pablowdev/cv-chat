@@ -1,16 +1,3 @@
 # La web (circulovicioso.club)
 
-Páginas fijas exportadas de Webflow, en `/opt/sitio/web` (el contenido de la web no está en este
-repositorio), servidas por un Caddy chico de solo lectura (`Caddyfile`):
-
-- Las direcciones de antes sin `.html` siguen andando (`/legal`, `/full-fat-search`...).
-- La wiki usa sus páginas para cada entrada (`/wiki/<entrada>` → `detail_wiki.html`) y categoría
-  (`/wiki-categorias/<categoría>` → `detail_wiki-categorias.html`); las llena `tools/puente/web/wiki.js`
-  con lo que guarda CV Chat (`tools/puente/wiki.js`).
-
-`editar-web.js` hace los cambios a las páginas exportadas (la barra de la cuenta única, la wiki, sin
-Memberstack, sin tienda ni Discord en la portada). Si se vuelve a exportar de Webflow:
-
-```
-node editar-web.js <carpeta de la web exportada> https://chat.ejemplo.com
-```
+Fuente de la web en `fuente/` (paginas, estilos y scripts; las fotos y fuentes tipograficas no estan en el repositorio). `node fuente/armar.js <salida>` arma las paginas con la misma cabecera y pie. Se sirve con un Caddy chico de solo lectura (`Caddyfile`): la wiki es una sola pagina para todas sus direcciones (la llena `tools/puente/web/wiki.js`) y "Mi cuenta" (`/cuenta`) usa la cuenta unica (`tools/puente/cuenta.js`).

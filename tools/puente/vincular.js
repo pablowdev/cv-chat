@@ -89,7 +89,25 @@ function setup(ctx) {
     takeHandoff: (code) => { const x = handoffs.get(code); handoffs.delete(code); return x ? x.user.id : null; },
     checkPassword,
   } });
-  cuenta.setup({ db, log, warn, publicUrl, helpers: { json, send, sessionUser, sessionFor, foroSalir: v => foro.salirUrl(v) } });
+  cuenta.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson, sessionUser, sessionFor, foroSalir: v => foro.salirUrl(v),
+    // "Mi cuenta" en la web: Discord y el foro
+    discord: {
+      on: () => !!(clientId && clientSecret),
+      info: (userId) => { const l = db.prepare('SELECT discord_user_id, discord_username, discord_global_name, discord_avatar FROM puente_vinculos WHERE haven_user_id = ?').get(userId);
+        return l ? { nombre: l.discord_global_name || l.discord_username, usuario: l.discord_username, avatar: l.discord_avatar ? `https://cdn.discordapp.com/avatars/${l.discord_user_id}/${l.discord_avatar}.png?size=128` : null } : null; },
+      start: (userId, volver) => authorizeUrl({ purpose: 'link', userId, volver }, email.on() ? 'identify email' : 'identify'),
+      unlink: (userId) => {
+        const l = db.prepare('SELECT discord_user_id FROM puente_vinculos WHERE haven_user_id = ?').get(userId);
+        if (!l) return 0;
+        const restored = unlink(userId, l.discord_user_id);
+        try { onUnlinked(userId); } catch (err) { warn('accesos al desvincular:', err.message); }
+        log(`desvinculado: Haven #${userId} <-> Discord ${l.discord_user_id} (${restored} mensajes devueltos al historial importado)`);
+        return 1;
+      },
+    },
+    foro,
+    email: (userId) => email.status(userId),
+  } });
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
@@ -919,7 +937,9 @@ async function handle(req, res) {
     const entry = states.get(state);
     states.delete(state);
     // Al entrar con Discord, los avisos van a /puente/entrar; el resto, a /puente/vincular
-    const back = (params) => send(res, 302, 'text/plain', '', { Location: `${entry && entry.purpose === 'login' ? '/puente/entrar' : '/puente/vincular'}?${new URLSearchParams(params)}` });
+    // Desde "Mi cuenta" de la web (entry.volver): vuelve ahi
+    const back = (params) => send(res, 302, 'text/plain', '', { Location: entry && entry.volver ? ((to, params) => { const v = new URL(to); for (const [k, x] of Object.entries(params)) v.searchParams.set(k, x); return v.href; })(entry.volver, { vinculo: 'discord', ...params })
+      : `${entry && entry.purpose === 'login' ? '/puente/entrar' : '/puente/vincular'}?${new URLSearchParams(params)}` });
     if (u.searchParams.get('error')) return back({ error: 'cancelado' });
     if (!entry || entry.exp < Date.now()) return back({ error: 'caducado' });
     const code = u.searchParams.get('code');

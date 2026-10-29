@@ -1,0 +1,77 @@
+<section class="caja ffs">
+  <div class="caja__cuerpo ffs__cab">
+    <p class="rotulo">full fat search</p>
+    <h1 class="titulo">¿En qué episodio se dijo…?</h1>
+    <p class="ffs__bajada">Buscá cualquier palabra o frase en los subtítulos de todos los episodios. Cada resultado te lleva al momento justo del video.</p>
+    <form class="ffs__form" id="ffs-form" role="search">
+      <input class="input ffs__input" id="ffs-q" name="q" type="search" placeholder="Escribí una palabra o frase" aria-label="Qué buscar" autocomplete="off" required>
+      <button class="btn btn--degrade ffs__boton" type="submit">Buscar</button>
+    </form>
+    <p class="ffs__sugerencias chico">Probá con: <a href="?q=enano">enano</a> · <a href="?q=numerone">numerone</a> · <a href="?q=mono">mono</a></p>
+  </div>
+</section>
+
+<p class="ffs__estado" id="ffs-estado" aria-live="polite"></p>
+<div class="ffs__resultados" id="ffs-resultados"></div>
+<div class="ffs__mas" id="ffs-mas" hidden><button class="btn" type="button" id="ffs-mas-btn">Ver más resultados</button></div>
+
+<script type="module" src="https://cdn.jsdelivr.net/npm/@justinribeiro/lite-youtube@1.5.0/lite-youtube.js"></script>
+<script>
+(function () {
+  'use strict';
+  var API = 'https://fullfatsearch.fly.dev/youtube/subtitles_with_videos.json?_shape=array&_search=';
+  var POR_PAGINA = 12;
+  var form = document.getElementById('ffs-form'), q = document.getElementById('ffs-q');
+  var estado = document.getElementById('ffs-estado'), box = document.getElementById('ffs-resultados');
+  var mas = document.getElementById('ffs-mas'), masBtn = document.getElementById('ffs-mas-btn');
+  var todos = [], hasta = 0, consulta = '';
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var hora = function (s) { s = Math.max(0, Math.floor(s || 0)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+  // La palabra buscada, resaltada en la frase
+  function resaltar(texto, palabra) {
+    var t = esc(texto); if (!palabra) return t;
+    var p = esc(palabra).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return t.replace(new RegExp('(' + p + ')', 'gi'), '<mark>$1</mark>');
+  }
+  function pintar() {
+    var fin = Math.min(hasta + POR_PAGINA, todos.length);
+    for (var i = hasta; i < fin; i++) {
+      var r = todos[i];
+      var fecha = r.upload_date ? new Date(r.upload_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      var art = document.createElement('article');
+      art.className = 'caja ffs__item';
+      art.innerHTML = '<div class="ffs__video"><lite-youtube videoid="' + esc(r.video_id) + '" params="start=' + Math.max(0, (r.start_seconds || 0) - 4) + '" videotitle="' + esc(r.video_title) + '"></lite-youtube></div>' +
+        '<div class="ffs__texto"><p class="ffs__frase">“' + resaltar(String(r.text || '').replace(/&nbsp;/g, ' ').replace(/\[\s*_+\s*\]/g, '[…]'), consulta) + '”</p>' +
+        '<h2 class="ffs__ep">' + esc(r.video_title) + '</h2>' +
+        '<p class="chico">' + esc(fecha) + ' · minuto ' + hora(r.start_seconds) + '</p>' +
+        '<a class="ffs__ir flecha" href="' + esc(r.link) + '" target="_blank" rel="noopener">mirar en YouTube</a></div>';
+      box.appendChild(art);
+    }
+    hasta = fin;
+    mas.hidden = hasta >= todos.length;
+  }
+  async function buscar(texto, empujar) {
+    consulta = texto.trim(); if (!consulta) return;
+    q.value = consulta;
+    if (empujar) history.pushState(null, '', '?q=' + encodeURIComponent(consulta));
+    document.title = consulta + ' · Full Fat Search - Círculo Vicioso';
+    box.textContent = ''; mas.hidden = true; estado.textContent = 'Buscando…';
+    try {
+      var r = await fetch(API + encodeURIComponent(consulta));
+      todos = await r.json(); hasta = 0;
+      if (!Array.isArray(todos)) throw new Error('respuesta');
+      estado.textContent = todos.length === 0 ? 'Nadie dijo "' + consulta + '" en el programa (todavía).'
+        : todos.length >= 100 ? 'Hay 100 o más menciones de "' + consulta + '". Mostramos las primeras 100.'
+        : todos.length === 1 ? 'Hay 1 mención de "' + consulta + '".' : 'Hay ' + todos.length + ' menciones de "' + consulta + '".';
+      pintar();
+    } catch (e) {
+      estado.textContent = 'No se pudo buscar ahora. Probá de nuevo en un rato.';
+    }
+  }
+  form.addEventListener('submit', function (e) { e.preventDefault(); buscar(q.value, true); });
+  masBtn.addEventListener('click', pintar);
+  window.addEventListener('popstate', function () { var v = new URLSearchParams(location.search).get('q'); if (v) buscar(v, false); });
+  var inicial = new URLSearchParams(location.search).get('q');
+  if (inicial) buscar(inicial, false); else q.focus();
+})();
+</script>

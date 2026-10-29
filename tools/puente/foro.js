@@ -147,6 +147,29 @@ function proposeUsername(f) {
 }
 
 // Quien volvio del foro para entrar: { listo } (entra), { nuevo } (crear la cuenta) o { error }
+// Ir al foro a entrar o a vincular (con la cuenta de CV Chat que vincula, y a donde volver)
+function start(res, para, user, volver) {
+  clean([states]);
+  const estado = crypto.randomBytes(24).toString('hex');
+  states.set(estado, { para, userId: user ? user.id : null, volver: volver || null, exp: Date.now() + STATE_TTL_MS });
+  // Al vincular, el foro muestra con que cuenta de CV Chat (firmado: no se puede cambiar)
+  const q = new URLSearchParams({ estado, para });
+  if (user) q.set('cuenta', user.display_name || user.username);
+  q.set('firma', sign(`${estado}|${para}|${q.get('cuenta') || ''}`));
+  addCookie(res, `puente_foro=${estado}; Path=/puente/foro; Max-Age=${STATE_TTL_MS / 1000}; HttpOnly; Secure; SameSite=Lax`);
+  return `${foroUrl}/cvchat.php?${q}`;
+}
+// Para "Mi cuenta" en la web (cuenta.js)
+function info(havenUserId) {
+  const l = db.prepare('SELECT foro_user_id, foro_username, foro_avatar FROM puente_foro WHERE haven_user_id = ?').get(havenUserId);
+  return l ? { id: l.foro_user_id, usuario: l.foro_username, avatar: l.foro_avatar, perfil: `${foroUrl}/member/${l.foro_user_id}` } : null;
+}
+function unlink(havenUserId) {
+  const n = db.prepare('DELETE FROM puente_foro WHERE haven_user_id = ?').run(havenUserId).changes;
+  if (n) log(`desvinculado del foro: Haven #${havenUserId}`);
+  return n;
+}
+
 function login(f) {
   clean([signups]);
   if (bannedInForo(f)) return { error: 'ban' };
@@ -173,15 +196,7 @@ async function handle(req, res, p, u) {
     const para = body.para === 'vincular' ? 'vincular' : 'entrar';
     const user = para === 'vincular' ? sessionUser(req) : null;
     if (para === 'vincular' && !user) return json(res, 401, { error: 'sin sesion' });
-    clean([states]);
-    const estado = crypto.randomBytes(24).toString('hex');
-    states.set(estado, { para, userId: user ? user.id : null, exp: Date.now() + STATE_TTL_MS });
-    // Al vincular, el foro muestra con que cuenta de CV Chat (firmado: no se puede cambiar)
-    const q = new URLSearchParams({ estado, para });
-    if (user) q.set('cuenta', user.display_name || user.username);
-    q.set('firma', sign(`${estado}|${para}|${q.get('cuenta') || ''}`));
-    res.setHeader('Set-Cookie', `puente_foro=${estado}; Path=/puente/foro; Max-Age=${STATE_TTL_MS / 1000}; HttpOnly; Secure; SameSite=Lax`);
-    return json(res, 200, { url: `${foroUrl}/cvchat.php?${q}` });
+    return json(res, 200, { url: start(res, para, user, null) });
   }
 
   if (p === '/puente/foro/vuelta' && req.method === 'GET') {
@@ -201,7 +216,9 @@ async function handle(req, res, p, u) {
       }
       return go(entry.volver);
     }
-    const back = (params) => go(entry && entry.para === 'vincular' ? '/puente/vincular' : '/puente/entrar', { via: 'foro', ...params });
+    // Desde "Mi cuenta" de la web: vuelve ahi
+    const back = (params) => (entry && entry.volver ? go(((to, params) => { const v = new URL(to); for (const [k, x] of Object.entries(params)) v.searchParams.set(k, x); return v.href; })(entry.volver, { vinculo: 'foro', ...params }))
+      : go(entry && entry.para === 'vincular' ? '/puente/vincular' : '/puente/entrar', { via: 'foro', ...params }));
     if (u.searchParams.get('error') === 'cancelado') { states.delete(estado); return back({ error: 'cancelado' }); }
     const f = readReturn(u);
     if (!f || f.estado !== estado) return back({ error: 'foro' });
@@ -321,12 +338,11 @@ async function handle(req, res, p, u) {
   if (p === '/puente/api/foro/desvincular' && req.method === 'POST') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });
-    const n = db.prepare('DELETE FROM puente_foro WHERE haven_user_id = ?').run(user.id).changes;
-    if (n) log(`desvinculado del foro: Haven #${user.id}`);
+    unlink(user.id);
     return json(res, 200, { ok: true });
   }
 
   return false;
 }
 
-module.exports = { setup, handle, salirUrl, _test: { readReturn, sign } };
+module.exports = { setup, handle, salirUrl, start, info, unlink, on: () => on(), _test: { readReturn, sign } };
