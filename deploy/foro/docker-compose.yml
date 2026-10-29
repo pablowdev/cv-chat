@@ -3,6 +3,7 @@
 #   escribible/  lo unico donde el foro puede escribir (caches)
 #   db/          la base de datos (MariaDB)
 #   .env         contraseñas y la clave de envio de mails (solo root)
+#   puente.env   la clave compartida con CV Chat (solo root, solo para web)
 # Redes: el foro no tiene salida a internet. Caddy (el de CV Chat) le llega por foro-frente; los
 # mails salen por "correo" (Postfix), lo unico con salida, y solo hacia Resend.
 name: foro
@@ -11,6 +12,8 @@ services:
     build: ./imagen
     image: foro-web:local
     container_name: foro-web
+    # La clave compartida con CV Chat para cvchat.php (CV_PUENTE_SECRETO, CV_CHAT_URL)
+    env_file: puente.env
     volumes:
       - ./codigo:/var/www/html:ro
       - ./escribible/cache:/var/www/html/cache

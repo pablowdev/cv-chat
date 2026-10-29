@@ -31,7 +31,8 @@
   }
 
   const params = new URLSearchParams(location.search);
-  if (params.get('ok')) {
+  const viaForo = params.get('via') === 'foro';
+  if (viaForo) { /* los avisos del foro van en su tarjeta (foro, abajo) */ } else if (params.get('ok')) {
     const n = Number(params.get('mensajes') || 0);
     message(n > 0 ? `¡Listo! Tu cuenta quedó vinculada y ${n.toLocaleString('es')} mensajes de tu historial de Discord pasaron a tu cuenta.` : '¡Listo! Tu cuenta quedó vinculada.');
   } else if (params.get('error')) {
@@ -108,5 +109,55 @@
     } catch (err) { message(err.message, true); btn.disabled = false; }
   });
 
+  // ── La cuenta del foro (foro.js) ──
+  const FORO_ERRORES = {
+    cancelado: 'Cancelaste la vinculación en el foro.',
+    caducado: 'El paso caducó. Volvé a intentarlo.',
+    foro: 'El foro no confirmó tu cuenta. Volvé a intentarlo.',
+    ocupada: 'Esa cuenta del foro ya está vinculada a otra cuenta de __PUENTE_APP__. Si es tuya, desvinculala primero desde esa cuenta.',
+    ban: 'Esa cuenta está suspendida en el foro.',
+  };
+  function foroMessage(text, isError) {
+    const el = $('foro-mensaje');
+    el.textContent = text;
+    el.className = 'mensaje' + (isError ? ' error' : '');
+    el.hidden = !text;
+  }
+  if (viaForo) {
+    if (params.get('ok')) foroMessage('¡Listo! Tu cuenta del foro quedó vinculada.');
+    else if (params.get('error')) foroMessage(FORO_ERRORES[params.get('error')] || 'Algo salió mal. Volvé a intentarlo.', true);
+  }
+  async function loadForo() {
+    if (!token || recoveryToken) return;
+    let st;
+    try { st = await call('GET', '/puente/api/foro/estado'); } catch { return; }
+    if (!st.disponible) return;
+    $('foro').hidden = false;
+    $('foro-sin-vincular').hidden = st.vinculado;
+    $('foro-vinculada').hidden = !st.vinculado;
+    if (st.vinculado) {
+      $('foro-usuario').textContent = st.foro.usuario;
+      $('foro-perfil').href = st.foro.perfil;
+      if (st.foro.avatar) $('foro-avatar').src = st.foro.avatar; else $('foro-avatar').removeAttribute('src');
+    }
+  }
+  $('btn-foro-vincular').addEventListener('click', async e => {
+    e.target.disabled = true;
+    try {
+      const res = await fetch('/puente/api/foro/iniciar', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ para: 'vincular' }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Error');
+      location.href = data.url;
+    } catch (err) { foroMessage(err.message, true); e.target.disabled = false; }
+  });
+  $('btn-foro-desvincular').addEventListener('click', async e => {
+    if (!confirm('¿Desvincular tu cuenta del foro? Ya no vas a poder entrar con ella.')) return;
+    e.target.disabled = true;
+    try { await call('POST', '/puente/api/foro/desvincular'); foroMessage('Cuenta del foro desvinculada.'); await loadForo(); }
+    catch (err) { foroMessage(err.message, true); }
+    e.target.disabled = false;
+  });
+
   load();
+  loadForo();
 })();

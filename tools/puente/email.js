@@ -185,6 +185,20 @@ function fromDiscordIfMissing(userId, me) {
   try { fromDiscord(userId, me); } catch (err) { warn('email de Discord:', err.message); }
 }
 
+// El email que el foro ya confirmo (foro.js), si todavia no tiene uno confirmado
+function fromForoIfMissing(userId, rawEmail) {
+  if (!on() || status(userId).confirmado) return;
+  const email = norm(rawEmail);
+  if (!valid(email) || takenByOther(email, userId)) return;
+  try {
+    db.prepare(`INSERT INTO puente_emails (haven_user_id, email, confirmado, origen, actualizado)
+                VALUES (?, ?, 1, 'foro', CURRENT_TIMESTAMP)
+                ON CONFLICT(haven_user_id) DO UPDATE SET email = excluded.email, confirmado = 1, origen = 'foro',
+                  token_hash = NULL, token_vence = NULL, actualizado = CURRENT_TIMESTAMP`).run(userId, email);
+    log(`email: tomado del foro para Haven #${userId}`);
+  } catch (err) { warn('email del foro:', err.message); }
+}
+
 // "¿Olvidaste tu contraseña?": siempre la misma respuesta, exista o no la cuenta
 async function forgot(rawEmail, ip) {
   const email = norm(rawEmail);
@@ -267,4 +281,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, status, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, status, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };

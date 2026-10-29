@@ -69,6 +69,25 @@
 
     <p id="mensaje" class="mensaje" hidden></p>
   </main>
+
+  <main class="card" id="foro" hidden>
+    <h1>Tu cuenta del foro</h1>
+    <p class="lead">Vinculala para entrar a __PUENTE_APP__ con tu cuenta del foro y que se sepa que sos vos en los dos lados.</p>
+    <section id="foro-sin-vincular" hidden>
+      <button id="btn-foro-vincular" class="btn foro">Conectar con el foro</button>
+    </section>
+    <section id="foro-vinculada" hidden>
+      <div class="perfil">
+        <img id="foro-avatar" alt="">
+        <div>
+          <div class="nombre" id="foro-usuario"></div>
+          <a class="usuario" id="foro-perfil" target="_blank" rel="noopener">Ver perfil en el foro</a>
+        </div>
+      </div>
+      <button id="btn-foro-desvincular" class="btn peligro">Desvincular</button>
+    </section>
+    <p id="foro-mensaje" class="mensaje" hidden></p>
+  </main>
   <script src="/puente/vincular.js"></script>
 </body>
 </html>

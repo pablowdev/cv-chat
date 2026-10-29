@@ -21,6 +21,19 @@ Redes:
 
 `.env` (solo root): `MARIADB_ROOT_PASSWORD`, `MARIADB_PASSWORD` y `RELAYHOST_PASSWORD` (la clave de Resend).
 
+## Entrar a CV Chat con la cuenta del foro
+
+`cvchat.php` va en `codigo/` (junto a `index.php`). Es el puente de `tools/puente/foro.js`: pide
+iniciar sesión en el foro si hace falta, pregunta si se quiere seguir y vuelve a CV Chat con quién es,
+firmado. Lee `puente.env` (solo root, solo para `web`):
+
+```
+CV_PUENTE_SECRETO=<la misma que FORO_PUENTE_SECRETO de CV Chat>
+CV_CHAT_URL=https://chat.ejemplo.com
+```
+
+Al actualizar vBulletin, `cvchat.php` queda (no viene en el paquete).
+
 En el Caddy de CV Chat: el servicio `caddy` también en la red `foro-frente` (externa) y un bloque
 `foro.ejemplo.com { reverse_proxy foro-web:80 }`.
 

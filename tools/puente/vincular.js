@@ -37,6 +37,7 @@ const temaFijo = require('./tema-fijo.js');
 const llave = require('./llave.js');
 const email = require('./email.js');
 const nombres = require('./nombres.js');
+const foro = require('./foro.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -77,6 +78,12 @@ function setup(ctx) {
 
   email.setup({ db, log, warn, publicUrl, appName, setPassword });
   llave.setup({ db, io, log, appName, publicUrl });
+  foro.setup({ db, log, warn, helpers: {
+    json, send, readJson, sessionUser, appName, sessionFor, usernameTaken, usernameProblem,
+    register: registerThroughHaven, canLogin: () => !!generateToken,
+    handoff: (code, userId) => handoffs.set(code, { ...sessionFor(userId), exp: Date.now() + HANDOFF_TTL_MS }),
+    emailIfMissing: (userId, addr) => email.fromForoIfMissing(userId, addr),
+  } });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();
@@ -976,6 +983,10 @@ async function handle(req, res) {
   }
   if (p.startsWith('/puente/api/invitacion/')) {
     const r = await require('./invitaciones.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
+  if (p.startsWith('/puente/api/foro/') || p === '/puente/foro/vuelta') {
+    const r = await foro.handle(req, res, p, u);
     if (r !== false) return;
   }
   if (p.startsWith('/puente/api/logros/')) {
