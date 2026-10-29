@@ -11234,3 +11234,81 @@ var puenteSinUbicacion = (function () {
     if (e.target.closest && e.target.closest('#logout-btn')) ss.set('puente_salio', '1');
   }, true);
 })();
+
+// "/foro <texto>" en el cuadro de escribir: busca en el foro (foro-lector.js) sin mandar nada al
+// canal. Cada resultado se abre en el foro o se pega su enlace en el mensaje.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const st = el('style');
+  st.textContent = '#puente-foro-buscar{position:fixed;inset:0;z-index:10050;display:flex;align-items:flex-start;justify-content:center;padding:8vh 12px 12px;background:rgba(0,0,0,.6)}'
+    + '#puente-foro-buscar .pfb{width:100%;max-width:620px;max-height:80vh;display:flex;flex-direction:column;background:var(--bg-secondary,#2b2d31);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);overflow:hidden}'
+    + '#puente-foro-buscar .pfb-cab{display:flex;gap:8px;padding:12px;border-bottom:1px solid rgba(255,255,255,.08)}'
+    + '#puente-foro-buscar input{flex:1;min-width:0;padding:10px 12px;border-radius:8px;border:0;background:var(--bg-tertiary,#1e1f22);color:inherit;font:inherit}'
+    + '#puente-foro-buscar .pfb-x{border:0;background:none;color:inherit;font-size:22px;cursor:pointer;padding:0 8px}'
+    + '#puente-foro-buscar .pfb-lista{overflow:auto;padding:6px}'
+    + '#puente-foro-buscar .pfb-item{display:block;padding:10px 12px;border-radius:8px;color:inherit;text-decoration:none}'
+    + '#puente-foro-buscar .pfb-item:hover{background:rgba(255,255,255,.06)}'
+    + '#puente-foro-buscar .pfb-t{font-weight:700}'
+    + '#puente-foro-buscar .pfb-m{font-size:12px;opacity:.7;margin:2px 0 4px}'
+    + '#puente-foro-buscar .pfb-x2{font-size:13px;opacity:.85;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+    + '#puente-foro-buscar .pfb-pegar{margin-top:6px;font-size:12px;border:0;border-radius:6px;padding:4px 10px;background:var(--accent,#5865f2);color:#fff;cursor:pointer}'
+    + '#puente-foro-buscar .pfb-nada{padding:18px;text-align:center;opacity:.75}';
+  document.head.appendChild(st);
+  const input = () => byId('message-input');
+  function cerrar() { const o = byId('puente-foro-buscar'); if (o) o.remove(); }
+  async function buscar(q, lista) {
+    lista.textContent = '';
+    lista.appendChild(el('div', 'pfb-nada', 'Buscando en el foro…'));
+    try {
+      const r = await fetch('/puente/api/foro/buscar?q=' + encodeURIComponent(q), { headers: { Authorization: 'Bearer ' + (localStorage.getItem('haven_token') || '') } });
+      const d = await r.json().catch(() => ({}));
+      lista.textContent = '';
+      if (!r.ok) { lista.appendChild(el('div', 'pfb-nada', d.error || 'No se pudo buscar.')); return; }
+      if (!d.resultados.length) { lista.appendChild(el('div', 'pfb-nada', 'No hay temas del foro con "' + q + '".')); return; }
+      for (const t of d.resultados) {
+        const a = el('a', 'pfb-item'); a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
+        a.appendChild(el('div', 'pfb-t', t.tema));
+        a.appendChild(el('div', 'pfb-m', t.canal + ' · ' + t.autor + ' · ' + new Date(t.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) + (t.respuestas ? ' · ' + t.respuestas + (t.respuestas === 1 ? ' respuesta' : ' respuestas') : '')));
+        if (t.texto) a.appendChild(el('div', 'pfb-x2', t.texto));
+        const pegar = el('button', 'pfb-pegar', 'Pegar el enlace en el mensaje');
+        pegar.type = 'button';
+        pegar.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); const i = input(); if (i) { i.value = (i.value ? i.value + ' ' : '') + t.url; i.dispatchEvent(new Event('input', { bubbles: true })); i.focus(); } cerrar(); });
+        a.appendChild(pegar);
+        lista.appendChild(a);
+      }
+    } catch { lista.textContent = ''; lista.appendChild(el('div', 'pfb-nada', 'No hay conexión.')); }
+  }
+  function abrir(q) {
+    cerrar();
+    const o = el('div'); o.id = 'puente-foro-buscar';
+    const box = el('div', 'pfb'), cab = el('form', 'pfb-cab'), campo = el('input'), x = el('button', 'pfb-x', '×'), lista = el('div', 'pfb-lista');
+    campo.type = 'search'; campo.placeholder = 'Buscar en el foro'; campo.value = q; x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+    cab.append(campo, x); box.append(cab, lista); o.appendChild(box); document.body.appendChild(o);
+    cab.addEventListener('submit', (e) => { e.preventDefault(); if (campo.value.trim().length >= 2) buscar(campo.value.trim(), lista); });
+    x.addEventListener('click', cerrar);
+    o.addEventListener('click', (e) => { if (e.target === o) cerrar(); });
+    o.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
+    if (q.length >= 2) buscar(q, lista); else lista.appendChild(el('div', 'pfb-nada', 'Escribí qué buscar en el foro.'));
+    setTimeout(() => campo.focus(), 30);
+  }
+  window.puenteForoBuscar = { abierto: () => !!byId('puente-foro-buscar'), cerrar };
+  let t = 0;
+  (function enganchar() {
+    const app = window.app;
+    if (!app || typeof app._sendMessage !== 'function' || !input()) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    const enviar = app._sendMessage;
+    app._sendMessage = function () {
+      const i = input();
+      const m = i && /^\/foro(?:\s+([\s\S]*))?$/i.exec(i.value.trim());
+      if (m) {
+        i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true }));
+        try { this._hideSlashDropdown && this._hideSlashDropdown(); this._hideMentionDropdown && this._hideMentionDropdown(); } catch { /* */ }
+        abrir((m[1] || '').trim());
+        return;
+      }
+      return enviar.apply(this, arguments);
+    };
+  })();
+})();

@@ -7,7 +7,7 @@ services:
     # Version fijada (4.24.0): el puente, el tema y patches/ se revisaron para esta version. Revisarlos antes de actualizar.
     # Antes de pasar a 4.23.0 se marco import_authors_cleared=1 en server_settings: esa migracion de
     # Haven le saca el dueño a los mensajes importados, y aca son del usuario discord-historial a proposito.
-    image: ghcr.io/ancsemi/haven@sha256:a935a79431b965972bebc2bdbb803dbee6e49fc584e373e063d10a39918f780c
+    image: ghcr.io/ancsemi/haven@sha256:b66c3a432f5531be2be7ab697418144869c0878bfe5e1d36869af13d9d987637
     container_name: haven
     volumes:
       - ./haven-data:/data
@@ -26,6 +26,8 @@ services:
       - FORCE_HTTP=true
       # PARCHE: ver patches/import-timeout.js
       - NODE_OPTIONS=--require /patches/import-timeout.js --require /tools/puente/cargar.js
+    # Tambien en la red del lector del foro (/opt/foro): solo le llega al lector, no al foro
+    networks: [default, foro-lector]
     restart: unless-stopped
     # Registros: hasta 10 archivos de 100 MB (1 GB) por programa; recien ahi se borran los mas viejos
     logging:
@@ -47,6 +49,8 @@ services:
       - ./caddy-config:/config
     depends_on:
       - haven
+    # Tambien en la red del foro (/opt/foro), para llegarle a foro-web
+    networks: [default, foro-frente]
     restart: unless-stopped
     # Registros: hasta 10 archivos de 100 MB (1 GB) por programa; recien ahi se borran los mas viejos
     logging:
@@ -54,3 +58,9 @@ services:
       options:
         max-size: "100m"
         max-file: "10"
+
+networks:
+  foro-frente:
+    external: true
+  foro-lector:
+    external: true

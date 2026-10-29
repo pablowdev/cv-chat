@@ -43,6 +43,25 @@ services:
     mem_limit: 1536m
     restart: unless-stopped
     logging: { driver: json-file, options: { max-size: "50m", max-file: "5" } }
+  # El lector para CV Chat (lector/lector.php, tools/puente/foro-lector.js): solo lee, y solo lo publico,
+  # con un usuario de la base que solo puede leer los temas (lector.env). CV Chat le llega por foro-lector.
+  lector:
+    image: foro-web:local
+    container_name: foro-lector
+    command: ["php", "-S", "0.0.0.0:8080", "/lector/lector.php"]
+    user: "33:33"
+    env_file: lector.env
+    volumes:
+      - ./lector:/lector:ro
+    networks: [foro-datos, foro-lector]
+    depends_on: [db]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
   correo:
     image: boky/postfix:latest
     container_name: foro-correo
@@ -62,3 +81,4 @@ networks:
   foro-frente: { name: foro-frente, internal: true }
   foro-datos: { name: foro-datos, internal: true }
   foro-salida: { name: foro-salida }
+  foro-lector: { name: foro-lector, internal: true }

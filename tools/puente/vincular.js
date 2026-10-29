@@ -40,6 +40,7 @@ const nombres = require('./nombres.js');
 const foro = require('./foro.js');
 const cuenta = require('./cuenta.js');
 const wiki = require('./wiki.js');
+const foroLector = require('./foro-lector.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -109,6 +110,7 @@ function setup(ctx) {
     email: (userId) => email.status(userId),
   } });
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
+  foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();
@@ -168,6 +170,8 @@ function hookHttp() {
         // Un enlace a un mensaje (de CV Chat o de Discord) se ve como "#canal › mensaje"
         // (web/aviso.js): sin tarjeta de vista previa
         if (isMessageLink(url)) { json(res, 400, { error: 'enlace a un mensaje' }); return true; }
+        // Un enlace al foro: la tarjeta con el tema (foro-lector.js)
+        if (foroPreview(req, res)) return true;
         req.url = twitterProxyToX(url);
         const server = this;
         if (tweetPreview(req, res, () => origEmit.call(server, event, req, res, ...rest))) return true;
@@ -202,6 +206,19 @@ function twitterProxyToX(reqUrl) {
 const TWEET_RE = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
 const tweetCache = new Map(); // id del tuit -> { at, data }
 const TWEET_TTL_MS = 30 * 60 * 1000;
+function foroPreview(req, res) {
+  let target;
+  try { target = new URL(req.url, 'http://x').searchParams.get('url') || ''; } catch { return false; }
+  if (!foroLector.nodoDe(target.trim())) return false;
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ') || !verifyToken || !verifyToken(auth.slice(7))) return false;
+  foroLector.vistaPrevia(target.trim()).then(data => {
+    if (data) send(res, 200, 'application/json', JSON.stringify({ ...data, url: target }));
+    else json(res, 404, { error: 'no esta' });
+  }).catch(() => { if (!res.headersSent) json(res, 502, { error: 'el foro no contesto' }); });
+  return true;
+}
+
 function tweetPreview(req, res, next) {
   if (req.method !== 'GET') return false;
   let target;
@@ -1018,6 +1035,10 @@ async function handle(req, res) {
   }
   if (p.startsWith('/puente/api/wiki/')) {
     const r = await wiki.handle(req, res, p, u);
+    if (r !== false) return;
+  }
+  if (p === '/puente/api/foro/buscar') {
+    const r = await foroLector.handle(req, res, p, u);
     if (r !== false) return;
   }
   if (p.startsWith('/puente/api/foro/') || p.startsWith('/puente/foro/')) {
