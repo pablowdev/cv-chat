@@ -133,7 +133,12 @@
     const menu = el('div', 'cv-barra__menu'); menu.hidden = true;
     const item = (t, href) => { const a = el('a', null, t); a.href = href; menu.appendChild(a); return a; };
     item('Mi cuenta', WEB + '/cuenta');
-    itemsForo(item);
+    // Lo del foro, igual en la web y en el foro (con la cuenta del foro unida)
+    if (yo.foro) {
+      item('Mi perfil del foro', FORO + '/member/' + encodeURIComponent(yo.foro));
+      item('Ajustes del foro', FORO + '/settings/account');
+      if (yo.admin) item('Panel del foro', FORO + '/admincp/');
+    }
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });
