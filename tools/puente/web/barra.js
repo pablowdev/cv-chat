@@ -90,7 +90,10 @@
     if (/^\/(login|register)\/?$/.test(location.pathname) && !vbId) { location.replace(location.pathname.startsWith('/register') ? CHAT + '/?registro=1&volver=' + encodeURIComponent(FORO + '/') : CHAT + '/?volver=' + encodeURIComponent(FORO + '/')); return; }
     if (!yo) return;
     if (yo.conectado && !vbId && !ss.get('cv_sso')) { ss.set('cv_sso'); location.replace(CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(aca)); return; }
-    if (!yo.conectado && vbId && !ss.get('cv_auto')) { ss.set('cv_auto'); location.replace(CHAT + '/puente/foro/auto?volver=' + encodeURIComponent(aca)); }
+    if (!yo.conectado && vbId && !ss.get('cv_auto')) { ss.set('cv_auto'); location.replace(CHAT + '/puente/foro/auto?volver=' + encodeURIComponent(aca)); return; }
+    // Adentro de los dos, con cuentas sin unir: el foro pregunta una vez si se unen ("Ahora no" se recuerda)
+    let noUnir = false; try { noUnir = !!localStorage.getItem('cv_unir_no'); } catch { /* */ }
+    if (yo.conectado && vbId && !yo.foro && !noUnir && !ss.get('cv_sso')) { ss.set('cv_sso'); location.replace(CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(aca)); }
   }
 
   function start() {
