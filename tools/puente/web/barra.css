@@ -110,3 +110,13 @@
 @media (max-width: 560px) {
   .cv-ventana { left: 0; right: 0; width: auto; height: calc(100vh - 56px); height: calc(100dvh - 56px); border-radius: 0; border-left: 0; border-right: 0; }
 }
+
+/* En el foro, a quien tiene solo cuenta del foro: como usar los mensajes privados */
+.cv-unir { position: fixed; inset: 0; z-index: 100001; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .6); }
+.cv-unir__caja { position: relative; width: 100%; max-width: 420px; padding: 22px 22px 20px; background: #2b2d2c; border: 1px solid #3a3c3b; border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55); color: #c9c7c6; font: 14px/1.5 Arial, Helvetica, sans-serif; }
+.cv-unir__caja b { display: block; margin-bottom: 8px; color: #f2f2f2; font-size: 16px; }
+.cv-unir__caja p { margin: 0 0 10px; }
+.cv-unir__x { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: #939190; font-size: 22px; cursor: pointer; }
+.cv-unir__x:hover { color: #f2f2f2; }
+.cv-unir__btn { display: inline-block; margin-top: 6px; padding: 9px 16px; border-radius: 6px; background: #ee2d6f; color: #fff !important; font-weight: 700; text-decoration: none !important; }

@@ -11350,240 +11350,153 @@ var puenteSinUbicacion = (function () {
   })();
 })();
 
-// Los mensajes privados del foro, en CV Chat (foro-servicio.js). Los nuevos van por los mensajes
-// directos, cifrados; los de antes del foro se leen aca:
-//  - En la conversacion con alguien que tambien tiene la cuenta del foro unida: arriba, lo que se
-//    hablaron en el foro (avisando que no estan cifrados) y el cartel de que desde ahi si lo estan.
-//  - En la pantalla de mensajes directos: "Mensajes del foro", todas las conversaciones del foro
-//    (tambien con quien no tiene cuenta en CV Chat).
-// Y /app?mensajes=1 (el boton de mensajes de la barra de la web y del foro) abre los mensajes directos.
+// Los mensajes privados del foro, en CV Chat (foro-servicio.js): son el principio de la misma conversacion.
+//  - Con quien tambien tiene la cuenta del foro unida: en su mensaje directo, arriba de todo, lo que se
+//    hablaron en el foro (no estaba cifrado) y al final de eso el cartel de que desde ahi esta cifrado.
+//  - Con quien tiene solo cuenta del foro: se lee igual, en el chat, pero no hay mensajes privados con esa
+//    persona hasta que una su cuenta del foro con CV Chat.
+// La lista de mensajes directos, la misma en todo el sistema: solo las conversaciones donde alguna vez hubo
+// un mensaje (las que se abrieron y quedaron vacias no aparecen, salvo la que se esta mirando o si se
+// hablaron en el foro), y las del foro con quien no tiene conversacion en CV Chat.
+// Y /app?mensajes=1 (el boton de mensajes de la barra de la web y del foro) abre los mensajes directos, y
+// en la ventanita de mensajes de la web y del foro (barra.js) el chat abre directo la lista.
 (function () {
   'use strict';
   const byId = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
   const fecha = (t) => new Date(t).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const st = el('style');
-  st.textContent = '#puente-foro-pm{margin:8px 16px 4px;border-radius:10px;background:var(--bg-secondary,#2b2d31);font-size:14px;flex:0 0 auto}'
-    + '#puente-foro-pm .pfp-cab{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}'
-    + '#puente-foro-pm .pfp-cab b{flex:1}#puente-foro-pm .pfp-cab small{opacity:.7}'
-    + '#puente-foro-pm .pfp-aviso{margin:0 14px 8px;padding:8px 10px;border-radius:8px;background:rgba(240,178,50,.14);color:#f0b232;font-size:12px}'
-    + '#puente-foro-pm .pfp-lista{max-height:45vh;overflow:auto;padding:0 14px 10px}'
-    + '.pfp-msj{padding:6px 0;border-top:1px solid rgba(255,255,255,.06)}.pfp-msj .pfp-de{font-weight:700;font-size:13px}.pfp-msj .pfp-f{opacity:.55;font-size:11px;margin-left:6px}'
-    + '.pfp-msj .pfp-t{white-space:pre-wrap;word-break:break-word;margin-top:2px}.pfp-msj.mio .pfp-de{color:var(--accent,#5865f2)}'
-    + '#puente-foro-pm .pfp-cifrado{margin:0 14px 10px;padding:8px 10px;border-radius:8px;background:rgba(87,242,135,.12);color:#57f287;font-size:12px}'
-    + '#puente-foro-archivo{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(0,0,0,.6)}'
-    + '#puente-foro-archivo .pfa{width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;background:var(--bg-secondary,#2b2d31);border-radius:12px;overflow:hidden}'
-    + '#puente-foro-archivo .pfa-cab{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08)}#puente-foro-archivo .pfa-cab b{flex:1}'
-    + '#puente-foro-archivo .pfa-x{border:0;background:none;color:inherit;font-size:22px;cursor:pointer}'
-    + '#puente-foro-archivo .pfa-cuerpo{overflow:auto;padding:8px 16px 16px}'
-    + '#puente-foro-archivo .pfa-conv{display:block;width:100%;padding:10px 12px;margin:4px 0;border:0;border-radius:8px;background:rgba(255,255,255,.04);color:inherit;font:inherit;text-align:left;cursor:pointer}'
-    + '#puente-foro-archivo .pfa-conv:hover{background:rgba(255,255,255,.08)}#puente-foro-archivo .pfa-conv small{display:block;opacity:.65;margin-top:2px}'
-    + '#puente-foro-archivo .pfa-conv.es-nuevo b::after{content:"";display:inline-block;width:8px;height:8px;margin-left:8px;border-radius:50%;background:#f23f43;vertical-align:middle}'
-    + '#puente-foro-archivo .pfa-lista{max-height:none;padding:0 2px 8px}'
-    + '#puente-foro-archivo .pfa-escribir{position:sticky;bottom:-16px;margin:8px -16px -16px;padding:10px 16px 16px;background:var(--bg-secondary,#2b2d31);border-top:1px solid rgba(255,255,255,.08);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}'
-    + '#puente-foro-archivo .pfa-escribir .pfp-aviso{grid-column:1/-1;margin:0}'
-    + '#puente-foro-archivo .pfa-escribir textarea{resize:vertical;min-height:42px;max-height:30vh;padding:10px 12px;border:0;border-radius:8px;background:var(--bg-tertiary,#1e1f22);color:inherit;font:inherit}'
-    + '#puente-foro-archivo .pfa-escribir button{height:42px;padding:0 16px;border:0;border-radius:8px;background:var(--accent,#5865f2);color:#fff;font:inherit;font-weight:600;cursor:pointer}#puente-foro-archivo .pfa-escribir button:disabled{opacity:.6;cursor:default}'
-    + '#puente-foro-archivo .pfa-error{grid-column:1/-1;color:#f23f43;font-size:13px}';
-  document.head.appendChild(st);
   const api = (q) => fetch('/puente/api/foro/privados' + q, { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).catch(() => null);
-  const AVISO = 'Estos mensajes son del foro: no están cifrados (el foro los guardaba como texto común).';
-  const CIFRADO = '🔒 Desde acá, los mensajes son de CV Chat y están cifrados de punta a punta: solo los pueden leer ustedes dos.';
-  function lista(mensajes) {
-    const box = el('div', 'pfp-lista');
-    for (const m of mensajes) {
-      const d = el('div', 'pfp-msj' + (m.mio ? ' mio' : ''));
-      const cab = el('div'); cab.append(el('span', 'pfp-de', m.de), el('span', 'pfp-f', fecha(m.fecha)));
-      d.append(cab);
-      if (m.titulo) d.append(el('div', 'pfp-f', m.titulo));
-      d.append(el('div', 'pfp-t', m.texto));
-      box.appendChild(d);
-    }
-    return box;
-  }
-
-  // ── En la conversacion ──
-  let pedido = 0;
-  async function enConversacion() {
-    const viejo = byId('puente-foro-pm'); if (viejo) viejo.remove();
-    const app = window.app;
-    const ch = app && Array.isArray(app.channels) ? app.channels.find(c => c && c.code === app.currentChannel) : null;
-    if (!ch || !ch.is_dm || ch.is_group || !ch.dm_target) return;
-    const yo = ++pedido;
-    const d = await api('?con=' + encodeURIComponent(ch.dm_target.id));
-    if (yo !== pedido || !d || !d.mensajes || !d.mensajes.length) return;
-    const msgs = byId('messages');
-    if (!msgs || !msgs.parentNode) return;
-    const box = el('div'); box.id = 'puente-foro-pm';
-    const cab = el('button', 'pfp-cab'); cab.type = 'button';
-    cab.append(el('span', null, '📁'), el('b', null, d.mensajes.length + (d.mensajes.length === 1 ? ' mensaje' : ' mensajes') + ' del foro con ' + (d.con || ch.dm_target.username)), el('small', null, 'ver'));
-    const cuerpo = el('div'); cuerpo.hidden = true;
-    cuerpo.append(el('div', 'pfp-aviso', '⚠️ ' + AVISO), lista(d.mensajes));
-    cab.addEventListener('click', () => { cuerpo.hidden = !cuerpo.hidden; cab.querySelector('small').textContent = cuerpo.hidden ? 'ver' : 'ocultar'; if (!cuerpo.hidden) { const l = cuerpo.querySelector('.pfp-lista'); l.scrollTop = l.scrollHeight; } });
-    box.append(cab, cuerpo, el('div', 'pfp-cifrado', CIFRADO));
-    msgs.parentNode.insertBefore(box, msgs);
-  }
-
-  // ── Todas las conversaciones del foro ──
-  // Con quien tiene CV Chat: se sigue por mensaje directo (cifrado). Con quien esta solo en el foro: se le
-  // contesta desde aca y le llega como privado del foro (sin cifrar, porque no tiene CV Chat).
-  const visto = {
-    todo() { try { return JSON.parse(localStorage.getItem('puente_foro_visto') || '{}'); } catch { return {}; } },
-    marcar(c) { const v = visto.todo(); const u = c.mensajes[c.mensajes.length - 1]; v[c.clave] = u ? u.fecha : Date.now(); try { localStorage.setItem('puente_foro_visto', JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
-    nuevo(c) { const u = c.mensajes[c.mensajes.length - 1]; return !!(u && !u.mio && u.fecha > (visto.todo()[c.clave] || 0)); },
-  };
-  window.puenteForoVisto = visto;
-  const soloForo = (c) => c.cuentas.some(x => !x);
-  const SIN_CIFRAR = (c) => '⚠️ ' + c.con.filter((n, i) => !c.cuentas[i]).join(', ') + ' todavía no ' + (c.cuentas.filter(x => !x).length > 1 ? 'tienen' : 'tiene')
-    + ' CV Chat: lo que escribas acá le llega como mensaje privado del foro, sin cifrar. Cuando entre a CV Chat, la conversación sigue cifrada.';
-  let abierto = null; // la ventana abierta (para que se cierre una antes de abrir otra)
-  async function archivo(abrir) {
-    if (abierto) abierto();
-    const o = el('div'); o.id = 'puente-foro-archivo';
-    const box = el('div', 'pfa'), cab = el('div', 'pfa-cab'), titulo = el('b', null, 'Mensajes del foro'), x = el('button', 'pfa-x', '×'), cuerpo = el('div', 'pfa-cuerpo');
-    x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
-    cab.append(titulo, x); box.append(cab, cuerpo); o.appendChild(box); document.body.appendChild(o);
-    let reloj = null;
-    const cerrar = () => { clearInterval(reloj); o.remove(); abierto = null; };
-    abierto = cerrar;
-    x.addEventListener('click', cerrar); o.addEventListener('click', (e) => { if (e.target === o) cerrar(); });
-    cuerpo.appendChild(el('p', null, 'Cargando…'));
-    let d = await api('');
-    cuerpo.textContent = '';
-    if (!d) { cuerpo.appendChild(el('p', null, 'No se pudo cargar.')); return; }
-    if (!d.unida) { cuerpo.appendChild(el('p', null, 'Tu cuenta del foro no está unida a esta. Unila desde "Mi cuenta" para ver tus mensajes del foro acá.')); return; }
-    if (!d.conversaciones.length) { cuerpo.appendChild(el('p', null, 'No tenías mensajes privados en el foro.')); return; }
-    const conversaciones = () => {
-      clearInterval(reloj); titulo.textContent = 'Mensajes del foro';
-      cuerpo.textContent = '';
-      cuerpo.appendChild(el('div', 'pfp-aviso', '⚠️ ' + AVISO));
-      for (const c of d.conversaciones) {
-        const b = el('button', 'pfa-conv' + (visto.nuevo(c) ? ' es-nuevo' : '')); b.type = 'button';
-        const ult = c.mensajes[c.mensajes.length - 1];
-        b.append(el('b', null, c.con.join(', ') || 'Vos'), el('small', null, c.mensajes.length + (c.mensajes.length === 1 ? ' mensaje' : ' mensajes') + ' · ' + fecha(ult.fecha) + (soloForo(c) ? ' · solo en el foro' : '')));
-        b.addEventListener('click', () => conversacion(c.clave));
-        cuerpo.appendChild(b);
-      }
-    };
-    function conversacion(clave) {
-      const c = d.conversaciones.find(k => k.clave === clave);
-      if (!c) return conversaciones();
-      visto.marcar(c);
-      titulo.textContent = c.con.join(', ') || 'Vos';
-      cuerpo.textContent = '';
-      const v = el('button', 'pfa-conv pfa-volver', '← Todas las conversaciones'); v.type = 'button'; v.addEventListener('click', conversaciones);
-      cuerpo.append(v, el('div', 'pfp-aviso', '⚠️ ' + AVISO));
-      const l = lista(c.mensajes); l.classList.add('pfa-lista'); cuerpo.appendChild(l);
-      const id = c.cuentas.length === 1 && c.cuentas[0];
-      if (!soloForo(c)) {
-        // Con quien tiene cuenta en CV Chat: seguir la charla por mensaje directo
-        if (id && window.app && window.app.socket) {
-          const seguir = el('button', 'pfa-conv pfa-volver', '💬 Seguir hablando por mensaje directo (cifrado)'); seguir.type = 'button';
-          seguir.addEventListener('click', () => { window.app.socket.emit('start-dm', { targetUserId: id }); cerrar(); });
-          cuerpo.appendChild(seguir);
-        }
-      } else {
-        // Con quien esta solo en el foro: contestar desde aca
-        const caja = el('form', 'pfa-escribir');
-        const t = el('textarea'); t.rows = 2; t.maxLength = 8000; t.placeholder = 'Escribile a ' + c.con.join(', ') + '…';
-        const b = el('button', null, 'Enviar'); b.type = 'submit';
-        const err = el('div', 'pfa-error'); err.hidden = true;
-        caja.append(el('div', 'pfp-aviso', SIN_CIFRAR(c)), t, b, err);
-        t.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); caja.requestSubmit(); } });
-        caja.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const texto = t.value.trim();
-          if (!texto || b.disabled) return;
-          b.disabled = true; err.hidden = true;
-          const r = await fetch('/puente/api/foro/privados/enviar', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ clave, texto }) })
-            .then(x => x.json()).catch(() => ({ error: 'No se pudo mandar. Probá de nuevo.' }));
-          b.disabled = false;
-          if (!r || !r.ok) { err.textContent = (r && r.error) || 'No se pudo mandar.'; err.hidden = false; return; }
-          t.value = '';
-          await refrescar(true);
-        });
-        cuerpo.appendChild(caja);
-        setTimeout(() => t.focus(), 50);
-      }
-      l.scrollTop = l.scrollHeight;
-      // Lo que va llegando del foro, mientras esta abierta
-      clearInterval(reloj);
-      reloj = setInterval(() => refrescar(false), 15000);
-      async function refrescar(siempre) {
-        const n = await api('?fresco=1');
-        if (!n || !n.conversaciones || !document.body.contains(o)) return;
-        const antes = c.mensajes.length;
-        d = n;
-        const c2 = d.conversaciones.find(k => k.clave === clave);
-        if (!c2 || (!siempre && c2.mensajes.length === antes)) return;
-        const nueva = lista(c2.mensajes); nueva.classList.add('pfa-lista');
-        cuerpo.replaceChild(nueva, cuerpo.querySelector('.pfa-lista'));
-        nueva.scrollTop = nueva.scrollHeight;
-        c.mensajes = c2.mensajes; visto.marcar(c2);
-        if (window.puenteForoLista) window.puenteForoLista(d.conversaciones);
-      }
-    }
-    if (typeof abrir === 'string') conversacion(abrir); else conversaciones();
-  }
-  window.puenteForoArchivo = archivo;
-
-  // La entrada "Mensajes del foro" en la pantalla de mensajes directos
-  const obs = new MutationObserver(() => {
-    const home = byId('puente-dm-home');
-    if (home && !home.querySelector('.puente-dm-home-foro')) {
-      const b = el('button', 'puente-dm-home-row puente-dm-home-foro'); b.type = 'button';
-      b.append(el('span', 'puente-dm-avatar', '📁'), el('span', 'puente-dm-home-name', 'Mensajes del foro'), el('span', 'puente-dm-home-chat', '›'));
-      b.addEventListener('click', archivo);
-      const t = home.querySelector('.puente-dm-home-title');
-      if (t) t.after(b); else home.prepend(b);
-    }
-  });
-
-  let t = 0;
-  (function enganchar() {
-    const app = window.app;
-    if (!app || typeof app.switchChannel !== 'function' || !Array.isArray(app.channels) || !byId('messages')) { if (++t < 120) setTimeout(enganchar, 1000); return; }
-    const cambiar = app.switchChannel;
-    app.switchChannel = function () {
-      const r = cambiar.apply(this, arguments);
-      setTimeout(enConversacion, 400);
-      return r;
-    };
-    obs.observe(document.body, { childList: true, subtree: true });
-    setTimeout(enConversacion, 800);
-    // /app?mensajes=1: abrir los mensajes directos
-    const q = new URLSearchParams(location.search);
-    if (q.get('mensajes')) {
-      history.replaceState(null, '', location.pathname);
-      setTimeout(() => { const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click(); }, 1500);
-    }
-  })();
-})();
-// La lista de mensajes directos, la misma en todo el sistema:
-//  - Solo las conversaciones donde alguna vez hubo un mensaje: las que se abrieron y quedaron vacias
-//    no aparecen (salvo la que se esta mirando, o si con esa persona se hablo en el foro).
-//  - Tambien las conversaciones privadas del foro (foro-servicio.js), con quien tenga o no cuenta en
-//    CV Chat: con quien la tiene, se abre el mensaje directo (arriba se ven los del foro); con quien
-//    no, se leen los mensajes del foro.
-// Y el chat en la ventanita de mensajes de la web y del foro (barra.js): ahi abre los mensajes directos.
-(function () {
-  'use strict';
-  const byId = (id) => document.getElementById(id);
-  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
-  const st = el('style');
-  st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
-    + '#dm-list .puente-dm-foro .puente-dm-foro-tag{margin-left:auto;padding:0 5px;border-radius:3px;background:rgba(255,255,255,.08);font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:.04em}';
-  document.head.appendChild(st);
-
-  const vacios = new Set(), recien = new Set();
-  let foro = [];
   const chans = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels : []);
   const dmCon = (id) => chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id);
   const unico = (c) => (c.cuentas.length === 1 && c.cuentas[0]) || null;
+  const COLORES = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c'];
+  const color = (s) => COLORES[[...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % COLORES.length];
+  const AVISO = '⚠️ Estos mensajes son del foro: no están cifrados (el foro los guardaba como texto común).';
+  const CIFRADO = '🔒 Desde acá, los mensajes son de CV Chat y están cifrados de punta a punta: solo los pueden leer ustedes dos.';
 
-  let obs = null;
+  const st = el('style');
+  st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
+    + '#dm-list .puente-dm-foro{display:flex;align-items:center;min-height:3.5rem;gap:.875rem;padding:.375rem .75rem;cursor:pointer}'
+    + '#dm-list .puente-dm-foro .channel-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    + '#dm-list .puente-dm-foro .channel-hash{display:none}'
+    + '#dm-list .puente-dm-foro .puente-dm-avatar{display:flex;flex-shrink:0;width:2.5rem;height:2.5rem;border-radius:50%;overflow:hidden;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.0625rem}'
+    + '#dm-list .puente-dm-foro .puente-dm-avatar img{width:100%;height:100%;object-fit:cover}'
+    + '#dm-list .puente-dm-foro.active{background:#343338}'
+    + '.puente-dm-foro-tag{flex:0 0 auto;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:#96969e;font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}'
+    + '.puente-foro-hist{padding:8px 0}'
+    + '.pfh-aviso,.pfh-cifrado,.pfv-pie{margin:8px 16px;padding:10px 14px;border-radius:8px;border-left:3px solid;font-size:13px;line-height:1.45}'
+    + '.pfh-aviso{background:rgba(240,178,50,.08);border-color:#f0b232;color:#e9cd8f}'
+    + '.pfh-cifrado{background:rgba(59,165,93,.09);border-color:#3ba55d;color:#a6dcb6}'
+    + '.puente-foro-msj{position:relative}.puente-foro-msj+.puente-foro-msj.pfh-sep{margin-top:.75rem}'
+    + '.puente-foro-msj .message-avatar{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;object-fit:cover}'
+    + '.puente-foro-msj .pfh-asunto{display:block;margin-bottom:2px;color:#96969e;font-size:12px}'
+    + '.puente-foro-msj .pfh-sin-avatar{visibility:hidden}'
+    + '[data-haven-region="main"]:has(> #puente-foro-vista){position:relative}'
+    + '#puente-foro-vista{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;background:#1a1a1e;color:#dbdee1}'
+    + '#puente-foro-vista .pfv-cab{flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:48px;padding:0 16px;border-bottom:1px solid #29292d;font-weight:700;color:#fbfbfb}'
+    + '#puente-foro-vista .pfv-volver{display:none;border:0;background:none;color:inherit;font-size:20px;cursor:pointer;padding:0 6px 0 0}'
+    + '@media (max-width:768px){#puente-foro-vista .pfv-volver{display:block}}'
+    + '#puente-foro-vista .pfv-lista{flex:1 1 auto;overflow-y:auto}'
+    + '.pfv-pie{flex:0 0 auto;margin:8px 16px 16px;background:#222327;border-color:#5865f2;color:#b5bac1;font-size:14px}';
+  document.head.appendChild(st);
+
+  // ── Los mensajes del foro, con el aspecto de los del chat ──
+  const formato = (t) => { try { return window.app && typeof window.app._formatContent === 'function' ? window.app._formatContent(t) : null; } catch { return null; } };
+  function avatar(m) {
+    const ini = (m.de || '?').trim().charAt(0).toUpperCase();
+    const letra = el('div', 'message-avatar', ini); letra.style.backgroundColor = color(m.de);
+    if (!m.foto) return letra;
+    const i = el('img', 'message-avatar message-avatar-img'); i.src = m.foto; i.alt = ini; i.loading = 'lazy';
+    i.addEventListener('error', () => i.replaceWith(letra));
+    return i;
+  }
+  function mensaje(m, prev) {
+    const seguido = prev && prev.de === m.de && m.fecha - prev.fecha < 10 * 60 * 1000 && !m.titulo;
+    const d = el('div', 'puente-foro-msj' + (seguido ? '' : ' pfh-sep'));
+    const row = el('div', 'message-row'), body = el('div', 'message-body');
+    const av = avatar(m); if (seguido) av.classList.add('pfh-sin-avatar');
+    if (!seguido) {
+      const head = el('div', 'message-header');
+      const a = el('span', 'message-author', m.de); a.style.color = m.mio ? '#fbfbfb' : color(m.de);
+      head.append(a, el('span', 'message-time', fecha(m.fecha)));
+      body.appendChild(head);
+    }
+    const c = el('div', 'message-content');
+    if (m.titulo) c.appendChild(el('span', 'pfh-asunto', 'Asunto: ' + m.titulo));
+    const html = formato(m.texto);
+    if (html != null) { const x = el('div'); x.innerHTML = html; c.appendChild(x); } else { const x = el('div', null, m.texto); x.style.whiteSpace = 'pre-wrap'; c.appendChild(x); }
+    body.appendChild(c);
+    row.append(av, body); d.appendChild(row);
+    return d;
+  }
+  function historial(mensajes, pie) {
+    const box = el('div', 'puente-foro-hist');
+    box.appendChild(el('div', 'pfh-aviso', AVISO));
+    mensajes.forEach((m, i) => box.appendChild(mensaje(m, mensajes[i - 1])));
+    if (pie) box.appendChild(pie);
+    return box;
+  }
+
+  // ── En el mensaje directo con alguien que tiene la cuenta del foro unida: el principio de la charla ──
+  let actual = null, pedido = 0; // { code, box }
+  function poner() {
+    const msgs = byId('messages');
+    if (!actual) return;
+    if (!msgs || !window.app || window.app.currentChannel !== actual.code) { actual.box.remove(); actual = null; return; }
+    if (msgs.firstElementChild === actual.box) return;
+    const abajo = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+    msgs.insertBefore(actual.box, msgs.firstChild);
+    if (abajo) msgs.scrollTop = msgs.scrollHeight;
+  }
+  async function enConversacion() {
+    const app = window.app;
+    const ch = app ? chans().find(c => c && c.code === app.currentChannel) : null;
+    if (actual && (!ch || actual.code !== ch.code)) { actual.box.remove(); actual = null; }
+    if (!ch || !ch.is_dm || ch.is_group || !ch.dm_target || (actual && actual.code === ch.code)) return;
+    const yo = ++pedido;
+    const d = await api('?con=' + encodeURIComponent(ch.dm_target.id));
+    if (yo !== pedido || !d || !d.mensajes || !d.mensajes.length || app.currentChannel !== ch.code) return;
+    actual = { code: ch.code, box: historial(d.mensajes, el('div', 'pfh-cifrado', CIFRADO)) };
+    actual.box.id = 'puente-foro-historial';
+    poner();
+  }
+
+  // ── Con quien tiene solo cuenta del foro: la conversacion en el chat, para leer ──
+  function cerrarVista() { const v = byId('puente-foro-vista'); if (v) v.remove(); document.querySelectorAll('#dm-list .puente-dm-foro.active').forEach(n => n.classList.remove('active')); }
+  function vista(c) {
+    const main = document.querySelector('[data-haven-region="main"]');
+    if (!main) return;
+    cerrarVista();
+    const nombre = c.con.join(', ') || 'Vos';
+    const v = el('div'); v.id = 'puente-foro-vista';
+    const cab = el('div', 'pfv-cab'), volver = el('button', 'pfv-volver', '←');
+    volver.type = 'button'; volver.title = 'Mensajes'; volver.addEventListener('click', () => { const m = byId('mobile-menu-btn'); if (m) m.click(); });
+    cab.append(volver, el('span', null, '@ ' + nombre), el('span', 'puente-dm-foro-tag', 'foro'));
+    const lista = el('div', 'pfv-lista'); lista.appendChild(historial(c.mensajes));
+    const quien = c.con.filter((n, i) => !c.cuentas[i]).join(', ') || nombre;
+    v.append(cab, lista, el('div', 'pfv-pie', `💬 ${quien} tiene solo cuenta del foro. Los mensajes privados son los de CV Chat: cuando una su cuenta del foro con la de la página (en "Mi cuenta"), pueden seguir hablando acá mismo, con mensajes cifrados.`));
+    main.appendChild(v);
+    lista.scrollTop = lista.scrollHeight;
+    const dh = byId('puente-dm-home'); if (dh) dh.remove();
+    const body = byId('app-body'); if (body) body.classList.remove('mobile-sidebar-open');
+    visto.marcar(c);
+    aplicar();
+    const it = document.querySelector(`#dm-list .puente-dm-foro[data-foro="${CSS.escape(c.clave)}"]`); if (it) it.classList.add('active');
+  }
+
+  // Cuales del foro ya se vieron (para marcar las que tienen algo nuevo). La primera vez, todas vistas
+  const visto = {
+    todo() { try { return JSON.parse(localStorage.getItem('puente_foro_visto') || 'null'); } catch { return {}; } },
+    guardar(v) { try { localStorage.setItem('puente_foro_visto', JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
+    marcar(c) { const v = visto.todo() || {}; const u = c.mensajes[c.mensajes.length - 1]; v[c.clave] = u ? u.fecha : Date.now(); visto.guardar(v); },
+    nuevo(c) { const v = visto.todo() || {}; const u = c.mensajes[c.mensajes.length - 1]; return !!(u && !u.mio && u.fecha > (v[c.clave] || 0)); },
+    empezar(l) { if (visto.todo()) return; const v = {}; for (const c of l) { const u = c.mensajes[c.mensajes.length - 1]; v[c.clave] = u ? u.fecha : 0; } visto.guardar(v); },
+  };
+
+  // ── La lista de mensajes directos ──
+  const vacios = new Set(), recien = new Set();
+  let foro = [], obs = null;
   function aplicar() {
     const list = byId('dm-list'), app = window.app;
     if (!list || !app) return;
@@ -11596,30 +11509,33 @@ var puenteSinUbicacion = (function () {
         it.classList.toggle('puente-dm-vacio', ocultar);
       }
       // Las del foro que no tienen conversacion en CV Chat, al final de la lista
+      const abierta = byId('puente-foro-vista') && (list.querySelector('.puente-dm-foro.active') || {}).dataset;
       list.querySelectorAll('.puente-dm-foro').forEach(n => n.remove());
-      foro.forEach((c) => {
+      for (const c of foro) {
         const id = unico(c);
-        if (id && dmCon(id)) return;
+        if (id && dmCon(id)) continue;
         const nombre = c.con.join(', ') || 'Vos';
-        const it = el('div', 'channel-item puente-dm-foro'); it.dataset.foro = c.clave;
-        it.title = id ? 'Mensajes del foro con ' + nombre : 'Mensajes del foro con ' + nombre + ' (no tiene cuenta en CV Chat)';
-        it.append(el('span', 'puente-dm-avatar', nombre.trim().charAt(0).toUpperCase() || '?'), el('span', 'channel-name', nombre), el('span', 'puente-dm-foro-tag', 'foro'));
-        if (!id && window.puenteForoVisto && window.puenteForoVisto.nuevo(c)) it.appendChild(el('span', 'channel-badge', '1'));
+        const it = el('div', 'channel-item puente-dm-foro' + (abierta && abierta.foro === c.clave ? ' active' : '')); it.dataset.foro = c.clave;
+        it.title = 'Mensajes del foro con ' + nombre;
+        const av = el('span', 'puente-dm-avatar');
+        const f = c.fotos && c.fotos.length === 1 && c.fotos[0];
+        if (f) { const i = el('img'); i.src = f; i.alt = ''; i.loading = 'lazy'; i.addEventListener('error', () => { i.remove(); av.textContent = nombre.charAt(0).toUpperCase(); }); av.appendChild(i); }
+        else { av.textContent = c.con.length > 1 ? '👥' : (nombre.trim().charAt(0).toUpperCase() || '?'); av.style.backgroundColor = color(nombre); }
+        it.append(av, el('span', 'channel-name', nombre), el('span', 'puente-dm-foro-tag', 'foro'));
+        if (visto.nuevo(c)) it.appendChild(el('span', 'channel-badge', '1'));
         it.addEventListener('click', () => abrir(c));
         list.appendChild(it);
-      });
+      }
     } finally { if (obs) obs.observe(list, { childList: true }); }
   }
   function abrir(c) {
     const id = unico(c);
-    if (id && window.app && window.app.socket) { window.app.socket.emit('start-dm', { targetUserId: id }); return; }
-    if (typeof window.puenteForoArchivo === 'function') window.puenteForoArchivo(c.clave);
-    setTimeout(aplicar, 300);
+    // Con cuenta en CV Chat: su mensaje directo (ahi arriba esta lo del foro)
+    if (id && window.app && window.app.socket) { cerrarVista(); window.app.socket.emit('start-dm', { targetUserId: id }); return; }
+    vista(c);
   }
-  // La ventana de mensajes del foro avisa cuando llegaron o se mandaron mensajes
-  window.puenteForoLista = (l) => { if (Array.isArray(l)) { foro = l; aplicar(); } };
 
-  function pedir(fresco) {
+  function pedir() {
     const app = window.app, so = app && app.socket;
     if (so && so.connected) {
       so.emit('puente-dm-recientes', {}, (r) => {
@@ -11628,26 +11544,40 @@ var puenteSinUbicacion = (function () {
         aplicar();
       });
     }
-    fetch('/puente/api/foro/privados' + (fresco ? '?fresco=1' : ''), { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).catch(() => null)
-      .then(d => { if (d && Array.isArray(d.conversaciones)) { foro = d.conversaciones; aplicar(); } });
+    api('').then(d => { if (d && Array.isArray(d.conversaciones)) { visto.empezar(d.conversaciones); foro = d.conversaciones; aplicar(); } });
   }
 
   let t = 0;
   (function enganchar() {
-    const app = window.app, so = app && app.socket, list = byId('dm-list');
-    if (!so || !list || !Array.isArray(app.channels)) { if (++t < 120) setTimeout(enganchar, 1000); return; }
-    // Cada vez que Haven vuelve a dibujar la lista
+    const app = window.app, so = app && app.socket, list = byId('dm-list'), msgs = byId('messages');
+    if (!so || !list || !msgs || typeof app.switchChannel !== 'function' || !Array.isArray(app.channels)) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    // Cada vez que Haven vuelve a dibujar la lista o los mensajes
     obs = new MutationObserver(() => aplicar());
     obs.observe(list, { childList: true });
+    new MutationObserver(poner).observe(msgs, { childList: true });
     so.on('new-message', (d) => { if (d && vacios.delete(d.channelCode)) aplicar(); });
-    // Llego un mensaje privado del foro (foro-servicio.js): la lista al dia
-    so.on('puente-aviso', (a) => { if (a && / en el foro$/.test(a.title || '')) setTimeout(pedir, 500); });
     so.on('dm-opened', (d) => { if (d && d.code) { recien.add(d.code); aplicar(); } });
+    so.on('puente-aviso', (a) => { if (a && / en el foro$/.test(a.title || '')) setTimeout(pedir, 500); });
     so.on('connect', () => setTimeout(pedir, 1500));
     setTimeout(pedir, 1200);
-    if (typeof app.switchChannel === 'function') {
-      const cambiar = app.switchChannel;
-      app.switchChannel = function () { const r = cambiar.apply(this, arguments); setTimeout(aplicar, 50); return r; };
+    const cambiar = app.switchChannel;
+    app.switchChannel = function () {
+      cerrarVista();
+      const r = cambiar.apply(this, arguments);
+      setTimeout(() => { aplicar(); enConversacion(); }, 50);
+      return r;
+    };
+    // Abrir otra cosa (un mensaje directo en la ventanita, los canales, la pantalla de mensajes): se cierra la del foro
+    document.addEventListener('click', (e) => {
+      if (!byId('puente-foro-vista') || !(e.target instanceof Element)) return;
+      if (e.target.closest('#dm-list .dm-item, .server-icon, .puente-rail-btn, #channel-list .channel-item:not(.puente-dm-foro), .puente-dm-home-row')) cerrarVista();
+    }, true);
+    setTimeout(enConversacion, 800);
+    // /app?mensajes=1: abrir los mensajes directos
+    const q = new URLSearchParams(location.search);
+    if (q.get('mensajes')) {
+      history.replaceState(null, '', location.pathname);
+      setTimeout(() => { const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click(); }, 1500);
     }
   })();
 

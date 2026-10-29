@@ -71,6 +71,21 @@
     if (alCerrar) alCerrar();
   }
 
+  // En el foro, a quien tiene solo cuenta del foro: los mensajes privados son los de CV Chat
+  function avisoUnir() {
+    if (document.querySelector('.cv-unir')) return;
+    const o = el('div', 'cv-unir'), box = el('div', 'cv-unir__caja');
+    o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Mensajes privados');
+    const x = el('button', 'cv-unir__x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+    const ir = el('a', 'cv-unir__btn', 'Unir mis cuentas'); ir.href = CHAT + '/puente/foro/sso?volver=' + encodeURIComponent(location.href.split('#')[0]);
+    box.append(x, el('b', null, 'Mensajes privados'),
+      el('p', null, 'Los mensajes privados ahora son los de CV Chat: los mismos en la página, el foro y el chat, y cifrados.'),
+      el('p', null, 'Para usarlos, uní tu cuenta del foro con la de la página. Tus mensajes del foro de antes siguen ahí.'), ir);
+    o.appendChild(box); document.body.appendChild(o);
+    const cerrar = () => o.remove();
+    x.addEventListener('click', cerrar); o.addEventListener('click', (e) => { if (e.target === o) cerrar(); });
+  }
+
   function usuario(yo) {
     const box = el('div', 'cv-barra__user');
     if (!yo || !yo.conectado) {
@@ -163,27 +178,28 @@
     const cont = document.querySelector('nav.js-top-menu-user .b-top-menu__container');
     if (cont && !cont.querySelector('.cv-barra__links')) cont.insertBefore(links(yo), cont.firstChild);
     const vbId = Number((window.pageData && window.pageData.userid) || 0);
-    // Los mensajes privados son los de CV Chat (cifrados): el "Mensajes" del foro lleva ahi, y las
-    // paginas de privados del foro tambien (los de antes se leen en CV Chat)
-    // (en la ventanita, ahi mismo; las paginas de privados del foro llevan al inicio con la ventanita abierta)
-    // Solo con la cuenta del foro unida a CV Chat: quien esta solo en el foro sigue con los privados del foro
-    // (y desde CV Chat le contestan ahi mismo, foro-servicio.js)
+    // Los mensajes privados son los de CV Chat (cifrados), los mismos en la web, el foro y el chat. Con la
+    // cuenta del foro unida: el "Mensajes" del foro y sus paginas de privados abren la ventanita ahi mismo.
+    // Con solo cuenta del foro no hay mensajes privados: se avisa como unir las cuentas.
+    // (si no se pudo saber quien es, no se toca nada)
     const unida = !!(vbId && yo && yo.conectado && Number(yo.foro) === vbId);
+    const sinUnir = !!(vbId && yo && !unida);
     const arriba = () => document.querySelector('nav.js-top-menu-user') || cont;
-    if (unida && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
-    if (cont && unida) {
+    const mensajes = () => (unida ? abrirVentana(arriba()) : avisoUnir());
+    if ((unida || sinUnir) && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
+    if (cont && (unida || sinUnir)) {
       for (const li of cont.querySelectorAll('li')) {
         const t = li.querySelector('.b-comp-menu-dropdown__trigger, a');
         if (t && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
-          li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }, true);
+          li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); mensajes(); }, true);
         }
       }
     }
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href*="/privatemessage"], a[href*="/pmchat"]');
-      if (a && unida) { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }
+      if (a && (unida || sinUnir)) { e.preventDefault(); e.stopImmediatePropagation(); mensajes(); }
     }, true);
-    if (unida && location.hash === '#mensajes') { history.replaceState(null, '', location.pathname + location.search); abrirVentana(arriba()); }
+    if ((unida || sinUnir) && location.hash === '#mensajes') { history.replaceState(null, '', location.pathname + location.search); mensajes(); }
     // Iniciar sesion y registrarse: por la cuenta unica
     document.addEventListener('click', (e) => {
       const t = e.target.closest && e.target.closest('#lnkLoginSignupMenu, a[href$="/register"], a[href*="/register?"], a[href*="auth/logout"]');

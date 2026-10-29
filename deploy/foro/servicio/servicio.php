@@ -11,9 +11,7 @@
 //  GET  /tejemanejes?desde=         los avisos de compra/venta (tema, texto entero, fotos)
 //  POST /tema     {id, titulo, texto}            publica un tema en compra/venta como esa cuenta
 //  POST /editar   {nodo, id, titulo, texto}      lo cambia (solo temas propios de compra/venta)
-//  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat)
-//  POST /privado  {id, para, texto, conversacion}  manda un privado como esa cuenta: sigue esa conversacion
-//                                   (si es suya) o empieza una con esas cuentas (para: [ids])
+//  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat), con nombres y fotos
 //  GET  /privados-nuevos?desde=&ids=  los privados que les llegaron a esas cuentas desde esa fecha (ms)
 
 header('Content-Type: application/json; charset=utf-8');
@@ -200,33 +198,9 @@ if ($ruta === '/privados') {
 	$gente = [];
 	foreach ($out as $m) foreach (array_merge([$m['de']], $m['para']) as $u) $gente[$u] = true;
 	$nombres = [];
-	foreach (array_keys($gente) as $u) { $x = $db->getRow('user', ['userid' => $u]); if ($x) $nombres[$u] = texto($x['displayname'] ?: $x['username']); }
-	salir(['mensajes' => $out, 'nombres' => $nombres]);
-}
-
-if ($ruta === '/privado' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-	$id = (int) ($cuerpo['id'] ?? 0);
-	$conv = (int) ($cuerpo['conversacion'] ?? 0);
-	$para = array_values(array_filter(array_map('intval', (array) ($cuerpo['para'] ?? []))));
-	$txt = bbcode($cuerpo['texto'] ?? '');
-	if (!$id || trim($txt) === '' || (!$conv && !$para)) salir(['error' => 'datos'], 400);
-	$data = ['rawtext' => $txt];
-	if ($conv) {
-		// Solo una conversacion de esa cuenta
-		$n = $db->getRow('vBForum:node', ['nodeid' => $conv]);
-		if (!$n || (int) $n['starter'] !== $conv || !$db->getRow('vBForum:sentto', ['nodeid' => $conv, 'userid' => $id])) salir(['error' => 'no es suya'], 403);
-		$data['parentid'] = $conv;
-		$data['respondto'] = $conv;
-	} else {
-		$nombres = [];
-		foreach ($para as $u) { $x = $db->getRow('user', ['userid' => $u]); if (!$x) salir(['error' => 'no esta'], 404); $nombres[] = $x['username']; }
-		$data['msgRecipients'] = implode(';', $nombres);
-		$data['title'] = trim((string) ($cuerpo['titulo'] ?? '')) ?: 'Mensaje';
-	}
-	como($id);
-	$r = $api->callApi('content_privatemessage', 'add', [$data, ['nl2br' => true]]);
-	if (is_array($r) && isset($r['errors'])) salir(['error' => json_encode($r['errors'])], 400);
-	salir(['ok' => true, 'nodo' => (int) $r]);
+	$fotos = [];
+	foreach (array_keys($gente) as $u) { $x = $db->getRow('user', ['userid' => $u]); if ($x) $nombres[$u] = texto($x['displayname'] ?: $x['username']); $fo = foto($u); if ($fo) $fotos[$u] = $fo['url']; }
+	salir(['mensajes' => $out, 'nombres' => $nombres, 'fotos' => $fotos]);
 }
 
 if ($ruta === '/privados-nuevos') {

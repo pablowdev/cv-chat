@@ -1048,7 +1048,7 @@ async function handle(req, res) {
     const r = await wiki.handle(req, res, p, u);
     if (r !== false) return;
   }
-  if (p === '/puente/api/foro/privados' || p === '/puente/api/foro/privados/enviar') {
+  if (p === '/puente/api/foro/privados') {
     const r = await foroServicio.handle(req, res, p, u);
     if (r !== false) return;
   }
