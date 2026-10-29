@@ -166,9 +166,12 @@
     // Los mensajes privados son los de CV Chat (cifrados): el "Mensajes" del foro lleva ahi, y las
     // paginas de privados del foro tambien (los de antes se leen en CV Chat)
     // (en la ventanita, ahi mismo; las paginas de privados del foro llevan al inicio con la ventanita abierta)
+    // Solo con la cuenta del foro unida a CV Chat: quien esta solo en el foro sigue con los privados del foro
+    // (y desde CV Chat le contestan ahi mismo, foro-servicio.js)
+    const unida = !!(vbId && yo && yo.conectado && Number(yo.foro) === vbId);
     const arriba = () => document.querySelector('nav.js-top-menu-user') || cont;
-    if (vbId && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
-    if (cont) {
+    if (unida && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
+    if (cont && unida) {
       for (const li of cont.querySelectorAll('li')) {
         const t = li.querySelector('.b-comp-menu-dropdown__trigger, a');
         if (t && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
@@ -178,9 +181,9 @@
     }
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href*="/privatemessage"], a[href*="/pmchat"]');
-      if (a) { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }
+      if (a && unida) { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }
     }, true);
-    if (vbId && location.hash === '#mensajes') { history.replaceState(null, '', location.pathname + location.search); abrirVentana(arriba()); }
+    if (unida && location.hash === '#mensajes') { history.replaceState(null, '', location.pathname + location.search); abrirVentana(arriba()); }
     // Iniciar sesion y registrarse: por la cuenta unica
     document.addEventListener('click', (e) => {
       const t = e.target.closest && e.target.closest('#lnkLoginSignupMenu, a[href$="/register"], a[href*="/register?"], a[href*="auth/logout"]');

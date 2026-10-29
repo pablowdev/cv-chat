@@ -5,9 +5,12 @@
 //    Un nombre que viene del foro pasa por las mismas reglas que en CV Chat (identidad.js: no el de otro).
 //  - Las notificaciones del foro (te respondieron, te citaron, te mencionaron...) llegan a CV Chat: un
 //    cartelito en la app abierta, o la notificacion del telefono (avisos.js).
-//  - Los mensajes privados del foro se leen en CV Chat (los nuevos ya van por los mensajes directos, cifrados):
-//    GET /puente/api/foro/privados?con=<cuenta>  los del foro con esa persona (en su conversacion de CV Chat)
-//    GET /puente/api/foro/privados               todas las conversaciones del foro (tambien con quien no tiene cuenta)
+//  - Los mensajes privados del foro se leen en CV Chat (con quien tiene CV Chat, los nuevos van por los mensajes
+//    directos, cifrados). Con quien esta solo en el foro, se sigue hablando desde CV Chat: van y vienen como
+//    privados del foro (sin cifrar: esa persona no tiene CV Chat), y cuando le escriben llega el aviso.
+//    GET  /puente/api/foro/privados?con=<cuenta>  los del foro con esa persona (en su conversacion de CV Chat)
+//    GET  /puente/api/foro/privados               todas las conversaciones del foro (tambien con quien no tiene cuenta)
+//    POST /puente/api/foro/privados/enviar {clave, texto}  contestar en esa conversacion del foro
 // FORO_SERVICIO_URL (http://foro-servicio:8080) y FORO_SERVICIO_CLAVE (la SERVICIO_CLAVE de /opt/foro/servicio.env).
 
 const fs = require('fs');
@@ -55,6 +58,7 @@ async function vuelta() {
   andando = true;
   try { await sincronizar(); } catch (err) { warn('foro: avatar y nombre:', err.message); }
   try { await avisos(); } catch (err) { warn('foro: avisos:', err.message); }
+  try { await privadosNuevos(); } catch (err) { warn('foro: privados nuevos:', err.message); }
   andando = false;
 }
 
@@ -157,14 +161,33 @@ async function avisos() {
 
 // ── Los privados del foro ──
 const cachePm = new Map(); // foro id -> { at, d }
-async function privadosDe(foroId) {
+async function privadosDe(foroId, fresco) {
   const c = cachePm.get(foroId);
-  if (c && Date.now() - c.at < 5 * 60 * 1000) return c.d;
+  if (c && Date.now() - c.at < (fresco ? 8000 : 5 * 60 * 1000)) return c.d;
   const d = await servicio('/privados?id=' + foroId);
   cachePm.set(foroId, { at: Date.now(), d });
   if (cachePm.size > 300) cachePm.delete(cachePm.keys().next().value);
   return d;
 }
+// Los privados nuevos del foro a las cuentas unidas: el aviso (como un mensaje directo)
+async function privadosNuevos() {
+  const unidas = db.prepare('SELECT haven_user_id, foro_user_id FROM puente_foro').all();
+  const porForo = new Map(unidas.map(x => [x.foro_user_id, x.haven_user_id]));
+  const desde = estado('privados_desde');
+  if (desde == null || !porForo.size) { if (desde == null) estado('privados_desde', Date.now()); return; }
+  const d = await servicio(`/privados-nuevos?desde=${Number(desde)}&ids=${[...porForo.keys()].join(',')}`);
+  for (const m of d.mensajes || []) {
+    const uid = porForo.get(m.para);
+    if (!uid) continue;
+    cachePm.delete(m.para);
+    // Lo que se manda desde CV Chat ya lo vio quien lo mando
+    if (enviados.has(m.nodo)) continue;
+    h.avisarUsuario(uid, { title: `${m.de_nombre} te escribió en el foro`.slice(0, 120), body: plano(m.texto).slice(0, 160) || 'Mensaje privado', url: '/app?mensajes=1', tag: 'puente-foro-pm-' + m.nodo });
+  }
+  if (Number(d.hasta) > Number(desde)) estado('privados_desde', d.hasta);
+}
+const enviados = new Set();
+
 // El texto del foro sin BBCode (las citas quedan como "> ")
 function plano(raw) {
   let s = String(raw || '');
@@ -174,7 +197,9 @@ function plano(raw) {
   s = s.replace(/\[\/?[a-z*]+(?:=[^\]]*)?\]/gi, '');
   return s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#0?39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 }
+const porMinuto = new Map(); // haven id -> [ms]
 async function handle(req, res, p, u) {
+  if (p === '/puente/api/foro/privados/enviar' && req.method === 'POST') return enviar(req, res);
   if (p !== '/puente/api/foro/privados' || req.method !== 'GET') return false;
   const { json, sessionUser } = h;
   const yo = sessionUser(req);
@@ -182,7 +207,7 @@ async function handle(req, res, p, u) {
   const mio = (db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(yo.id) || {}).foro_user_id;
   if (!on() || !mio) return json(res, 200, { unida: !!mio, mensajes: [], conversaciones: [] });
   let d;
-  try { d = await privadosDe(mio); } catch (err) { warn('foro: privados:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
+  try { d = await privadosDe(mio, u.searchParams.get('fresco') === '1'); } catch (err) { warn('foro: privados:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
   const nombre = id => d.nombres[id] || 'Alguien';
   const armar = m => ({ mio: m.de === mio, de: nombre(m.de), texto: plano(m.texto), titulo: m.titulo || null, fecha: m.fecha });
   const con = Number(u.searchParams.get('con')) || 0;
@@ -198,11 +223,46 @@ async function handle(req, res, p, u) {
   for (const m of d.mensajes) {
     const otros = [...new Set([m.de, ...m.para])].filter(x => x !== mio).sort((a, b) => a - b);
     const k = otros.join(',');
-    if (!grupos.has(k)) grupos.set(k, { con: otros.map(nombre), cuentas: otros.map(x => (db.prepare('SELECT haven_user_id FROM puente_foro WHERE foro_user_id = ?').get(x) || {}).haven_user_id || null), mensajes: [] });
+    if (!grupos.has(k)) grupos.set(k, { clave: k, con: otros.map(nombre), cuentas: otros.map(x => (db.prepare('SELECT haven_user_id FROM puente_foro WHERE foro_user_id = ?').get(x) || {}).haven_user_id || null), mensajes: [] });
     grupos.get(k).mensajes.push(armar(m));
   }
   const conversaciones = [...grupos.values()].sort((a, b) => b.mensajes[b.mensajes.length - 1].fecha - a.mensajes[a.mensajes.length - 1].fecha);
   return json(res, 200, { unida: true, conversaciones });
+}
+
+// Contestar en una conversacion del foro desde CV Chat: sigue la ultima charla del foro con esas personas
+async function enviar(req, res) {
+  const { json, sessionUser } = h;
+  const yo = sessionUser(req);
+  if (!yo) return json(res, 401, { error: 'sin sesion' });
+  const mio = (db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(yo.id) || {}).foro_user_id;
+  if (!on() || !mio) return json(res, 400, { error: 'Tu cuenta del foro no está unida.' });
+  const ahora = Date.now(), l = (porMinuto.get(yo.id) || []).filter(t => ahora - t < 60000);
+  if (l.length >= 15) return json(res, 429, { error: 'Muchos mensajes seguidos: esperá un momento.' });
+  let body = '';
+  for await (const c of req) { body += c; if (body.length > 20000) return json(res, 413, { error: 'Muy largo' }); }
+  let b; try { b = JSON.parse(body || '{}'); } catch { return json(res, 400, { error: 'datos' }); }
+  const texto = String(b.texto || '').trim().slice(0, 8000);
+  if (!texto || typeof b.clave !== 'string') return json(res, 400, { error: 'Escribí algo.' });
+  let d;
+  try { d = await privadosDe(mio, true); } catch (err) { warn('foro: privados:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
+  const de = d.mensajes.filter(m => [...new Set([m.de, ...m.para])].filter(x => x !== mio).sort((a, c) => a - c).join(',') === b.clave);
+  if (!de.length) return json(res, 404, { error: 'No está esa conversación.' });
+  const hilo = de[de.length - 1].conversacion;
+  try {
+    const r = await servicio('/privado', { id: mio, conversacion: hilo, texto });
+    if (r.nodo) enviados.add(r.nodo);
+    if (enviados.size > 2000) enviados.delete(enviados.values().next().value);
+  } catch (err) {
+    warn('foro: mandar privado:', err.message);
+    if (/duplicate_post/.test(err.message)) return json(res, 400, { error: 'Ese mismo mensaje ya lo mandaste.' });
+    if (/flood|wait/i.test(err.message)) return json(res, 429, { error: 'El foro pide esperar unos segundos entre mensajes.' });
+    return json(res, 502, { error: 'El foro no lo aceptó. Probá de nuevo.' });
+  }
+  porMinuto.set(yo.id, [...l, ahora]);
+  cachePm.delete(mio);
+  for (const x of b.clave.split(',').map(Number)) cachePm.delete(x);
+  return json(res, 200, { ok: true });
 }
 
 module.exports = { setup, on, servicio, handle };

@@ -12,6 +12,9 @@
 //  POST /tema     {id, titulo, texto}            publica un tema en compra/venta como esa cuenta
 //  POST /editar   {nodo, id, titulo, texto}      lo cambia (solo temas propios de compra/venta)
 //  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat)
+//  POST /privado  {id, para, texto, conversacion}  manda un privado como esa cuenta: sigue esa conversacion
+//                                   (si es suya) o empieza una con esas cuentas (para: [ids])
+//  GET  /privados-nuevos?desde=&ids=  los privados que les llegaron a esas cuentas desde esa fecha (ms)
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -199,6 +202,56 @@ if ($ruta === '/privados') {
 	$nombres = [];
 	foreach (array_keys($gente) as $u) { $x = $db->getRow('user', ['userid' => $u]); if ($x) $nombres[$u] = texto($x['displayname'] ?: $x['username']); }
 	salir(['mensajes' => $out, 'nombres' => $nombres]);
+}
+
+if ($ruta === '/privado' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+	$id = (int) ($cuerpo['id'] ?? 0);
+	$conv = (int) ($cuerpo['conversacion'] ?? 0);
+	$para = array_values(array_filter(array_map('intval', (array) ($cuerpo['para'] ?? []))));
+	$txt = bbcode($cuerpo['texto'] ?? '');
+	if (!$id || trim($txt) === '' || (!$conv && !$para)) salir(['error' => 'datos'], 400);
+	$data = ['rawtext' => $txt];
+	if ($conv) {
+		// Solo una conversacion de esa cuenta
+		$n = $db->getRow('vBForum:node', ['nodeid' => $conv]);
+		if (!$n || (int) $n['starter'] !== $conv || !$db->getRow('vBForum:sentto', ['nodeid' => $conv, 'userid' => $id])) salir(['error' => 'no es suya'], 403);
+		$data['parentid'] = $conv;
+		$data['respondto'] = $conv;
+	} else {
+		$nombres = [];
+		foreach ($para as $u) { $x = $db->getRow('user', ['userid' => $u]); if (!$x) salir(['error' => 'no esta'], 404); $nombres[] = $x['username']; }
+		$data['msgRecipients'] = implode(';', $nombres);
+		$data['title'] = trim((string) ($cuerpo['titulo'] ?? '')) ?: 'Mensaje';
+	}
+	como($id);
+	$r = $api->callApi('content_privatemessage', 'add', [$data, ['nl2br' => true]]);
+	if (is_array($r) && isset($r['errors'])) salir(['error' => json_encode($r['errors'])], 400);
+	salir(['ok' => true, 'nodo' => (int) $r]);
+}
+
+if ($ruta === '/privados-nuevos') {
+	$desde = (int) floor(((int) ($_GET['desde'] ?? 0)) / 1000);
+	$ids = ids($_GET['ids'] ?? '');
+	if (!$ids) salir(['mensajes' => [], 'hasta' => time() * 1000]);
+	$hasta = time();
+	$tipo = (int) vB_Types::instance()->getContentTypeID('vBForum_PrivateMessage');
+	$out = [];
+	$nuevos = (array) $db->getRows('vBForum:node', [vB_dB_Query::CONDITIONS_KEY => [
+		['field' => 'contenttypeid', 'value' => $tipo],
+		['field' => 'publishdate', 'value' => $desde, 'operator' => vB_dB_Query::OPERATOR_GT],
+		['field' => 'publishdate', 'value' => $hasta, 'operator' => vB_dB_Query::OPERATOR_LTE],
+	]]);
+	foreach (array_slice($nuevos, 0, 300) as $n) {
+		$pm = $db->getRow('vBForum:privatemessage', ['nodeid' => (int) $n['nodeid']]);
+		if (!$pm || $pm['msgtype'] !== 'message') continue;
+		$t = $db->getRow('vBForum:text', ['nodeid' => (int) $n['nodeid']]);
+		foreach ((array) $db->getRows('vBForum:sentto', ['nodeid' => (int) $n['nodeid']]) as $r) {
+			$u = (int) $r['userid'];
+			if ($u === (int) $n['userid'] || !in_array($u, $ids, true)) continue;
+			$out[] = ['para' => $u, 'de' => (int) $n['userid'], 'de_nombre' => texto($n['authorname']), 'texto' => $t ? texto($t['rawtext']) : '', 'nodo' => (int) $n['nodeid']];
+		}
+	}
+	salir(['mensajes' => $out, 'hasta' => $hasta * 1000]);
 }
 
 salir(['error' => 'no esta'], 404);
