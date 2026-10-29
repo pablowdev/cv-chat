@@ -38,6 +38,8 @@ const llave = require('./llave.js');
 const email = require('./email.js');
 const nombres = require('./nombres.js');
 const foro = require('./foro.js');
+const cuenta = require('./cuenta.js');
+const wiki = require('./wiki.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -83,7 +85,12 @@ function setup(ctx) {
     register: registerThroughHaven, canLogin: () => !!generateToken,
     handoff: (code, userId) => handoffs.set(code, { ...sessionFor(userId), exp: Date.now() + HANDOFF_TTL_MS }),
     emailIfMissing: (userId, addr) => email.fromForoIfMissing(userId, addr),
+    confirmedEmail: (userId) => { const e = email.status(userId); return e.confirmado ? e.email : null; },
+    takeHandoff: (code) => { const x = handoffs.get(code); handoffs.delete(code); return x ? x.user.id : null; },
+    checkPassword,
   } });
+  cuenta.setup({ db, log, warn, publicUrl, helpers: { json, send, sessionUser, sessionFor, foroSalir: v => foro.salirUrl(v) } });
+  wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();
@@ -468,7 +475,7 @@ async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/wiki.js' || p === '/puente/wiki.css')) {
     const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     let body = fs.readFileSync(path.join(STATIC, file));
@@ -985,7 +992,15 @@ async function handle(req, res) {
     const r = await require('./invitaciones.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
-  if (p.startsWith('/puente/api/foro/') || p === '/puente/foro/vuelta') {
+  if (p.startsWith('/puente/api/cuenta/') || p === '/puente/cuenta/salir') {
+    const r = await cuenta.handle(req, res, p, u);
+    if (r !== false) return;
+  }
+  if (p.startsWith('/puente/api/wiki/')) {
+    const r = await wiki.handle(req, res, p, u);
+    if (r !== false) return;
+  }
+  if (p.startsWith('/puente/api/foro/') || p.startsWith('/puente/foro/')) {
     const r = await foro.handle(req, res, p, u);
     if (r !== false) return;
   }
@@ -1183,6 +1198,28 @@ async function registerThroughHaven(req, username) {
   } catch (err) {
     warn('entrar con Discord:', err.message);
     return { ok: false, error: 'No se pudo crear la cuenta. Probá de nuevo en un momento.' };
+  }
+}
+
+// Usuario y contraseña de una cuenta (el inicio de sesion de Haven, con sus limites de intentos)
+async function checkPassword(req, username, password) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',').pop().trim() || req.socket.remoteAddress || '';
+  try {
+    const r = await fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip },
+      body: JSON.stringify({ username, password, eulaVersion: '2.0', ageVerified: true }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.requiresTOTP) return { ok: false, status: 400, error: 'Tu cuenta tiene verificación en dos pasos: entrá a CV Chat con tu usuario y uní el foro desde "Vincular cuentas".' };
+    if (r.ok && data.token && data.user) return { ok: true, userId: data.user.id, token: data.token, user: data.user };
+    if (r.status === 429) return { ok: false, status: 429, error: 'Hubo demasiados intentos. Esperá un rato y probá de nuevo.' };
+    if (r.status === 403) return { ok: false, status: 403, error: 'Esa cuenta está suspendida.' };
+    return { ok: false, status: 401, error: 'El usuario o la contraseña no son correctos.' };
+  } catch (err) {
+    warn('unir cuentas:', err.message);
+    return { ok: false, status: 503, error: 'No se pudo comprobar la cuenta. Probá de nuevo en un momento.' };
   }
 }
 

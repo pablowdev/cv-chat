@@ -60,14 +60,25 @@
       $('discord').textContent = foro ? d.cuenta + ' en el foro' : '@' + d.discord;
       if (foro) {
         $('crear').querySelector('.puente-nota-chica').textContent = `Tu foto del foro se usa en ${d.app}, y tu cuenta del foro queda vinculada.`;
-        $('otras').querySelector('a').textContent = `¿Ya tenés cuenta en ${d.app}? Entrá con tu usuario y vinculá el foro desde ahí`;
+        $('unir').hidden = false;
       }
       $('usuario').value = d.usuario;
       $('crear').hidden = false;
-      $('otras').hidden = false;
+      $('otras').hidden = foro;
       // Las condiciones: las mismas que muestra Haven al registrarse
       $('terminos').addEventListener('click', (e) => { e.preventDefault(); window.open('/?terminos=1', '_blank', 'noopener'); });
     }).catch(() => { title('No hay conexión', 'Recargá la página.'); backToLogin(); });
+    // Con el foro: unirla a una cuenta que ya existe
+    $('unir').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const btn = $('unir').querySelector('button');
+      btn.disabled = true; note('');
+      post(API + 'unir', { codigo: code, usuario: $('unir-usuario').value.trim(), password: $('unir-pass').value }).then(({ ok, d }) => {
+        if (ok && d.token) return enter(d);
+        btn.disabled = false; $('unir-pass').value = '';
+        note(d.error || 'No se pudieron unir las cuentas.', true);
+      }).catch(() => { btn.disabled = false; note('No hay conexión. Probá de nuevo.', true); });
+    });
     $('crear').addEventListener('submit', (e) => {
       e.preventDefault();
       const btn = $('crear').querySelector('button');

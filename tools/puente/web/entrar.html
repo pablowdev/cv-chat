@@ -38,6 +38,21 @@
       <p class="puente-nota-chica">Tu nombre y tu foto de Discord se usan en __PUENTE_APP__, y tu historial de mensajes de Discord pasa a tu cuenta.</p>
     </form>
 
+    <!-- Con el foro: unir la cuenta del foro a una de __PUENTE_APP__ que ya existe (foro.js) -->
+    <form id="unir" class="auth-form" hidden>
+      <div class="puente-o">o</div>
+      <p class="puente-nota-chica" style="text-align:left;margin:0 0 .75rem">¿Ya tenés cuenta en __PUENTE_APP__? Entrá con ella y se une a tu cuenta del foro: vas a usar una sola cuenta para todo.</p>
+      <div class="form-group">
+        <label for="unir-usuario">Usuario de __PUENTE_APP__</label>
+        <input type="text" id="unir-usuario" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="unir-pass">Contraseña</label>
+        <input type="password" id="unir-pass" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-primary puente-btn-foro">Unir mis cuentas</button>
+    </form>
+
     <p class="puente-nota" id="nota" hidden></p>
     <a class="btn-primary puente-boton" id="ir" href="/" hidden>Volver a iniciar sesión</a>
 

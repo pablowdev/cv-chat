@@ -1,0 +1,46 @@
+/* La barra de arriba de la web y del foro (barra.js): la misma que la del foro */
+.cv-barra, .cv-barra *, .b-top-menu__container > .cv-barra__links, .b-top-menu__container > .cv-barra__links * {
+  box-sizing: border-box; text-transform: none !important; letter-spacing: normal !important; font-family: Helvetica, Arial, Verdana, sans-serif !important;
+}
+.cv-barra {
+  position: relative; z-index: 1000; height: 28px;
+  background: linear-gradient(#222, #2b2d2c); color: #9a9999;
+  font: 400 13px/28px Helvetica, Arial, Verdana, sans-serif; letter-spacing: normal; text-transform: none;
+}
+.cv-barra__in { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 28px; padding: 0 32px; }
+.cv-barra__links { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.cv-barra__links::-webkit-scrollbar { display: none; }
+.cv-barra__link { padding: 0 8px; color: #9a9999 !important; text-decoration: none !important; white-space: nowrap; font: 400 13px/28px Helvetica, Arial, Verdana, sans-serif; }
+.cv-barra__link:hover { color: #f2f2f2 !important; }
+.cv-barra__link.is-actual { color: #f2f2f2 !important; font-weight: 700; }
+.cv-barra__user { position: relative; flex: 0 0 auto; }
+.cv-barra__entrar { color: #939190 !important; font-weight: 700; font-size: 12px; text-decoration: none !important; white-space: nowrap; }
+.cv-barra__entrar:hover { color: #f2f2f2 !important; }
+.cv-barra__yo { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px; border: 0; background: none; cursor: pointer;
+  color: #939190; font: 700 12px/28px Helvetica, Arial, Verdana, sans-serif; }
+.cv-barra__yo:hover { color: #f2f2f2; }
+.cv-barra__avatar { width: 20px; height: 20px; border-radius: 3px; object-fit: cover; flex: 0 0 auto; }
+.cv-barra__avatar--letra { display: inline-flex; align-items: center; justify-content: center; background: #ee2d6f; color: #fff; font-size: 11px; line-height: 1; }
+.cv-barra__nombre { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-barra__flecha { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: .7; }
+.cv-barra__menu { position: absolute; right: 0; top: 28px; min-width: 170px; padding: 4px 0; background: #2b2d2c; border: 1px solid #3a3c3b;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45); z-index: 1001; }
+.cv-barra__menu[hidden] { display: none; }
+.cv-barra__menu a { display: block; padding: 0 14px; color: #c9c7c6 !important; text-decoration: none !important; font: 400 13px/30px Helvetica, Arial, Verdana, sans-serif; white-space: nowrap; }
+.cv-barra__menu a:hover { background: #3a3c3b; color: #fff !important; }
+
+/* En el foro: los accesos a la izquierda de su barra */
+.b-top-menu__container { display: flex; align-items: center; justify-content: space-between; }
+.b-top-menu__container > .cv-barra__links { flex: 1 1 auto; margin-left: -8px; }
+.b-top-menu__container > .b-top-menu--user { flex: 0 0 auto; }
+
+@media (max-width: 560px) {
+  .cv-barra__in { padding: 0 8px; gap: 6px; }
+  .cv-barra__link { padding: 0 6px; }
+  .cv-barra__nombre { max-width: 90px; }
+  .cv-barra__entrar { font-size: 11px; }
+}
+/* En el celular la barra del foro no tiene lugar: ahi quedan su menu y quien entro */
+@media (max-width: 640px) {
+  .b-top-menu__container > .cv-barra__links { display: none; }
+}

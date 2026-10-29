@@ -7,6 +7,10 @@
 //  POST /puente/api/foro/crear        crea la cuenta de CV Chat con la del foro
 //  GET  /puente/api/foro/estado       { disponible, vinculado, foro } (requiere sesion)
 //  POST /puente/api/foro/desvincular  (requiere sesion)
+//  POST /puente/api/foro/unir         une la cuenta del foro a una de CV Chat que ya existe (usuario y contraseña)
+//  GET  /puente/foro/sso              cuenta unica (cuenta.js): entra al foro con la cuenta de CV Chat
+//  GET  /puente/foro/sso-vuelta       el foro avisa con que cuenta del foro quedo (la une)
+//  GET  /puente/foro/auto             quien entro solo al foro: entra tambien a CV Chat, sin preguntar
 //
 // El foro no se conecta con CV Chat (estan en redes separadas): todo pasa por el
 // navegador. CV Chat manda a <FORO_URL>/cvchat.php (deploy/foro/cvchat.php) con un
@@ -21,6 +25,12 @@
 //
 // Entrar con el foro, como con Discord: no para administradores ni cuentas con
 // verificacion en dos pasos, ni para quien esta baneado en el foro o en CV Chat.
+//
+// Cuenta unica (cuenta.js): con la sesion de CV Chat, el foro entra solo a la
+// cuenta del foro unida. Si todavia no hay una, el foro busca la del mismo email
+// (confirmado en los dos lados) y las une; si no, pregunta "¿ya tenes cuenta en
+// el foro?" (entrar con ella las une) o crea una nueva con el mismo usuario.
+// Esos pedidos van firmados y vencen a los 2 minutos; el foro los usa una vez.
 
 const crypto = require('crypto');
 const fs = require('fs');
@@ -34,10 +44,11 @@ const AVATAR_DIR = path.join(path.dirname(process.env.PUENTE_ADJUNTOS_DIR || '/d
 const states = new Map();   // estado -> { para, userId, exp }
 const signups = new Map();  // codigo -> { f, exp }
 
-let db, log, warn, h, foroUrl = '', secret = '';
+let db, log, warn, h, cuenta, foroUrl = '', secret = '';
 
 function setup(ctx) {
   ({ db, log, warn, helpers: h } = ctx);
+  cuenta = require('./cuenta.js');
   foroUrl = String(process.env.FORO_URL || '').replace(/\/+$/, '');
   secret = String(process.env.FORO_PUENTE_SECRETO || '');
   db.exec(`
@@ -58,6 +69,18 @@ const sign = (text) => crypto.createHmac('sha256', secret).update(text).digest('
 function signedOk(text, sig) {
   const a = Buffer.from(sign(text)), b = Buffer.from(String(sig || ''));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+// Agrega una cookie a las que ya tenga la respuesta (la de la cuenta unica, por ejemplo)
+function addCookie(res, value) {
+  const prev = res.getHeader('Set-Cookie');
+  res.setHeader('Set-Cookie', [...(prev ? [].concat(prev) : []), value]);
+}
+const b64 = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
+// Salir del foro (cuenta.js): cvchat.php cierra la sesion del foro y vuelve a "volver"
+function salirUrl(volver) {
+  if (!on()) return null;
+  const t = String(Math.floor(Date.now() / 1000));
+  return `${foroUrl}/cvchat.php?${new URLSearchParams({ salir: '1', volver, t, firma: sign(`salir|${volver}|${t}`) })}`;
 }
 function cookie(req, name) {
   const m = String(req.headers.cookie || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
@@ -164,10 +187,20 @@ async function handle(req, res, p, u) {
   if (p === '/puente/foro/vuelta' && req.method === 'GET') {
     const estado = u.searchParams.get('estado') || '';
     const entry = states.get(estado);
-    const go = (to, params) => send(res, 302, 'text/plain', '', {
-      Location: `${to}?${new URLSearchParams(params)}`,
-      'Set-Cookie': 'puente_foro=; Path=/puente/foro; Max-Age=0; HttpOnly; Secure; SameSite=Lax',
-    });
+    const go = (to, params) => {
+      addCookie(res, 'puente_foro=; Path=/puente/foro; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
+      return send(res, 302, 'text/plain', '', { Location: params ? `${to}?${new URLSearchParams(params)}` : to });
+    };
+    // Entrada automatica (cuenta unica): siempre vuelve a la pagina de donde vino, sin carteles
+    if (entry && entry.auto) {
+      states.delete(estado);
+      const f = readReturn(u);
+      if (f && f.estado === estado && entry.exp >= Date.now() && f.para === 'entrar') {
+        const r = login(f);
+        if (r.listo) cuenta.open(req, res, h.takeHandoff(r.listo));
+      }
+      return go(entry.volver);
+    }
     const back = (params) => go(entry && entry.para === 'vincular' ? '/puente/vincular' : '/puente/entrar', { via: 'foro', ...params });
     if (u.searchParams.get('error') === 'cancelado') { states.delete(estado); return back({ error: 'cancelado' }); }
     const f = readReturn(u);
@@ -218,6 +251,66 @@ async function handle(req, res, p, u) {
     return json(res, 200, h.sessionFor(r.user.id));
   }
 
+  // Unir la cuenta del foro (que volvio sin cuenta de CV Chat) a una que ya existe
+  if (p === '/puente/api/foro/unir' && req.method === 'POST') {
+    const body = await readJson(req) || {};
+    const code = typeof body.codigo === 'string' ? body.codigo : '';
+    const sg = signups.get(code);
+    if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con el foro".' });
+    const r = await h.checkPassword(req, String(body.usuario || ''), String(body.password || ''), String(body.codigo2fa || ''));
+    if (!r.ok) return json(res, r.status || 400, { error: r.error, pideCodigo: !!r.pideCodigo });
+    const f = sg.f;
+    const mine = db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(r.userId);
+    if (mine && mine.foro_user_id !== f.id) return json(res, 409, { error: 'Esa cuenta de CV Chat ya está unida a otra cuenta del foro.' });
+    if (db.prepare('SELECT 1 FROM puente_foro WHERE foro_user_id = ? AND haven_user_id != ?').get(f.id, r.userId)) { signups.delete(code); return json(res, 409, { error: 'Esa cuenta del foro ya está unida a otra cuenta.' }); }
+    signups.delete(code);
+    saveLink(r.userId, f);
+    await avatarIfMissing(r.userId, f);
+    if (emailConfirmed(f)) h.emailIfMissing(r.userId, f.email);
+    log(`unidas: Haven #${r.userId} <-> foro ${f.usuario} (#${f.id})`);
+    return json(res, 200, { token: r.token, user: r.user });
+  }
+
+  // ── Cuenta unica ──
+  // Entrar al foro con la sesion de CV Chat (la barra del foro manda aca a quien no entro al foro)
+  if (p === '/puente/foro/sso' && req.method === 'GET') {
+    const volver = cuenta.safeReturn(u.searchParams.get('volver'), `${foroUrl}/`);
+    const user = on() ? cuenta.userFromCookie(req) : null;
+    if (!user) return send(res, 302, 'text/plain', '', { Location: volver });
+    const l = db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(user.id);
+    const d = b64({
+      accion: 'sso', haven: user.id, foro: l ? l.foro_user_id : null, usuario: user.username, nombre: user.display_name || user.username,
+      email: h.confirmedEmail(user.id), volver, t: Math.floor(Date.now() / 1000), n: crypto.randomBytes(12).toString('hex'),
+    });
+    return send(res, 302, 'text/plain', '', { Location: `${foroUrl}/cvchat.php?${new URLSearchParams({ sso: d, s: sign(d) })}` });
+  }
+  // El foro unio (o creo) la cuenta del foro: se guarda, si es la misma persona que tiene la sesion aca
+  if (p === '/puente/foro/sso-vuelta' && req.method === 'GET') {
+    const f = readReturn(u);
+    const volver = cuenta.safeReturn(f && f.volver, `${foroUrl}/`);
+    const user = on() ? cuenta.userFromCookie(req) : null;
+    if (!f || f.para !== 'sso' || !user || user.id !== f.haven) return send(res, 302, 'text/plain', '', { Location: volver });
+    const other = db.prepare('SELECT haven_user_id FROM puente_foro WHERE foro_user_id = ?').get(f.id);
+    const mine = db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(user.id);
+    if ((!other || other.haven_user_id === user.id) && (!mine || mine.foro_user_id === f.id) && !bannedInForo(f)) {
+      saveLink(user.id, f);
+      await avatarIfMissing(user.id, f);
+      log(`unidas (${f.como || 'foro'}): Haven #${user.id} <-> foro ${f.usuario} (#${f.id})`);
+    }
+    return send(res, 302, 'text/plain', '', { Location: volver });
+  }
+  // Quien tiene sesion en el foro pero no en CV Chat: entra tambien a CV Chat, sin preguntar
+  // (si la cuenta del foro no esta unida, vuelve igual, sin nada)
+  if (p === '/puente/foro/auto' && req.method === 'GET') {
+    const volver = cuenta.safeReturn(u.searchParams.get('volver'), `${foroUrl}/`);
+    if (!on()) return send(res, 302, 'text/plain', '', { Location: volver });
+    clean([states]);
+    const estado = crypto.randomBytes(24).toString('hex');
+    states.set(estado, { para: 'entrar', auto: true, volver, exp: Date.now() + 2 * 60 * 1000 });
+    const q = new URLSearchParams({ estado, para: 'entrar', cuenta: '', auto: '1', firma: sign(`${estado}|entrar||auto`) });
+    return send(res, 302, 'text/plain', '', { Location: `${foroUrl}/cvchat.php?${q}` });
+  }
+
   if (p === '/puente/api/foro/estado' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });
@@ -236,4 +329,4 @@ async function handle(req, res, p, u) {
   return false;
 }
 
-module.exports = { setup, handle, _test: { readReturn, sign } };
+module.exports = { setup, handle, salirUrl, _test: { readReturn, sign } };

@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpng-dev libj
  && docker-php-ext-configure gd --with-jpeg --with-freetype --with-webp \
  && docker-php-ext-install -j"$(nproc)" mysqli pdo_mysql gd zip intl opcache exif \
  && rm -rf /var/lib/apt/lists/* \
- && a2enmod rewrite headers remoteip expires \
+ && a2enmod rewrite headers remoteip expires substitute \
  && a2disconf other-vhosts-access-log
 COPY php.ini /usr/local/etc/php/conf.d/foro.ini
 COPY apache-foro.conf /etc/apache2/conf-enabled/zz-foro.conf

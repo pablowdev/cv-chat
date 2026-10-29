@@ -5,9 +5,10 @@ services:
   sitio:
     image: caddy:2
     container_name: sitio-web
-    command: ["caddy", "file-server", "--root", "/srv", "--listen", ":80"]
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     volumes:
       - ./web:/srv:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
     networks: [foro-frente]
     read_only: true
     tmpfs: [/data, /config]

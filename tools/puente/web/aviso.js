@@ -11201,3 +11201,36 @@ var puenteSinUbicacion = (function () {
     };
   })();
 })();
+
+// Cuenta unica (cuenta.js): la sesion del chat vale tambien para la web y el foro
+// (una cookie de todo el dominio). Si se entro desde la web o el foro (?volver= en
+// el inicio, login.js), se vuelve ahi. "Salir" sale tambien de la web y del foro.
+(function () {
+  'use strict';
+  const ss = {
+    get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* */ } },
+    del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } },
+  };
+  let tok = null;
+  try { tok = localStorage.getItem('haven_token'); } catch { return; }
+  if (!tok) return;
+  // Se salio desde la web o el foro despues de entrar al chat: sale tambien del chat
+  const salio = document.cookie.match(/(?:^|;\s*)cv_salio=(\d+)/);
+  if (salio) {
+    let iat = 0;
+    try { iat = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).iat || 0; } catch { /* sin fecha */ }
+    if (iat && iat < Number(salio[1])) {
+      ['haven_token', 'haven_user', 'haven_sync_key'].forEach(k => { try { localStorage.removeItem(k); } catch { /* */ } });
+      location.replace('/');
+      return;
+    }
+  }
+  const volver = ss.get('puente_volver');
+  fetch('/puente/api/cuenta/sesion', { method: 'POST', headers: { Authorization: 'Bearer ' + tok } }).catch(() => {}).then(() => {
+    if (volver) { ss.del('puente_volver'); location.replace(volver); }
+  });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('#logout-btn')) ss.set('puente_salio', '1');
+  }, true);
+})();

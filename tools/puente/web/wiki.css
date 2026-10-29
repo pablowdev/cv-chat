@@ -1,0 +1,32 @@
+/* Lo que agrega la wiki (web/wiki.js) a las paginas de la web, con sus colores */
+.cvw-resumen { margin: 6px 0 10px; font-size: 13px; line-height: 1.45; opacity: .75; text-transform: none; }
+.cvw-buscar { max-width: 360px; margin: 12px 0 0; }
+.cvw-meta { margin-top: 24px; padding-top: 12px; border-top: 1px solid rgba(243, 247, 226, .25); }
+.cvw-meta .caption { text-transform: none; }
+.cvw-historial { margin-top: 10px; }
+.cvw-historial summary { cursor: pointer; }
+.cvw-historial .toc_item { margin: 6px 0; }
+.cvw-aviso { padding: 10px 12px; border: 1px solid #f3f7e2; margin: 0 0 12px; }
+.cvw-aviso--mal { border-color: #ee2d6f; color: #ee2d6f; }
+.cvw-botones { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 6px; }
+.cvw-sec { background: transparent !important; border: 1px solid #f3f7e2 !important; }
+.cvw-chico { padding: 4px 10px !important; font-size: 12px !important; }
+.wiki-buttons { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.cvw-propuesta { padding: 16px 0 20px; border-bottom: 1px solid rgba(243, 247, 226, .25); }
+.cvw-propuesta .caption { text-transform: none; }
+.cvw-vista { max-height: 420px; overflow: auto; padding: 10px; border: 1px dashed rgba(243, 247, 226, .4); }
+.cvw-diff { font-family: "Space Mono", monospace; font-size: 12px; line-height: 1.5; max-height: 420px; overflow: auto; border: 1px dashed rgba(243, 247, 226, .4); white-space: pre-wrap; word-break: break-word; }
+.cvw-diff > div { padding: 0 8px; }
+.cvw-igual { opacity: .55; }
+.cvw-sale { background: rgba(238, 45, 111, .22); text-decoration: line-through; }
+.cvw-entra { background: rgba(120, 220, 140, .2); }
+.cvw-foto { display: block; max-width: 100%; max-height: 260px; margin: 8px 0; border: 1px solid rgba(243, 247, 226, .4); }
+.cvw-foto[hidden] { display: none; }
+.cvw-foto-box input[type=file] { display: block; margin: 6px 0; color: inherit; font: inherit; font-size: 12px; }
+.cvw-meter { cursor: pointer; text-decoration: underline; }
+.cvw-estado { margin-top: 12px; }
+.cvw-form textarea { min-height: 280px; }
+.w-richtext img { max-width: 100%; height: auto; }
+.w-richtext blockquote { margin: 12px 0; padding: 4px 14px; border-left: 3px solid #ee2d6f; }
+.w-richtext pre { white-space: pre-wrap; padding: 10px; border: 1px solid rgba(243, 247, 226, .3); }
+.cvw-foto-box [hidden], .cvw-form [hidden] { display: none !important; }

@@ -34,6 +34,10 @@ CV_CHAT_URL=https://chat.ejemplo.com
 
 Al actualizar vBulletin, `cvchat.php` queda (no viene en el paquete).
 
+La barra de arriba de Círculo Vicioso (la de la web, `tools/puente/web/barra.*`) la agrega Apache a cada
+página del foro (`imagen/apache-foro.conf`, con `mod_substitute`), menos a los paneles de control: no hace
+falta tocar las plantillas de vBulletin.
+
 En el Caddy de CV Chat: el servicio `caddy` también en la red `foro-frente` (externa) y un bloque
 `foro.ejemplo.com { reverse_proxy foro-web:80 }`.
 

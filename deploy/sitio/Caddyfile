@@ -1,0 +1,13 @@
+# La web (paginas fijas, exportadas de Webflow). Las direcciones de antes sin ".html"
+# siguen andando, y la wiki usa sus paginas para cada entrada y categoria (la llena
+# tools/puente/web/wiki.js con lo que guarda CV Chat).
+:80 {
+	root * /srv
+	@entrada path_regexp ^/wiki/[^/]+/?$
+	rewrite @entrada /detail_wiki.html
+	@categoria path_regexp ^/wiki-categorias/[^/]+/?$
+	rewrite @categoria /detail_wiki-categorias.html
+	rewrite /wiki/ /wiki.html
+	try_files {path} {path}.html
+	file_server
+}

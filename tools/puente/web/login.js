@@ -205,3 +205,42 @@
   fix();
 })();
 
+
+// Cuenta unica (cuenta.js): con ?volver= (la web o el foro mandan aca para entrar)
+// se vuelve ahi despues de entrar (aviso.js); si ya hay sesion en la web o el foro,
+// entra solo; y al salir del chat sale tambien de la web y del foro.
+(function () {
+  'use strict';
+  const ss = {
+    get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* */ } },
+    del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } },
+  };
+  const q = new URLSearchParams(location.search);
+  // Solo las paginas propias: el chat, la web (con y sin www) y el foro
+  const dom = location.hostname.split('.').slice(1).join('.');
+  const propia = (url) => {
+    try { const u = new URL(url); return u.protocol === 'https:' && [location.hostname, dom, 'www.' + dom, 'foro.' + dom].includes(u.hostname); } catch { return false; }
+  };
+  const volver = q.get('volver');
+  if (volver && propia(volver)) ss.set('puente_volver', volver);
+  if (q.has('volver') || q.has('registro')) history.replaceState(null, '', location.pathname);
+  if (ss.get('puente_salio')) {
+    ss.del('puente_salio'); ss.del('puente_volver');
+    location.replace('/puente/cuenta/salir?volver=' + encodeURIComponent(location.origin + '/'));
+    return;
+  }
+  if (q.get('registro') === '1') {
+    const tab = () => { const b = document.querySelector('.auth-tab[data-tab="register"]'); if (b) b.click(); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(tab, 50)); else setTimeout(tab, 50);
+  }
+  let tok = null;
+  try { tok = localStorage.getItem('haven_token'); } catch { return; }
+  if (tok) return; // Haven ya pasa a /app
+  fetch('/puente/api/cuenta/token', { method: 'POST' }).then(r => (r.ok ? r.json() : null)).then(d => {
+    if (!d || !d.token) return;
+    localStorage.setItem('haven_token', d.token);
+    localStorage.setItem('haven_user', JSON.stringify(d.user));
+    location.replace('/app');
+  }).catch(() => {});
+})();
