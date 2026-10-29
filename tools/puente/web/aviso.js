@@ -11312,3 +11312,32 @@ var puenteSinUbicacion = (function () {
     };
   })();
 })();
+
+// Los avisos del foro (foro-servicio.js): un cartelito abajo, que lleva al foro
+(function () {
+  'use strict';
+  const st = document.createElement('style');
+  st.textContent = '#puente-aviso-cartel{position:fixed;right:16px;bottom:16px;z-index:10060;display:flex;flex-direction:column;gap:8px;max-width:min(360px,calc(100vw - 32px))}'
+    + '#puente-aviso-cartel a{display:block;padding:12px 14px;border-radius:10px;background:var(--bg-secondary,#2b2d31);color:inherit;text-decoration:none;box-shadow:0 8px 28px rgba(0,0,0,.45);border-left:3px solid #ee2d6f;animation:puenteAvisoEntra .25s ease-out}'
+    + '#puente-aviso-cartel b{display:block;font-size:13px;margin-bottom:2px}#puente-aviso-cartel span{font-size:12px;opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+    + '@keyframes puenteAvisoEntra{from{transform:translateY(12px);opacity:0}}';
+  document.head.appendChild(st);
+  function mostrar(d) {
+    let box = document.getElementById('puente-aviso-cartel');
+    if (!box) { box = document.createElement('div'); box.id = 'puente-aviso-cartel'; document.body.appendChild(box); }
+    const a = document.createElement('a');
+    a.href = d.url || '#'; a.target = '_blank'; a.rel = 'noopener';
+    const b = document.createElement('b'); b.textContent = d.title || 'El foro'; a.appendChild(b);
+    if (d.body) { const s2 = document.createElement('span'); s2.textContent = d.body; a.appendChild(s2); }
+    a.addEventListener('click', () => a.remove());
+    box.appendChild(a);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => a.remove(), 9000);
+  }
+  let t = 0;
+  (function enganchar() {
+    const s3 = window.app && window.app.socket;
+    if (!s3 || typeof s3.on !== 'function') { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    s3.on('puente-aviso', mostrar);
+  })();
+})();

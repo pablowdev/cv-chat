@@ -41,6 +41,7 @@ const foro = require('./foro.js');
 const cuenta = require('./cuenta.js');
 const wiki = require('./wiki.js');
 const foroLector = require('./foro-lector.js');
+const foroServicio = require('./foro-servicio.js');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const states = new Map(); // state -> { purpose: 'link' | 'recover', userId, exp }
@@ -111,6 +112,7 @@ function setup(ctx) {
   } });
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
+  foroServicio.setup({ db, log, warn, helpers: { io, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) } });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();

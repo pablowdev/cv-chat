@@ -157,4 +157,21 @@ function onInbound(d) {
   } catch (err) { warn('avisos:', err.message); }
 }
 
-module.exports = { setup, onInbound };
+// Un aviso para una persona (las notificaciones del foro, foro-servicio.js): en la app abierta,
+// un cartelito (aviso.js, "puente-aviso"); si no la tiene abierta y enfocada, la notificacion push
+function avisarUsuario(userId, { title, body, url, tag }) {
+  try {
+    let enfocada = false;
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && s.user.id === userId) { s.emit('puente-aviso', { title, body, url }); if (s.hasFocus !== false) enfocada = true; }
+    }
+    if (enfocada || !webpush) return;
+    const payload = JSON.stringify({ title, body: body && body.length > 140 ? body.slice(0, 137) + '...' : (body || ''), tag: tag || 'puente-foro', url: url || '/app', __puente: 1 });
+    for (const sub of db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(userId)) {
+      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 3600 })
+        .catch(err => { if (err && (err.statusCode === 404 || err.statusCode === 410)) { try { db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint); } catch { /* */ } } });
+    }
+  } catch (err) { warn('avisos: avisar:', err.message); }
+}
+
+module.exports = { setup, onInbound, avisarUsuario };

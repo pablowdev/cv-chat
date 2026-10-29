@@ -62,6 +62,29 @@ services:
     mem_limit: 128m
     restart: unless-stopped
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+  # El servicio para CV Chat (servicio/servicio.php, tools/puente/foro-servicio.js): lo que CV Chat hace en el
+  # foro (avatar y nombre, avisos, compra/venta, leer los privados), con el codigo del foro. CV Chat le llega
+  # por foro-lector, con la clave de servicio.env.
+  servicio:
+    image: foro-web:local
+    container_name: foro-servicio
+    command: ["php", "-S", "0.0.0.0:8080", "/servicio/servicio.php"]
+    user: "33:33"
+    env_file: servicio.env
+    volumes:
+      - ./codigo:/var/www/html:ro
+      - ./escribible/cache:/var/www/html/cache
+      - ./escribible/core-cache:/var/www/html/core/cache
+      - ./servicio:/servicio:ro
+    networks: [foro-datos, foro-lector]
+    depends_on: [db]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 256m
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
   correo:
     image: boky/postfix:latest
     container_name: foro-correo
