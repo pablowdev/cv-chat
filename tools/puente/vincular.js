@@ -279,7 +279,12 @@ function injectScript(req, res, src) {
   const toBuf = (c, enc) => (Buffer.isBuffer(c) ? c : Buffer.from(c, typeof enc === 'string' ? enc : 'utf8'));
   const origSetHeader = res.setHeader, origWrite = res.write, origEnd = res.end;
   res.setHeader = function (name, value) {
-    if (String(name).toLowerCase() === 'content-length' && isHtml()) return this; // se calcula al final
+    const n = String(name).toLowerCase();
+    if (n === 'content-length' && isHtml()) return this; // se calcula al final
+    // Los mensajes en una ventanita de la web y del foro (barra.js): el chat se puede abrir
+    // adentro de esas paginas propias, y de ninguna otra
+    if (n === 'x-frame-options') return this;
+    if (n === 'content-security-policy' && typeof value === 'string') value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
     return origSetHeader.call(this, name, value);
   };
   res.write = function (chunk, encoding, cb) {
@@ -392,7 +397,8 @@ const appHaven = (ua) => APP_HAVEN.test(String(ua || ''));
 const mensajeAppHaven = () => `Esta app no es la de ${appName()}. Bajá la app de ${appName()} desde ${publicUrl || ''}/puente/descargar`;
 function appAjena(req) {
   const h = req.headers;
-  if (h['sec-fetch-dest'] === 'iframe') return true;
+  // En un marco: solo adentro de las paginas propias (la ventanita de mensajes de la web y del foro, barra.js)
+  if (h['sec-fetch-dest'] === 'iframe') return !['same-origin', 'same-site'].includes(h['sec-fetch-site']);
   if (/haven/i.test(String(h['x-requested-with'] || ''))) return true; // el nombre de la app de Android que abre la pagina
   const ua = String(h['user-agent'] || '');
   // La app de escritorio de Haven (Electron, como la de CV Chat, que se marca con "CVChat/")

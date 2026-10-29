@@ -253,4 +253,4 @@ async function handle(req, res, p, u) {
   return false;
 }
 
-module.exports = { setup, handle, on, userFromCookie, open, close, safeReturn, allowedOrigin: o => origins().includes(o), dominio: () => dominio };
+module.exports = { setup, handle, on, userFromCookie, open, close, safeReturn, allowedOrigin: o => origins().includes(o), origins, dominio: () => dominio };

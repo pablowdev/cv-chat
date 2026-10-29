@@ -109,7 +109,8 @@ function script(db) {
   // que se vea igual que la web, y queda la marca window.puenteApp para reconocerla
   // Adentro de la ventana de otra app (la de Haven de Google Play: un marco de otro origen, o su puente
   // Capacitor): a la pagina para bajar la app de CV Chat. Lo mismo hace el servidor (vincular.js, appAjena)
-  return `(function(){try{var ajena=!!window.Capacitor;if(window.top!==window){try{ajena=ajena||window.top.location.origin!==location.origin;}catch(e){ajena=true;}}` +
+  // (la ventanita de mensajes de la web y del foro, barra.js, es un marco de las paginas propias: esa si)
+  return `(function(){try{var ajena=!!window.Capacitor;if(window.top!==window){try{ajena=ajena||window.top.location.origin!==location.origin;}catch(e){var an=(location.ancestorOrigins&&location.ancestorOrigins[0])||document.referrer||'',dom=location.hostname.replace(/^[^.]+\\./,''),h='';try{h=new URL(an).hostname;}catch(e2){}ajena=!(h===dom||h.slice(-dom.length-1)==='.'+dom);}}` +
     `if(ajena){location.replace('/puente/descargar?desde=otra-app');return;}}catch(e){}})();` +
     `(function(){try{var na=navigator.userAgent;if(/Electron\\/|CVChat\\//.test(na)){window.puenteApp=true;var limpio=na.replace(/ Electron\\/[^ ]+/,'');Object.defineProperty(navigator,'userAgent',{get:function(){return limpio;},configurable:true});}}catch(e){}})();` +
     `(function(){try{var t=${t};` +

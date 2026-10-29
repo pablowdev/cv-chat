@@ -93,3 +93,20 @@
   .cv-barra .cv-barra__user { gap: 6px; }
   .cv-barra__avisos { position: fixed; left: 8px; right: 8px; top: 44px; width: auto; }
 }
+
+/* La ventanita de mensajes: baja desde la barra, con el chat adentro */
+.cv-ventana { position: fixed; right: 12px; top: 44px; z-index: 100000; width: min(420px, calc(100vw - 16px)); height: min(640px, calc(100vh - 64px));
+  display: flex; flex-direction: column; background: #2b2d2c; border: 1px solid #3a3c3b; border-top: 0; border-radius: 0 0 10px 10px; overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55); transform: translateY(-8px); opacity: 0; visibility: hidden; pointer-events: none;
+  transition: transform .18s ease, opacity .18s ease, visibility 0s linear .18s; }
+.cv-ventana.es-abierta { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition: transform .18s ease, opacity .18s ease; }
+.cv-ventana__cab { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 14px; border-bottom: 1px solid #3a3c3b;
+  color: #f2f2f2; font: 700 13px/38px Arial, Helvetica, sans-serif; }
+.cv-ventana__cab b { flex: 1; }
+.cv-ventana__btn { border: 0; background: none; padding: 0 8px; color: #939190 !important; font: 12px/38px Arial, Helvetica, sans-serif; text-decoration: none !important; cursor: pointer; }
+.cv-ventana__btn:hover { color: #f2f2f2 !important; }
+.cv-ventana__x { font-size: 22px; }
+.cv-ventana__marco { flex: 1; width: 100%; border: 0; background: #313338; }
+@media (max-width: 560px) {
+  .cv-ventana { left: 0; right: 0; width: auto; height: calc(100vh - 56px); height: calc(100dvh - 56px); border-radius: 0; border-left: 0; border-right: 0; }
+}

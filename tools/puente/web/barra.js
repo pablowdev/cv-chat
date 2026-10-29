@@ -41,6 +41,36 @@
     const s = el('span', 'cv-barra__avatar cv-barra__avatar--letra', (yo.nombre || '?').trim().charAt(0).toUpperCase());
     return s;
   }
+  // Los mensajes en una ventanita que baja desde la barra, con el chat adentro (aviso.js la
+  // reconoce por el nombre "cv-ventana" y abre los mensajes directos): se abre y se cierra sin
+  // dejar la pagina. Al cerrarla queda cargada, para volver a abrirla al toque.
+  let ventana = null, alCerrar = null;
+  function abrirVentana(desde) {
+    if (!ventana) {
+      ventana = el('div', 'cv-ventana'); ventana.setAttribute('role', 'dialog'); ventana.setAttribute('aria-label', 'Mensajes');
+      const cab = el('div', 'cv-ventana__cab');
+      const grande = el('a', 'cv-ventana__btn', 'Abrir en el chat ↗'); grande.href = CHAT + '/app?mensajes=1'; grande.target = '_blank'; grande.rel = 'noopener';
+      const x = el('button', 'cv-ventana__btn cv-ventana__x', '×'); x.type = 'button'; x.title = 'Cerrar'; x.setAttribute('aria-label', 'Cerrar');
+      x.addEventListener('click', cerrarVentana);
+      cab.append(el('b', null, 'Mensajes'), grande, x);
+      const marco = el('iframe', 'cv-ventana__marco'); marco.name = 'cv-ventana'; marco.title = 'Mensajes'; marco.src = CHAT + '/app';
+      ventana.append(cab, marco);
+      ventana.addEventListener('click', (e) => e.stopPropagation());
+      document.body.appendChild(ventana);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ventana.classList.contains('es-abierta')) cerrarVentana(); });
+      void ventana.offsetHeight; // para que se vea bajar
+    }
+    if (ventana.classList.contains('es-abierta')) { cerrarVentana(); return; }
+    const r = desde && desde.getBoundingClientRect();
+    ventana.style.top = Math.max(0, Math.round(r ? r.bottom : 0)) + 'px';
+    ventana.classList.add('es-abierta');
+  }
+  function cerrarVentana() {
+    if (!ventana) return;
+    ventana.classList.remove('es-abierta');
+    if (alCerrar) alCerrar();
+  }
+
   function usuario(yo) {
     const box = el('div', 'cv-barra__user');
     if (!yo || !yo.conectado) {
@@ -61,7 +91,11 @@
     if (!enForo) {
       const m = el('a', 'cv-barra__mensajes'); m.href = CHAT + '/app?mensajes=1'; m.title = 'Mensajes'; m.setAttribute('aria-label', 'Mensajes');
       m.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"/></svg><span>Mensajes</span>';
-      if (yo.mensajes) m.appendChild(el('b', 'cv-barra__contador', String(yo.mensajes > 99 ? '99+' : yo.mensajes)));
+      const contar = (n) => { const c = m.querySelector('.cv-barra__contador'); if (c) c.remove(); if (n) m.appendChild(el('b', 'cv-barra__contador', String(n > 99 ? '99+' : n))); };
+      contar(yo.mensajes);
+      m.addEventListener('click', (e) => { if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); e.stopPropagation(); abrirVentana(bar()); });
+      // Al cerrar la ventanita, cuantas quedaron sin leer
+      alCerrar = () => fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).then(d => contar(d && d.mensajes)).catch(() => {});
       box.appendChild(m);
       box.appendChild(campanita(yo));
     }
@@ -113,6 +147,7 @@
     return wrap;
   }
 
+  const bar = () => document.getElementById('cv-barra');
   function webBar(yo) {
     let bar = document.getElementById('cv-barra');
     if (!bar) { bar = el('div', 'cv-barra'); bar.id = 'cv-barra'; document.body.insertBefore(bar, document.body.firstChild); }
@@ -130,20 +165,22 @@
     const vbId = Number((window.pageData && window.pageData.userid) || 0);
     // Los mensajes privados son los de CV Chat (cifrados): el "Mensajes" del foro lleva ahi, y las
     // paginas de privados del foro tambien (los de antes se leen en CV Chat)
-    const mensajes = CHAT + '/app?mensajes=1';
-    if (vbId && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(mensajes); return; }
+    // (en la ventanita, ahi mismo; las paginas de privados del foro llevan al inicio con la ventanita abierta)
+    const arriba = () => document.querySelector('nav.js-top-menu-user') || cont;
+    if (vbId && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(FORO + '/#mensajes'); return; }
     if (cont) {
       for (const li of cont.querySelectorAll('li')) {
         const t = li.querySelector('.b-comp-menu-dropdown__trigger, a');
         if (t && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
-          li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); location.href = mensajes; }, true);
+          li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }, true);
         }
       }
     }
     document.addEventListener('click', (e) => {
       const a = e.target.closest && e.target.closest('a[href*="/privatemessage"], a[href*="/pmchat"]');
-      if (a) { e.preventDefault(); e.stopImmediatePropagation(); location.href = mensajes; }
+      if (a) { e.preventDefault(); e.stopImmediatePropagation(); abrirVentana(arriba()); }
     }, true);
+    if (vbId && location.hash === '#mensajes') { history.replaceState(null, '', location.pathname + location.search); abrirVentana(arriba()); }
     // Iniciar sesion y registrarse: por la cuenta unica
     document.addEventListener('click', (e) => {
       const t = e.target.closest && e.target.closest('#lnkLoginSignupMenu, a[href$="/register"], a[href*="/register?"], a[href*="auth/logout"]');

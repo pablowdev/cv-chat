@@ -3857,7 +3857,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (!box) { box = el('div', 'puente-dm-home'); box.id = 'puente-dm-home'; main.appendChild(box); }
     box.textContent = '';
     box.appendChild(el('div', 'puente-dm-home-title', 'Mensajes directos'));
-    const items = [...document.querySelectorAll('#dm-list .dm-item')];
+    const items = [...document.querySelectorAll('#dm-list .dm-item:not(.puente-dm-vacio), #dm-list .puente-dm-foro')];
     if (!items.length) { box.appendChild(el('div', 'puente-dm-home-empty', 'Todavía no tenés mensajes directos. Para empezar uno, tocá el nombre de una persona y elegí "Mensaje".')); return; }
     for (const item of items) {
       const row = el('button', 'puente-dm-home-row');
@@ -3866,7 +3866,7 @@ document.addEventListener('pointerdown', (ev) => {
       row.appendChild(av ? av.cloneNode(true) : el('span', 'puente-dm-avatar', '?'));
       row.appendChild(el('span', 'puente-dm-home-name', ((item.querySelector('.channel-name') || {}).textContent || '').trim()));
       row.appendChild(el('span', 'puente-dm-home-chat', '💬'));
-      row.addEventListener('click', () => { if (window.app) window.app.switchChannel(item.dataset.code); });
+      row.addEventListener('click', () => { if (!item.dataset.code) item.click(); else if (window.app) window.app.switchChannel(item.dataset.code); });
       box.appendChild(row);
     }
   }
@@ -11419,7 +11419,7 @@ var puenteSinUbicacion = (function () {
   }
 
   // ── Todas las conversaciones del foro ──
-  async function archivo() {
+  async function archivo(abrir) {
     const o = el('div'); o.id = 'puente-foro-archivo';
     const box = el('div', 'pfa'), cab = el('div', 'pfa-cab'), x = el('button', 'pfa-x', '×'), cuerpo = el('div', 'pfa-cuerpo');
     x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
@@ -11455,6 +11455,8 @@ var puenteSinUbicacion = (function () {
       }
     };
     conversaciones();
+    // Abrir directo una (desde la lista de mensajes directos)
+    if (typeof abrir === 'number') { const b = cuerpo.querySelectorAll('.pfa-conv')[abrir]; if (b) b.click(); }
   }
   window.puenteForoArchivo = archivo;
 
@@ -11489,4 +11491,112 @@ var puenteSinUbicacion = (function () {
       setTimeout(() => { const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click(); }, 1500);
     }
   })();
+})();
+// La lista de mensajes directos, la misma en todo el sistema:
+//  - Solo las conversaciones donde alguna vez hubo un mensaje: las que se abrieron y quedaron vacias
+//    no aparecen (salvo la que se esta mirando, o si con esa persona se hablo en el foro).
+//  - Tambien las conversaciones privadas del foro (foro-servicio.js), con quien tenga o no cuenta en
+//    CV Chat: con quien la tiene, se abre el mensaje directo (arriba se ven los del foro); con quien
+//    no, se leen los mensajes del foro.
+// Y el chat en la ventanita de mensajes de la web y del foro (barra.js): ahi abre los mensajes directos.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
+  const st = el('style');
+  st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
+    + '#dm-list .puente-dm-foro .puente-dm-foro-tag{margin-left:auto;padding:0 5px;border-radius:3px;background:rgba(255,255,255,.08);font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:.04em}';
+  document.head.appendChild(st);
+
+  const vacios = new Set(), recien = new Set();
+  let foro = [];
+  const chans = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels : []);
+  const dmCon = (id) => chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id);
+  const unico = (c) => (c.cuentas.length === 1 && c.cuentas[0]) || null;
+
+  let obs = null;
+  function aplicar() {
+    const list = byId('dm-list'), app = window.app;
+    if (!list || !app) return;
+    if (obs) obs.disconnect();
+    try {
+      const conForo = new Set(foro.map(unico).filter(Boolean));
+      for (const it of list.querySelectorAll('.dm-item[data-code]')) {
+        const code = it.dataset.code, ch = chans().find(c => c && c.code === code);
+        const ocultar = vacios.has(code) && !recien.has(code) && code !== app.currentChannel && !(ch && ch.dm_target && conForo.has(ch.dm_target.id));
+        it.classList.toggle('puente-dm-vacio', ocultar);
+      }
+      // Las del foro que no tienen conversacion en CV Chat, al final de la lista
+      list.querySelectorAll('.puente-dm-foro').forEach(n => n.remove());
+      foro.forEach((c, i) => {
+        const id = unico(c);
+        if (id && dmCon(id)) return;
+        const nombre = c.con.join(', ') || 'Vos';
+        const it = el('div', 'channel-item puente-dm-foro'); it.dataset.foro = String(i);
+        it.title = id ? 'Mensajes del foro con ' + nombre : 'Mensajes del foro con ' + nombre + ' (no tiene cuenta en CV Chat)';
+        it.append(el('span', 'puente-dm-avatar', nombre.trim().charAt(0).toUpperCase() || '?'), el('span', 'channel-name', nombre), el('span', 'puente-dm-foro-tag', 'foro'));
+        it.addEventListener('click', () => abrir(c, i));
+        list.appendChild(it);
+      });
+    } finally { if (obs) obs.observe(list, { childList: true }); }
+  }
+  function abrir(c, i) {
+    const id = unico(c);
+    if (id && window.app && window.app.socket) { window.app.socket.emit('start-dm', { targetUserId: id }); return; }
+    if (typeof window.puenteForoArchivo === 'function') window.puenteForoArchivo(i);
+  }
+
+  function pedir() {
+    const app = window.app, so = app && app.socket;
+    if (so && so.connected) {
+      so.emit('puente-dm-recientes', {}, (r) => {
+        if (!r || !Array.isArray(r.vacios)) return;
+        vacios.clear(); r.vacios.forEach(c => vacios.add(c));
+        aplicar();
+      });
+    }
+    fetch('/puente/api/foro/privados', { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).catch(() => null)
+      .then(d => { if (d && Array.isArray(d.conversaciones)) { foro = d.conversaciones; aplicar(); } });
+  }
+
+  let t = 0;
+  (function enganchar() {
+    const app = window.app, so = app && app.socket, list = byId('dm-list');
+    if (!so || !list || !Array.isArray(app.channels)) { if (++t < 120) setTimeout(enganchar, 1000); return; }
+    // Cada vez que Haven vuelve a dibujar la lista
+    obs = new MutationObserver(() => aplicar());
+    obs.observe(list, { childList: true });
+    so.on('new-message', (d) => { if (d && vacios.delete(d.channelCode)) aplicar(); });
+    so.on('dm-opened', (d) => { if (d && d.code) { recien.add(d.code); aplicar(); } });
+    so.on('connect', () => setTimeout(pedir, 1500));
+    setTimeout(pedir, 1200);
+    if (typeof app.switchChannel === 'function') {
+      const cambiar = app.switchChannel;
+      app.switchChannel = function () { const r = cambiar.apply(this, arguments); setTimeout(aplicar, 50); return r; };
+    }
+  })();
+
+  // ── En la ventanita de mensajes de la web y del foro ──
+  if (window.name === 'cv-ventana' && window.top !== window) {
+    document.documentElement.classList.add('puente-ventana');
+    // Solo los mensajes: sin la columna de servidores, juegos y compraventa
+    const v = el('style'); v.textContent = 'html.puente-ventana #puente-rail{display:none!important}html.puente-ventana .sidebar{padding-left:0!important;width:min(340px,92vw)!important}html.puente-ventana .channel-header #search-container{display:none!important}'; document.head.appendChild(v);
+    // Los mensajes directos, y la lista de conversaciones (no la ultima abierta), como un mensajero.
+    // Se insiste hasta que se ven (el chat termina de armarse de a poco)
+    let n = 0, toco = false;
+    // (si la persona ya empezo a usarlo, se deja de insistir)
+    ['pointerdown', 'keydown'].forEach(e => document.addEventListener(e, (ev) => { if (ev.isTrusted) toco = true; }, { capture: true, once: true }));
+    (function mensajes() {
+      if (toco) return;
+      const app = window.app, side = document.querySelector('.sidebar'), body = byId('app-body');
+      const listo = side && side.classList.contains('puente-ver-dms') && (!byId('mobile-menu-btn') || !byId('mobile-menu-btn').offsetParent || (body && body.classList.contains('mobile-sidebar-open')));
+      if (listo && n > 3) return;
+      if (app && side) {
+        if (!side.classList.contains('puente-ver-dms')) { const b = document.querySelector('.puente-rail-dm') || document.querySelector('.puente-pc-dm'); if (b) b.click(); }
+        else if (body && !body.classList.contains('mobile-sidebar-open')) { const m = byId('mobile-menu-btn'); if (m && m.offsetParent) m.click(); }
+      }
+      if (++n < 40) setTimeout(mensajes, 700);
+    })();
+  }
 })();

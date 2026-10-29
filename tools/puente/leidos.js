@@ -69,8 +69,10 @@ function setup({ db, io, warn }) {
       if (typeof ack !== 'function' || !socket.user) return;
       try {
         const dms = {};
-        for (const d of dmsQ.all(socket.user.id)) dms[d.code] = ms(d.ultimo) || ms(d.creado);
-        ack({ dms });
+        // vacios: las conversaciones sin ningun mensaje (se abrieron y nunca se escribio), que no se muestran
+        const vacios = [];
+        for (const d of dmsQ.all(socket.user.id)) { dms[d.code] = ms(d.ultimo) || ms(d.creado); if (!d.ultimo) vacios.push(d.code); }
+        ack({ dms, vacios });
       } catch (err) { warn('dm recientes:', err.message); ack({ error: true }); }
     });
   });
