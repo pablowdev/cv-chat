@@ -21,20 +21,31 @@
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
   const registrarse = CHAT + '/?registro=1&volver=' + encodeURIComponent(aca);
   const salir = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(enForo ? FORO + '/' : aca);
-  // La misma en la web y en el foro: el nombre del club a la izquierda
-  const LINKS = [['Círculo Vicioso', WEB + '/']];
+  // La misma en la web y en el foro: el nombre del club, y los mismos enlaces que el menu de la web.
+  // [texto, direccion, cuando es la seccion en la que se esta]
+  const ruta = location.pathname.replace(/\/+$/, '') || '/';
+  const LINKS = [
+    ['Círculo Vicioso', WEB + '/', false],
+    ['Inicio', WEB + '/', !enForo && ruta === '/'],
+    ['Wiki', WEB + '/wiki', !enForo && /^\/wiki/.test(ruta)],
+    ['Full Fat Search', WEB + '/full-fat-search', !enForo && ruta.startsWith('/full-fat-search')],
+    ['Foro', FORO + '/', enForo],
+    ['Chat', CHAT + '/app', false],
+  ];
   const ss = { get: k => { try { return sessionStorage.getItem(k); } catch { return '1'; } }, set: k => { try { sessionStorage.setItem(k, '1'); } catch { /* */ } }, del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } } };
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   function links(yo) {
     const nav = el('nav', 'cv-barra__links');
-    for (const [t, href] of LINKS) {
+    LINKS.forEach(([t, href, actual], i) => {
       const a = el('a', 'cv-barra__link', t); a.href = href;
+      if (actual) { a.classList.add('is-actual'); a.setAttribute('aria-current', 'page'); }
       // Los administradores ven cuantas propuestas de la wiki hay por revisar
       if (t === 'Wiki' && yo && yo.wikiPendientes) { a.textContent = `Wiki (${yo.wikiPendientes})`; a.href = WEB + '/wiki?revisar=1'; }
-      a.classList.add('cv-barra__marca');
+      // El nombre del club, chiquito, y despues los enlaces
+      if (i === 0) a.classList.add('cv-barra__marca');
       nav.appendChild(a);
-    }
+    });
     return nav;
   }
   function avatar(yo) {

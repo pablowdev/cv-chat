@@ -147,3 +147,18 @@
 html.cv-en-foro nav.js-top-menu-user { display: none !important; }
 html.cv-en-foro .cv-barra { margin: 0; font-size: 14px; }
 html.cv-en-foro .cv-barra a, html.cv-en-foro .cv-barra button { font-family: Helvetica, Arial, Verdana, sans-serif !important; }
+
+/* Los enlaces de la barra (los mismos del menu de la web), en la web y en el foro */
+.cv-barra .cv-barra__links { gap: 4px; }
+.cv-barra .cv-barra__link { font-size: 13px; line-height: 44px; }
+.cv-barra .cv-barra__link.cv-barra__marca { margin-right: 14px; font-size: 11px; }
+.cv-barra .cv-barra__link.is-actual { color: #f2f2f2 !important; box-shadow: inset 0 -2px 0 #ee2d6f; }
+/* En pantallas chicas no entra todo: se esconde el nombre del club y los enlaces se deslizan */
+@media (max-width: 760px) { .cv-barra .cv-barra__link.cv-barra__marca { display: none; } }
+@media (max-width: 560px) { .cv-barra .cv-barra__link { font-size: 12px; padding: 0 6px; } }
+@media (max-width: 560px) {
+  /* Entrar, corto, para que entren los enlaces; y los enlaces se deslizan (se esfuman en el borde) */
+  .cv-barra .cv-barra__entrar { font-size: 0 !important; }
+  .cv-barra .cv-barra__entrar::after { content: "Entrar"; font-size: 12px; }
+  .cv-barra .cv-barra__links { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); padding-right: 18px; }
+}
