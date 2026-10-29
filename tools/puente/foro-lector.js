@@ -1,9 +1,9 @@
 // El foro adentro de CV Chat, con el lector del foro (deploy/foro/lector: solo lee, y solo lo publico).
 //
-//  - Canal #foro (FORO_CANAL, "foro" si no se dice otro; lo crea un administrador, mejor de tipo foro y
-//    de solo lectura): cada tema nuevo del foro es un mensaje, y sus respuestas van en su hilo. Se publica
-//    con el webhook del canal (el de Haven), con el nombre y la foto de quien lo escribio en el foro.
-//    Empieza desde lo que haya cuando se prende: no trae lo viejo.
+//  - Canal del foro, apagado (el foro se abre adentro de CV Chat con su boton, aviso.js). Con FORO_CANAL (el
+//    nombre de un canal de texto que crea un administrador): cada tema nuevo del foro es un mensaje, y sus
+//    respuestas van en su hilo, con el webhook del canal, con el nombre y la foto de quien lo escribio en el
+//    foro. Empieza desde lo que haya cuando se prende: no trae lo viejo.
 //  - Vista previa de los enlaces al foro (vincular.js la pide al pegar un enlace).
 //  - GET /puente/api/foro/buscar?q=  temas del foro (el "/foro <texto>" del chat, web/aviso.js)
 //
@@ -12,20 +12,21 @@
 const crypto = require('crypto');
 
 const CADA_MS = 60 * 1000, POR_VUELTA = 20;
-let db, log, warn, h, url = '', clave = '', canal = 'foro', foroUrl = '';
+let db, log, warn, h, url = '', clave = '', canal = '', foroUrl = '';
 let andando = false;
 
 function setup(ctx) {
   ({ db, log, warn, helpers: h } = ctx);
   url = String(process.env.FORO_LECTOR_URL || '').replace(/\/+$/, '');
   clave = String(process.env.FORO_LECTOR_CLAVE || '');
-  canal = String(process.env.FORO_CANAL || 'foro').toLowerCase();
+  canal = String(process.env.FORO_CANAL || '').trim().toLowerCase();
   foroUrl = String(process.env.FORO_URL || '').replace(/\/+$/, '');
   if (!url || clave.length < 32) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_foro_estado (clave TEXT PRIMARY KEY, valor TEXT);
     CREATE TABLE IF NOT EXISTS puente_foro_temas (tema_id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, channel_id INTEGER NOT NULL);
   `);
+  if (!canal) { log('foro: lector listo (vistas previas y busqueda; sin canal del foro)'); return; }
   log(`foro: lector listo; el canal #${canal} recibe los temas nuevos`);
   setTimeout(vuelta, 15000);
   setInterval(vuelta, CADA_MS);
