@@ -112,7 +112,7 @@ function setup(ctx) {
   } });
   wiki.setup({ db, log, warn, publicUrl, helpers: { json, send, readJson } });
   foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
-  foroServicio.setup({ db, log, warn, helpers: { io, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) } });
+  foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
@@ -1038,6 +1038,10 @@ async function handle(req, res) {
   }
   if (p.startsWith('/puente/api/wiki/')) {
     const r = await wiki.handle(req, res, p, u);
+    if (r !== false) return;
+  }
+  if (p === '/puente/api/foro/privados') {
+    const r = await foroServicio.handle(req, res, p, u);
     if (r !== false) return;
   }
   if (p === '/puente/api/foro/buscar') {

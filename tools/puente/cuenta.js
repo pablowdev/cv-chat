@@ -127,6 +127,14 @@ function close(req, res) {
   if (on()) { addCookie(res, cookieHeader('', 0)); addCookie(res, saliHeader(String(Math.floor(Date.now() / 1000)), 365 * 24 * 3600)); }
 }
 
+// Para la barra: cuantas conversaciones de mensajes directos tienen algo sin leer
+function dmSinLeer(userId) {
+  try {
+    return db.prepare(`SELECT COUNT(*) n FROM channels c JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
+      LEFT JOIN read_positions rp ON rp.user_id = cm.user_id AND rp.channel_id = c.id
+      WHERE c.is_dm = 1 AND EXISTS (SELECT 1 FROM messages m WHERE m.channel_id = c.id AND m.id > COALESCE(rp.last_read_message_id, 0) AND COALESCE(m.user_id, 0) != cm.user_id)`).get(userId).n;
+  } catch { return 0; }
+}
 // Para la barra de los administradores: propuestas de la wiki por revisar (wiki.js)
 function wikiPendientes() {
   try { return db.prepare("SELECT COUNT(*) n FROM puente_wiki_rev WHERE estado = 'pendiente'").get().n; } catch { return 0; }
@@ -154,6 +162,7 @@ async function handle(req, res, p, u) {
       conectado: true, chat: publicUrl, id: user.id, usuario: user.username, nombre: user.display_name || user.username,
       avatar: absolute(user.avatar), admin: !!user.is_admin, foro: foro ? foro.foro_user_id : null,
       wikiPendientes: user.is_admin ? wikiPendientes() : 0,
+      mensajes: dmSinLeer(user.id),
     });
   }
 

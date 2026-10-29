@@ -5,6 +5,9 @@
 //    Un nombre que viene del foro pasa por las mismas reglas que en CV Chat (identidad.js: no el de otro).
 //  - Las notificaciones del foro (te respondieron, te citaron, te mencionaron...) llegan a CV Chat: un
 //    cartelito en la app abierta, o la notificacion del telefono (avisos.js).
+//  - Los mensajes privados del foro se leen en CV Chat (los nuevos ya van por los mensajes directos, cifrados):
+//    GET /puente/api/foro/privados?con=<cuenta>  los del foro con esa persona (en su conversacion de CV Chat)
+//    GET /puente/api/foro/privados               todas las conversaciones del foro (tambien con quien no tiene cuenta)
 // FORO_SERVICIO_URL (http://foro-servicio:8080) y FORO_SERVICIO_CLAVE (la SERVICIO_CLAVE de /opt/foro/servicio.env).
 
 const fs = require('fs');
@@ -150,4 +153,54 @@ async function avisos() {
   if (d.hasta > Number(desde)) estado('avisos_desde', d.hasta);
 }
 
-module.exports = { setup, on, servicio };
+// ── Los privados del foro ──
+const cachePm = new Map(); // foro id -> { at, d }
+async function privadosDe(foroId) {
+  const c = cachePm.get(foroId);
+  if (c && Date.now() - c.at < 5 * 60 * 1000) return c.d;
+  const d = await servicio('/privados?id=' + foroId);
+  cachePm.set(foroId, { at: Date.now(), d });
+  if (cachePm.size > 300) cachePm.delete(cachePm.keys().next().value);
+  return d;
+}
+// El texto del foro sin BBCode (las citas quedan como "> ")
+function plano(raw) {
+  let s = String(raw || '');
+  s = s.replace(/\[quote[^\]]*\]([\s\S]*?)\[\/quote\]/gi, (m, t) => t.trim().split('\n').map(l => '> ' + l).join('\n') + '\n');
+  s = s.replace(/\[img[^\]]*\]\s*(https?:\/\/[^\[\s]+)\s*\[\/img\]/gi, '$1');
+  s = s.replace(/\[url=([^\]]*)\]([\s\S]*?)\[\/url\]/gi, (m, u, t) => (t.trim() && t.trim() !== u ? `${t} (${u})` : u));
+  s = s.replace(/\[\/?[a-z*]+(?:=[^\]]*)?\]/gi, '');
+  return s.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#0?39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
+}
+async function handle(req, res, p, u) {
+  if (p !== '/puente/api/foro/privados' || req.method !== 'GET') return false;
+  const { json, sessionUser } = h;
+  const yo = sessionUser(req);
+  if (!yo) return json(res, 401, { error: 'sin sesion' });
+  const mio = (db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(yo.id) || {}).foro_user_id;
+  if (!on() || !mio) return json(res, 200, { unida: !!mio, mensajes: [], conversaciones: [] });
+  let d;
+  try { d = await privadosDe(mio); } catch (err) { warn('foro: privados:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
+  const nombre = id => d.nombres[id] || 'Alguien';
+  const armar = m => ({ mio: m.de === mio, de: nombre(m.de), texto: plano(m.texto), titulo: m.titulo || null, fecha: m.fecha });
+  const con = Number(u.searchParams.get('con')) || 0;
+  if (con) {
+    // Con esa persona: solo lo que se hablaron de a dos
+    const suyo = (db.prepare('SELECT foro_user_id FROM puente_foro WHERE haven_user_id = ?').get(con) || {}).foro_user_id;
+    if (!suyo) return json(res, 200, { unida: true, mensajes: [] });
+    const dos = d.mensajes.filter(m => { const g = new Set([m.de, ...m.para]); return g.size === 2 && g.has(mio) && g.has(suyo); });
+    return json(res, 200, { unida: true, con: nombre(suyo), mensajes: dos.map(armar) });
+  }
+  // Todas las conversaciones, por con quienes
+  const grupos = new Map();
+  for (const m of d.mensajes) {
+    const otros = [...new Set([m.de, ...m.para])].filter(x => x !== mio).sort((a, b) => a - b);
+    const k = otros.join(',');
+    if (!grupos.has(k)) grupos.set(k, { con: otros.map(nombre), cuentas: otros.map(x => (db.prepare('SELECT haven_user_id FROM puente_foro WHERE foro_user_id = ?').get(x) || {}).haven_user_id || null), mensajes: [] });
+    grupos.get(k).mensajes.push(armar(m));
+  }
+  const conversaciones = [...grupos.values()].sort((a, b) => b.mensajes[b.mensajes.length - 1].fecha - a.mensajes[a.mensajes.length - 1].fecha);
+  return json(res, 200, { unida: true, conversaciones });
+}
+
+module.exports = { setup, on, servicio, handle };

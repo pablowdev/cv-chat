@@ -57,6 +57,13 @@
     item('Salir', salir).addEventListener('click', () => { ss.del('cv_sso'); ss.del('cv_auto'); });
     b.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', () => { menu.hidden = true; });
+    // Los mensajes privados (los de CV Chat, para todo el sistema), con cuantas conversaciones hay sin leer
+    if (!enForo) {
+      const m = el('a', 'cv-barra__mensajes'); m.href = CHAT + '/app?mensajes=1'; m.title = 'Mensajes'; m.setAttribute('aria-label', 'Mensajes');
+      m.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"/></svg><span>Mensajes</span>';
+      if (yo.mensajes) m.appendChild(el('b', 'cv-barra__contador', String(yo.mensajes > 99 ? '99+' : yo.mensajes)));
+      box.appendChild(m);
+    }
     box.appendChild(b); box.appendChild(menu);
     return box;
   }
@@ -76,6 +83,22 @@
     const cont = document.querySelector('nav.js-top-menu-user .b-top-menu__container');
     if (cont && !cont.querySelector('.cv-barra__links')) cont.insertBefore(links(yo), cont.firstChild);
     const vbId = Number((window.pageData && window.pageData.userid) || 0);
+    // Los mensajes privados son los de CV Chat (cifrados): el "Mensajes" del foro lleva ahi, y las
+    // paginas de privados del foro tambien (los de antes se leen en CV Chat)
+    const mensajes = CHAT + '/app?mensajes=1';
+    if (vbId && /^\/(privatemessage|pmchat)/.test(location.pathname)) { location.replace(mensajes); return; }
+    if (cont) {
+      for (const li of cont.querySelectorAll('li')) {
+        const t = li.querySelector('.b-comp-menu-dropdown__trigger, a');
+        if (t && /^\s*mensajes\s*$/i.test(t.textContent || '')) {
+          li.addEventListener('click', (e) => { e.preventDefault(); e.stopImmediatePropagation(); location.href = mensajes; }, true);
+        }
+      }
+    }
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest && e.target.closest('a[href*="/privatemessage"], a[href*="/pmchat"]');
+      if (a) { e.preventDefault(); e.stopImmediatePropagation(); location.href = mensajes; }
+    }, true);
     // Iniciar sesion y registrarse: por la cuenta unica
     document.addEventListener('click', (e) => {
       const t = e.target.closest && e.target.closest('#lnkLoginSignupMenu, a[href$="/register"], a[href*="/register?"], a[href*="auth/logout"]');

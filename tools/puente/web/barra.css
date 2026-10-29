@@ -48,3 +48,9 @@
 .cv-barra__link.cv-barra__marca { padding-left: 0; text-transform: uppercase !important; letter-spacing: .08em !important; font-size: 11px; }
 /* En la web: el nombre del club, chiquito, a la izquierda */
 .cv-barra__link.cv-barra__marca { padding-left: 0; text-transform: uppercase !important; letter-spacing: .08em !important; font-size: 11px; }
+/* Mensajes (los de CV Chat), con las conversaciones sin leer */
+.cv-barra__user { display: flex; align-items: center; gap: 10px; }
+.cv-barra__mensajes { position: relative; display: inline-flex; align-items: center; gap: 5px; color: #939190 !important; font-weight: 700; font-size: 12px; text-decoration: none !important; }
+.cv-barra__mensajes:hover { color: #f2f2f2 !important; }
+.cv-barra__contador { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ee2d6f; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
+@media (max-width: 560px) { .cv-barra__mensajes span { display: none; } }
