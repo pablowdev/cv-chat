@@ -1974,10 +1974,10 @@ function leido(sc) {
 })();
 
 // PC: pagina "Miembros" como la de Discord (solo administradores): arriba de
-// los canales, "Miembros" abre una tabla con todos los usuarios, desde cuando
-// estan, su cuenta de Discord y su antiguedad, con que invitacion entraron,
-// roles, cuantos mensajes escribieron y cuando fue el ultimo, y señales
-// (administrador, sin vincular, sin email...). Se busca por nombre y se ordena
+// los canales, "Miembros" abre una tabla con todos los usuarios, su email (y si
+// esta confirmado), desde cuando estan, su @usuario de Discord y la antiguedad de
+// esa cuenta, cuantos mensajes escribieron y cuando fue el ultimo, y señales
+// (administrador, sin vincular...). La invitacion, si entraron con una, va al lado del nombre. Se busca por nombre y se ordena
 // tocando las columnas. Tocar a alguien abre su perfil.
 // En el celular: pantalla completa con una lista (como la app de Discord), un
 // menu para ordenar, y el boton "atras" del telefono la cierra.
@@ -1998,19 +1998,17 @@ function leido(sc) {
 
   let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '';
   const COLS = [
-    ['nombre', 'NOMBRE'], ['desde', 'MIEMBRO DESDE'], ['discord', 'SE UNIÓ A DISCORD'], ['invitacion', 'CÓMO ENTRÓ'],
-    ['roles', 'ROLES'], ['mensajes', 'MENSAJES'], ['ultimo', 'ÚLTIMO MENSAJE'], ['senales', 'SEÑALES'],
+    ['nombre', 'NOMBRE'], ['correo', 'EMAIL'], ['desde', 'MIEMBRO DESDE'], ['discord', 'DISCORD'],
+    ['mensajes', 'MENSAJES'], ['ultimo', 'ÚLTIMO MENSAJE'], ['senales', 'SEÑALES'],
   ];
-  const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? (m.discord && m.discord.desde) || '' :
-    k === 'invitacion' ? m.invitacion || '' : k === 'roles' ? m.roles.length : k === 'senales' ? signals(m).length : (m[k] ?? '');
+  const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? String((m.discord && m.discord.usuario) || '').toLowerCase() :
+    k === 'correo' ? String(m.correo || '').toLowerCase() : k === 'senales' ? signals(m).length : (m[k] ?? '');
   function signals(m) {
     const out = [];
     if (m.admin) out.push(['Admin', 'admin']);
     if (m.enLinea) out.push(['En línea', 'ok']);
     if (m.invitado) out.push(['Invitado', 'gris']);
     if (!m.discord && !m.invitado) out.push(['Sin vincular', 'aviso']);
-    if (m.email === 'pendiente') out.push(['Email sin confirmar', 'aviso']);
-    else if (!m.email && !m.invitado) out.push(['Sin email', 'gris']);
     if (m.dosPasos) out.push(['2 pasos', 'ok']);
     return out;
   }
@@ -2036,7 +2034,7 @@ function leido(sc) {
     body.textContent = '';
     const q = term.trim().toLowerCase();
     const list = data.filter(m => !q || String(m.nombre).toLowerCase().includes(q) || String(m.usuario).toLowerCase().includes(q) ||
-      (m.discord && String(m.discord.usuario || '').toLowerCase().includes(q)));
+      String(m.correo || '').toLowerCase().includes(q) || (m.discord && String(m.discord.usuario || '').toLowerCase().includes(q)));
     list.sort((a, b) => { const x = value(a, sortKey), y = value(b, sortKey); return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
     page.querySelector('.pm-total').textContent = list.length === data.length ? data.length + ' miembros' : list.length + ' de ' + data.length;
     page.querySelectorAll('.pm-th').forEach(th => {
@@ -2052,28 +2050,30 @@ function leido(sc) {
       else av.textContent = String(m.nombre).charAt(0).toUpperCase();
       if (m.enLinea) av.appendChild(el('span', 'pm-punto'));
       const names = el('div', 'pm-nombres');
-      names.append(el('div', 'pm-n1', m.nombre), el('div', 'pm-n2', m.usuario));
+      const n2 = el('div', 'pm-n2', m.usuario);
+      if (m.invitacion) n2.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
+      names.append(el('div', 'pm-n1', m.nombre), n2);
       who.append(av, names);
+      // Email: la direccion y, si no lo confirmo, "sin confirmar"
+      const mail = el('div', 'pm-c pm-dos');
+      if (m.correo) {
+        const dir = el('div', 'pm-n1 pm-correo', m.correo); dir.title = m.correo;
+        mail.appendChild(dir);
+        if (m.email === 'pendiente') mail.appendChild(el('div', 'pm-n2 pm-aviso-txt', 'sin confirmar'));
+      } else mail.appendChild(el('span', 'pm-vacio', '—'));
       const since = el('div', 'pm-c', ago(m.desde)); since.title = fecha(m.desde);
-      const dc = el('div', 'pm-c');
-      if (m.discord) { dc.textContent = ago(m.discord.desde); dc.title = '@' + m.discord.usuario + (m.discord.desde ? ' · cuenta creada el ' + fecha(m.discord.desde) : ''); }
-      else { dc.textContent = '—'; dc.classList.add('pm-vacio'); }
-      const how = el('div', 'pm-c');
-      if (m.invitacion) { const chip = el('span', 'pm-chip pm-invitacion', m.invitacion); how.appendChild(chip); }
-      else how.appendChild(el('span', 'pm-vacio', m.invitado ? 'Invitado' : 'Registro'));
-      const rl = el('div', 'pm-c pm-roles');
-      for (const r of m.roles.slice(0, 3)) {
-        const chip = el('span', 'pm-chip');
-        const dot = el('span', 'pm-rol-punto'); dot.style.background = r.color || '#80848e';
-        chip.append(dot, document.createTextNode(r.nombre));
-        rl.appendChild(chip);
-      }
-      if (m.roles.length > 3) rl.appendChild(el('span', 'pm-chip', '+' + (m.roles.length - 3)));
+      // Discord: el @usuario y la antiguedad de esa cuenta
+      const dc = el('div', 'pm-c pm-dos');
+      if (m.discord) {
+        dc.appendChild(el('div', 'pm-n1 pm-correo', '@' + m.discord.usuario));
+        if (m.discord.desde) dc.appendChild(el('div', 'pm-n2', 'cuenta de ' + ago(m.discord.desde)));
+        dc.title = '@' + m.discord.usuario + (m.discord.desde ? ' · cuenta creada el ' + fecha(m.discord.desde) : '');
+      } else dc.appendChild(el('span', 'pm-vacio', '—'));
       const msgs = el('div', 'pm-c pm-num', m.mensajes.toLocaleString('es-AR'));
       const last = el('div', 'pm-c', ago(m.ultimo)); last.title = fecha(m.ultimo);
       const sig = el('div', 'pm-c pm-roles');
       for (const [label, kind] of signals(m)) sig.appendChild(el('span', 'pm-senal ' + kind, label));
-      tr.append(who, since, dc, how, rl, msgs, last, sig);
+      tr.append(who, mail, since, dc, msgs, last, sig);
       tr.addEventListener('click', () => {
         const app = window.app;
         if (!app || !app.socket) return;
@@ -2103,16 +2103,13 @@ function leido(sc) {
       const bits = ['Desde ' + ago(m.desde).replace(/^hace /, 'hace '), m.mensajes.toLocaleString('es-AR') + (m.mensajes === 1 ? ' mensaje' : ' mensajes')];
       if (m.ultimo) bits.push('último ' + ago(m.ultimo));
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
+      const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo + (m.email === 'pendiente' ? ' (sin confirmar)' : '')) : null;
       const chips = el('div', 'pm-roles');
-      for (const r of m.roles.slice(0, 2)) {
-        const chip = el('span', 'pm-chip');
-        const dot = el('span', 'pm-rol-punto'); dot.style.background = r.color || '#80848e';
-        chip.append(dot, document.createTextNode(r.nombre));
-        chips.appendChild(chip);
-      }
+      if (m.discord) chips.appendChild(el('span', 'pm-chip', '@' + m.discord.usuario));
       if (m.invitacion) chips.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
       for (const [label, kind] of signals(m)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
       info.append(names, meta);
+      if (correo) info.appendChild(correo);
       if (chips.childNodes.length) info.appendChild(chips);
       row.append(av, info);
       row.addEventListener('click', () => {

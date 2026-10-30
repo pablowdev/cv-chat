@@ -1738,9 +1738,16 @@ html body .pip-input-resizer { display: none !important; }
 .pm-buscar:focus { border-color: #5865f2; }
 .pm-tabla { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
 .pm-fila {
-  display: grid; grid-template-columns: minmax(14rem, 2.2fr) 1fr 1fr 1fr minmax(8rem, 1.4fr) 0.7fr 1fr minmax(10rem, 1.6fr);
-  align-items: center; gap: 0.75rem; min-width: 70rem; padding: 0.625rem 1.25rem; border-bottom: 1px solid #232226; cursor: pointer;
+  /* nombre, email, miembro desde, discord, mensajes, ultimo mensaje, señales */
+  display: grid; grid-template-columns: minmax(13rem, 2fr) minmax(13rem, 2fr) 1fr minmax(10rem, 1.4fr) 0.7fr 1fr minmax(9rem, 1.4fr);
+  align-items: center; gap: 0.75rem; min-width: 72rem; padding: 0.625rem 1.25rem; border-bottom: 1px solid #232226; cursor: pointer;
 }
+/* Celdas de dos lineas (email y "sin confirmar"; @usuario de Discord y su antiguedad) */
+.pm-dos { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pm-dos .pm-n1.pm-correo { font-size: 0.9375rem; font-weight: 500; color: #dbdee1; white-space: nowrap; }
+.pm-aviso-txt { color: #f0c36a; }
+.pm-n2 .pm-invitacion { margin-left: 0.375rem; padding: 0 0.375rem; font-size: 0.75rem; }
+.pm-item-meta.pm-correo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-fila:not(.pm-encabezado):hover { background: #232228; }
 .pm-encabezado { position: sticky; top: 0; z-index: 1; background: #1e1e22; cursor: default; padding-top: 0.75rem; padding-bottom: 0.75rem; }
 .pm-th { padding: 0; border: 0; background: transparent; color: #b5bac1; font: inherit; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; text-align: left; cursor: pointer; white-space: normal; line-height: 1.2; }

@@ -1238,8 +1238,14 @@ function members() {
     .all().map(r => [r.user_id, r.label || r.code]));
   const links = new Map(db.prepare('SELECT haven_user_id, discord_user_id, discord_username, discord_global_name, linked_at FROM puente_vinculos').all()
     .map(r => [r.haven_user_id, r]));
-  let emails = new Map();
-  try { emails = new Map(db.prepare('SELECT haven_user_id, confirmado FROM puente_emails').all().map(r => [r.haven_user_id, r.confirmado ? 'confirmado' : 'pendiente'])); } catch { /* sin email */ }
+  // El email de cada cuenta (la pagina es solo para administradores) y si esta confirmado
+  let emails = new Map(), correos = new Map();
+  try {
+    for (const r of db.prepare('SELECT haven_user_id, email, confirmado FROM puente_emails').all()) {
+      emails.set(r.haven_user_id, r.confirmado ? 'confirmado' : 'pendiente');
+      if (r.email) correos.set(r.haven_user_id, r.email);
+    }
+  } catch { /* sin email */ }
   const online = new Set();
   try { for (const so of io.of('/').sockets.values()) if (so.user && so.user.id) online.add(so.user.id); } catch { /* sin conexiones */ }
   const utc = s => (!s ? null : s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
@@ -1252,7 +1258,7 @@ function members() {
       mensajes: c ? c.n : 0, ultimo: c ? utc(c.ultimo) : null,
       roles: roles.get(u.id) || [], invitacion: invites.get(u.id) || null,
       discord: l ? { usuario: l.discord_username, nombre: l.discord_global_name || null, desde: discordCreated(l.discord_user_id), vinculado: utc(l.linked_at) } : null,
-      email: emails.get(u.id) || null, enLinea: online.has(u.id),
+      email: emails.get(u.id) || null, correo: correos.get(u.id) || null, enLinea: online.has(u.id),
     };
   });
   membersCache = { at: Date.now(), list };
