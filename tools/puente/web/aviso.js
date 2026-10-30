@@ -11969,8 +11969,13 @@ var puenteSinUbicacion = (function () {
     + '.puente-foro-msj .message-avatar{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;object-fit:cover}'
     + '.puente-foro-msj .pfh-asunto{display:block;margin-bottom:2px;color:#96969e;font-size:12px}'
     + '.puente-foro-msj .pfh-sin-avatar{visibility:hidden}'
+    // la linea donde termina lo del foro (sin cifrar)
+    + '.pfh-fin{display:flex;align-items:center;gap:10px;margin:18px 16px 10px;color:#e9cd8f;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}'
+    + '.pfh-fin::before,.pfh-fin::after{content:"";flex:1 1 auto;height:1px;background:#f0b232;opacity:.55}'
     + '[data-haven-region="main"]:has(> #puente-foro-vista){position:relative}'
-    + '#puente-foro-vista{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;background:#1a1a1e;color:#dbdee1}'
+    // lo que hay detras (el cuadro de escribir de la conversacion anterior) no se ve ni se toca
+    + '[data-haven-region="main"]:has(> #puente-foro-vista) > :not(#puente-foro-vista){visibility:hidden!important;pointer-events:none!important}'
+    + '#puente-foro-vista{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;background:#1a1a1e;color:#dbdee1}'
     + '#puente-foro-vista .pfv-cab{flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:48px;padding:0 16px;border-bottom:1px solid #29292d;font-weight:700;color:#fbfbfb}'
     + '#puente-foro-vista .pfv-volver{display:none;border:0;background:none;color:inherit;font-size:20px;cursor:pointer;padding:0 6px 0 0}'
     + '@media (max-width:768px){#puente-foro-vista .pfv-volver{display:block}}'
@@ -12011,6 +12016,7 @@ var puenteSinUbicacion = (function () {
     const box = el('div', 'puente-foro-hist');
     box.appendChild(el('div', 'pfh-aviso', AVISO));
     mensajes.forEach((m, i) => box.appendChild(mensaje(m, mensajes[i - 1])));
+    box.appendChild(el('div', 'pfh-fin', 'Hasta acá, los mensajes del foro (sin cifrar)'));
     if (pie) box.appendChild(pie);
     return box;
   }
