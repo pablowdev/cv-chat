@@ -12675,3 +12675,12 @@ var puenteSinUbicacion = (function () {
     };
   })();
 })();
+
+// Arriba de cada canal y mensaje directo, sin la fila de iconos de Haven (mensajes fijados, archivos, hilos,
+// cifrado, codigo del canal, mover mensajes) ni el aviso de "actualizacion disponible" de Haven (el puntito azul)
+(function () {
+  'use strict';
+  const st = document.createElement('style');
+  st.textContent = '#header-actions-box,#update-banner{display:none!important}';
+  document.head.appendChild(st);
+})();
