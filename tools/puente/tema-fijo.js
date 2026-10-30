@@ -25,20 +25,20 @@ const BLOCKED_PREFS = new Set(['theme', 'effects', 'channel_order']);
 // Opciones de diseño que Haven guarda en el navegador
 const UI_KEYS = [
   'haven-layout', 'haven-layout-v2', 'haven-panel-layout', 'haven-density', 'haven-channel-scroll',
-  'haven-toggle-style', 'haven-emojisize', 'haven-role-display', 'haven-fontsize', 'haven-zoom',
+  'haven-toggle-style', 'haven-emojisize', 'haven-role-display', 'haven-fontsize',
   'haven-embed-size', 'haven-image-mode', 'haven-toolbar-icons', 'haven-toolbar-order', 'haven-toolbar-visible-slots',
   'haven_animate_chat', 'haven_animate_pfp', 'haven_banner_header_mode', 'haven_banner_height', 'haven_banner_offset',
   'haven_compact_composer', 'haven_hide_send_btn', 'haven_show_statusbar', 'haven_enabled_plugins', 'haven_enabled_themes',
   'haven_color_base', 'haven_custom_hsv', 'haven_rgb_settings', 'haven_crt_scanline', 'haven_crt_vignette',
   'haven_glitch_freq', 'haven_fx_speeds', 'haven_fx_sacred_intensity',
-  // Haven 4.23: Accesibilidad, categorias como lista o pestanas y aspecto de los mensajes oficiales
-  'haven-text-size', 'haven-line-spacing', 'haven-letter-spacing', 'haven-reduce-motion', 'haven-readable-font',
-  'haven-contrast', 'haven-underline-links', 'haven-large-targets', 'haven_category_layout', 'haven_official_style',
+  // Haven 4.23: categorias como lista o pestanas y aspecto de los mensajes oficiales. (Zoom y Accesibilidad
+  // no: cada uno elige lo suyo en su dispositivo, por ejemplo el tamaño del texto si ve poco)
+  'haven_category_layout', 'haven_official_style',
 ];
 const UI_SET = new Set(UI_KEYS);
 const FORMS = new Set(['pc', 'movil']);
 // Secciones de Configuracion que solo ven los administradores
-const UI_SECTIONS = ['section-layout', 'section-zoom', 'section-reaction-size', 'section-role-display', 'section-toolbar-icons',
+const UI_SECTIONS = ['section-layout', 'section-reaction-size', 'section-role-display', 'section-toolbar-icons',
   'section-image-display', 'section-embed-size', 'section-banner-display', 'section-toggle-style', 'section-statusbar', 'section-plugins'];
 
 function setup({ db, io, log }) {
