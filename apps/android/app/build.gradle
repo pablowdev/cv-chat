@@ -38,7 +38,8 @@ android {
     flavorDimensions 'canal'
     productFlavors {
         web { dimension 'canal'; buildConfigField 'boolean', 'TIENDA', 'false' }
-        play { dimension 'canal'; buildConfigField 'boolean', 'TIENDA', 'true' }
+        // La proteccion automatica de Play pide Android 7 (API 24) o mas
+        play { dimension 'canal'; minSdk 24; buildConfigField 'boolean', 'TIENDA', 'true' }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
