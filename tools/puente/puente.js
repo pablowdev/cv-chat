@@ -595,6 +595,10 @@ function hookHavenEmits() {
   // anota a que mensaje de Discord corresponde (despues ya no esta en la base),
   // para borrarlo tambien alla cuando Haven confirme. La limpieza automatica de
   // Haven no pasa por aca, asi que no borra historial de Discord.
+  // Una PC con Windows, Linux o ChromeOS (las Mac se deciden en aviso.js: un iPad tambien dice ser Mac)
+  const esPC = (socket) => { const ua = String((socket.handshake && socket.handshake.headers['user-agent']) || ''); return /Windows NT|CrOS|X11|Linux x86_64/.test(ua) && !/Android|Mobile/i.test(ua); };
+  // Las de Windows (Edge) que ya estaban guardadas: fuera
+  try { const n = db.prepare("DELETE FROM push_subscriptions WHERE endpoint LIKE 'https://%.notify.windows.com/%'").run().changes; if (n) log(`sin avisos en la PC: ${n} suscripciones de Windows borradas`); } catch (err) { warn('suscripciones de Windows:', err.message); }
   io.on('connection', socket => {
     socket.use((packet, next) => {
       try {
@@ -602,6 +606,11 @@ function hookHavenEmits() {
         // El usuario tecnico que representa a la gente de Discord sin vincular no recibe mensajes directos
         if (data && event === 'start-dm' && Number(data.targetUserId) === (db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get() || {}).id) {
           socket.emit('error-msg', 'Ese usuario representa a la gente de Discord sin cuenta vinculada: no se le pueden mandar mensajes directos.');
+          return;
+        }
+        // En la PC no hay notificaciones del sistema (aviso.js, puente-sin-avisos-pc): no se guarda su suscripcion
+        if (event === 'push-subscribe' && esPC(socket)) {
+          if (data && typeof data.endpoint === 'string' && socket.user) db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(socket.user.id, data.endpoint);
           return;
         }
         if (data && (event === 'rename-channel' || event === 'set-channel-topic') && typeof data.code === 'string') watchChannelEdit(data.code, socket);

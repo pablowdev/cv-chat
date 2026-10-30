@@ -9996,6 +9996,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
   if (ios && !standalone) return;
+  if (!ios && !/Android|Mobile/i.test(navigator.userAgent)) return; // en la PC no hay notificaciones del sistema (puente-sin-avisos-pc)
 
   async function check() {
     if (Notification.permission !== 'default') return;
@@ -11731,38 +11732,52 @@ var puenteSinUbicacion = (function () {
   setTimeout(revisar, 1000);
 })();
 
-// App de la PC: un solo aviso por mensaje, como Discord. Abierta (aunque este escondida junto al
-// reloj) suena CV Chat y sale el cartel de Windows sin sonido. Antes, ademas, llegaba la
-// notificacion del servidor un par de segundos despues, con el sonido de Windows: dos avisos de lo
-// mismo. Ahora la app le dice al servidor cual es su suscripcion (avisos.js no le manda nada
-// mientras este conectada) y el cartel lo muestra ella, solo si no se esta mirando CV Chat.
-// (puente-un-aviso)
+// En la PC (el navegador o la app de la PC, en Windows, Mac o Linux): nunca el cartel del sistema,
+// con su ruido. Alcanza con los sonidos de CV Chat. Sin carteles de mensajes ni de llamadas, y sin
+// notificaciones del servidor: la suscripcion de esta PC se borra y no se vuelve a pedir (el
+// servidor tampoco la acepta, puente.js). En el celular, todo sigue igual.
+// (puente-sin-avisos-pc)
 (function () {
   'use strict';
-  if (!window.puenteApp || /Android|iPhone|iPad/i.test(navigator.userAgent)) return; // puenteApp: la de la PC (tema-fijo.js)
+  const ua = navigator.userAgent;
+  const tablet = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1; // iPad que dice ser Mac
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || tablet) return;
+  // Ningun cartel del sistema: ni los de Haven (mensajes, llamadas) ni los de nadie
+  if (window.Notification) {
+    const N = window.Notification;
+    const Mudo = function () { return { close() {}, addEventListener() {}, removeEventListener() {} }; };
+    Object.defineProperty(Mudo, 'permission', { get: () => N.permission });
+    Mudo.requestPermission = () => Promise.resolve(N.permission);
+    try { window.Notification = Mudo; } catch { /* sigue con lo de abajo */ }
+  }
+  // Sin la seccion de notificaciones push en Ajustes
+  const st = document.createElement('style');
+  st.textContent = '#section-push{display:none!important}';
+  document.head.appendChild(st);
   let t = 0;
-  function decir() {
-    const so = window.app && window.app.socket;
+  function borrar() {
+    const app = window.app, so = app && app.socket;
     if (!so || !so.connected || !navigator.serviceWorker) return;
-    navigator.serviceWorker.ready
-      .then((r) => r.pushManager.getSubscription())
-      .then((sub) => { if (sub && sub.endpoint) so.emit('puente-push-propio', { endpoint: sub.endpoint }); })
+    navigator.serviceWorker.getRegistration()
+      .then((r) => (r ? r.pushManager.getSubscription() : null))
+      .then((sub) => {
+        if (!sub) return;
+        so.emit('push-unsubscribe', { endpoint: sub.endpoint });
+        sub.unsubscribe().catch(() => {});
+        if (app._pushSubscription) app._pushSubscription = null;
+      })
       .catch(() => {});
   }
   (function enganchar() {
     const app = window.app, so = app && app.socket;
     if (!so || typeof app._fireNativeNotification !== 'function') { if (++t < 120) setTimeout(enganchar, 1000); return; }
-    so.on('connect', () => setTimeout(decir, 500));
-    setTimeout(decir, 500);
-    setInterval(decir, 5 * 60 * 1000); // por si se activaron las notificaciones despues
-    const original = app._fireNativeNotification;
-    app._fireNativeNotification = function () {
-      if (!document.hidden && document.hasFocus()) return; // se esta mirando CV Chat: alcanza con el sonido
-      // Haven no muestra el cartel si hay suscripcion (esperaba la del servidor): que lo muestre
-      const sub = this._pushSubscription;
-      this._pushSubscription = null;
-      try { return original.apply(this, arguments); } finally { this._pushSubscription = sub; }
+    app._fireNativeNotification = function () {}; // el sonido ya sono antes (notifications.play)
+    app._subscribePush = async function () {
+      const tg = document.getElementById('push-notif-enabled'); if (tg) tg.checked = false;
     };
+    if (window.havenDesktop && typeof window.havenDesktop.notify === 'function') { try { window.havenDesktop.notify = () => {}; } catch { /* solo lectura */ } }
+    so.on('connect', () => setTimeout(borrar, 1500));
+    setTimeout(borrar, 1500);
   })();
 })();
 
