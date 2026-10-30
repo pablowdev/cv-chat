@@ -485,7 +485,7 @@ async function inboundCreate(msg, ownBot = false) {
   }
   if (!r.changes) return;
   markInserted(r.lastInsertRowid);
-  // Sin cuenta vinculada: el aviso de la mudanza (mudanza.js, una vez por dia a cada uno)
+  // Sin cuenta vinculada: el aviso de la mudanza (mudanza.js, un privado por Discord, una sola vez)
   if (!link && !ownBot) require('./mudanza.js').aviso(msg);
   if (!msg.webhook_id && msg.author) vincular.recordAuthor(r.lastInsertRowid, msg.author.id);
   if (msg.webhook_id || (msg.author && msg.author.bot)) {
