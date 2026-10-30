@@ -165,3 +165,20 @@ html.cv-en-foro .cv-barra a, html.cv-en-foro .cv-barra button { font-family: Hel
 
 /* El foro adentro de CV Chat: sin barras arriba (la de CV Chat ya esta), ni la del foro */
 html.cv-foro-en-chat nav.js-top-menu-user { display: none !important; }
+
+/* El foro en el celular (y adentro de la app): el encabezado chico, con el logo y el menu en una fila, y los
+   selectores ("Foros", "Ultima actividad"...) oscuros como el resto, no blancos */
+@media (max-width: 768px) {
+  html:is(.cv-en-foro, .cv-foro-en-chat) .b-top-background__header-mainnav { position: relative; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) #header { height: auto !important; min-height: 0 !important; padding: 8px 64px 8px 12px !important; display: flex !important; align-items: center; box-sizing: border-box !important; width: 100% !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) #header .header-cell { padding: 0 !important; margin: 0 !important; display: block !important; height: auto !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) #header .site-logo, html:is(.cv-en-foro, .cv-foro-en-chat) #header .header-cell { margin: 0 !important; padding: 0 !important; height: auto !important; width: auto !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) #header .site-logo img { height: 52px !important; width: auto !important; max-height: 52px !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) #header .toolbar { display: none !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) body #channel-tabbar { position: absolute !important; top: 0 !important; right: 0 !important; left: auto !important; width: auto !important; height: 68px !important; min-height: 0 !important; display: flex !important; align-items: center; justify-content: flex-end; padding: 0 12px !important; background: none !important; border: 0 !important; box-shadow: none !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown { background: #1e1e22 !important; color: #dbdee1 !important; border: 1px solid #3a3940 !important; border-radius: 6px !important; box-shadow: none !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown .selectBox-label, html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown .selectBox-arrow { color: #dbdee1 !important; background-color: transparent !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown-menu { background: #1e1e22 !important; border-color: #3a3940 !important; }
+  html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown-menu li a { color: #dbdee1 !important; }
+}
+html:is(.cv-en-foro, .cv-foro-en-chat) select { background-color: #1e1e22 !important; color: #dbdee1 !important; border: 1px solid #3a3940 !important; border-radius: 6px !important; padding: 4px 8px !important; color-scheme: dark; }
