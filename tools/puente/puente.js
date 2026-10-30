@@ -155,6 +155,7 @@ function start(deps) {
   require('./medicion.js').setup({ io, db });
   require('./buscar.js').setup({ db, io, log, warn });
   embeds.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn });
+  require('./mudanza.js').setup({ db, api: (m, e, b) => api(m, e, b), log, warn, appName, publicUrl });
   miniaturas.setup({ log, warn });
   stickers.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   hookHavenEmits();
@@ -484,6 +485,8 @@ async function inboundCreate(msg, ownBot = false) {
   }
   if (!r.changes) return;
   markInserted(r.lastInsertRowid);
+  // Sin cuenta vinculada: el aviso de la mudanza (mudanza.js, una vez por dia a cada uno)
+  if (!link && !ownBot) require('./mudanza.js').aviso(msg);
   if (!msg.webhook_id && msg.author) vincular.recordAuthor(r.lastInsertRowid, msg.author.id);
   if (msg.webhook_id || (msg.author && msg.author.bot)) {
     db.prepare('INSERT OR IGNORE INTO puente_apps (message_id) VALUES (?)').run(r.lastInsertRowid);
