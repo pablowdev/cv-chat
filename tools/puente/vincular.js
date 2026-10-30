@@ -291,8 +291,12 @@ function tweetPreview(req, res, next) {
 // Agrega <script src> antes de </body> en una pagina HTML de Haven, tanto si se
 // envia de una vez (res.send) como por partes (res.sendFile).
 function injectScript(req, res, src) {
-  delete req.headers['if-none-match'];      // siempre la pagina completa, nunca un 304
-  delete req.headers['if-modified-since'];  // de una copia vieja sin el script
+  // Haven nunca contesta 304 (su huella es la de la pagina sin lo que se agrega aca): se pide la
+  // pagina completa y la huella se calcula sobre la pagina ya armada. Asi el navegador que ya tiene
+  // exactamente esta recibe un 304 de pocos bytes en vez de los ~450 KB de cada apertura.
+  const etagCliente = String(req.headers['if-none-match'] || '');
+  delete req.headers['if-none-match'];
+  delete req.headers['if-modified-since'];
   const tag = `<script src="${src}" defer></script>`;
   const chunks = [];
   const isHtml = () => String(res.getHeader('Content-Type') || '').includes('text/html');
@@ -372,6 +376,15 @@ function injectScript(req, res, src) {
         }
         html = shareTags(html);
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
+        if (this.statusCode === 200) {
+          const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 27) + '"';
+          origSetHeader.call(this, 'ETag', etag);
+          if (mismaHuella(etagCliente, etag)) {
+            this.statusCode = 304;
+            this.removeHeader('Content-Length');
+            return origEnd.call(this, undefined, done);
+          }
+        }
         origSetHeader.call(this, 'Content-Length', body.length);
       }
     } catch { /* si algo falla, se sirve la pagina tal cual */ }
@@ -397,6 +410,10 @@ function appVersion() {
   versionCache = { t: Date.now(), v };
   return v;
 }
+// Los .js y .css de /puente/ ya armados, con su huella (ver el GET de esos archivos)
+const armados = new Map();
+// El navegador ya tiene esa version (If-None-Match). Sin el W/ que le agrega Caddy al comprimir
+const mismaHuella = (pedido, etag) => String(pedido || '').split(/\s*,\s*/).some(t => t.replace(/^W\//, '') === etag);
 function send(res, status, type, body, headers = {}) {
   if (res.headersSent) return;
   res.writeHead(status, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -555,6 +572,21 @@ async function handle(req, res) {
   if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js')) {
     const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
+    // Los .js y .css se guardan ya armados (aviso.js pesa 1 MB) y van con una huella (ETag): el
+    // navegador pregunta siempre (no-cache, asi nunca usa uno viejo) y si no cambio recibe un 304
+    // de pocos bytes y usa el que ya tiene, sin volver a bajarlo ni a compilarlo
+    const guardable = !file.endsWith('.html');
+    let st = null;
+    if (guardable) { try { st = fs.statSync(path.join(STATIC, file)); } catch { /* no esta: lo dice readFileSync */ } }
+    const clave = st && `${st.size}:${st.mtimeMs}:${process.env.PUENTE_TITULO || ''}:${process.env.PUENTE_CANAL_INICIO || ''}:${appName()}`;
+    const guardado = clave && armados.get(file);
+    if (guardado && guardado.clave === clave) {
+      if (mismaHuella(req.headers['if-none-match'], guardado.etag)) {
+        res.writeHead(304, { ETag: guardado.etag, 'Cache-Control': 'no-cache' });
+        return res.end();
+      }
+      return send(res, 200, type, guardado.body, { ETag: guardado.etag, 'Cache-Control': 'no-cache' });
+    }
     let body = fs.readFileSync(path.join(STATIC, file));
     // Titulo de la pestana (PUENTE_TITULO): se escribe en aviso.js y login.js al servirlos.
     if (file.endsWith('.js')) {
@@ -570,6 +602,15 @@ async function handle(req, res) {
         ? appName().replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
         : appName().replace(/[\\'"`\r\n<>]/g, ''); // va dentro de un string de JS
       body = body.toString('utf8').replace(/__PUENTE_APP__/g, app);
+    }
+    if (clave) {
+      const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 20) + '"';
+      armados.set(file, { clave, etag, body });
+      if (mismaHuella(req.headers['if-none-match'], etag)) {
+        res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' });
+        return res.end();
+      }
+      return send(res, 200, type, body, { ETag: etag, 'Cache-Control': 'no-cache' });
     }
     return send(res, 200, type, body);
   }

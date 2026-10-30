@@ -113,6 +113,15 @@ function script(db) {
   return `(function(){try{var ajena=!!window.Capacitor;if(window.top!==window){try{ajena=ajena||window.top.location.origin!==location.origin;}catch(e){var an=(location.ancestorOrigins&&location.ancestorOrigins[0])||document.referrer||'',dom=location.hostname.replace(/^[^.]+\\./,''),h='';try{h=new URL(an).hostname;}catch(e2){}ajena=!(h===dom||h.slice(-dom.length-1)==='.'+dom);}}` +
     `if(ajena){location.replace('/puente/descargar?desde=otra-app');return;}}catch(e){}})();` +
     `(function(){try{var na=navigator.userAgent;if(/Electron\\/|CVChat\\//.test(na)){window.puenteApp=true;var limpio=na.replace(/ Electron\\/[^ ]+/,'');Object.defineProperty(navigator,'userAgent',{get:function(){return limpio;},configurable:true});}}catch(e){}})();` +
+    // El tema se cargaba dos veces: theme-init.js lo pone de entrada (para que no parpadee) y despues
+    // Haven agrega otra copia con ?_=hora, que se baja entera en cada apertura y no saca la primera.
+    // Las dos tienen las mismas reglas, asi que el navegador evaluaba todo el tema el doble en cada
+    // cambio (cada letra, cada mensaje). La de Haven se pide sin ?_= (sale de la cache) y, cuando
+    // carga, se saca la de entrada: se ve exactamente igual (la de Haven va despues y es la que manda)
+    "(function(){try{var E='haven-theme-file-early';new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var a=ms[i].addedNodes;for(var j=0;j<a.length;j++){var l=a[j];" +
+      "if(!l||l.tagName!=='LINK'||l.rel!=='stylesheet'||l.id===E)continue;var m=/^(\\/themes\\/[^?]+)\\?_=\\d+$/.exec(l.getAttribute('href')||''),e=document.getElementById(E);" +
+      "if(!m||!e||e.getAttribute('href')!==m[1])continue;l.href=m[1];" +
+      "l.addEventListener('load',function(){var e2=document.getElementById(E);if(e2&&e2.parentNode)e2.parentNode.removeChild(e2);},{once:true});}}}).observe(document.head,{childList:true});}catch(e){}})();" +
     `(function(){try{var t=${t};` +
     `if(t){if(localStorage.getItem('haven_theme')!==t)localStorage.setItem('haven_theme',t);` +
     `if(localStorage.getItem('haven_effects')!=='auto')localStorage.setItem('haven_effects','auto');}` +

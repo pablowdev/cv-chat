@@ -5566,7 +5566,7 @@ document.addEventListener('pointerdown', (ev) => {
       const v = getVal();
       ed.remove();
       ta.classList.remove('puente-ta-oculto');
-      delete ta.value; delete ta.focus; delete ta.blur;
+      delete ta.value; delete ta.focus; delete ta.blur; delete ta.style.height;
       NATIVE.set.call(ta, v);
     } catch { /* nada */ }
   }
@@ -5585,6 +5585,16 @@ document.addEventListener('pointerdown', (ev) => {
     copyStyles(); syncAttrs();
     ta.classList.add('puente-ta-oculto');
     alive = true;
+    // Haven le cambia el alto en cada letra (alto automatico y despues el que entra). Escondido, el tema
+    // lo deja en 1px igual, pero el cambio obligaba a recalcular los estilos de toda la pagina: mientras
+    // esta el cuadro nuevo, ese alto no se toca
+    try {
+      Object.defineProperty(ta.style, 'height', {
+        configurable: true,
+        get() { return this.getPropertyValue('height'); },
+        set(v) { if (!alive) this.setProperty('height', v); },
+      });
+    } catch { /* si no se puede, Haven lo cambia como siempre */ }
     lastValue = getVal();
     render(lastValue);
 
@@ -11978,9 +11988,10 @@ var puenteSinUbicacion = (function () {
     // la linea donde termina lo del foro (sin cifrar)
     + '.pfh-fin{display:flex;align-items:center;gap:10px;margin:18px 16px 10px;color:#e9cd8f;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}'
     + '.pfh-fin::before,.pfh-fin::after{content:"";flex:1 1 auto;height:1px;background:#f0b232;opacity:.55}'
-    + '[data-haven-region="main"]:has(> #puente-foro-vista){position:relative}'
+    // con una clase y no con :has(): ese selector hacia recalcular los estilos de la pagina entera en cada letra
+    + '[data-haven-region="main"].puente-con-foro-vista{position:relative}'
     // lo que hay detras (el cuadro de escribir de la conversacion anterior) no se ve ni se toca
-    + '[data-haven-region="main"]:has(> #puente-foro-vista) > :not(#puente-foro-vista){visibility:hidden!important;pointer-events:none!important}'
+    + '[data-haven-region="main"].puente-con-foro-vista > :not(#puente-foro-vista){visibility:hidden!important;pointer-events:none!important}'
     + '#puente-foro-vista{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;background:#1a1a1e;color:#dbdee1}'
     + '#puente-foro-vista .pfv-cab{flex:0 0 auto;display:flex;align-items:center;gap:10px;min-height:48px;padding:0 16px;border-bottom:1px solid #29292d;font-weight:700;color:#fbfbfb}'
     + '#puente-foro-vista .pfv-volver{display:none;border:0;background:none;color:inherit;font-size:20px;cursor:pointer;padding:0 6px 0 0}'
@@ -12052,7 +12063,14 @@ var puenteSinUbicacion = (function () {
   }
 
   // ── Con quien tiene solo cuenta del foro: la conversacion en el chat, para leer ──
-  function cerrarVista() { const v = byId('puente-foro-vista'); if (v) v.remove(); document.querySelectorAll('#dm-list .puente-dm-foro.active').forEach(n => n.classList.remove('active')); }
+  function cerrarVista() { const v = byId('puente-foro-vista'); if (v) v.remove(); document.querySelectorAll('.puente-con-foro-vista').forEach(n => n.classList.remove('puente-con-foro-vista')); document.querySelectorAll('#dm-list .puente-dm-foro.active').forEach(n => n.classList.remove('active')); }
+  // Si la vista se va por otro lado, main deja de esconder lo de atras
+  let mainVigilado = null;
+  function vigilarMain(main) {
+    if (mainVigilado === main) return;
+    mainVigilado = main;
+    new MutationObserver(() => { if (!byId('puente-foro-vista')) main.classList.remove('puente-con-foro-vista'); }).observe(main, { childList: true });
+  }
   function vista(c) {
     const main = document.querySelector('[data-haven-region="main"]');
     if (!main) return;
@@ -12066,6 +12084,7 @@ var puenteSinUbicacion = (function () {
     const quien = c.con.filter((n, i) => !c.cuentas[i]).join(', ') || nombre;
     v.append(cab, lista, el('div', 'pfv-pie', `💬 ${quien} tiene solo cuenta del foro. Los mensajes privados son los de CV Chat: cuando una su cuenta del foro con la de la página (en "Mi cuenta"), pueden seguir hablando acá mismo, con mensajes cifrados.`));
     main.appendChild(v);
+    main.classList.add('puente-con-foro-vista'); vigilarMain(main);
     lista.scrollTop = lista.scrollHeight;
     const dh = byId('puente-dm-home'); if (dh) dh.remove();
     const body = byId('app-body'); if (body) body.classList.remove('mobile-sidebar-open');
