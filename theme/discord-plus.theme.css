@@ -1757,6 +1757,91 @@ html body .pip-input-resizer { display: none !important; }
 .pm-celular .pm-dato { flex-basis: calc(50% - 0.25rem); min-width: 0; }
 .pm-celular .pm-filtros { padding: 0.625rem 0.75rem; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
 .pm-celular .pm-filtro { flex: 0 0 auto; }
+/* Pestañas "Miembros | Estadisticas" */
+.pm-pestanas { display: flex; gap: 0.25rem; margin-left: 0.25rem; }
+.pm-pestana { padding: 0.375rem 0.75rem; border: 0; border-radius: 0.375rem; background: transparent; color: #b5bac1; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+.pm-pestana:hover { background: #2e2d32; color: #fbfbfb; }
+.pm-pestana.actual { background: #2e2d32; color: #fbfbfb; }
+.pm-celular .pm-pestana { font-size: 0.9375rem; padding: 0.375rem 0.5rem; }
+
+/* Pestaña "Estadisticas" (aviso.js, panel-estadisticas.js) */
+.pe-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
+.pe-vista[hidden], .pm-card[hidden], .pm-descargar[hidden] { display: none !important; }
+.pe-barra { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.pe-rangos { display: flex; gap: 0.375rem; }
+.pe-rango { min-width: 3rem; padding: 0.375rem 0.75rem; border: 1px solid #2e2d32; border-radius: 999px; background: transparent; color: #dbdee1; font: inherit; font-weight: 700; cursor: pointer; }
+.pe-rango:hover { background: #2e2d32; }
+.pe-rango.actual { background: #fbfbfb; border-color: #fbfbfb; color: #121214; }
+.pe-cuerpo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.pe-aviso { grid-column: 1 / -1; padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(240, 178, 50, 0.12); color: #f0c36a; font-size: 0.875rem; }
+.pe-totales { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.75rem; }
+.pe-total { padding: 0.875rem 1rem; border: 1px solid #29292d; border-radius: 0.625rem; background: #1e1e22; }
+.pe-total-l { font-size: 0.875rem; font-weight: 600; color: #b5bac1; }
+.pe-total-fila { display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.25rem; }
+.pe-total-n { font-size: 1.625rem; font-weight: 800; color: #fbfbfb; font-variant-numeric: tabular-nums; }
+.pe-var { font-size: 0.8125rem; font-weight: 700; color: #96969e; }
+.pe-var.sube { color: #7fd6a2; }
+.pe-var.baja { color: #f8a5a7; }
+.pe-caja { min-width: 0; padding: 1rem 1.125rem; border: 1px solid #29292d; border-radius: 0.625rem; background: #1e1e22; }
+.pe-ancha { grid-column: 1 / -1; }
+.pe-titulo { margin-bottom: 0.75rem; font-size: 1rem; font-weight: 700; color: #fbfbfb; }
+.pe-svg { display: block; width: 100%; height: auto; }
+.pe-guia { stroke: #2b2a30; stroke-width: 1; }
+.pe-eje { fill: #80848e; font-size: 11px; font-family: inherit; }
+.pe-mudanza { display: flex; align-items: baseline; gap: 0.625rem; margin-bottom: 0.5rem; }
+.pe-mudanza-n { font-size: 2rem; font-weight: 800; color: #fbfbfb; }
+.pe-mudanza-l { color: #b5bac1; font-size: 0.9375rem; }
+.pe-leyenda { display: flex; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.8125rem; color: #b5bac1; }
+.pe-leyenda i { display: inline-block; width: 0.625rem; height: 0.625rem; margin-right: 0.375rem; border-radius: 2px; vertical-align: middle; }
+.pe-nota { margin-top: 0.5rem; font-size: 0.8125rem; color: #80848e; }
+.pe-calor { display: grid; grid-template-columns: 2.5rem repeat(24, minmax(0, 1fr)); gap: 2px; }
+.pe-calor-h, .pe-calor-d { font-size: 0.6875rem; color: #80848e; text-align: center; }
+.pe-calor-d { text-align: left; line-height: 1.25rem; }
+.pe-calor-c { height: 1.25rem; border-radius: 3px; background: #5865f2; }
+.pe-fila { padding: 0.375rem 0; }
+.pe-fila.pe-clic { cursor: pointer; }
+.pe-fila.pe-clic:hover .pe-fila-n { color: #fbfbfb; text-decoration: underline; }
+.pe-fila-top { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.875rem; }
+.pe-fila-n { color: #dbdee1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pe-fila-v { flex: 0 0 auto; color: #b5bac1; font-variant-numeric: tabular-nums; white-space: pre; }
+.pe-fila-fondo { height: 0.375rem; margin-top: 0.25rem; border-radius: 999px; background: #2b2a30; overflow: hidden; }
+.pe-fila-llena { height: 100%; border-radius: 999px; background: #5865f2; }
+.pm-celular .pe-vista { padding: 0.75rem; }
+.pm-celular .pe-cuerpo { grid-template-columns: minmax(0, 1fr); }
+.pm-celular .pe-totales { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pm-celular .pe-calor { grid-template-columns: 2rem repeat(24, minmax(0, 1fr)); gap: 1px; }
+.pm-celular .pe-calor-c { height: 0.875rem; }
+
+/* La campanita al lado del nombre del servidor (aviso.js, campana.js) */
+html body .sidebar-header .brand { display: flex; align-items: center; min-width: 0; }
+html body .sidebar-header .brand .brand-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* En el celular, para que el nombre entre entero con la campanita: sin el logo chico (el del club ya
+   esta en la columna de la izquierda) y la letra apenas mas chica */
+@media (max-width: 768px) {
+  html body .sidebar-header .brand .brand-icon { display: none; }
+  html body .sidebar-header .brand .brand-text { font-size: 1.25rem; }
+  .puente-campana-btn { margin-right: 0.25rem; }
+}
+.puente-campana-btn { position: relative; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; margin-left: auto; padding: 0; border: 0; border-radius: 0.375rem; background: transparent; color: #b5bac1; cursor: pointer; }
+.puente-campana-btn:hover { background: #2e2d32; color: #fbfbfb; }
+.puente-campana-n { position: absolute; top: -0.125rem; right: -0.25rem; min-width: 1rem; height: 1rem; padding: 0 0.25rem; box-sizing: border-box; border-radius: 999px; background: #f23f43; color: #fff; font-size: 0.6875rem; font-weight: 800; line-height: 1rem; text-align: center; border: 2px solid #121214; }
+.puente-campana-n[hidden] { display: none; }
+.puente-campana-panel { position: fixed; z-index: 10040; width: min(24rem, calc(100vw - 16px)); max-height: min(32rem, calc(100vh - 80px)); display: flex; flex-direction: column; border: 1px solid #29292d; border-radius: 0.625rem; background: #1e1e22; color: #dbdee1; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); overflow: hidden; }
+.puente-campana-panel.pc-celular { inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top, 0px); }
+.pc-cab { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid #29292d; }
+.pc-titulo { font-size: 1rem; font-weight: 700; color: #fbfbfb; }
+.pc-cerrar { border: 0; background: transparent; color: #b5bac1; font-size: 1.125rem; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 0.375rem; }
+.pc-cerrar:hover { background: #2e2d32; color: #fbfbfb; }
+.pc-lista { flex: 1 1 auto; overflow-y: auto; scrollbar-width: thin; }
+.pc-item { display: flex; gap: 0.75rem; width: 100%; padding: 0.75rem 1rem; border: 0; border-bottom: 1px solid #232226; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pc-item:hover { background: #26252b; }
+.pc-item.pc-nueva { background: rgba(88, 101, 242, 0.08); }
+.pc-icono { flex: 0 0 auto; font-size: 1.125rem; line-height: 1.4; }
+.pc-textos { min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+.pc-t1 { font-size: 0.9375rem; font-weight: 600; color: #fbfbfb; }
+.pc-t2 { font-size: 0.875rem; color: #b5bac1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pc-t3 { font-size: 0.75rem; color: #80848e; }
+.pc-vacio { padding: 2rem 1.25rem; text-align: center; color: #80848e; font-size: 0.9375rem; line-height: 1.4; }
 /* Celdas de dos lineas (email y "sin confirmar"; @usuario de Discord y su antiguedad) */
 .pm-dos { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
 .pm-dos .pm-n1.pm-correo { font-size: 0.9375rem; font-weight: 500; color: #dbdee1; white-space: nowrap; }

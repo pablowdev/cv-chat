@@ -5,12 +5,18 @@
 //
 //  GET  /puente/api/cuenta/avisos        (cuenta.js) { sinLeer, avisos: [...] }
 //  POST /puente/api/cuenta/avisos/leer   todas vistas
+// La misma campanita adentro de la app (web/aviso.js, al lado del nombre del servidor), con la
+// sesion de la app en vez de la de la web; y cuando llega un aviso nuevo, el numerito se
+// actualiza en el momento en las conexiones abiertas de esa persona ("puente-campana").
+//  GET  /puente/api/campana        { sinLeer, avisos: [...] }
+//  POST /puente/api/campana/leer   todas vistas
 
 const MAX_POR_PERSONA = 100;
-let db, log, warn, publicUrl = '';
+let db, log, warn, io = null, publicUrl = '';
 
 function setup(ctx) {
   ({ db, log, warn, publicUrl } = ctx);
+  io = ctx.io || null;
   // Si algo de esto falla, el resto del puente arranca igual
   try { preparar(); } catch (err) { warn('campana: no arranco:', err.message); return; }
   escuchar(ctx.io);
@@ -39,7 +45,26 @@ function registrar(userId, { origen, titulo, texto, url, clave }) {
       .run(userId, origen, String(titulo).slice(0, 160), texto ? String(texto).slice(0, 240) : null, url || null, clave || null, Date.now());
     const sobran = db.prepare('SELECT id FROM puente_campana WHERE user_id = ? ORDER BY id DESC LIMIT -1 OFFSET ?').all(userId, MAX_POR_PERSONA);
     if (sobran.length) db.prepare(`DELETE FROM puente_campana WHERE id IN (${sobran.map(() => '?').join(',')})`).run(...sobran.map(r => r.id));
+    avisar(userId);
   } catch (err) { warn('campana:', err.message); }
+}
+// El numerito, en el momento, en la app abierta de esa persona
+function avisar(userId) {
+  if (!io) return;
+  try {
+    const n = sinLeer(userId);
+    for (const s of io.of('/').sockets.values()) if (s.user && s.user.id === userId) s.emit('puente-campana', { sinLeer: n });
+  } catch { /* sin conexiones */ }
+}
+
+// Adentro de la app: la misma campanita con la sesion de la app
+async function handle(req, res, p, u, h) {
+  if (p !== '/puente/api/campana' && p !== '/puente/api/campana/leer') return false;
+  const user = h.sessionUser(req);
+  if (!user) return h.json(res, 401, { error: 'sin sesion' });
+  if (p === '/puente/api/campana' && req.method === 'GET') return h.json(res, 200, { sinLeer: sinLeer(user.id), avisos: lista(user.id) });
+  if (p === '/puente/api/campana/leer' && req.method === 'POST') { leer(user.id); avisar(user.id); return h.json(res, 200, { ok: true }); }
+  return h.json(res, 405, { error: 'metodo' });
 }
 const sinLeer = userId => { try { return db.prepare('SELECT COUNT(*) n FROM puente_campana WHERE user_id = ? AND leido = 0').get(userId).n; } catch { return 0; } };
 const lista = userId => db.prepare('SELECT id, origen, titulo, texto, url, fecha, leido FROM puente_campana WHERE user_id = ? ORDER BY id DESC LIMIT 40').all(userId)
@@ -94,4 +119,4 @@ function escuchar(io) {
   }
 }
 
-module.exports = { setup, registrar, sinLeer, lista, leer };
+module.exports = { setup, registrar, sinLeer, lista, leer, handle };

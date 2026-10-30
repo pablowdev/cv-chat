@@ -1130,6 +1130,14 @@ async function handle(req, res) {
     const r = await require('./mercado.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p === '/puente/api/campana' || p === '/puente/api/campana/leer') {
+    const r = await campana.handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
+  if (p === '/puente/api/estadisticas') {
+    const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/presencia') {
     const r = await require('./presencia.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
@@ -1463,4 +1471,4 @@ function recordAuthor(messageId, discordUserId) {
   if (messageId && discordUserId) db.prepare('INSERT OR IGNORE INTO puente_autores (message_id, discord_user_id) VALUES (?, ?)').run(messageId, discordUserId);
 }
 
-module.exports = { setup, recordAuthor, whoReacted, historyOwner, moveHistory };
+module.exports = { setup, recordAuthor, whoReacted, historyOwner, moveHistory, members };

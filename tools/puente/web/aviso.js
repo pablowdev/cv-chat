@@ -1973,6 +1973,118 @@ function leido(sc) {
   })();
 })();
 
+// La campanita adentro de la app (campana.js), a la derecha del nombre del servidor: las respuestas
+// y menciones de CV Chat y las del foro, las mismas de la campanita de la web. El numerito se
+// actualiza en el momento ("puente-campana"); al abrirla quedan vistas. Tocar un aviso lleva al
+// mensaje, o al post del foro adentro de la app. En el celular la lista ocupa toda la pantalla.
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const celular = () => matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+  const CAMPANA = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7L19 16Z"/></svg>';
+  let btn = null, badge = null, panel = null, n = 0;
+  function ago(ms) {
+    const s = Math.max(0, (Date.now() - ms) / 1000);
+    for (const [sec, one, many] of [[86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) if (s >= sec) { const k = Math.floor(s / sec); return 'hace ' + k + ' ' + (k === 1 ? one : many); }
+    return 'recién';
+  }
+  function pintar() {
+    if (!badge) return;
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.hidden = !n;
+    if (btn) btn.title = n ? 'Notificaciones (' + n + ' sin leer)' : 'Notificaciones';
+  }
+  function contar() {
+    const tk = token(); if (!tk) return;
+    fetch('/puente/api/campana', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (d) { n = d.sinLeer || 0; pintar(); } }).catch(() => {});
+  }
+  function cerrar() {
+    if (!panel) return;
+    panel.remove(); panel = null;
+    document.removeEventListener('mousedown', fuera, true); document.removeEventListener('keydown', tecla, true);
+  }
+  function fuera(e) { if (panel && !panel.contains(e.target) && !(btn && btn.contains(e.target))) cerrar(); }
+  function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }
+  function ir(a) {
+    cerrar();
+    const url = String(a.url || '');
+    const foro = /^https?:\/\/foro\./.test(url);
+    if (foro && window.puenteForo) { try { const u = new URL(url); window.puenteForo.abrir(u.pathname + u.search + u.hash); return; } catch { /* abajo */ } }
+    if (!foro && window.puenteEnlaces && window.puenteEnlaces.abrir(url)) return;
+    if (url) location.href = url;
+  }
+  function abrir() {
+    if (panel) { cerrar(); return; }
+    panel = el('div', 'puente-campana-panel' + (celular() ? ' pc-celular' : ''));
+    panel.id = 'puente-campana-panel';
+    const cab = el('div', 'pc-cab');
+    cab.appendChild(el('span', 'pc-titulo', 'Notificaciones'));
+    const x = el('button', 'pc-cerrar'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.textContent = '✕';
+    x.addEventListener('click', cerrar);
+    cab.appendChild(x);
+    const lista = el('div', 'pc-lista');
+    lista.appendChild(el('div', 'pc-vacio', 'Cargando…'));
+    panel.append(cab, lista);
+    if (!celular() && btn) {
+      const r = btn.getBoundingClientRect();
+      panel.style.top = (r.bottom + 6) + 'px';
+      panel.style.left = Math.max(8, Math.min(r.left - 8, innerWidth - 400)) + 'px';
+    }
+    document.body.appendChild(panel);
+    document.addEventListener('mousedown', fuera, true); document.addEventListener('keydown', tecla, true);
+    fetch('/puente/api/campana', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => {
+        if (!panel) return;
+        lista.textContent = '';
+        const avisos = (d && d.avisos) || [];
+        if (!avisos.length) lista.appendChild(el('div', 'pc-vacio', 'Todavía no tenés notificaciones. Acá vas a ver cuando te respondan o te mencionen, en CV Chat y en el foro.'));
+        for (const a of avisos) {
+          const it = el('button', 'pc-item' + (a.leido ? '' : ' pc-nueva')); it.type = 'button';
+          it.appendChild(el('span', 'pc-icono', a.origen === 'foro' ? '🗨️' : '💬'));
+          const tx = el('span', 'pc-textos');
+          tx.appendChild(el('span', 'pc-t1', a.titulo));
+          if (a.texto) tx.appendChild(el('span', 'pc-t2', a.texto));
+          tx.appendChild(el('span', 'pc-t3', (a.origen === 'foro' ? 'Foro · ' : 'CV Chat · ') + ago(a.fecha)));
+          it.appendChild(tx);
+          it.addEventListener('click', () => ir(a));
+          lista.appendChild(it);
+        }
+        // Abierta: quedan vistas
+        if (d && d.sinLeer) fetch('/puente/api/campana/leer', { method: 'POST', headers: { Authorization: 'Bearer ' + token() } }).catch(() => {});
+        n = 0; pintar();
+      }).catch(() => { if (panel) { lista.textContent = ''; lista.appendChild(el('div', 'pc-vacio', 'No se pudieron cargar las notificaciones.')); } });
+  }
+  function poner() {
+    const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
+    if (!brand) return false;
+    if (document.getElementById('puente-campana-btn')) return true;
+    btn = el('button', 'puente-campana-btn'); btn.id = 'puente-campana-btn'; btn.type = 'button';
+    btn.innerHTML = CAMPANA;
+    badge = el('span', 'puente-campana-n'); badge.hidden = true;
+    btn.appendChild(badge);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); abrir(); });
+    brand.appendChild(btn);
+    pintar();
+    return true;
+  }
+  let tries = 0, enganchado = null;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.socket || !token() || !poner()) { if (++tries < 120) setTimeout(wait, 500); return; }
+    contar();
+    if (enganchado !== app.socket) {
+      enganchado = app.socket;
+      app.socket.on('puente-campana', (d) => { n = (d && d.sinLeer) || 0; pintar(); });
+      app.socket.on('connect', contar);
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) contar(); });
+    // Haven a veces vuelve a armar la barra: si se perdio el boton, se vuelve a poner
+    setInterval(() => { if (!document.getElementById('puente-campana-btn')) poner(); }, 3000);
+  })();
+})();
+
 // Desde donde se entra (app de Android, app de PC, iPhone, navegador del celular o de la PC): se le
 // avisa al servidor una vez por apertura, para la pagina "Miembros" (presencia.js)
 (function () {
@@ -2192,6 +2304,159 @@ function leido(sc) {
     }
   }
 
+  // ── Pestaña "Estadisticas" (estadisticas.js): solo administradores, en la misma pagina ──
+  let rangoEst = '4s', vista = 'miembros';
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const fmt = n => Number(n || 0).toLocaleString('es-AR');
+  function etiqueta(e, paso) {
+    if (paso === 'mes') { const [, m] = e.split('-'); return MESES[Number(m) - 1]; }
+    const [, m, d] = e.split('-'); return Number(d) + '/' + Number(m);
+  }
+  function variacion(act, ant) {
+    if (!ant) return act ? ['nuevo', 'sube'] : ['', ''];
+    const p = Math.round(((act - ant) / ant) * 100);
+    return [(p > 0 ? '↑ +' : p < 0 ? '↓ ' : '') + p + '%', p > 0 ? 'sube' : p < 0 ? 'baja' : ''];
+  }
+  // Barras en SVG; con dos series quedan apiladas (la primera abajo)
+  function barras(series, etiquetas, paso, colores) {
+    const W = 640, H = 200, izq = 34, abajo = 22, arriba = 8;
+    const n = etiquetas.length, tot = etiquetas.map((_, i) => series.reduce((s, v) => s + (v[i] || 0), 0));
+    const max = Math.max(1, ...tot);
+    const ancho = (W - izq) / n, barra = Math.max(2, ancho * 0.62);
+    const y = v => H - abajo - ((H - abajo - arriba) * v) / max;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" class="pe-svg" role="img">`;
+    for (const f of [0, 0.5, 1]) {
+      const v = Math.round(max * f), yy = y(v);
+      svg += `<line x1="${izq}" x2="${W}" y1="${yy}" y2="${yy}" class="pe-guia"/><text x="${izq - 6}" y="${yy + 4}" class="pe-eje" text-anchor="end">${fmt(v)}</text>`;
+    }
+    const cada = Math.ceil(n / 12);
+    etiquetas.forEach((e, i) => {
+      const x = izq + i * ancho + (ancho - barra) / 2;
+      let base = 0;
+      series.forEach((s, k) => {
+        const v = s[i] || 0; if (!v) return;
+        const y1 = y(base + v), y0 = y(base);
+        svg += `<rect x="${x}" y="${y1}" width="${barra}" height="${Math.max(1, y0 - y1)}" rx="2" fill="${colores[k]}"><title>${etiqueta(e, paso)}: ${fmt(v)}</title></rect>`;
+        base += v;
+      });
+      if (i % cada === 0) svg += `<text x="${x + barra / 2}" y="${H - 6}" class="pe-eje" text-anchor="middle">${etiqueta(e, paso)}</text>`;
+    });
+    return svg + '</svg>';
+  }
+  function tarjeta(titulo, cuerpo, extra) {
+    const c = el('div', 'pe-caja' + (extra ? ' ' + extra : ''));
+    c.appendChild(el('div', 'pe-titulo', titulo));
+    if (typeof cuerpo === 'string') { const d = el('div'); d.innerHTML = cuerpo; c.appendChild(d); } else if (cuerpo) c.appendChild(cuerpo);
+    return c;
+  }
+  function filaBarra(nombre, valor, total, texto) {
+    const f = el('div', 'pe-fila');
+    const top = el('div', 'pe-fila-top'); top.append(el('span', 'pe-fila-n', nombre), el('span', 'pe-fila-v', texto || fmt(valor)));
+    const fondo = el('div', 'pe-fila-fondo'); const llena = el('div', 'pe-fila-llena'); llena.style.width = (total ? Math.max(1, (valor / total) * 100) : 0) + '%';
+    fondo.appendChild(llena); f.append(top, fondo); return f;
+  }
+  function pintarEstadisticas(box, d) {
+    box.textContent = '';
+    if (!d.resumenListo) box.appendChild(el('div', 'pe-aviso', 'Armando el resumen de mensajes por primera vez: los números de mensajes pueden estar incompletos unos minutos.'));
+    // Totales con su variacion respecto del periodo anterior
+    const T = d.totales;
+    const totales = el('div', 'pe-totales');
+    for (const [k, label] of [['nuevos', 'Nuevos miembros'], ['activos', 'Activos'], ['cv', 'Mensajes desde CV Chat'], ['dc', 'Mensajes desde Discord'],
+      ['dm', 'Mensajes privados'], ['reacciones', 'Reacciones'], ['partidas', 'Partidas jugadas'], ['publicaciones', 'Publicaciones del Marketplace']]) {
+      const [act, ant] = T[k] || [0, 0];
+      const c = el('div', 'pe-total');
+      c.appendChild(el('div', 'pe-total-l', label));
+      const fila = el('div', 'pe-total-fila'); fila.appendChild(el('span', 'pe-total-n', fmt(act)));
+      const [txt, cls] = variacion(act, ant);
+      if (txt && !(k === 'activos' && d.activosDesde && d.activosDesde > d.desde)) fila.appendChild(el('span', 'pe-var ' + cls, txt));
+      c.appendChild(fila);
+      totales.appendChild(c);
+    }
+    box.appendChild(totales);
+    const S = d.serie;
+    // Termometro de la mudanza
+    const cvT = T.cv[0], dcT = T.dc[0], pct = cvT + dcT ? Math.round((cvT / (cvT + dcT)) * 100) : 0;
+    const mud = el('div');
+    const cab = el('div', 'pe-mudanza'); cab.append(el('span', 'pe-mudanza-n', pct + '%'), el('span', 'pe-mudanza-l', 'de los mensajes de los canales se escribieron desde CV Chat'));
+    const ley = el('div', 'pe-leyenda'); ley.innerHTML = '<span><i style="background:#5865f2"></i>Desde CV Chat</span><span><i style="background:#9b84ec"></i>Desde Discord</span>';
+    const g = el('div'); g.innerHTML = barras([S.cv, S.dc], d.etiquetas, d.paso, ['#5865f2', '#9b84ec']);
+    mud.append(cab, ley, g);
+    box.appendChild(tarjeta('Termómetro de la mudanza', mud, 'pe-ancha'));
+    box.appendChild(tarjeta('Nuevos miembros', barras([S.nuevos], d.etiquetas, d.paso, ['#3ba55d'])));
+    const act = el('div'); act.innerHTML = barras([S.activos], d.etiquetas, d.paso, ['#f0b232']);
+    if (d.activosDesde && d.activosDesde > d.desde) act.appendChild(el('div', 'pe-nota', 'Se anota desde el ' + etiqueta(d.activosDesde, 'dia') + ': antes no hay datos.'));
+    box.appendChild(tarjeta(d.paso === 'dia' ? 'Activos por día' : d.paso === 'semana' ? 'Activos por semana' : 'Activos por mes', act));
+    // Mapa de horas (de Argentina)
+    const max = Math.max(1, ...d.calor.flat());
+    const mapa = el('div', 'pe-calor');
+    mapa.appendChild(el('div', 'pe-calor-esq'));
+    for (let hh = 0; hh < 24; hh++) mapa.appendChild(el('div', 'pe-calor-h', hh % 3 === 0 ? String(hh) : ''));
+    d.calor.forEach((fila, i) => {
+      mapa.appendChild(el('div', 'pe-calor-d', DIAS[i]));
+      fila.forEach((v, hh) => { const c = el('div', 'pe-calor-c'); c.style.opacity = String(0.08 + 0.92 * (v / max)); c.title = DIAS[i] + ' ' + hh + ' h: ' + fmt(v) + ' mensajes'; mapa.appendChild(c); });
+    });
+    box.appendChild(tarjeta('Horas de actividad (hora de Argentina)', mapa, 'pe-ancha'));
+    // Canales
+    const can = el('div');
+    const maxC = Math.max(1, ...d.canales.map(c => c.n));
+    for (const c of d.canales.slice(0, 12)) {
+      const [txt] = variacion(c.n, c.ant);
+      const f = filaBarra('#' + c.nombre, c.n, maxC, fmt(c.n) + (txt ? '  ' + txt : ''));
+      f.classList.add('pe-clic'); f.addEventListener('click', () => { if (window.app) window.app.switchChannel(c.code); });
+      can.appendChild(f);
+    }
+    if (!d.canales.length) can.appendChild(el('div', 'pe-nota', 'Sin mensajes en este período.'));
+    box.appendChild(tarjeta('Canales más activos', can));
+    // Embudo
+    const emb = el('div');
+    const base = d.embudo[0][1] || 0;
+    for (const [label, v] of d.embudo) emb.appendChild(filaBarra(label, v, base, fmt(v) + (base ? ' · ' + Math.round((v / base) * 100) + '%' : '')));
+    emb.appendChild(el('div', 'pe-nota', 'De quienes se registraron en este período.'));
+    box.appendChild(tarjeta('Embudo de los nuevos', emb));
+    // Dispositivos
+    const dis = el('div');
+    const lista = Object.entries(d.dispositivos).sort((a, b) => b[1] - a[1]);
+    const totD = lista.reduce((s, [, v]) => s + v, 0);
+    for (const [k, v] of lista) dis.appendChild(filaBarra(k, v, totD, Math.round((v / totD) * 100) + '% · ' + fmt(v)));
+    if (!lista.length) dis.appendChild(el('div', 'pe-nota', 'Todavía no hay datos: se empezó a anotar hace poco.'));
+    box.appendChild(tarjeta('Dispositivo', dis));
+  }
+  function cargarEstadisticas() {
+    const box = page && page.querySelector('.pe-cuerpo');
+    if (!box) return;
+    page.querySelectorAll('.pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoEst));
+    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
+    fetch('/puente/api/estadisticas?rango=' + rangoEst, { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarEstadisticas(box, d); })
+      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar las estadísticas.')); } });
+  }
+  function verVista(v) {
+    vista = v;
+    if (!page) return;
+    page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === v));
+    page.querySelector('.pm-card').hidden = v !== 'miembros';
+    page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
+    const dl = page.querySelector('.pm-descargar'); if (dl) dl.hidden = v !== 'miembros';
+    if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
+  }
+  function armarVistaEstadisticas() {
+    const v = el('div', 'pe-vista'); v.hidden = true;
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'Estadísticas'));
+    const rangos = el('div', 'pe-rangos');
+    for (const [k, label] of [['7d', '7D'], ['4s', '4S'], ['3m', '3M'], ['1a', '1A']]) {
+      const b = el('button', 'pe-rango', label); b.type = 'button'; b.dataset.r = k;
+      b.title = { '7d': 'Últimos 7 días', '4s': 'Últimas 4 semanas', '3m': 'Últimos 3 meses', '1a': 'Último año' }[k];
+      b.addEventListener('click', () => { rangoEst = k; cargarEstadisticas(); });
+      rangos.appendChild(b);
+    }
+    barra.appendChild(rangos);
+    v.append(barra, el('div', 'pe-cuerpo'));
+    return v;
+  }
+
   function open() {
     close();
     const side = document.querySelector('aside.sidebar');
@@ -2202,7 +2467,15 @@ function leido(sc) {
     const left = small ? 0 : side ? side.getBoundingClientRect().right : 0;
     page.style.left = left + 'px';
     const head = el('div', 'pm-head');
-    const title = el('div', 'pm-titulo'); title.innerHTML = ICON; title.appendChild(el('span', '', 'Miembros'));
+    // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
+    const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
+    const tabs = el('div', 'pm-pestanas');
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas']]) {
+      const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
+      t.addEventListener('click', () => verVista(v));
+      tabs.appendChild(t);
+    }
+    title.appendChild(tabs);
     const x = el('button', 'pm-cerrar'); x.type = 'button'; x.title = 'Cerrar (Esc)';
     x.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
     x.addEventListener('click', close);
@@ -2261,8 +2534,9 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card);
+    page.append(head, card, armarVistaEstadisticas());
     document.body.appendChild(page);
+    verVista('miembros');
     document.addEventListener('keydown', onKey, true);
     if (small) { try { history.pushState({ puenteMiembros: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
     else search.focus(); // en el celular no: abriria el teclado
