@@ -116,6 +116,14 @@ function problem(havenUserId, name, discordUserId) {
   return MSG;
 }
 
+// El nombre es de alguien de Discord (el historial, la lista de miembros o una cuenta vinculada): para
+// decirle que entre con Discord, asi sus mensajes de Discord quedan en su cuenta (foro.js)
+function deDiscord(name) {
+  if (Date.now() - builtAt > REFRESH_MS) { try { build(); } catch { /* el anterior */ } }
+  const owners = index.get(key(name));
+  return !!(owners && [...owners].some(o => String(o).startsWith('d')));
+}
+
 // "Gana el verdadero": al vincular, las cuentas sin vincular con su nombre lo pierden
 function onLinked(havenUserId) {
   try {
@@ -152,4 +160,4 @@ function collisions() {
   return out;
 }
 
-module.exports = { setup, onGuildReady, problem, onLinked, collisions, key, _test: { build, index: () => index } };
+module.exports = { setup, onGuildReady, problem, deDiscord, onLinked, collisions, key, _test: { build, index: () => index } };

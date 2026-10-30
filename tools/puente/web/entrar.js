@@ -49,6 +49,27 @@
     return;
   }
 
+  // Su nombre esta en el historial de Discord: el aviso y el boton para entrar con Discord
+  function avisoDiscord(texto) {
+    let box = $('puente-con-discord');
+    if (!box) {
+      box = document.createElement('div'); box.id = 'puente-con-discord';
+      box.style.cssText = 'margin:0 0 16px;padding:14px 16px;border-radius:10px;background:rgba(88,101,242,.14);border:1px solid rgba(88,101,242,.45);font-size:14px;line-height:1.45;text-align:left';
+      const p = document.createElement('p'); p.style.margin = '0 0 10px'; box.appendChild(p);
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'puente-btn-discord';
+      b.style.cssText = 'width:100%;padding:11px;border:0;border-radius:8px;background:#5865f2;color:#fff;font:inherit;font-weight:600;cursor:pointer';
+      b.textContent = 'Entrar con Discord';
+      b.addEventListener('click', () => {
+        b.disabled = true;
+        post('/puente/api/entrar/iniciar', {}).then(({ ok, d }) => { if (ok && d.url) location.href = d.url; else { b.disabled = false; note(d.error || 'No se pudo. Probá de nuevo.', true); } })
+          .catch(() => { b.disabled = false; note('No hay conexión. Probá de nuevo.', true); });
+      });
+      box.appendChild(b);
+      $('crear').parentNode.insertBefore(box, $('crear'));
+    }
+    box.querySelector('p').textContent = texto;
+  }
+
   if (q.get('nuevo')) {
     const code = q.get('nuevo');
     title('Crear tu cuenta', '');
@@ -64,6 +85,7 @@
       }
       $('usuario').value = d.usuario;
       $('crear').hidden = false;
+      if (foro && d.historial) avisoDiscord(`Tu nombre (${d.cuenta}) está en el historial de Discord de la comunidad. Si sos vos, entrá con Discord: así tus mensajes de Discord quedan asociados al historial de tu cuenta. Después unís el foro desde "Mi cuenta".`);
       $('otras').hidden = foro;
       // Las condiciones: las mismas que muestra Haven al registrarse
       $('terminos').addEventListener('click', (e) => { e.preventDefault(); window.open('/?terminos=1', '_blank', 'noopener'); });
@@ -86,6 +108,7 @@
       post(API + 'crear', { codigo: code, usuario: $('usuario').value.trim(), acepto: $('acepto').checked }).then(({ ok, d }) => {
         if (ok && d.token) return enter(d);
         btn.disabled = false;
+        if (d.discord) { note(''); avisoDiscord(d.error); return; }
         note(d.error || 'No se pudo crear la cuenta.', true);
       }).catch(() => { btn.disabled = false; note('No hay conexión. Probá de nuevo.', true); });
     });

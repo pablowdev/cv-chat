@@ -37,6 +37,8 @@ const fs = require('fs');
 const path = require('path');
 
 const STATE_TTL_MS = 10 * 60 * 1000, SIGNUP_TTL_MS = 15 * 60 * 1000, HANDOFF_TTL_MS = 2 * 60 * 1000;
+// Entrar con el foro con un nombre que esta en el historial de Discord
+const MSG_DISCORD = 'Ese nombre está en el historial de Discord de la comunidad. Si sos vos, entrá con Discord: así tus mensajes de Discord quedan asociados al historial de tu cuenta. Después unís el foro desde "Mi cuenta".';
 const BANNED_GROUP = 8;             // "Banned Users" de vBulletin
 const UNCONFIRMED_GROUPS = [3, 4];  // esperando confirmar el email / moderacion
 // Las cuentas de CV Chat creadas desde aca sirven para todo de entrada: la del foro se crea sola (cvchat.php).
@@ -255,7 +257,10 @@ async function handle(req, res, p, u) {
     const sg = signups.get(u.searchParams.get('codigo') || '');
     if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con el foro".' });
     const f = sg.f;
-    return json(res, 200, { nombre: f.nombre || f.usuario, cuenta: f.usuario, avatar: f.foto || null, usuario: proposeUsername(f), app: h.appName() });
+    const id = require('./identidad.js');
+    // Su nombre del foro esta en el historial de Discord: seguramente es la misma persona
+    const historial = id.deDiscord(f.usuario) || id.deDiscord(f.nombre || '');
+    return json(res, 200, { nombre: f.nombre || f.usuario, cuenta: f.usuario, avatar: f.foto || null, usuario: proposeUsername(f), app: h.appName(), historial });
   }
 
   if (p === '/puente/api/foro/crear' && req.method === 'POST') {
@@ -266,6 +271,8 @@ async function handle(req, res, p, u) {
     if (!body.acepto) return json(res, 400, { error: 'Tenés que aceptar las condiciones y confirmar que tenés 18 años o más.' });
     const username = String(body.usuario || '').trim();
     const problem = h.usernameProblem(username) || require('./identidad.js').problem(0, username, null);
+    // El nombre es de alguien del historial de Discord: si es suyo, que entre con Discord
+    if (problem && require('./identidad.js').deDiscord(username)) return json(res, 409, { error: MSG_DISCORD, discord: true });
     if (problem) return json(res, 400, { error: problem });
     const f = sg.f;
     if (db.prepare('SELECT 1 FROM puente_foro WHERE foro_user_id = ?').get(f.id)) { signups.delete(code); return json(res, 409, { error: 'Esa cuenta del foro ya tiene una cuenta. Volvé a tocar "Entrar con el foro".' }); }
