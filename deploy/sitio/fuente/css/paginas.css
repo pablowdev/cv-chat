@@ -49,3 +49,18 @@
   .vinculo .btn { grid-column: 1 / -1; width: 100%; }
 }
 .mis-aportes li.chico { display: block; }
+
+/* Descargar la app */
+.descargar { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; align-items: start; }
+.descargar__intro { grid-column: 1 / -1; }
+.descargar .caja__cuerpo { padding: 24px 28px; }
+.descargar__intro h1 { margin: 8px 0 12px; }
+.descargar__intro p:not(.rotulo) { color: var(--fg-2); max-width: 72ch; margin: 0; }
+.descargar__app h2 { margin: 6px 0 14px; }
+.descargar__app .rotulo { color: var(--accent); }
+.descargar__app .btn { margin-bottom: 6px; }
+.descargar__app ol { padding-left: 1.2em; margin: 12px 0 0; }
+.descargar__app li, .descargar__app p { color: var(--fg-2); }
+.descargar__app li + li { margin-top: 6px; }
+.descargar__app.es-el-tuyo { grid-column: 1 / -1; border-color: var(--accent); }
+@media (max-width: 720px) { .descargar { grid-template-columns: 1fr; gap: 12px; margin-top: 12px; } .descargar .caja__cuerpo { padding: 18px; } .descargar__app .btn { width: 100%; } }

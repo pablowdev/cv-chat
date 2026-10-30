@@ -7,6 +7,8 @@ module.exports = {
   'wiki.html': { fuente: 'wiki.html', titulo: 'Wiki - Círculo Vicioso Club', actual: 'wiki', css: [`${CHAT}/puente/wiki.css`], js: [`${CHAT}/puente/wiki.js`],
     descripcion: 'La wiki de Círculo Vicioso: el lore, los efectos y los personajes del club, escrita por la comunidad.' },
   'cuenta.html': { fuente: 'cuenta.html', titulo: 'Tu cuenta - Círculo Vicioso Club', actual: null, css: ['/css/paginas.css'], js: ['/js/cuenta.js'], sinIndice: true },
+  'descargar.html': { fuente: 'descargar.html', titulo: 'Descargá la app - Círculo Vicioso Club', actual: null, canonica: '/descargar', css: ['/css/paginas.css'],
+    descripcion: 'La app de CV Chat para Android, iPhone, Windows, Mac y Linux: el chat, el foro y los juegos del club.' },
   'legal.html': { fuente: 'legal.html', titulo: 'Privacidad - Círculo Vicioso Club', actual: null, canonica: '/legal', css: ['/css/paginas.css'] },
   '404.html': { fuente: '404.html', titulo: 'No está - Círculo Vicioso Club', actual: null, css: ['/css/paginas.css'], sinIndice: true },
 };

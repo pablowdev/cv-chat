@@ -49,7 +49,7 @@ ${cuerpo.trim()}
   </main>
   <footer class="pie">
     <span>Círculo Vicioso Club</span>
-    <nav><a href="/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a></nav>
+    <nav><a href="/descargar">La app</a><a href="/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a></nav>
   </footer>
 </div>
 </body>

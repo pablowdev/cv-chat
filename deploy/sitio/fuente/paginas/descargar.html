@@ -1,0 +1,73 @@
+<div class="descargar">
+  <section class="caja descargar__intro">
+    <div class="caja__cuerpo">
+      <p class="rotulo">la app</p>
+      <h1 class="titulo">Descargá CV Chat</h1>
+      <p>El chat, el foro, los juegos y los mensajes privados del club, en tu celular o en tu PC, con avisos cuando te escriben. Se actualiza sola: siempre ves lo último, sin reinstalar. Es la misma cuenta que usás acá.</p>
+    </div>
+  </section>
+
+  <section class="caja descargar__app" id="android">
+    <div class="caja__cuerpo">
+      <p class="rotulo">celular</p>
+      <h2 class="titulo-2">Android</h2>
+      <a class="btn btn--rosa" href="https://chat.circulovicioso.club/puente/descargas/CV-Chat-Android.apk" download>Descargar para Android</a>
+      <ol>
+        <li>Tocá <b>Descargar</b> y abrí el archivo cuando termine.</li>
+        <li>Si el celular pregunta, permití <b>instalar apps de este origen</b> (es normal en las apps que no vienen de la tienda).</li>
+        <li>Tocá <b>Instalar</b> y listo: CV Chat queda en tu pantalla de inicio.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="caja descargar__app" id="ios">
+    <div class="caja__cuerpo">
+      <p class="rotulo">celular</p>
+      <h2 class="titulo-2">iPhone y iPad</h2>
+      <p>Apple no deja instalar apps fuera de su tienda, pero CV Chat se instala desde Safari y funciona igual, a pantalla completa y con notificaciones:</p>
+      <ol>
+        <li>Abrí <a href="https://chat.circulovicioso.club/app">chat.circulovicioso.club</a> en <b>Safari</b>.</li>
+        <li>Tocá el botón <b>Compartir</b> (el cuadrado con la flecha).</li>
+        <li>Elegí <b>Agregar a inicio</b> y tocá <b>Agregar</b>.</li>
+        <li>Abrí CV Chat desde el ícono nuevo y, si querés avisos, aceptá las notificaciones.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="caja descargar__app" id="windows">
+    <div class="caja__cuerpo">
+      <p class="rotulo">pc</p>
+      <h2 class="titulo-2">Windows</h2>
+      <a class="btn btn--rosa" href="https://chat.circulovicioso.club/puente/descargas/CV-Chat-Windows.exe" download>Descargar para Windows</a>
+      <ol>
+        <li>Abrí el archivo descargado: se instala solo y abre CV Chat.</li>
+        <li>Si Windows muestra <b>"Windows protegió su PC"</b>, tocá <b>Más información</b> y después <b>Ejecutar de todas formas</b> (aparece en las apps nuevas que no son de la tienda).</li>
+        <li>Al cerrar la ventana, CV Chat queda al lado del reloj para seguir avisándote. Para salir: clic derecho en el ícono → Salir.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="caja descargar__app" id="otros">
+    <div class="caja__cuerpo">
+      <p class="rotulo">pc</p>
+      <h2 class="titulo-2">Mac y Linux</h2>
+      <p>Instalala desde el navegador: en Chrome o Edge, abrí <a href="https://chat.circulovicioso.club/app">chat.circulovicioso.club</a> y tocá el ícono de instalar en la barra de direcciones (o el menú ⋮ → <b>Instalar CV Chat</b>). En Safari para Mac: Archivo → <b>Agregar al Dock</b>.</p>
+      <p class="chico">También podés usar CV Chat directamente en el navegador, sin instalar nada.</p>
+    </div>
+  </section>
+</div>
+<script>
+// La del dispositivo de quien entra va primero y resaltada
+(function () {
+  var ua = navigator.userAgent, id = null;
+  if (/Android/i.test(ua)) id = 'android';
+  else if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) id = 'ios';
+  else if (/Windows/.test(ua)) id = 'windows';
+  else if (/Mac|Linux|CrOS/.test(ua)) id = 'otros';
+  var el = id && document.getElementById(id);
+  if (!el) return;
+  el.classList.add('es-el-tuyo');
+  var intro = document.querySelector('.descargar__intro');
+  if (intro && intro.nextElementSibling !== el) intro.parentNode.insertBefore(el, intro.nextElementSibling);
+})();
+</script>

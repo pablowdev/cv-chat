@@ -65,3 +65,9 @@ a.acceso:hover .acceso__ir { color: var(--accent); }
   .inicio__lado { grid-template-columns: 1fr; gap: 12px; }
   .acceso { grid-column: 1 / -1; padding: 16px; }
 }
+
+/* La app: una franja con los botones de descarga (la pagina /descargar tiene los pasos) */
+.inicio__app { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 28px; padding: 22px 28px; }
+.inicio__app p:not(.rotulo) { margin: 6px 0 0; color: var(--fg-2); }
+.inicio__app .rotulo { color: var(--accent); }
+@media (max-width: 720px) { .inicio__app { padding: 18px; } .inicio__app .inicio__acciones { width: 100%; } .inicio__app .btn { flex: 1 1 auto; } }
