@@ -2807,3 +2807,87 @@ html.puente-md-sin-ubicacion .dm-safety-notice[data-kind="gps"] { display: none 
 /* Marketplace: el aviso tambien en la compra/venta del foro (foro-mercado.js) */
 .mk-foro { display: block; margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-tertiary, #1e1f22); color: var(--text-link, #00a8fc); font-size: 14px; text-decoration: none; }
 .mk-foro:hover { text-decoration: underline; }
+
+/* Ajedrez (aviso.js, ajedrez.js): el tablero en los colores del club, arriba el rival y abajo vos
+   con las piezas comidas y el reloj; al costado (o abajo en el celular) las jugadas y las tablas */
+.puente-jg .aj-hero { background: #2b2d2c; }
+.puente-jg .aj-hero-dibujo { display: flex; justify-content: center; height: 5.5rem; margin-bottom: 0.25rem; }
+.puente-jg .aj-hero-dibujo svg { height: 100%; width: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
+.puente-jg .aj-hero .jg-hero-s { color: #c9c7c6; }
+.puente-jg .jg-espera .aj-hero-dibujo { height: 4rem; }
+.puente-jg .aj-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.puente-jg .aj-tapa { position: absolute; inset: 0; background: #2b2d2c; }
+.puente-jg .aj-tapa-tab { position: absolute; inset: 12% 22%; display: grid; grid-template-columns: repeat(4, 1fr); transform: perspective(26rem) rotateX(48deg); border-radius: 0.25rem; overflow: hidden; box-shadow: 0 1rem 1.5rem rgba(0,0,0,0.5); }
+.puente-jg .aj-tapa-tab span.cl { background: #f1e4e9; }
+.puente-jg .aj-tapa-tab span.os { background: #b9577d; }
+.puente-jg .aj-tapa-p { position: absolute; left: 0; right: 0; bottom: 10%; display: flex; justify-content: center; height: 62%; }
+.puente-jg .aj-tapa-p svg { height: 100%; width: auto; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.55)); }
+.puente-jg .aj-mesa { max-width: 76rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; }
+@media (min-width: 900px) {
+  .puente-jg .aj-mesa { grid-template-columns: auto 17rem; justify-content: center; }
+  .puente-jg .aj-lado { position: sticky; top: 0.75rem; }
+  .puente-jg .aj-jugadas { max-height: calc(100vh - 20rem); }
+}
+.puente-jg .aj-tabcol { display: flex; flex-direction: column; gap: 0.375rem; width: min(100%, calc(100vh - 12.5rem)); width: min(100%, calc(100dvh - 12.5rem)); min-width: min(100%, 17rem); margin: 0 auto; }
+/* en la compu la columna del tablero es auto: necesita un ancho propio (lo que entre al lado de las jugadas y de alto) */
+@media (min-width: 900px) {
+  .puente-jg .aj-tabcol { width: min(calc(100vw - 27rem), calc(100vh - 12.5rem), 52rem); width: min(calc(100vw - 27rem), calc(100dvh - 12.5rem), 52rem); }
+}
+.puente-jg .aj-jug { display: flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; padding: 0.25rem 0.375rem; border-radius: 0.625rem; }
+.puente-jg .aj-jug .jg-av { flex: 0 0 2rem; width: 2rem; height: 2rem; font-size: 0.875rem; }
+.puente-jg .aj-jtexto { flex: 1 1 auto; min-width: 0; }
+.puente-jg .aj-nom { font-weight: 700; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; }
+.puente-jg .aj-jug.le-toca .aj-nom::after { content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; margin-left: 0.375rem; border-radius: 50%; background: #57c785; vertical-align: middle; }
+.puente-jg .aj-capt { display: flex; align-items: center; min-height: 1.125rem; flex-wrap: wrap; }
+.puente-jg .aj-cp { display: inline-block; width: 1.125rem; height: 1.125rem; margin-right: -0.3125rem; }
+.puente-jg .aj-cp svg { width: 100%; height: 100%; display: block; }
+.puente-jg .aj-dif { margin-left: 0.5rem; font-size: 0.75rem; font-weight: 700; color: #949ba4; }
+.puente-jg .aj-reloj { flex: 0 0 auto; min-width: 4.75rem; padding: 0.25rem 0.625rem; border-radius: 0.375rem; background: #232227; color: #949ba4; font: 700 1.375rem/1.2 ui-monospace, "SFMono-Regular", Consolas, monospace; text-align: right; font-variant-numeric: tabular-nums; }
+.puente-jg .aj-reloj.corre { background: #f2f3f5; color: #111214; }
+.puente-jg .aj-reloj.corre.poco { background: #da373c; color: #fff; }
+.puente-jg .aj-tablero {
+  position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1; width: 100%;
+  border-radius: 0.375rem; overflow: hidden; box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.5); touch-action: none; -webkit-user-select: none; user-select: none;
+}
+.puente-jg .aj-c { position: relative; aspect-ratio: 1; }
+.puente-jg .aj-c.cl { background: #f1e4e9; }
+.puente-jg .aj-c.os { background: #b9577d; }
+.puente-jg .aj-c.ult::before, .puente-jg .aj-c.sel::before, .puente-jg .aj-c.jaque::before, .puente-jg .aj-c.encima::before { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.puente-jg .aj-c.ult::before { background: rgba(255, 205, 64, 0.42); }
+.puente-jg .aj-c.sel::before { background: rgba(88, 101, 242, 0.5); }
+.puente-jg .aj-c.encima::before { box-shadow: inset 0 0 0 4px rgba(255,255,255,0.75); }
+.puente-jg .aj-c.jaque::before { background: radial-gradient(circle, #ff2a2a 0%, rgba(230,0,0,0.75) 30%, rgba(169,0,0,0) 72%); }
+.puente-jg .aj-c.dest.vacia::after { content: ""; position: absolute; left: 36%; top: 36%; width: 28%; height: 28%; border-radius: 50%; background: rgba(20, 16, 24, 0.28); pointer-events: none; z-index: 2; }
+.puente-jg .aj-c.dest.come::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 0.3rem rgba(20, 16, 24, 0.3); pointer-events: none; z-index: 2; }
+.puente-jg .aj-c.dest { cursor: pointer; }
+.puente-jg .aj-p { position: absolute; inset: 0; z-index: 1; }
+.puente-jg .aj-p svg { display: block; width: 100%; height: 100%; pointer-events: none; }
+.puente-jg .aj-p.mia { cursor: grab; }
+.puente-jg .aj-p.levantada { opacity: 0.3; }
+.puente-jg .aj-p.vuela { transition: transform 0.2s ease-out; z-index: 3; }
+.puente-jg .aj-fantasma { position: fixed; z-index: 100008; pointer-events: none; transform: translate(-50%, -55%) scale(1.12); filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5)); }
+.puente-jg .aj-fantasma svg { display: block; width: 100%; height: 100%; }
+.puente-jg .aj-num, .puente-jg .aj-let { position: absolute; z-index: 2; font-size: clamp(0.5625rem, 1.6vw, 0.75rem); font-weight: 700; line-height: 1; pointer-events: none; }
+.puente-jg .aj-num { top: 0.1875rem; left: 0.25rem; }
+.puente-jg .aj-let { bottom: 0.1875rem; right: 0.25rem; }
+.puente-jg .aj-c.cl .aj-num, .puente-jg .aj-c.cl .aj-let { color: #b9577d; }
+.puente-jg .aj-c.os .aj-num, .puente-jg .aj-c.os .aj-let { color: #f1e4e9; }
+.puente-jg .aj-lado { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+.puente-jg .aj-estado { padding: 0.75rem; border-radius: 0.75rem; background: #2e2d32; color: #dbdee1; text-align: center; font-weight: 700; }
+.puente-jg .aj-estado.mio { background: #57c785; color: #0e2318; }
+.puente-jg .aj-tablas { padding: 0.75rem; border-radius: 0.75rem; background: #3b2f0b; color: #f0b232; text-align: center; font-weight: 700; display: flex; flex-direction: column; gap: 0.5rem; }
+.puente-jg .aj-jugadas { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) minmax(0, 1fr); align-content: start; gap: 0.125rem 0.25rem; max-height: 12rem; overflow-y: auto; padding: 0.5rem; border-radius: 0.75rem; background: #232227; font-size: 0.875rem; }
+.puente-jg .aj-jugadas .n { color: #6d6f78; text-align: right; padding: 0.125rem 0.25rem 0.125rem 0; }
+.puente-jg .aj-jugadas .j { padding: 0.125rem 0.375rem; border-radius: 0.25rem; color: #dbdee1; font-weight: 600; }
+.puente-jg .aj-jugadas .j.ult { background: #3a3940; color: #fff; }
+.puente-jg .aj-sinj { grid-column: 1 / -1; padding: 0.25rem; color: #949ba4; text-align: center; }
+.puente-jg .aj-acc .jg-btn { flex: 1 1 auto; }
+.puente-jg .aj-log { margin: 0; font-size: 0.8125rem; color: #949ba4; }
+.puente-jg .aj-fin { padding: 1.25rem 1rem; background: #2b2d2c; }
+.puente-jg .aj-coronar { max-width: 22rem; }
+.puente-jg .aj-cor-fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
+.puente-jg .aj-cor-op { aspect-ratio: 1; padding: 0.25rem; border: 0; border-radius: 0.5rem; background: #f1e4e9; cursor: pointer; }
+.puente-jg .aj-cor-op:nth-child(even) { background: #b9577d; }
+.puente-jg .aj-cor-op:hover, .puente-jg .aj-cor-op:focus-visible { outline: 3px solid #5865f2; }
+.puente-jg .aj-cor-op svg { display: block; width: 100%; height: 100%; }
+@media (prefers-reduced-motion: reduce) { .puente-jg .aj-p.vuela { transition: none; } }
