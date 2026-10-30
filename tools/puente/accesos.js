@@ -278,6 +278,14 @@ async function recomputeUser(discordUserId, memberFromEvent = undefined) {
     const m = await api('GET', `/guilds/${getGuildId()}/members/${discordUserId}`);
     member = m && !m.__error ? m : (m && m.__error === 404 ? null : undefined);
     if (member === undefined) return; // error temporal: no tocar nada
+    // Ya no esta en el servidor de Discord: si no lo banearon, queda como una cuenta sin vincular
+    // (con PUENTE_SIN_VINCULAR_VEN=publicos, lo de @everyone), no peor que sin vincular
+    if (member === null && OPEN_UNLINKED) {
+      const b = await api('GET', `/guilds/${getGuildId()}/bans/${discordUserId}`);
+      if (b && b.__error === 404) member = EVERYONE;
+      else if (!b || !b.__error) member = null; // baneado: sin canales de Discord
+      else return; // error temporal
+    }
   }
   return apply(link.haven_user_id, member);
 }
@@ -327,7 +335,8 @@ function onDispatch(t, d) {
     case 'GUILD_ROLE_CREATE': case 'GUILD_ROLE_UPDATE': case 'GUILD_ROLE_DELETE': onRole(t, d); break;
     case 'CHANNEL_CREATE': case 'CHANNEL_UPDATE': case 'CHANNEL_DELETE': scheduleAll(); break;
     case 'GUILD_MEMBER_UPDATE': if (d.user) recomputeUser(d.user.id, { user: d.user, roles: d.roles || [] }); break;
-    case 'GUILD_MEMBER_REMOVE': if (d.user) recomputeUser(d.user.id, null); break;
+    // se fue o lo echaron: se fija si esta baneado (sin canales) o no (lo de @everyone)
+    case 'GUILD_MEMBER_REMOVE': if (d.user) recomputeUser(d.user.id); break;
     case 'GUILD_BAN_ADD': if (d.user) recomputeUser(d.user.id, null); break;
   }
 }

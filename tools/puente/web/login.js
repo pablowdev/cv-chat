@@ -236,9 +236,13 @@
     const tab = () => { const b = document.querySelector('.auth-tab[data-tab="register"]'); if (b) b.click(); };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(tab, 50)); else setTimeout(tab, 50);
   }
+  // Con la flecha de atras el navegador muestra esta pagina guardada, sin volver a correr nada:
+  // con la sesion abierta, de vuelta al chat en vez de quedarse en el login
+  addEventListener('pageshow', (e) => { try { if (e.persisted && localStorage.getItem('haven_token')) location.replace('/app'); } catch { /* sin almacenamiento */ } });
   let tok = null;
   try { tok = localStorage.getItem('haven_token'); } catch { return; }
-  if (tok) return; // Haven ya pasa a /app
+  // con sesion: al chat sin dejar el login en el historial (asi atras no vuelve a caer aca)
+  if (tok) { location.replace('/app'); return; }
   fetch('/puente/api/cuenta/token', { method: 'POST' }).then(r => (r.ok ? r.json() : null)).then(d => {
     if (!d || !d.token) return;
     localStorage.setItem('haven_token', d.token);
