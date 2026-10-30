@@ -9,6 +9,8 @@ module.exports = {
   'cuenta.html': { fuente: 'cuenta.html', titulo: 'Tu cuenta - Círculo Vicioso Club', actual: null, css: ['/css/paginas.css'], js: ['/js/cuenta.js'], sinIndice: true },
   'descargar.html': { fuente: 'descargar.html', titulo: 'Descargá la app - Círculo Vicioso Club', actual: null, canonica: '/descargar', css: ['/css/paginas.css'],
     descripcion: 'La app de CV Chat para Android, iPhone, Windows, Mac y Linux: el chat, el foro y los juegos del club.' },
+  'borrar-cuenta.html': { fuente: 'borrar-cuenta.html', titulo: 'Borrar tu cuenta - Círculo Vicioso Club', actual: null, canonica: '/borrar-cuenta', css: ['/css/paginas.css'],
+    descripcion: 'Cómo borrar tu cuenta de CV Chat, o solo algunos datos, y qué se borra.' },
   'legal.html': { fuente: 'legal.html', titulo: 'Privacidad - Círculo Vicioso Club', actual: null, canonica: '/legal', css: ['/css/paginas.css'] },
   '404.html': { fuente: '404.html', titulo: 'No está - Círculo Vicioso Club', actual: null, css: ['/css/paginas.css'], sinIndice: true },
 };
