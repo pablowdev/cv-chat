@@ -1973,11 +1973,38 @@ function leido(sc) {
   })();
 })();
 
+// Desde donde se entra (app de Android, app de PC, iPhone, navegador del celular o de la PC): se le
+// avisa al servidor una vez por apertura, para la pagina "Miembros" (presencia.js)
+(function () {
+  'use strict';
+  const ses = (k) => { try { return sessionStorage.getItem(k); } catch { return null; } };
+  const q = new URLSearchParams(location.search);
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const instalada = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let plataforma;
+  if (window.puenteApp || /CVChat\//.test(ua)) plataforma = 'pc-app';
+  else if (q.get('app') === 'android' || q.get('app') === 'play' || ses('puente_app_android') || ses('puente_app_play') ||
+    /^android-app:\/\/club\.circulovicioso\.chat/.test(document.referrer || '')) plataforma = 'android-app';
+  else if (ios && instalada) plataforma = 'iphone-app';
+  else plataforma = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || ios ? 'celular-web' : 'pc-web';
+  let tries = 0;
+  (function avisar() {
+    let tk = null;
+    try { tk = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
+    if (!tk) { if (++tries < 60) setTimeout(avisar, 2000); return; }
+    fetch('/puente/api/presencia', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: JSON.stringify({ plataforma }) }).catch(() => {});
+  })();
+})();
+
 // PC: pagina "Miembros" como la de Discord (solo administradores): arriba de
 // los canales, "Miembros" abre una tabla con todos los usuarios, su email (y si
 // esta confirmado), desde cuando estan, su @usuario de Discord y la antiguedad de
 // esa cuenta, cuantos mensajes escribieron y cuando fue el ultimo, y señales
-// (administrador, sin vincular...). La invitacion, si entraron con una, va al lado del nombre. Se busca por nombre y se ordena
+// (administrador, sin vincular, denuncias...). La invitacion, si entraron con una, va al lado del nombre.
+// Arriba, un resumen (nuevos de hoy y de la semana, cuantos confirmaron el email, vincularon Discord
+// y escribieron) y filtros rapidos. "Ultima vez": cuando se conecto y desde donde entra (presencia.js);
+// debajo de los mensajes, cuantos de Discord pasaron a su cuenta al vincular. Se busca por nombre y se ordena
 // tocando las columnas. Tocar a alguien abre su perfil.
 // En el celular: pantalla completa con una lista (como la app de Discord), un
 // menu para ordenar, y el boton "atras" del telefono la cierra.
@@ -1996,10 +2023,18 @@ function leido(sc) {
   }
   const fecha = iso => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' }) : '');
 
-  let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '';
+  let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '', filtro = 'todos';
+  const inicioHoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const FILTROS = [
+    ['todos', 'Todos', () => true],
+    ['hoy', 'Nuevos de hoy', m => m.desde && Date.parse(m.desde) >= inicioHoy()],
+    ['sinEmail', 'Sin email confirmado', m => !m.invitado && m.email !== 'confirmado'],
+    ['sinDiscord', 'Sin Discord', m => !m.discord && !m.invitado],
+    ['nunca', 'No escribieron en CV Chat', m => !m.mensajes],
+  ];
   const COLS = [
     ['nombre', 'NOMBRE'], ['correo', 'EMAIL'], ['desde', 'MIEMBRO DESDE'], ['discord', 'DISCORD'],
-    ['mensajes', 'MENSAJES'], ['ultimo', 'ÚLTIMO MENSAJE'], ['senales', 'SEÑALES'],
+    ['mensajes', 'MENSAJES'], ['ultimo', 'ÚLTIMO MENSAJE'], ['visto', 'ÚLTIMA VEZ'], ['senales', 'SEÑALES'],
   ];
   const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? String((m.discord && m.discord.usuario) || '').toLowerCase() :
     k === 'correo' ? String(m.correo || '').toLowerCase() : k === 'senales' ? signals(m).length : (m[k] ?? '');
@@ -2009,6 +2044,7 @@ function leido(sc) {
     if (m.enLinea) out.push(['En línea', 'ok']);
     if (m.invitado) out.push(['Invitado', 'gris']);
     if (!m.discord && !m.invitado) out.push(['Sin vincular', 'aviso']);
+    if (m.denuncias) out.push([m.denuncias + (m.denuncias === 1 ? ' denuncia' : ' denuncias'), 'mal']);
     if (m.dosPasos) out.push(['2 pasos', 'ok']);
     return out;
   }
@@ -2029,19 +2065,42 @@ function leido(sc) {
     close();
   }
 
+  // Resumen: nuevos de hoy y de la semana, y que parte confirmo el email, vinculo Discord y escribio
+  function resumen() {
+    const box = page && page.querySelector('.pm-resumen');
+    if (!box || !data.length) return;
+    const hoy = inicioHoy(), semana = Date.now() - 7 * 864e5;
+    const personas = data.filter(m => !m.invitado);
+    const n = personas.length || 1;
+    const pct = (x) => Math.round((x / n) * 100) + '%';
+    const datos = [
+      [data.filter(m => m.desde && Date.parse(m.desde) >= hoy).length, 'nuevos hoy'],
+      [data.filter(m => m.desde && Date.parse(m.desde) >= semana).length, 'en los últimos 7 días'],
+      [pct(personas.filter(m => m.email === 'confirmado').length), 'confirmaron el email'],
+      [pct(personas.filter(m => m.discord).length), 'vincularon Discord'],
+      [pct(personas.filter(m => m.mensajes > 0).length), 'escribieron en CV Chat'],
+      [data.filter(m => m.enLinea).length, 'en línea ahora'],
+    ];
+    box.textContent = '';
+    for (const [num, label] of datos) { const d = el('div', 'pm-dato'); d.append(el('div', 'pm-dato-n', String(num)), el('div', 'pm-dato-l', label)); box.appendChild(d); }
+  }
+
   function renderRows() {
     const body = page.querySelector('.pm-filas');
     body.textContent = '';
     const q = term.trim().toLowerCase();
-    const list = data.filter(m => !q || String(m.nombre).toLowerCase().includes(q) || String(m.usuario).toLowerCase().includes(q) ||
-      String(m.correo || '').toLowerCase().includes(q) || (m.discord && String(m.discord.usuario || '').toLowerCase().includes(q)));
+    const pasa = (FILTROS.find(x => x[0] === filtro) || FILTROS[0])[2];
+    const list = data.filter(m => pasa(m) && (!q || String(m.nombre).toLowerCase().includes(q) || String(m.usuario).toLowerCase().includes(q) ||
+      String(m.correo || '').toLowerCase().includes(q) || (m.discord && String(m.discord.usuario || '').toLowerCase().includes(q))));
+    resumen();
+    page.querySelectorAll('.pm-filtro').forEach(b => b.classList.toggle('actual', b.dataset.f === filtro));
     list.sort((a, b) => { const x = value(a, sortKey), y = value(b, sortKey); return (x > y ? 1 : x < y ? -1 : 0) * sortDir; });
     page.querySelector('.pm-total').textContent = list.length === data.length ? data.length + ' miembros' : list.length + ' de ' + data.length;
     page.querySelectorAll('.pm-th').forEach(th => {
       th.classList.toggle('actual', th.dataset.k === sortKey);
       th.dataset.dir = th.dataset.k === sortKey ? (sortDir > 0 ? '▲' : '▼') : '';
     });
-    if (mobile()) { renderList(body, list); if (!list.length) body.appendChild(el('div', 'pm-sin', 'No hay nadie con ese nombre.')); return; }
+    if (mobile()) { renderList(body, list); if (!list.length) body.appendChild(el('div', 'pm-sin', 'No hay nadie así.')); return; }
     for (const m of list) {
       const tr = el('div', 'pm-fila');
       const who = el('div', 'pm-c pm-nombre');
@@ -2069,11 +2128,19 @@ function leido(sc) {
         if (m.discord.desde) dc.appendChild(el('div', 'pm-n2', 'cuenta de ' + ago(m.discord.desde)));
         dc.title = '@' + m.discord.usuario + (m.discord.desde ? ' · cuenta creada el ' + fecha(m.discord.desde) : '');
       } else dc.appendChild(el('span', 'pm-vacio', '—'));
-      const msgs = el('div', 'pm-c pm-num', m.mensajes.toLocaleString('es-AR'));
+      // Mensajes en CV Chat y, debajo, los de Discord que pasaron a su cuenta
+      const msgs = el('div', 'pm-c pm-num pm-dos');
+      msgs.appendChild(el('div', 'pm-n1 pm-correo', m.mensajes.toLocaleString('es-AR')));
+      if (m.recuperados) msgs.appendChild(el('div', 'pm-n2', '+' + m.recuperados.toLocaleString('es-AR') + ' de Discord'));
       const last = el('div', 'pm-c', ago(m.ultimo)); last.title = fecha(m.ultimo);
+      // Ultima vez conectado y desde donde entra
+      const seen = el('div', 'pm-c pm-dos');
+      seen.appendChild(el('div', 'pm-n1 pm-correo' + (m.enLinea ? ' pm-ok-txt' : ''), m.enLinea ? 'En línea' : m.visto ? ago(m.visto) : '—'));
+      if (m.entraDesde) seen.appendChild(el('div', 'pm-n2', m.entraDesde));
+      seen.title = (m.visto && !m.enLinea ? fecha(m.visto) : '') + (m.usa && m.usa.length ? (m.visto && !m.enLinea ? ' · ' : '') + 'Usó: ' + m.usa.join(', ') : '');
       const sig = el('div', 'pm-c pm-roles');
       for (const [label, kind] of signals(m)) sig.appendChild(el('span', 'pm-senal ' + kind, label));
-      tr.append(who, mail, since, dc, msgs, last, sig);
+      tr.append(who, mail, since, dc, msgs, last, seen, sig);
       tr.addEventListener('click', () => {
         const app = window.app;
         if (!app || !app.socket) return;
@@ -2101,7 +2168,10 @@ function leido(sc) {
       const names = el('div', 'pm-item-nombres');
       names.append(el('span', 'pm-n1', m.nombre), el('span', 'pm-n2', m.usuario));
       const bits = ['Desde ' + ago(m.desde).replace(/^hace /, 'hace '), m.mensajes.toLocaleString('es-AR') + (m.mensajes === 1 ? ' mensaje' : ' mensajes')];
+      if (m.recuperados) bits[1] += ' (+' + m.recuperados.toLocaleString('es-AR') + ' de Discord)';
       if (m.ultimo) bits.push('último ' + ago(m.ultimo));
+      bits.push(m.enLinea ? 'en línea' : m.visto ? 'conectado ' + ago(m.visto) : 'sin conexiones registradas');
+      if (m.entraDesde) bits.push(m.entraDesde);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
       const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo + (m.email === 'pendiente' ? ' (sin confirmar)' : '')) : null;
       const chips = el('div', 'pm-roles');
@@ -2158,19 +2228,27 @@ function leido(sc) {
     const card = el('div', 'pm-card');
     const bar = el('div', 'pm-bar');
     const h = el('div', 'pm-sub'); h.append(el('span', '', 'Miembros recientes'), el('span', 'pm-total', ''));
-    const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre o usuario';
+    const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre, usuario o email';
     search.addEventListener('input', () => { term = search.value; renderRows(); });
     bar.append(h, search);
     if (small) {
       const order = el('select', 'pm-orden');
       order.setAttribute('aria-label', 'Ordenar');
-      for (const [v, label] of [['desde:-1', 'Más nuevos primero'], ['desde:1', 'Más viejos primero'], ['nombre:1', 'Por nombre'], ['mensajes:-1', 'Más mensajes'], ['ultimo:-1', 'Escribieron hace poco']]) {
+      for (const [v, label] of [['desde:-1', 'Más nuevos primero'], ['desde:1', 'Más viejos primero'], ['nombre:1', 'Por nombre'], ['mensajes:-1', 'Más mensajes'], ['ultimo:-1', 'Escribieron hace poco'], ['visto:-1', 'Conectados hace poco']]) {
         const o = el('option', null, label); o.value = v; order.appendChild(o);
       }
       order.value = sortKey + ':' + sortDir;
       if (order.value !== sortKey + ':' + sortDir) order.value = 'desde:-1';
       order.addEventListener('change', () => { const [k, dir] = order.value.split(':'); sortKey = k; sortDir = Number(dir); renderRows(); });
       bar.appendChild(order);
+    }
+    // Resumen (se llena con los datos) y filtros rapidos
+    const stats = el('div', 'pm-resumen');
+    const filtros = el('div', 'pm-filtros');
+    for (const [k, label] of FILTROS) {
+      const b = el('button', 'pm-filtro', label); b.type = 'button'; b.dataset.f = k;
+      b.addEventListener('click', () => { filtro = k; renderRows(); });
+      filtros.appendChild(b);
     }
     const table = el('div', 'pm-tabla');
     const thead = el('div', 'pm-fila pm-encabezado');
@@ -2182,7 +2260,7 @@ function leido(sc) {
     const rows = el('div', 'pm-filas');
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
-    card.append(bar, table);
+    card.append(bar, stats, filtros, table);
     page.append(head, card);
     document.body.appendChild(page);
     document.addEventListener('keydown', onKey, true);

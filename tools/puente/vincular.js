@@ -1130,6 +1130,10 @@ async function handle(req, res) {
     const r = await require('./mercado.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p === '/puente/api/presencia') {
+    const r = await require('./presencia.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/denunciar') {
     const r = await require('./denuncias.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
@@ -1221,7 +1225,7 @@ function resultPage(title, text) {
 // Todos los usuarios con lo que muestra la pagina "Miembros": desde cuando
 // estan, su cuenta de Discord (y su antiguedad, que va en el numero de la
 // cuenta), con que invitacion entraron, roles, mensajes y algunas señales.
-let membersCache = null;
+let membersCache = null, historialCache = null;
 function members() {
   if (membersCache && Date.now() - membersCache.at < 60 * 1000) return membersCache.list;
   const users = db.prepare(`SELECT id, username, display_name, avatar, created_at, is_admin, is_guest, totp_enabled
@@ -1248,6 +1252,18 @@ function members() {
   } catch { /* sin email */ }
   const online = new Set();
   try { for (const so of io.of('/').sockets.values()) if (so.user && so.user.id) online.add(so.user.id); } catch { /* sin conexiones */ }
+  // Ultima vez conectado y desde donde entra (presencia.js)
+  let presencia = new Map();
+  try { presencia = require('./presencia.js').todas(); } catch { /* sin presencia */ }
+  // Mensajes de Discord de cada cuenta (el historial que paso a su cuenta al vincular y lo que escribio
+  // en Discord despues; el autor de Discord queda en puente_autores). Casi no cambian: cada 30 minutos
+  if (!historialCache || Date.now() - historialCache.at > 30 * 60 * 1000) {
+    historialCache = { at: Date.now(), map: new Map(db.prepare(`SELECT m.user_id, COUNT(*) n FROM puente_autores a JOIN messages m ON m.id = a.message_id
+                                                                WHERE m.user_id IS NOT NULL GROUP BY m.user_id`).all().map(r => [r.user_id, r.n])) };
+  }
+  // Denuncias recibidas (denuncias.js)
+  let denuncias = new Map();
+  try { denuncias = new Map(db.prepare('SELECT autor_id, COUNT(*) n FROM puente_denuncias WHERE autor_id IS NOT NULL GROUP BY autor_id').all().map(r => [r.autor_id, r.n])); } catch { /* sin denuncias */ }
   const utc = s => (!s ? null : s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
   const discordCreated = id => { try { return new Date(Number((BigInt(id) >> 22n) + 1420070400000n)).toISOString(); } catch { return null; } };
   const list = users.map(u => {
@@ -1255,10 +1271,14 @@ function members() {
     return {
       id: u.id, nombre: u.display_name || u.username, usuario: u.username, avatar: u.avatar || null,
       desde: utc(u.created_at), admin: !!u.is_admin, invitado: !!u.is_guest, dosPasos: !!u.totp_enabled,
-      mensajes: c ? c.n : 0, ultimo: c ? utc(c.ultimo) : null,
+      // los de CV Chat (sin los de Discord, que van aparte en recuperados)
+      mensajes: c ? Math.max(0, c.n - (historialCache.map.get(u.id) || 0)) : 0, ultimo: c ? utc(c.ultimo) : null,
       roles: roles.get(u.id) || [], invitacion: invites.get(u.id) || null,
       discord: l ? { usuario: l.discord_username, nombre: l.discord_global_name || null, desde: discordCreated(l.discord_user_id), vinculado: utc(l.linked_at) } : null,
       email: emails.get(u.id) || null, correo: correos.get(u.id) || null, enLinea: online.has(u.id),
+      visto: online.has(u.id) ? new Date().toISOString() : ((presencia.get(u.id) || {}).visto || null),
+      entraDesde: (presencia.get(u.id) || {}).desde || null, usa: (presencia.get(u.id) || {}).usadas || [],
+      recuperados: historialCache.map.get(u.id) || 0, denuncias: denuncias.get(u.id) || 0,
     };
   });
   membersCache = { at: Date.now(), list };
