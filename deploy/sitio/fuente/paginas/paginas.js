@@ -11,6 +11,8 @@ module.exports = {
     descripcion: 'La app de CV Chat para Android, iPhone, Windows, Mac y Linux: el chat, el foro y los juegos del club.' },
   'borrar-cuenta.html': { fuente: 'borrar-cuenta.html', titulo: 'Borrar tu cuenta - Círculo Vicioso Club', actual: null, canonica: '/borrar-cuenta', css: ['/css/paginas.css'],
     descripcion: 'Cómo borrar tu cuenta de CV Chat, o solo algunos datos, y qué se borra.' },
+  'seguridad-infantil.html': { fuente: 'seguridad-infantil.html', titulo: 'Protección infantil - Círculo Vicioso Club', actual: null, canonica: '/seguridad-infantil', css: ['/css/paginas.css'],
+    descripcion: 'Las normas de CV Chat contra el abuso y la explotación sexual infantil, y cómo avisarnos.' },
   'legal.html': { fuente: 'legal.html', titulo: 'Privacidad - Círculo Vicioso Club', actual: null, canonica: '/legal', css: ['/css/paginas.css'] },
   '404.html': { fuente: '404.html', titulo: 'No está - Círculo Vicioso Club', actual: null, css: ['/css/paginas.css'], sinIndice: true },
 };
