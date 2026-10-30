@@ -10,7 +10,9 @@
 //     Con PUENTE_SIN_VINCULAR_VEN=publicos las cuentas sin vincular ven lo que ve
 //     @everyone en Discord, asi que solo es un problema si estan en un canal que
 //     @everyone no puede ver.
-//  3. Cuentas vinculadas dentro de un canal que en Discord no pueden ver.
+//  3. Cuentas vinculadas dentro de un canal que en Discord no pueden ver. Si se fueron
+//     del servidor sin ban, con PUENTE_SIN_VINCULAR_VEN=publicos ven lo de @everyone
+//     (como las sin vincular); baneadas, ningun canal de Discord.
 // Si encuentra algo, lo publica en el canal de admins (AVISO_CANAL, "admilinks"
 // por defecto). Si esta todo bien no publica nada. Lo ejecuta haven-auditoria.timer.
 //
@@ -43,6 +45,17 @@ async function get(path) {
     return res.json();
   }
   throw new Error('Discord no respondio (demasiados pedidos)');
+}
+
+// Baneado del servidor de Discord? 404 = no. Si no se puede saber (sin permiso, error), se lo
+// trata como baneado: asi se avisa de mas y no de menos
+async function banned(guildId, userId) {
+  for (let i = 0; i < 5; i++) {
+    const res = await fetch(`${API}/guilds/${guildId}/bans/${userId}`, { headers: { Authorization: `Bot ${token}` } }).catch(() => null);
+    if (res && res.status === 429) { await sleep(1000 * ((await res.json().catch(() => ({}))).retry_after || 1) + 100); continue; }
+    return !(res && res.status === 404);
+  }
+  return true;
 }
 
 // El mismo calculo que hace Discord (permisos de servidor + permisos del canal)
@@ -104,11 +117,17 @@ async function main() {
     for (const m of members) {
       if (m.is_admin) continue;
       const member = await get(`/guilds/${guild.id}/members/${m.discord_user_id}`); // null: ya no esta en el servidor
+      // Se fue del servidor: si no esta baneado, el puente le da lo de @everyone (como a una cuenta
+      // sin vincular, accesos.js). Baneado (o si no se puede saber), ningun canal de Discord
+      const baneado = member ? false : await banned(guild.id, m.discord_user_id);
       for (const c of inChannel.all(m.id)) {
         const ch = info.get(c.d);
         if (!ch || THREAD_TYPES.has(ch.type)) continue;
-        if (!member) problems.push(`${m.username} está en #${c.name}, pero ya no está en el servidor de Discord${c.a_mano ? ' (agregado a mano)' : ''}`);
-        else if (!canView(member, ch, guild, roles)) problems.push(`${m.username} está en #${c.name}, pero en Discord no puede ver ese canal${c.a_mano ? ' (agregado a mano)' : ''}`);
+        const aMano = c.a_mano ? ' (agregado a mano)' : '';
+        if (!member) {
+          if (baneado) problems.push(`${m.username} está en #${c.name}, pero está baneado del servidor de Discord${aMano}`);
+          else if (!(OPEN_UNLINKED && everyoneSees(c.d))) problems.push(`${m.username} está en #${c.name}, pero ya no está en el servidor de Discord y ese canal no es público${aMano}`);
+        } else if (!canView(member, ch, guild, roles)) problems.push(`${m.username} está en #${c.name}, pero en Discord no puede ver ese canal${aMano}`);
       }
       await sleep(250);
     }
