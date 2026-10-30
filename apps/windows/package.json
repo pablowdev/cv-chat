@@ -1,7 +1,7 @@
 {
   "name": "cv-chat",
   "productName": "CV Chat",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "CV Chat, el chat de Circulo Vicioso",
   "author": "Circulo Vicioso",
   "main": "main.js",
@@ -16,6 +16,7 @@
     "copyright": "Circulo Vicioso",
     "files": [
       "main.js",
+      "sin-notificaciones.js",
       "build/icon.png"
     ],
     "directories": {

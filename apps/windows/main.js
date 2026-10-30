@@ -12,16 +12,23 @@ const ADENTRO = [ORIGEN, 'https://discord.com', 'https://www.discord.com'];
 
 let win = null, tray = null, saliendo = false;
 
-if (!app.requestSingleInstanceLock()) app.quit();
+// Una sola copia: si ya hay una abierta, esta se cierra en el acto (sin ventanita ni nada) y la
+// otra pasa al frente ('second-instance'). Antes seguia arrancando un rato y quedaban dos abiertas
+const unica = app.requestSingleInstanceLock();
+if (!unica) app.exit(0);
 app.commandLine.appendSwitch('lang', 'es-419'); // la pagina en castellano, aunque Windows este en ingles
-app.setAppUserModelId('club.circulovicioso.chat'); // para las notificaciones de Windows
+app.setAppUserModelId('club.circulovicioso.chat');
 
 function crear() {
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 420, minHeight: 500,
     backgroundColor: '#121214', title: 'CV Chat', show: false, autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
-    webPreferences: { spellcheck: true, contextIsolation: true, sandbox: true },
+    webPreferences: {
+      spellcheck: true, contextIsolation: true, sandbox: true,
+      // Sin notificaciones de Windows, en la pagina y en sus marcos (el foro adentro del chat)
+      preload: path.join(__dirname, 'sin-notificaciones.js'), nodeIntegrationInSubFrames: true,
+    },
   });
   win.removeMenu();
   win.loadURL(INICIO);
@@ -104,11 +111,14 @@ function plazo(ms) { clearTimeout(espera); espera = setTimeout(abrirApp, ms); }
 app.on('second-instance', () => { if (arranque && splash) splash.focus(); else mostrar(); });
 app.on('before-quit', () => { saliendo = true; });
 app.whenReady().then(() => {
-  // Microfono (llamadas de voz), notificaciones y portapapeles solo para CV Chat
+  if (!unica) return;
+  // Microfono (llamadas de voz) y portapapeles solo para CV Chat. Notificaciones de Windows, nunca:
+  // alcanza con los avisos y sonidos de CV Chat
   session.defaultSession.setPermissionRequestHandler((wc, permiso, cb) => {
-    const ok = wc.getURL().startsWith(ORIGEN) && ['media', 'notifications', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'].includes(permiso);
+    const ok = wc.getURL().startsWith(ORIGEN) && ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'].includes(permiso);
     cb(ok);
   });
+  session.defaultSession.setPermissionCheckHandler((wc, permiso) => permiso !== 'notifications');
   session.defaultSession.setSpellCheckerLanguages(['es-ES', 'en-US']);
   if (!app.isPackaged) { abrirApp(); return; } // probando sin instalar: no hay de donde actualizar
   ventanita();
@@ -154,4 +164,4 @@ autoUpdater.on('update-downloaded', async (info) => {
   const r = win && win.isVisible() ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
   if (r.response === 0) { saliendo = true; autoUpdater.quitAndInstall(true, true); }
 });
-app.whenReady().then(() => { setTimeout(buscarActualizacion, 60000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
+app.whenReady().then(() => { if (!unica) return; setTimeout(buscarActualizacion, 60000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
