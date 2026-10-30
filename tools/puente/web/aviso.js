@@ -713,8 +713,9 @@ function sheetDrag(sheet, opts) {
     if (row.children.length) menu.appendChild(row);
 
     // "Copiar texto", como en Discord
-    const raw = msgEl.dataset.rawContent;
-    if (raw && raw.trim()) {
+    // sin las lineas que son solo una imagen o un archivo subido (/uploads/...): eso no es texto
+    const raw = String(msgEl.dataset.rawContent || '').split('\n').filter(l => !/^\s*(\S*\/uploads\/\S+|\[file:[^\]]*\]\([^)]*\))\s*$/.test(l)).join('\n').trim();
+    if (raw) {
       const copy = el('button', 'channel-ctx-item');
       copy.type = 'button';
       copy.dataset.puenteAction = 'copy-text';
@@ -5769,12 +5770,14 @@ document.addEventListener('pointerdown', (ev) => {
     const own = [...msgEl.querySelectorAll('.reaction-badge.own')].some(b => b.dataset.emoji === emoji);
     app.socket.emit(own ? 'remove-reaction' : 'add-reaction', { messageId: msgId, emoji });
   }
+  // sin las lineas que son solo una imagen o un archivo subido (/uploads/...): eso no es texto
+  const sinAdjuntos = (t) => String(t || '').split('\n').filter(l => !/^\s*(\S*\/uploads\/\S+|\[file:[^\]]*\]\([^)]*\))\s*$/.test(l)).join('\n').trim();
   function rawText(app, msgEl) {
     const id = parseInt(msgEl.dataset.msgId, 10);
     const m = (app._lastRenderedMessages || []).find(x => x && x.id === id);
-    if (m && typeof m.content === 'string') return m.content;
+    if (m && typeof m.content === 'string') return sinAdjuntos(m.content);
     const c = msgEl.querySelector('.message-content');
-    return c ? c.innerText : '';
+    return c ? sinAdjuntos(c.innerText) : '';
   }
   function copy(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
@@ -12611,5 +12614,64 @@ var puenteSinUbicacion = (function () {
     if (!list || !window.app || !window.app.user) { if (++t < 120) setTimeout(esperar, 1000); return; }
     poner();
     new MutationObserver(poner).observe(list, { childList: true, subtree: true });
+  })();
+})();
+
+// El "+" de los mensajes directos (y de la ventanita de la web y del foro): con una persona abre el
+// mensaje directo con ella; con dos o mas, el grupo (lo de Haven). Haven pedia minimo dos.
+(function () {
+  'use strict';
+  let t = 0;
+  (function esperar() {
+    const app = window.app;
+    if (!app || !app.socket || typeof app._openGroupPicker !== 'function') { if (++t < 120) setTimeout(esperar, 1000); return; }
+    const original = app._openGroupPicker;
+    app._openGroupPicker = async function (opts) {
+      const r = await original.apply(this, arguments);
+      if (opts && opts.code) return r; // sumar gente a un grupo: como siempre
+      const modal = document.getElementById('group-picker-modal');
+      if (!modal) return r;
+      const q = (sel) => modal.querySelector(sel);
+      const titulo = q('.gp-title'), nombre = q('.gp-name'), hint = q('.gp-hint'), viejo = q('.gp-go');
+      if (!viejo) return r;
+      const hintGrupo = hint ? hint.textContent : '';
+      if (titulo) titulo.textContent = 'Nuevo mensaje';
+      if (nombre) nombre.placeholder = 'Nombre del grupo (opcional, con 2 o más)';
+      // el boton propio: el de Haven tiene sus manejadores (exige dos)
+      const go = viejo.cloneNode(true); viejo.replaceWith(go);
+      const marcados = () => [...modal.querySelectorAll('.gp-list input[type=checkbox]:checked')];
+      const pintar = () => {
+        const n = marcados().length;
+        go.disabled = n < 1 || n > 49;
+        go.textContent = n <= 1 ? 'Abrir mensaje' : 'Crear grupo';
+        if (nombre) nombre.style.display = n >= 2 ? '' : 'none';
+        if (hint) hint.textContent = n >= 2 ? hintGrupo : 'Elegí a una persona para mandarle un mensaje directo (cifrado), o a varias para armar un grupo.';
+      };
+      // despues del de Haven (que va en cada casilla): los cambios llegan aca por burbujeo
+      q('.gp-list').addEventListener('change', pintar);
+      q('.gp-search').addEventListener('input', () => setTimeout(pintar, 0));
+      go.addEventListener('click', () => {
+        const ids = marcados().map(b => b.closest('.gp-row')).filter(Boolean);
+        const n = ids.length;
+        if (n < 1) return;
+        if (n === 1) {
+          // el id: la lista de Haven no lo guarda en la fila; se busca por el nombre
+          const nom = ids[0].querySelector('span') ? ids[0].querySelector('span').textContent : '';
+          app._groupCandidates().then((ps) => {
+            const p = ps.find(x => x.username === nom);
+            if (p) { app.socket.emit('start-dm', { targetUserId: p.id }); if (app._showToast) app._showToast('Abriendo el mensaje con ' + p.username, 'info'); }
+          });
+          modal.remove();
+          return;
+        }
+        viejo.disabled = false; viejo.click(); // dos o mas: lo de Haven, con sus elegidos
+      });
+      // Haven guarda los elegidos en su propio conjunto (se marcan con sus casillas): para el grupo,
+      // el boton viejo sigue sabiendo quienes son aunque ya no este en la pantalla
+      pintar();
+      if (nombre) { nombre.style.display = 'none'; }
+      const bus = q('.gp-search'); if (bus) bus.focus();
+      return r;
+    };
   })();
 })();
