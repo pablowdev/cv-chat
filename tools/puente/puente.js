@@ -144,6 +144,7 @@ function start(deps) {
   require('./invitaciones.js').setup({ db, log, warn, publicUrl });
   require('./perfil.js').setup({ db, io, log, warn });
   require('./mercado.js').setup({ db, io, log, warn });
+  require('./denuncias.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });
   require('./funball.js').setup({ db, io, log, warn });
   require('./ajedrez.js').setup({ db, io, log, warn });

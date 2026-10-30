@@ -625,7 +625,7 @@ function sheetDrag(sheet, opts) {
     ['reply', 'thread', 'quote'],
     ['edit', 'copy-text', 'copy-link', 'pin', 'unpin'],
     [], // el resto (proteger, mensaje oficial, etiquetas...)
-    ['delete'],
+    ['puente-denunciar', 'delete'],
   ];
   let quick = null; // reacciones rapidas [{ emoji, url? }]
 
@@ -738,6 +738,16 @@ function sheetDrag(sheet, opts) {
       lk.append(el('span', 'puente-sheet-icon', '🔗'), el('span', '', 'Copiar enlace del mensaje'));
       lk.addEventListener('click', (ev) => { ev.stopPropagation(); window.puenteEnlaces.copiar(app, msgEl); hide(app); });
       buttons.push(lk);
+    }
+
+    // Denunciar (no en los mensajes propios)
+    if (window.puenteDenunciar && !window.puenteDenunciar.propio(app, msgEl)) {
+      const den = el('button', 'channel-ctx-item');
+      den.type = 'button';
+      den.dataset.puenteAction = 'puente-denunciar';
+      den.append(el('span', 'puente-sheet-icon', '🚩'), el('span', '', 'Denunciar mensaje'));
+      den.addEventListener('click', (ev) => { ev.stopPropagation(); hide(app); window.puenteDenunciar.abrir(app, msgEl); });
+      buttons.push(den);
     }
 
     const actionOf = (b) => b.dataset.action || b.dataset.puenteAction;
@@ -5725,6 +5735,99 @@ document.addEventListener('pointerdown', (ev) => {
 // PC: la barrita que aparece al pasar el mouse por un mensaje y el menu del clic
 // derecho, como en Discord de escritorio. La barrita: tres reacciones rapidas
 // (las mas usadas), agregar reaccion, responder, citar y "mas" (abre el menu).
+// Denunciar un mensaje (denuncias.js): la ventana con el motivo. Le llega a los administradores.
+// Esta en el menu del mensaje de la PC y en la hoja del celular (no en los mensajes propios).
+// En los privados (cifrados) el servidor no puede leer el texto: se manda el que se ve, si se quiere.
+(function () {
+  'use strict';
+  const MOTIVOS = [
+    ['menores', 'Abuso o explotación de menores'],
+    ['acoso', 'Acoso o amenazas'],
+    ['odio', 'Odio o violencia'],
+    ['sexual', 'Contenido sexual no deseado'],
+    ['spam', 'Spam o estafa'],
+    ['otro', 'Otro motivo'],
+  ];
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const css = el('style');
+  css.textContent = '.puente-den-fondo{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}'
+    + '.puente-den{width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;background:#2b2b31;color:#dbdee1;border-radius:12px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-size:14px}'
+    + '.puente-den h2{margin:0 0 4px;font-size:18px;color:#fbfbfb}.puente-den p{margin:0 0 14px;color:#b5bac1;font-size:13px;line-height:1.4}'
+    + '.puente-den-cita{margin:0 0 14px;padding:8px 10px;border-left:3px solid #4e5058;background:#232328;border-radius:4px;color:#b5bac1;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:90px;overflow:auto}'
+    + '.puente-den label.puente-den-op{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer}.puente-den label.puente-den-op:hover{background:#35353c}'
+    + '.puente-den input[type=radio]{accent-color:#f23f43;width:16px;height:16px;margin:0}'
+    + '.puente-den textarea{width:100%;box-sizing:border-box;margin-top:10px;min-height:64px;resize:vertical;background:#1e1f22;color:#dbdee1;border:1px solid #3a3a40;border-radius:8px;padding:8px 10px;font:inherit}'
+    + '.puente-den-incluir{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;color:#b5bac1}'
+    + '.puente-den-pie{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.puente-den-pie button{border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}'
+    + '.puente-den-no{background:transparent;color:#dbdee1}.puente-den-si{background:#da373c;color:#fff}.puente-den-si:disabled{opacity:.5;cursor:default}'
+    + '.puente-den-error{color:#f87171;font-size:13px;margin-top:10px}'
+    + '#message-context-menu .puente-mm-peligro{color:#f23f43}';
+  document.head.appendChild(css);
+
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const propio = (app, msgEl) => !!(app && app.user && msgEl && String(msgEl.dataset.userId || '') === String(app.user.id));
+  function textoVisible(msgEl) {
+    const c = msgEl.querySelector('.message-content');
+    return c ? c.innerText.trim().slice(0, 1000) : '';
+  }
+  function cerrar() { const o = document.getElementById('puente-denunciar'); if (o) { if (o.__off) o.__off(); o.remove(); } }
+
+  function abrir(app, msgEl) {
+    cerrar();
+    const id = parseInt(msgEl && msgEl.dataset.msgId, 10);
+    if (!id || !token()) return;
+    const canal = app && (app.channels || []).find(c => c && c.code === app.currentChannel);
+    const privado = !!(canal && canal.is_dm);
+    const fondo = el('div', 'puente-den-fondo'); fondo.id = 'puente-denunciar';
+    const caja = el('div', 'puente-den'); caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true');
+    caja.appendChild(el('h2', '', 'Denunciar mensaje'));
+    caja.appendChild(el('p', '', 'Les llega a los administradores de CV Chat, que lo revisan. Quien escribió el mensaje no se entera de que lo denunciaste.'));
+    const visto = textoVisible(msgEl);
+    if (visto) caja.appendChild(el('div', 'puente-den-cita', visto.length > 300 ? visto.slice(0, 300) + '…' : visto));
+    const lista = el('div');
+    let elegido = null;
+    for (const [v, t] of MOTIVOS) {
+      const l = el('label', 'puente-den-op'); const r = el('input'); r.type = 'radio'; r.name = 'puente-den-motivo'; r.value = v;
+      r.addEventListener('change', () => { elegido = v; si.disabled = false; });
+      l.append(r, el('span', '', t)); lista.appendChild(l);
+    }
+    caja.appendChild(lista);
+    const det = el('textarea'); det.maxLength = 500; det.placeholder = 'Contanos más (opcional)';
+    caja.appendChild(det);
+    let incluir = null;
+    if (privado && visto) {
+      const l = el('label', 'puente-den-incluir'); incluir = el('input'); incluir.type = 'checkbox'; incluir.checked = true;
+      l.append(incluir, el('span', '', 'Incluir el texto del mensaje (los mensajes privados están cifrados: sin esto, los administradores no pueden leerlo).'));
+      caja.appendChild(l);
+    }
+    const error = el('div', 'puente-den-error'); error.hidden = true; caja.appendChild(error);
+    const pie = el('div', 'puente-den-pie');
+    const no = el('button', 'puente-den-no', 'Cancelar'); no.type = 'button';
+    const si = el('button', 'puente-den-si', 'Denunciar'); si.type = 'button'; si.disabled = true;
+    pie.append(no, si); caja.appendChild(pie);
+    fondo.appendChild(caja);
+    no.addEventListener('click', cerrar);
+    fondo.addEventListener('mousedown', (e) => { if (e.target === fondo) cerrar(); });
+    const tecla = (e) => { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } };
+    document.addEventListener('keydown', tecla, true);
+    fondo.__off = () => document.removeEventListener('keydown', tecla, true);
+    si.addEventListener('click', async () => {
+      if (!elegido) return;
+      si.disabled = true; error.hidden = true;
+      try {
+        const r = await fetch('/puente/api/denunciar', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
+          body: JSON.stringify({ mensaje: id, motivo: elegido, detalle: det.value, texto: incluir && incluir.checked ? visto : '' }) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'No se pudo mandar la denuncia.');
+        cerrar();
+        if (app && app._showToast) app._showToast(d.ya ? 'Ya habías denunciado este mensaje' : 'Gracias: la denuncia les llegó a los administradores', 'success');
+      } catch (err) { error.textContent = err.message || 'No se pudo mandar la denuncia.'; error.hidden = false; si.disabled = false; }
+    });
+    document.body.appendChild(fondo);
+  }
+  window.puenteDenunciar = { abrir, propio };
+})();
+
 // El menu: reacciones rapidas arriba, "Agregar reaccion", y las opciones de Haven
 // ordenadas como en Discord, con su icono a la derecha y "Copiar texto". Son las
 // mismas acciones y permisos de Haven; solo cambian el aspecto y el orden.
@@ -5749,6 +5852,7 @@ document.addEventListener('pointerdown', (ev) => {
     more: svg('M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'),
     eyes: svg('M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5Zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z'),
     close: svg('M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'),
+    flag: svg('M5 2h2v1.2C8.6 2.5 10.4 2.3 12.3 3c1.6.6 3.2.7 4.9.2L19 2.7V14l-1.4.5c-2.1.7-4.1.6-6-.1-1.6-.6-3.1-.6-4.6 0V22H5V2Z'),
     chevron: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.6 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>',
   };
   // Opciones de Haven: nombre como en Discord, icono y grupo
@@ -5758,7 +5862,7 @@ document.addEventListener('pointerdown', (ev) => {
     'copy-link': ['Copiar enlace del mensaje', I.link, 2], 'copy-href': ['Copiar dirección del enlace', I.link, 2],
     archive: [null, I.shield, 3], unarchive: [null, I.shield, 3], 'edit-tags': [null, I.tag, 3], 'edit-role-menu': [null, I.tag, 3],
     'highlight-on': [null, I.megaphone, 3], 'highlight-off': [null, I.megaphone, 3],
-    delete: ['Eliminar mensaje', I.trash, 4],
+    'puente-denunciar': ['Denunciar mensaje', I.flag, 4], delete: ['Eliminar mensaje', I.trash, 4],
   };
   const ORDER = ['edit', 'reply', 'quote', 'thread', 'puente-copiar', 'pin', 'unpin', 'copy-link', 'copy-href'];
 
@@ -5931,6 +6035,13 @@ document.addEventListener('pointerdown', (ev) => {
       linkBtn.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); window.puenteEnlaces.copiar(app, msgEl); });
       by.set('copy-link', linkBtn);
     }
+    // Denunciar (no en los mensajes propios)
+    if (window.puenteDenunciar && !window.puenteDenunciar.propio(app, msgEl)) {
+      const den = el('button', 'channel-ctx-item puente-mm-peligro');
+      den.dataset.action = 'puente-denunciar';
+      den.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); window.puenteDenunciar.abrir(app, msgEl); });
+      by.set('puente-denunciar', den);
+    }
     // El nombre de Haven esta en su <span>; sin <span>, se le saca el emoji del principio
     const label = (b, a) => {
       const it = ITEMS[a];
@@ -5976,9 +6087,10 @@ document.addEventListener('pointerdown', (ev) => {
       vb.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); viewReactions(app, msgEl, start); });
       groups[0].push(vb);
     }
-    const used = new Set(['react']);
+    const used = new Set(['react', 'puente-denunciar']);
     for (const a of ORDER) if (by.has(a)) { used.add(a); groups[(ITEMS[a] || [0, 0, 3])[2] - 1].push(row(by.get(a), a)); }
     for (const [a, b] of by) if (!used.has(a) && a !== 'delete') groups[2].push(row(b, a));
+    if (by.has('puente-denunciar')) groups[3].push(row(by.get('puente-denunciar'), 'puente-denunciar'));
     if (by.has('delete')) groups[3].push(row(by.get('delete'), 'delete'));
     groups.filter(g => g.length).forEach((g, i) => {
       if (i) menu.appendChild(el('div', 'puente-mm-sep'));
