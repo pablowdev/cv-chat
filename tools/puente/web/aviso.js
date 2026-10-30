@@ -5828,6 +5828,27 @@ document.addEventListener('pointerdown', (ev) => {
   window.puenteDenunciar = { abrir, propio };
 })();
 
+// Canal sin chat de voz (el admin la apago en la configuracion del canal): Haven ya saca el boton
+// "Unirse al chat de voz", y aca se esconde tambien lo de voz del panel de la derecha ("Voz",
+// "Nadie en voz"). La ✕ que cierra ese panel en el celular queda. En los privados (llamadas) y en
+// los canales con voz, todo sigue igual. Marca html.puente-sin-voz solo cuando cambia.
+(function () {
+  'use strict';
+  const css = document.createElement('style');
+  css.textContent = 'html.puente-sin-voz #right-sidebar-voice .panel-title,html.puente-sin-voz #right-sidebar-voice .voice-header-actions,'
+    + 'html.puente-sin-voz #voice-users,html.puente-sin-voz #voice-join-mobile,html.puente-sin-voz #voice-join-btn{display:none!important}';
+  document.head.appendChild(css);
+  let antes = null;
+  function revisar() {
+    const app = window.app;
+    const ch = app && (app.channels || []).find(c => c && c.code === app.currentChannel);
+    const sinVoz = !!(ch && !ch.is_dm && ch.voice_enabled === 0);
+    if (sinVoz !== antes) { antes = sinVoz; document.documentElement.classList.toggle('puente-sin-voz', sinVoz); }
+  }
+  setInterval(revisar, 1000);
+  revisar();
+})();
+
 // El menu: reacciones rapidas arriba, "Agregar reaccion", y las opciones de Haven
 // ordenadas como en Discord, con su icono a la derecha y "Copiar texto". Son las
 // mismas acciones y permisos de Haven; solo cambian el aspecto y el orden.
