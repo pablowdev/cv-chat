@@ -2,7 +2,7 @@
 // que muchos servidores de Discord tienen (un bot les cambia el nombre):
 //   👥 <app>-N          usuarios registrados en Haven (<app>: PUENTE_TITULO en
 //                       minusculas con guiones, "cv-chat"; sin titulo, "haven")
-//   🔗 discord-link-N   cuentas de Haven vinculadas con Discord
+// (el de las cuentas vinculadas con Discord, "discord-link-N", se saco: si quedo, se retira solo)
 // Son canales propios de Haven (no vienen de Discord), de solo lectura y
 // visibles para todos, en la misma categoria que el contador de Discord.
 // Se actualizan como mucho cada INTERVAL_MS y solo si cambio el numero.
@@ -20,7 +20,6 @@ const appSlug = () => String(process.env.PUENTE_TITULO || '').normalize('NFKD').
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'haven';
 const STATS = [
   { key: 'haven', label: n => `👥 ${appSlug()}-${n}`, count: db => db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0").get().n },
-  { key: 'vinculados', label: n => `🔗 discord-link-${n}`, count: db => db.prepare('SELECT COUNT(*) n FROM puente_vinculos').get().n },
 ];
 const SETTING = 'puente_canales_contador';
 
@@ -28,6 +27,7 @@ let db, io, log, warn, timer = null;
 
 function setup(ctx) {
   ({ db, io, log, warn } = ctx);
+  retirar();
   ensureChannels();
   update();
   timer = setInterval(update, INTERVAL_MS);
@@ -37,6 +37,24 @@ function setup(ctx) {
 function ids() {
   try { return JSON.parse((db.prepare('SELECT value FROM server_settings WHERE key = ?').get(SETTING) || {}).value || '{}'); }
   catch { return {}; }
+}
+
+// Los contadores que ya no estan (discord-link): su canal se retira, si nunca tuvo mensajes (es solo el contador)
+function retirar() {
+  try {
+    const map = ids(), vigentes = new Set(STATS.map(s => s.key));
+    let changed = false;
+    for (const [k, id] of Object.entries(map)) {
+      if (vigentes.has(k)) continue;
+      const ch = db.prepare('SELECT id, name FROM channels WHERE id = ?').get(id);
+      if (ch && !db.prepare('SELECT 1 FROM messages WHERE channel_id = ? LIMIT 1').get(id)) {
+        db.prepare('DELETE FROM channels WHERE id = ?').run(id);
+        log(`estadisticas: canal contador "${ch.name}" retirado`);
+      }
+      delete map[k]; changed = true;
+    }
+    if (changed) { db.prepare('INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)').run(SETTING, JSON.stringify(map)); refreshAllChannelLists(); }
+  } catch (err) { warn('estadisticas: retirar:', err.message); }
 }
 
 function ensureChannels() {
