@@ -16,7 +16,7 @@
   if (q.get('vinculo')) {
     var que = q.get('vinculo') === 'foro' ? 'del foro' : 'de Discord';
     var ERR = { cancelado: 'Cancelaste la vinculación.', caducado: 'El paso caducó. Probá de nuevo.', ocupada: 'Esa cuenta ' + que + ' ya está vinculada a otra cuenta de Círculo Vicioso.', ban: 'Esa cuenta está suspendida.' };
-    setTimeout(function () { q.get('ok') ? mensaje('¡Listo! Tu cuenta ' + que + ' quedó vinculada.') : mensaje(ERR[q.get('error')] || 'No se pudo vincular. Probá de nuevo.', true); }, 0);
+    setTimeout(function () { q.get('historial') === 'ajeno' ? mensaje('Tu cuenta ' + que + ' quedó vinculada, pero su historial ya es de otra cuenta de Círculo Vicioso, así que no se movió. Si es tuyo, hablá con un administrador.', true) : q.get('ok') ? mensaje('¡Listo! Tu cuenta ' + que + ' quedó vinculada.') : mensaje(ERR[q.get('error')] || 'No se pudo vincular. Probá de nuevo.', true); }, 0);
     history.replaceState(null, '', location.pathname);
   }
 
@@ -29,7 +29,7 @@
       if (info.perfil) { var a = document.createElement('a'); a.href = info.perfil; a.textContent = ' · ver perfil'; a.target = '_blank'; a.rel = 'noopener'; est.appendChild(a); }
       btn.textContent = 'Desvincular'; btn.className = 'btn btn--chico btn--peligro';
       btn.onclick = function () {
-        if (!confirm('¿Desvincular tu cuenta ' + nombre + '?' + (con === 'discord' ? ' Tu historial de Discord vuelve a quedar como importado.' : ' Ya no vas a poder entrar con ella.'))) return;
+        if (!confirm('¿Desvincular tu cuenta ' + nombre + '?' + (con === 'discord' ? ' Tus mensajes de Discord siguen siendo tuyos: solo se corta la sincronización.' : ' Ya no vas a poder entrar con ella.'))) return;
         btn.disabled = true;
         api('/puente/api/cuenta/desconectar', { con: con }).then(function () { mensaje('Cuenta ' + nombre + ' desvinculada.'); cargar(); }).catch(function (e) { mensaje(e.message, true); btn.disabled = false; });
       };

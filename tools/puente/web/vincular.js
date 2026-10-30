@@ -34,7 +34,8 @@
   const viaForo = params.get('via') === 'foro';
   if (viaForo) { /* los avisos del foro van en su tarjeta (foro, abajo) */ } else if (params.get('ok')) {
     const n = Number(params.get('mensajes') || 0);
-    message(n > 0 ? `¡Listo! Tu cuenta quedó vinculada y ${n.toLocaleString('es')} mensajes de tu historial de Discord pasaron a tu cuenta.` : '¡Listo! Tu cuenta quedó vinculada.');
+    if (params.get('historial') === 'ajeno') message('Tu cuenta quedó vinculada, pero el historial de ese Discord ya es de otra cuenta de __PUENTE_APP__, así que no se movió. Si es tuyo, hablá con un administrador.', true);
+    else message(n > 0 ? `¡Listo! Tu cuenta quedó vinculada y ${n.toLocaleString('es')} mensajes de tu historial de Discord pasaron a tu cuenta.` : '¡Listo! Tu cuenta quedó vinculada.');
   } else if (params.get('error')) {
     message(ERRORES[params.get('error')] || 'Algo salió mal. Volvé a intentarlo.', true);
   }
@@ -64,7 +65,7 @@
     catch (err) { message(err.message, true); e.target.disabled = false; }
   });
   $('btn-desvincular').addEventListener('click', async e => {
-    if (!confirm('¿Desvincular tu cuenta de Discord? Tu historial de Discord volverá a quedar como importado.')) return;
+    if (!confirm('¿Desvincular tu cuenta de Discord? Tus mensajes de Discord siguen siendo tuyos: solo se corta la sincronización.')) return;
     e.target.disabled = true;
     try { await call('POST', '/puente/api/desvincular'); message('Cuenta desvinculada.'); await load(); }
     catch (err) { message(err.message, true); }

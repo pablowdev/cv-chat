@@ -74,7 +74,16 @@ function setup(ctx) {
       discord_user_id TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_puente_autores_user ON puente_autores(discord_user_id);
+    -- De quien es el historial de cada cuenta de Discord: de la primera cuenta que la vinculo (probo que
+    -- es suya). Desvincular corta la sincronizacion, pero el historial sigue siendo suyo; solo un admin lo mueve.
+    CREATE TABLE IF NOT EXISTS puente_historial (
+      discord_user_id TEXT PRIMARY KEY,
+      haven_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      desde INTEGER NOT NULL
+    );
   `);
+  // las vinculaciones de antes: ya probaron que son suyas
+  db.prepare('INSERT OR IGNORE INTO puente_historial (discord_user_id, haven_user_id, desde) SELECT discord_user_id, haven_user_id, ? FROM puente_vinculos').run(Date.now());
 
   api('GET', '/oauth2/applications/@me').then(app => {
     if (app && app.id) clientId = app.id;
@@ -103,9 +112,9 @@ function setup(ctx) {
       unlink: (userId) => {
         const l = db.prepare('SELECT discord_user_id FROM puente_vinculos WHERE haven_user_id = ?').get(userId);
         if (!l) return 0;
-        const restored = unlink(userId, l.discord_user_id);
+        unlink(userId, l.discord_user_id);
         try { onUnlinked(userId); } catch (err) { warn('accesos al desvincular:', err.message); }
-        log(`desvinculado: Haven #${userId} <-> Discord ${l.discord_user_id} (${restored} mensajes devueltos al historial importado)`);
+        log(`desvinculado: Haven #${userId} <-> Discord ${l.discord_user_id} (el historial sigue en su cuenta)`);
         return 1;
       },
     },
@@ -853,10 +862,10 @@ async function handle(req, res) {
     if (!user) return json(res, 401, { error: 'sin sesion' });
     const link = db.prepare('SELECT discord_user_id FROM puente_vinculos WHERE haven_user_id = ?').get(user.id);
     if (!link) return json(res, 200, { ok: true });
-    const restored = unlink(user.id, link.discord_user_id);
+    unlink(user.id, link.discord_user_id);
     try { onUnlinked(user.id); } catch (err) { warn('accesos al desvincular:', err.message); }
-    log(`desvinculado: Haven #${user.id} <-> Discord ${link.discord_user_id} (${restored} mensajes devueltos al historial importado)`);
-    return json(res, 200, { ok: true, mensajes: restored });
+    log(`desvinculado: Haven #${user.id} <-> Discord ${link.discord_user_id} (el historial sigue en su cuenta)`);
+    return json(res, 200, { ok: true });
   }
 
   if (p === '/puente/api/recuperar/iniciar' && req.method === 'POST') {
@@ -962,6 +971,7 @@ async function handle(req, res) {
     const problem = usernameProblem(username) || require('./identidad.js').problem(0, username, sg.me.id);
     if (problem) return json(res, 400, { error: problem });
     if (db.prepare('SELECT 1 FROM puente_vinculos WHERE discord_user_id = ?').get(sg.me.id)) { signups.delete(code); return json(res, 409, { error: 'Ese Discord ya tiene una cuenta. Volvé a tocar "Entrar con Discord".' }); }
+    if (historyOwner(sg.me.id)) { signups.delete(code); return json(res, 409, { error: MSG_CON_HISTORIAL() }); }
     const r = await registerThroughHaven(req, username);
     if (!r.ok) return json(res, 400, { error: r.error });
     signups.delete(code);
@@ -1039,6 +1049,7 @@ async function handle(req, res) {
     if (other && other.haven_user_id !== entry.userId) return back({ error: 'ocupada' });
 
     const moved = link(entry.userId, me);
+    const ajeno = moved < 0;
     // Sin avatar en Haven: usar el de Discord (no pisa uno elegido en Haven).
     try {
       const u = db.prepare('SELECT avatar FROM users WHERE id = ?').get(entry.userId);
@@ -1049,8 +1060,8 @@ async function handle(req, res) {
     } catch (err) { warn('avatar de Discord:', err.message); }
     try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
     email.fromDiscordIfMissing(entry.userId, me);
-    log(`vinculado: Haven #${entry.userId} <-> Discord ${me.username} (${me.id}); ${moved} mensajes historicos pasados a su cuenta`);
-    return back({ ok: '1', mensajes: String(moved) });
+    log(`vinculado: Haven #${entry.userId} <-> Discord ${me.username} (${me.id}); ${ajeno ? 'el historial es de otra cuenta, no se movio' : moved + ' mensajes historicos pasados a su cuenta'}`);
+    return back(ajeno ? { ok: '1', historial: 'ajeno' } : { ok: '1', mensajes: String(moved) });
   }
 
   if (p.startsWith('/puente/api/perfil/') || p.startsWith('/puente/fuentes/')) {
@@ -1217,6 +1228,8 @@ function loginWithDiscord(me) {
   const l = db.prepare('SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?').get(String(me.id));
   if (!l) {
     if (require('./baneos.js').isDiscordBanned(me.id)) return { error: 'ban' };
+    // Su historial ya es de una cuenta (que lo desvinculo): que entre con esa, en vez de crear otra
+    if (historyOwner(me.id)) return { error: 'con-historial' };
     signups.set(code, { me, exp: now + SIGNUP_TTL_MS }); return { nuevo: code };
   }
   const user = db.prepare('SELECT id, username, is_admin, totp_enabled FROM users WHERE id = ?').get(l.haven_user_id);
@@ -1305,11 +1318,14 @@ async function checkPassword(req, username, password) {
   }
 }
 
+const MSG_CON_HISTORIAL = () => `El historial de ese Discord ya está en una cuenta de ${appName()}. Entrá con esa cuenta (usuario y contraseña, o el foro) y, si querés, volvé a vincular Discord desde "Mi cuenta".`;
 function ghostId() {
   const g = db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get();
   return g ? g.id : null;
 }
 
+// Devuelve cuantos mensajes del historial pasaron a la cuenta, o -1 si ese historial es de otra cuenta
+function historyOwner(discordUserId) { const r = db.prepare('SELECT haven_user_id FROM puente_historial WHERE discord_user_id = ?').get(String(discordUserId)); return r ? r.haven_user_id : null; }
 function link(havenUserId, me) {
   return db.transaction(() => {
     const prev = db.prepare('SELECT discord_user_id FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId);
@@ -1319,24 +1335,38 @@ function link(havenUserId, me) {
                 ON CONFLICT(discord_user_id) DO UPDATE SET discord_username = excluded.discord_username,
                   discord_global_name = excluded.discord_global_name, discord_avatar = excluded.discord_avatar`)
       .run(me.id, havenUserId, me.username, me.global_name || null, me.avatar || null);
+    nombres.applyName(db, havenUserId, me.global_name || me.username);
+    const owner = historyOwner(me.id);
+    if (owner && owner !== havenUserId) return -1;
+    if (!owner) db.prepare('INSERT INTO puente_historial (discord_user_id, haven_user_id, desde) VALUES (?, ?, ?)').run(String(me.id), havenUserId, Date.now());
     // Sin el nombre de Discord guardado en cada mensaje: se ven con el de la cuenta (nombres.js)
     const moved = db.prepare(`UPDATE messages SET user_id = ?, imported_from = NULL, webhook_username = NULL
                        WHERE id IN (SELECT message_id FROM puente_autores WHERE discord_user_id = ?) AND imported_from = 'discord'`)
       .run(havenUserId, me.id).changes;
-    nombres.applyName(db, havenUserId, me.global_name || me.username);
     return moved;
   })();
 }
 
+// Desvincular corta la sincronizacion; el historial sigue siendo de la cuenta (puente_historial)
 function unlink(havenUserId, discordUserId) {
   return db.transaction(() => {
-    const l = db.prepare('SELECT discord_username, discord_global_name FROM puente_vinculos WHERE haven_user_id = ?').get(havenUserId);
-    const restored = db.prepare(`UPDATE messages SET user_id = ?, imported_from = 'discord', webhook_username = COALESCE(webhook_username, ?)
-                                 WHERE id IN (SELECT message_id FROM puente_autores WHERE discord_user_id = ?) AND user_id = ?`)
-      .run(ghostId(), (l && (l.discord_global_name || l.discord_username)) || 'Discord', discordUserId, havenUserId).changes;
     nombres.releaseName(db, havenUserId);
     db.prepare('DELETE FROM puente_vinculos WHERE haven_user_id = ?').run(havenUserId);
-    return restored;
+    return 0;
+  })();
+}
+// Solo para admins: pasar el historial de una cuenta de Discord a otra cuenta (o devolverlo al importado con null)
+function moveHistory(discordUserId, toHavenUserId) {
+  discordUserId = String(discordUserId);
+  return db.transaction(() => {
+    const from = historyOwner(discordUserId);
+    const dest = toHavenUserId || ghostId();
+    const n = db.prepare(`UPDATE messages SET user_id = ?, imported_from = ${toHavenUserId ? 'NULL' : "'discord'"}
+                          WHERE id IN (SELECT message_id FROM puente_autores WHERE discord_user_id = ?)${from ? ' AND user_id = ?' : " AND imported_from = 'discord'"}`)
+      .run(...[dest, discordUserId].concat(from ? [from] : [])).changes;
+    if (toHavenUserId) db.prepare('INSERT OR REPLACE INTO puente_historial (discord_user_id, haven_user_id, desde) VALUES (?, ?, ?)').run(discordUserId, toHavenUserId, Date.now());
+    else db.prepare('DELETE FROM puente_historial WHERE discord_user_id = ?').run(discordUserId);
+    return n;
   })();
 }
 
@@ -1345,4 +1375,4 @@ function recordAuthor(messageId, discordUserId) {
   if (messageId && discordUserId) db.prepare('INSERT OR IGNORE INTO puente_autores (message_id, discord_user_id) VALUES (?, ?)').run(messageId, discordUserId);
 }
 
-module.exports = { setup, recordAuthor, whoReacted };
+module.exports = { setup, recordAuthor, whoReacted, historyOwner, moveHistory };

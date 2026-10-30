@@ -195,6 +195,12 @@ try {
     INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, reply_to, discord_message_id, thread_id)
     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`);
 } catch { /* sin puente */ }
+// Tambien quien desvinculo su Discord: el historial sigue siendo suyo (puente_historial)
+try {
+  const st = db.prepare(`SELECT haven_user_id FROM puente_vinculos WHERE discord_user_id = ?
+    UNION ALL SELECT haven_user_id FROM puente_historial WHERE discord_user_id = ? LIMIT 1`);
+  q.linkOf = { get: (id) => st.get(id, id) };
+} catch { /* puente sin puente_historial todavia */ }
 
 // Para --rehacer: el mensaje ya guardado con ese ID de Discord, salvo los que
 // salieron de Haven (puente_salientes), cuyo texto es el de Haven.

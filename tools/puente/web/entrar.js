@@ -37,6 +37,7 @@
     foro: ['No se pudo', 'El foro no confirmó tu cuenta. Probá de nuevo en un momento.'],
     admin: ['Entrá con tu contraseña', 'Las cuentas de administrador entran con usuario y contraseña, por seguridad.'],
     '2fa': ['Entrá con tu contraseña', 'Tu cuenta tiene verificación en dos pasos: entrá con usuario, contraseña y el código.'],
+    'con-historial': ['Entrá con tu cuenta', 'El historial de ese Discord ya está en una cuenta de __PUENTE_APP__. Entrá con esa cuenta (usuario y contraseña, o el foro) y, si querés, volvé a vincular Discord desde "Mi cuenta".'],
     ban: ['No podés entrar', foro ? 'Esta cuenta está suspendida en el foro o en este servidor.' : 'Esta cuenta está suspendida en este servidor.'],
   };
 

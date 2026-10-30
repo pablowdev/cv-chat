@@ -452,6 +452,8 @@ async function inboundCreate(msg, ownBot = false) {
   const ref = msg.message_reference && msg.message_reference.type !== 1 ? msg.message_reference.message_id : null;
   const replyTo = ref ? ((S.byDiscordId.get(ref) || {}).id || null) : null;
   const link = msg.author && !msg.webhook_id ? S.linkByDiscord.get(msg.author.id) : null;
+  // Desvinculo su Discord pero el historial es suyo (puente_historial): lo nuevo tambien va a su cuenta
+  const dueno = !link && msg.author && !msg.webhook_id ? vincular.historyOwner(msg.author.id) : null;
   // Mismo nombre que usa el historial importado (no el apodo del servidor).
   const author = (msg.author && (msg.author.global_name || msg.author.username)) || 'Unknown';
 
@@ -471,6 +473,10 @@ async function inboundCreate(msg, ownBot = false) {
     r = db.prepare(`INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, reply_to, discord_message_id, thread_id)
                     VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`)
       .run(target.channel.id, link.haven_user_id, content, toSqlTs(msg.timestamp), discordAvatar(msg.author), replyTo, msg.id, target.root);
+  } else if (dueno) {
+    r = db.prepare(`INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, reply_to, discord_message_id, thread_id)
+                    VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`)
+      .run(target.channel.id, dueno, content, toSqlTs(msg.timestamp), discordAvatar(msg.author), replyTo, msg.id, target.root);
   } else {
     r = db.prepare(`INSERT OR IGNORE INTO messages (channel_id, user_id, content, created_at, webhook_username, webhook_avatar, is_webhook, imported_from, reply_to, discord_message_id, thread_id)
                     VALUES (?, ?, ?, ?, ?, ?, 0, 'discord', ?, ?, ?)`)
