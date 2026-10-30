@@ -87,6 +87,7 @@ public class Lanzador extends LauncherActivity {
     }
 
     private void buscarActualizacion() {
+        if (BuildConfig.TIENDA) { abrir(); return; } // la de Google Play se actualiza desde la tienda
         ui.postDelayed(this::abrir, ESPERA_MS); // sin respuesta a tiempo: se abre igual
         new Thread(() -> {
             try {

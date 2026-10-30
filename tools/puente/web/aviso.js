@@ -11088,6 +11088,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   if (w) { plataforma = 'windows'; actual = w[1]; }
   else {
     const q = new URLSearchParams(location.search);
+    // la de Google Play se actualiza desde la tienda: sin este aviso
+    if (q.get('app') === 'play') ses('puente_app_play', '1');
+    if (ses('puente_app_play')) return;
     if (q.get('app') === 'android') ses('puente_app_android', q.get('v') || '1.0.0');
     // la 1.0.1 y anteriores no avisan su version: se las reconoce porque Android abre la pagina desde la app
     else if (/^android-app:\/\/club\.circulovicioso\.chat/.test(document.referrer || '') && !ses('puente_app_android')) ses('puente_app_android', '1.0.0');

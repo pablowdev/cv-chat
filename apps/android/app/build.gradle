@@ -31,6 +31,15 @@ android {
             signingConfig signingConfigs.release
         }
     }
+    // Dos versiones: 'web' (el APK de /puente/descargar, que se actualiza sola bajando el APK nuevo) y
+    // 'play' (Google Play: sin ese actualizador ni el permiso de instalar paquetes, que Play no permite;
+    // se actualiza desde la tienda). Play pide el formato AAB: gradle bundlePlayRelease
+    buildFeatures { buildConfig true }
+    flavorDimensions 'canal'
+    productFlavors {
+        web { dimension 'canal'; buildConfigField 'boolean', 'TIENDA', 'false' }
+        play { dimension 'canal'; buildConfigField 'boolean', 'TIENDA', 'true' }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17

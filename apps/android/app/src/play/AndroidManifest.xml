@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La version de Google Play: sin el permiso de instalar sus propias actualizaciones (se actualiza
+     desde la tienda) y la pagina sabe que es la de Play (no le ofrece bajar el APK nuevo) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+    <application>
+        <activity android:name=".Lanzador">
+            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://chat.circulovicioso.club/app?app=play" tools:replace="android:value" />
+        </activity>
+    </application>
+</manifest>
