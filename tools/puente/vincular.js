@@ -488,6 +488,9 @@ function isMessageLink(previewUrl) {
 }
 
 // Canales de Discord que ve cualquiera del servidor y esta cuenta todavia no (para el aviso de vincular)
+function abiertosSinVincular() {
+  try { const a = require('./accesos.js'); return a.isEnabled() && a.openToUnlinked(); } catch { return false; }
+}
 function hiddenChannels(havenUserId) {
   let locked = new Set();
   try { locked = require('./accesos.js').lockedChannelIds(); } catch { /* sin accesos */ }
@@ -894,8 +897,11 @@ async function handle(req, res) {
       // Para el menu lateral del celular (como Discord): miembros y avatar propio
       miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial'").get().n,
       avatar: (db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id) || {}).avatar || null,
-      // Sin vincular: cuantos canales de Discord (de los que ve cualquiera) veria al vincular
-      canalesOcultos: link ? 0 : hiddenChannels(user.id),
+      // Sin vincular: cuantos canales de Discord (de los que ve cualquiera) veria al vincular.
+      // Si las cuentas sin vincular ya ven esos canales (PUENTE_SIN_VINCULAR_VEN=publicos), ninguno:
+      // al registrarse todavia no los tiene (se los da un instante despues) y el aviso decia, sin
+      // ser cierto, que sin Discord no se ven
+      canalesOcultos: link || abiertosSinVincular() ? 0 : hiddenChannels(user.id),
     });
   }
 
