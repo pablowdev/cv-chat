@@ -12684,3 +12684,198 @@ var puenteSinUbicacion = (function () {
   st.textContent = '#header-actions-box,#update-banner{display:none!important}';
   document.head.appendChild(st);
 })();
+
+// Imagenes y vistas previas como en Discord (puente-imagenes-discord):
+//  - El menu del clic derecho en una imagen, con el mismo aspecto que el de los mensajes (texto a la
+//    izquierda, icono a la derecha, separadores) y "Copiar enlace de la imagen".
+//  - En la imagen abierta, arriba a la derecha: acercar, reenviar, abrir en el navegador, mas
+//    opciones y cerrar.
+//  - Al pasar el mouse por la vista previa de un enlace, una ✕ para quitarla (solo quien escribio el
+//    mensaje, o un admin): queda el enlace solo, para todos (embeds.js), y tambien en Discord.
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const svg = (d, s = 20) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  const I = {
+    ver: 'M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5Zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+    guardar: 'M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4l3.3 3.3V4a1 1 0 0 1 1-1ZM4 19a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Z',
+    imagen: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v10.6l3.3-3.3a1 1 0 0 1 1.4 0l2.3 2.3 4.3-4.3a1 1 0 0 1 1.4 0L19 11.6V5H5Zm3.5 1.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z',
+    abrir: 'M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h6v2H5v12h12v-6h2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
+    enlace: 'M10.6 13.4a1 1 0 0 0 1.4 0l4-4a3 3 0 0 0-4.2-4.2l-1.5 1.5 1.4 1.4 1.5-1.5a1 1 0 0 1 1.4 1.4l-4 4a1 1 0 0 0 0 1.4Zm2.8-2.8a1 1 0 0 0-1.4 0l-4 4a3 3 0 0 0 4.2 4.2l1.5-1.5-1.4-1.4-1.5 1.5a1 1 0 0 1-1.4-1.4l4-4a1 1 0 0 0 0-1.4Z',
+    etiqueta: 'M21.4 11.6 12.4 2.6A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7c0 .55.22 1.05.59 1.42l9 9a2 2 0 0 0 2.82 0l7-7a2 2 0 0 0-.01-2.82ZM6.5 8A1.5 1.5 0 1 1 6.5 5a1.5 1.5 0 0 1 0 3Z',
+    ocultar: 'M2.3 3.7a1 1 0 0 1 1.4-1.4l18 18a1 1 0 0 1-1.4 1.4l-3.1-3.1A11.6 11.6 0 0 1 12 19.5c-5 0-9.3-3.1-11-7.5a12 12 0 0 1 3.8-5.2L2.3 3.7ZM12 4.5c5 0 9.3 3.1 11 7.5a12 12 0 0 1-2.6 4l-3.6-3.6A5 5 0 0 0 11.1 7L9 4.9c1-.3 2-.4 3-.4Z',
+    lupa: 'M10 3a7 7 0 0 1 5.6 11.2l4.6 4.6a1 1 0 0 1-1.4 1.4l-4.6-4.6A7 7 0 1 1 10 3Zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 2a1 1 0 0 1 1 1v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1H8a1 1 0 1 1 0-2h1V8a1 1 0 0 1 1-1Z',
+    reenviar: 'M14 5.5V9C7.5 9.6 4 13.6 3 19c2.3-3.2 5.6-4.7 11-4.8v3.6a.5.5 0 0 0 .85.35l6.3-6.3a.5.5 0 0 0 0-.7l-6.3-6.3a.5.5 0 0 0-.85.35Z',
+    mas: 'M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z',
+    cerrar: 'M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z',
+  };
+  const toast = (t, k) => { try { window.app && window.app._showToast && window.app._showToast(t, k || 'info'); } catch { /* sin aviso */ } };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const absoluta = (src) => { try { const u = new URL(src, location.href); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
+  const copiar = (t) => (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject(new Error('sin portapapeles')));
+
+  // ── El menu de la imagen ──
+  const ITEMS = {
+    view: ['Ver imagen', I.ver, 0], 'puente-abrir-img': ['Abrir imagen', I.abrir, 0],
+    copy: ['Copiar imagen', I.imagen, 1], save: ['Guardar imagen', I.guardar, 1],
+    'puente-copiar-enlace': ['Copiar enlace de la imagen', I.enlace, 2], open: ['Abrir en el navegador', I.abrir, 2],
+    'edit-tags': ['Editar etiquetas', I.etiqueta, 3], hide: ['Ocultar imagen', I.ocultar, 3],
+  };
+  function arreglarMenu(app, src) {
+    const menu = document.getElementById('image-context-menu');
+    if (!menu || menu.classList.contains('puente-img-menu')) return;
+    menu.classList.add('puente-img-menu', 'puente-pc-msgmenu');
+    const by = new Map([...menu.querySelectorAll('button[data-action]')].map(b => [b.dataset.action, b]));
+    const url = absoluta(src);
+    if (url) {
+      const b = el('button'); b.type = 'button'; b.dataset.action = 'puente-copiar-enlace';
+      b.addEventListener('click', (e) => { e.stopPropagation(); app._hideImageContextMenu(); copiar(url).then(() => toast('Enlace copiado', 'success'), () => prompt('Copiá el enlace:', url)); });
+      by.set('puente-copiar-enlace', b);
+    }
+    const grupos = [[], [], [], []];
+    for (const [a, b] of by) {
+      const it = ITEMS[a] || [null, I.imagen, 3];
+      const nombre = it[0] || b.textContent.replace(/^\s*[^\p{L}\p{N}\s]+\s*/u, '').trim();
+      b.textContent = '';
+      b.classList.add('channel-ctx-item', 'puente-mm-item');
+      if (a === 'hide') b.classList.add('danger');
+      b.append(el('span', 'puente-mm-label', nombre));
+      const ic = el('span', 'puente-mm-icon'); ic.innerHTML = svg(it[1]); b.appendChild(ic);
+      grupos[it[2]].push(b);
+    }
+    menu.textContent = '';
+    grupos.filter(g => g.length).forEach((g, i) => { if (i) menu.appendChild(el('div', 'puente-mm-sep')); g.forEach(b => menu.appendChild(b)); });
+    const r = menu.getBoundingClientRect();
+    if (r.right > innerWidth - 8) menu.style.left = Math.max(8, innerWidth - r.width - 8) + 'px';
+    if (r.bottom > innerHeight - 8) menu.style.top = Math.max(8, innerHeight - r.height - 8) + 'px';
+  }
+
+  // ── Arriba a la derecha de la imagen abierta ──
+  function barra(app) {
+    const lb = document.getElementById('image-lightbox'), img = document.getElementById('lightbox-img');
+    if (!lb || !img || lb.querySelector('.puente-lb-barra')) return;
+    const b = el('div', 'puente-lb-barra');
+    const boton = (icono, titulo, fn) => {
+      const x = el('button', 'puente-lb-btn'); x.type = 'button'; x.title = titulo; x.setAttribute('aria-label', titulo); x.innerHTML = svg(icono);
+      x.addEventListener('click', (e) => { e.stopPropagation(); fn(e, x); });
+      return x;
+    };
+    const zoom = boton(I.lupa, 'Acercar', () => {
+      const nivel = document.getElementById('lightbox-zoom-reset');
+      if (nivel && nivel.textContent.trim() !== '100%') nivel.click();
+      else { const mas = document.getElementById('lightbox-zoom-in'); if (mas) { mas.click(); mas.click(); } }
+    });
+    const reenviar = boton(I.reenviar, 'Reenviar', () => { const u = absoluta(img.src); if (u) elegirDestino(app, u); });
+    const abrir = boton(I.abrir, 'Abrir en el navegador', () => { if (img.src) window.open(img.src, '_blank', 'noopener'); });
+    const mas = boton(I.mas, 'Más', (e, x) => {
+      const r = x.getBoundingClientRect();
+      app._showImageContextMenu({ clientX: r.left, clientY: r.bottom + 6, preventDefault() {}, stopPropagation() {} }, img.src, {});
+    });
+    const cerrar = boton(I.cerrar, 'Cerrar', () => app._closeLightbox());
+    cerrar.classList.add('puente-lb-cerrar');
+    const grupo = el('div', 'puente-lb-grupo'); grupo.append(zoom, reenviar, abrir, mas);
+    b.append(grupo, cerrar);
+    lb.appendChild(b);
+    // reenviar solo con una imagen que tiene direccion (las de los mensajes cifrados se ven desde la memoria)
+    new MutationObserver(() => { reenviar.style.display = absoluta(img.src) ? '' : 'none'; }).observe(img, { attributes: true, attributeFilter: ['src'] });
+  }
+  // Reenviar: elegir a donde, y ahi queda el enlace escrito (se manda con Enter, cifrado si es un mensaje directo)
+  function elegirDestino(app, url) {
+    document.getElementById('puente-reenviar')?.remove();
+    const fondo = el('div', 'modal-overlay'); fondo.id = 'puente-reenviar'; fondo.style.display = 'flex';
+    const box = el('div', 'modal puente-reenviar');
+    box.appendChild(el('h3', null, 'Reenviar a'));
+    const q = el('input', 'settings-text-input'); q.type = 'search'; q.placeholder = 'Buscar un canal o una persona';
+    const lista = el('div', 'puente-reenviar-lista');
+    box.append(q, lista);
+    const acc = el('div', 'modal-actions');
+    const no = el('button', 'btn-sm', 'Cancelar'); no.type = 'button'; no.addEventListener('click', () => fondo.remove());
+    acc.appendChild(no); box.appendChild(acc);
+    fondo.appendChild(box);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) fondo.remove(); });
+    const nombre = (c) => (c.is_dm ? (c.is_group && app._groupName ? app._groupName(c) : '@' + ((c.dm_target && (c.dm_target.displayName || c.dm_target.username)) || 'mensaje')) : '#' + c.name);
+    const todos = (app.channels || []).filter(c => c && c.code && !c.is_voice && !c.is_forum && (c.is_dm || c.name));
+    const pintar = () => {
+      const f = q.value.trim().toLowerCase();
+      lista.textContent = '';
+      for (const c of todos.filter(c => !f || nombre(c).toLowerCase().includes(f)).slice(0, 60)) {
+        const r = el('button', 'puente-reenviar-fila', nombre(c)); r.type = 'button';
+        r.addEventListener('click', () => {
+          fondo.remove();
+          try { app._closeLightbox(); } catch { /* ya cerrada */ }
+          app.switchChannel(c.code);
+          setTimeout(() => {
+            const i = document.getElementById('message-input');
+            if (!i) return;
+            i.value = (i.value ? i.value + ' ' : '') + url;
+            i.dispatchEvent(new Event('input', { bubbles: true }));
+            i.focus();
+            toast('Listo para mandar: apretá Enter', 'info');
+          }, 700);
+        });
+        lista.appendChild(r);
+      }
+      if (!lista.children.length) lista.appendChild(el('div', 'puente-reenviar-vacio', 'No hay nada con ese nombre.'));
+    };
+    q.addEventListener('input', pintar);
+    pintar();
+    document.body.appendChild(fondo);
+    q.focus();
+  }
+
+  // ── La ✕ para quitar la vista previa de un enlace ──
+  function puedeQuitar(app, msgEl) {
+    const yo = app.user && app.user.id;
+    return !!yo && (String(msgEl.dataset.userId) === String(yo) || !!app.user.isAdmin);
+  }
+  function confirmar(fn) {
+    document.getElementById('puente-quitar-vista')?.remove();
+    const fondo = el('div', 'modal-overlay'); fondo.id = 'puente-quitar-vista'; fondo.style.display = 'flex';
+    const box = el('div', 'modal');
+    box.append(el('h3', null, '¿Quitar la vista previa?'), el('p', 'puente-qv-texto', 'Va a quedar solo el enlace, para todos. (Con Shift + clic en la ✕ no se pregunta.)'));
+    const acc = el('div', 'modal-actions');
+    const no = el('button', 'btn-sm', 'Cancelar'); no.type = 'button'; no.addEventListener('click', () => fondo.remove());
+    const si = el('button', 'btn-sm btn-danger', 'Quitar'); si.type = 'button'; si.addEventListener('click', () => { fondo.remove(); fn(); });
+    acc.append(no, si); box.appendChild(acc); fondo.appendChild(box);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) fondo.remove(); });
+    document.body.appendChild(fondo);
+    si.focus();
+  }
+  function quitar(msgEl) {
+    const id = parseInt(msgEl.dataset.msgId, 10);
+    if (!id) return;
+    fetch('/puente/api/embeds/quitar', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => { if (!ok) toast(d.error || 'No se pudo quitar.', 'error'); })
+      .catch(() => toast('No hay conexión.', 'error'));
+  }
+  function ponerX(app, msgEl) {
+    if (!puedeQuitar(app, msgEl)) return;
+    for (const v of msgEl.querySelectorAll('.puente-embeds > *, .message-content .link-preview, .thread-msg-content .link-preview')) {
+      if (v.querySelector(':scope > .puente-qv-x')) continue;
+      const x = el('button', 'puente-qv-x'); x.type = 'button'; x.title = 'Quitar la vista previa'; x.setAttribute('aria-label', x.title);
+      x.innerHTML = svg(I.cerrar, 16);
+      x.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) quitar(msgEl); else confirmar(() => quitar(msgEl)); });
+      v.appendChild(x);
+    }
+  }
+
+  let t = 0;
+  (function esperar() {
+    const app = window.app;
+    if (!app || typeof app._showImageContextMenu !== 'function' || !document.getElementById('image-lightbox')) { if (++t < 120) setTimeout(esperar, 1000); return; }
+    const orig = app._showImageContextMenu;
+    app._showImageContextMenu = function (e, src) {
+      const r = orig.apply(this, arguments);
+      try { arreglarMenu(this, src); } catch (err) { console.warn('[puente] menu de imagen:', err); }
+      return r;
+    };
+    barra(app);
+    if (!matchMedia('(pointer: coarse)').matches) {
+      document.addEventListener('mouseover', (e) => {
+        const m = e.target instanceof Element && e.target.closest('#messages [data-msg-id], #thread-messages [data-msg-id]');
+        if (m && m.querySelector('.puente-embeds, .link-preview')) ponerX(app, m);
+      });
+    }
+  })();
+})();

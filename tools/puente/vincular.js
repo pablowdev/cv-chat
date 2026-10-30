@@ -766,6 +766,17 @@ async function handle(req, res) {
     return json(res, 200, await require('./embeds.js').forUser(user, ids));
   }
 
+  // La ✕ de la vista previa de un enlace (embeds.js)
+  if (p === '/puente/api/embeds/quitar' && req.method === 'POST') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const body = await readJson(req);
+    const id = parseInt(body && body.id, 10);
+    if (!(id > 0)) return json(res, 400, { error: 'Falta el mensaje.' });
+    const r = await require('./embeds.js').quitar(user, id);
+    return json(res, r.status || 200, r);
+  }
+
   if (p === '/puente/api/mensaje' && req.method === 'GET') {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });

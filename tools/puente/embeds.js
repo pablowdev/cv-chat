@@ -23,6 +23,11 @@ function setup(ctx) {
     embeds TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   )`);
+  // Mensajes sin vista previa: quien lo escribio (o un admin) la quito con la ✕, como en Discord
+  db.exec(`CREATE TABLE IF NOT EXISTS puente_sin_vista (
+    haven_message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    por INTEGER, fecha INTEGER NOT NULL
+  )`);
 }
 
 const str = (v, n) => (typeof v === 'string' && v ? v.slice(0, n) : undefined);
@@ -61,8 +66,10 @@ function store(havenMessageId, embeds) {
   return list;
 }
 
-// Avisar a los que tienen el canal abierto
+const sinVista = (id) => !!db.prepare('SELECT 1 FROM puente_sin_vista WHERE haven_message_id = ?').get(id);
+// Avisar a los que tienen el canal abierto (sin vista previa: una lista vacia, que la saca)
 function emit(havenMessageId, list) {
+  if (sinVista(havenMessageId)) list = [];
   try {
     const ch = db.prepare('SELECT c.code FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(havenMessageId);
     if (ch) io.to(`channel:${ch.code}`).emit('puente-embeds', { channelCode: ch.code, messageId: havenMessageId, embeds: list });
@@ -79,9 +86,14 @@ function capture(havenMessageId, embeds, notify = true) {
 }
 
 // MESSAGE_UPDATE de Discord: ahi suele llegar el embed de un enlace (de los dos lados)
+const SUPPRESS_EMBEDS = 1 << 2;
 function onDiscordUpdate(d, retried = false) {
   if (!d || !d.id || !Array.isArray(d.embeds)) return;
   const row = db.prepare('SELECT id FROM messages WHERE discord_message_id = ?').get(String(d.id));
+  // La quitaron en Discord: tambien aca
+  if (row && (Number(d.flags) & SUPPRESS_EMBEDS) && !sinVista(row.id)) {
+    try { db.prepare('INSERT OR IGNORE INTO puente_sin_vista (haven_message_id, por, fecha) VALUES (?, NULL, ?)').run(row.id, Date.now()); } catch (err) { warn('embeds:', err.message); }
+  }
   if (row) return capture(row.id, d.embeds);
   // Un mensaje de CV Chat cuyo id de Discord se guarda un instante despues
   if (!retried) setTimeout(() => onDiscordUpdate(d, true), 3000).unref();
@@ -147,6 +159,7 @@ async function forUser(user, ids) {
     const m = msgQ.get(id);
     if (!m) continue;
     if (!(memberQ.get(m.cid, user.id) || (admin && !m.is_dm))) continue;
+    if (sinVista(m.id)) { out[id] = []; continue; }
     const s = storedQ.get(id);
     if (s) { try { out[id] = JSON.parse(s.embeds); } catch { /* se vuelve a pedir */ } continue; }
     if (m.discord_message_id && /https?:\/\//i.test(m.content || '')) waits.push(fetchLater(m).then(list => { if (list) out[m.id] = list; }));
@@ -156,4 +169,20 @@ async function forUser(user, ids) {
   return out;
 }
 
-module.exports = { setup, capture, onDiscordUpdate, forUser, clean };
+// La ✕ de la vista previa: solo quien escribio el mensaje, o un admin. Queda el enlace solo, para
+// todos; y en Discord tambien, si el mensaje esta alla (el bot puede, con "gestionar mensajes").
+async function quitar(user, id) {
+  const m = db.prepare(`SELECT m.id, m.user_id, m.thread_id, m.discord_message_id, c.discord_channel_id dch
+                        FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?`).get(id);
+  if (!m) return { status: 404, error: 'Ese mensaje ya no está.' };
+  const admin = !!(db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id) || {}).is_admin;
+  if (m.user_id !== user.id && !admin) return { status: 403, error: 'Solo quien escribió el mensaje puede quitar la vista previa.' };
+  db.prepare('INSERT OR IGNORE INTO puente_sin_vista (haven_message_id, por, fecha) VALUES (?, ?, ?)').run(m.id, user.id, Date.now());
+  emit(m.id, []);
+  const loc = discordLocation(m);
+  if (loc) api('PATCH', `/channels/${loc.channel}/messages/${loc.message}`, { flags: SUPPRESS_EMBEDS })
+    .then(r => { if (r && r.__error) warn('embeds: no se pudo quitar en Discord:', r.__error); }).catch(() => {});
+  return { ok: true };
+}
+
+module.exports = { setup, capture, onDiscordUpdate, forUser, clean, quitar };
