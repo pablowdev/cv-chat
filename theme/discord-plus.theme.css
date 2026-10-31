@@ -3097,3 +3097,6 @@ html body #image-context-menu.puente-img-menu .puente-mm-sep { height: 1px; marg
 }
 .puente-qv-x:hover { color: #fff; background: rgba(17, 18, 20, 0.95); }
 [data-msg-id]:hover .puente-qv-x { display: flex; }
+
+/* Mensajes directos: sin el candadito al lado de cada mensaje (Haven lo pone en los cifrados) */
+html body .e2e-tag { display: none !important; }

@@ -71,12 +71,14 @@ function sheetDrag(sheet, opts) {
 // asi que el aviso lo dice claro:
 //  - Al entrar, una tarjeta en el medio ("Te falta un paso") con el boton de
 //    Discord, que lleva directo a Discord. "Ahora no" la esconde hasta el otro dia.
-//  - Arriba de los canales, siempre, un recuadro con cuantos canales mas se ven
-//    al vincular (asi el chat vacio no queda sin explicacion).
+//  - Arriba de los canales, un recuadro con cuantos canales mas se ven al
+//    vincular (asi el chat vacio no queda sin explicacion). Tiene una X: quien
+//    lo cierra no lo vuelve a ver (puede vincular igual desde /puente/vincular).
 (function () {
   'use strict';
   const HIDE_KEY = 'puente_aviso_oculto_hasta';
   const HIDE_MS = 20 * 3600 * 1000; // hasta el otro dia
+  const CAJA_KEY = 'puente_caja_discord_cerrada';
   const DISCORD_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.44.87-.61 1.25a18.27 18.27 0 0 0-5.49 0 12.64 12.64 0 0 0-.62-1.25.08.08 0 0 0-.08-.04 19.74 19.74 0 0 0-4.89 1.52.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-1.99a.08.08 0 0 0-.04-.11 13.1 13.1 0 0 1-1.87-.89.08.08 0 0 1-.01-.13l.37-.29a.07.07 0 0 1 .08-.01c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08.01l.37.29a.08.08 0 0 1-.01.13c-.6.35-1.22.65-1.87.89a.08.08 0 0 0-.04.11c.36.7.77 1.36 1.22 1.99a.08.08 0 0 0 .09.03 19.84 19.84 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03ZM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42 0-1.33.96-2.42 2.16-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.18 1.1 2.16 2.42 0 1.34-.95 2.42-2.16 2.42Z"/></svg>';
 
   function storage(fn) { try { return fn(); } catch { return null; } }
@@ -102,7 +104,7 @@ function sheetDrag(sheet, opts) {
     if (!res || !res.ok) return res && res.status === 401 ? false : true;
     const st = await res.json().catch(() => null);
     if (!st || st.vinculado || !st.disponible) return true;
-    sidebarBox(st.canalesOcultos || 0);
+    if (!storage(() => localStorage.getItem(CAJA_KEY))) sidebarBox(st.canalesOcultos || 0);
     const until = Number(storage(() => localStorage.getItem(HIDE_KEY)) || 0);
     if (until <= Date.now()) card(st.canalesOcultos || 0);
     return true;
@@ -145,6 +147,10 @@ function sheetDrag(sheet, opts) {
       if (!list) { if (++tries < 60) setTimeout(put, 500); return; }
       if (document.getElementById('puente-vincular-caja')) return;
       const box = el('div'); box.id = 'puente-vincular-caja';
+      const x = el('button', 'pvc-cerrar'); x.type = 'button'; x.title = 'Cerrar'; x.setAttribute('aria-label', 'Cerrar');
+      x.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+      x.addEventListener('click', () => { storage(() => localStorage.setItem(CAJA_KEY, '1')); box.remove(); });
+      box.appendChild(x);
       box.appendChild(el('div', 'pvc-titulo', hidden ? `🔒 Hay ${canales(hidden)}` : '🔗 ¿Estabas en Discord?'));
       box.appendChild(el('div', 'pvc-texto', hidden ? 'Vinculá tu Discord para verlos y recuperar tu historial.' : 'Vinculá tu cuenta para recuperar tu historial y verificar tu nombre.'));
       const go = el('button', 'pvc-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
@@ -171,8 +177,10 @@ function sheetDrag(sheet, opts) {
     #puente-vincular-capa .pv-boton:disabled, #puente-vincular-caja .pvc-boton:disabled { opacity: .7; cursor: default; }
     #puente-vincular-capa .pv-luego { margin-top: .5rem; padding: .75rem; width: 100%; border: 0; background: transparent; color: #b5bac1; font: inherit; font-size: .9375rem; cursor: pointer; }
     #puente-vincular-capa .pv-luego:hover { color: #f2f3f5; text-decoration: underline; }
-    #puente-vincular-caja { margin: .5rem .5rem .375rem; padding: .75rem; border-radius: .625rem; background: rgba(88,101,242,.14); border: 1px solid rgba(88,101,242,.45); }
-    #puente-vincular-caja .pvc-titulo { font-size: .9375rem; font-weight: 700; color: #f2f3f5; }
+    #puente-vincular-caja { position: relative; margin: .5rem .5rem .375rem; padding: .75rem; border-radius: .625rem; background: rgba(88,101,242,.14); border: 1px solid rgba(88,101,242,.45); }
+    #puente-vincular-caja .pvc-titulo { font-size: .9375rem; font-weight: 700; color: #f2f3f5; padding-right: 1.5rem; }
+    #puente-vincular-caja .pvc-cerrar { position: absolute; top: .375rem; right: .375rem; display: flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #b5bac1; cursor: pointer; }
+    #puente-vincular-caja .pvc-cerrar:hover { background: rgba(255,255,255,.08); color: #f2f3f5; }
     #puente-vincular-caja .pvc-texto { margin: .25rem 0 .625rem; font-size: .8125rem; line-height: 1.35; color: #b5bac1; }
     #puente-vincular-caja .pvc-boton { min-height: 2.5rem; font-size: .9375rem; }
     #puente-vincular-caja .pvc-boton svg { width: 1.25rem; height: 1.25rem; }`;
@@ -4669,6 +4677,44 @@ document.addEventListener('pointerdown', (ev) => {
     }
     return true;
   }
+
+  // Al guardar una foto de perfil nueva Haven solo cambia la vista previa del editor: aca se cambia
+  // tambien la de la tarjeta de abajo y la de los mensajes propios ya cargados, sin recargar
+  function fotoNueva(url) {
+    const account = document.querySelector('[data-haven-region="account"]');
+    const av = account && account.querySelector('.puente-account-avatar');
+    if (av) {
+      av.textContent = '';
+      if (url) { const i = el('img'); i.src = url; i.alt = ''; av.appendChild(i); }
+      else av.textContent = String((window.app && window.app.user && window.app.user.username) || '?').charAt(0).toUpperCase();
+    }
+    const me = window.app && window.app.user && window.app.user.id;
+    if (me == null) return;
+    document.querySelectorAll(`.message[data-user-id="${CSS.escape(String(me))}"]`).forEach(m => {
+      const img = m.querySelector('img.message-avatar-img');
+      const letra = m.querySelector('div.message-avatar');
+      if (url && img) { img.src = url; img.style.display = ''; if (letra) letra.style.display = 'none'; }
+      else if (url && letra) {
+        const i = document.createElement('img');
+        i.className = letra.className.replace(/\bdiscord-import-avatar\b/, '') + ' message-avatar-img';
+        i.src = url; i.alt = letra.textContent; i.loading = 'lazy';
+        letra.insertAdjacentElement('beforebegin', i);
+        letra.style.display = 'none';
+      } else if (!url && letra) { if (img) img.style.display = 'none'; letra.style.display = ''; }
+    });
+  }
+  let triesFoto = 0;
+  (function vigilarFoto() {
+    const app = window.app;
+    if (!app || typeof app._commitAvatarSettings !== 'function') { if (++triesFoto < 120) setTimeout(vigilarFoto, 1000); return; }
+    const orig = app._commitAvatarSettings;
+    app._commitAvatarSettings = async function (...args) {
+      const antes = this.user && this.user.avatar;
+      const r = await orig.apply(this, args);
+      try { const ahora = this.user && this.user.avatar; if (ahora !== antes) fotoNueva(ahora || null); } catch (err) { console.warn('[puente] foto:', err); }
+      return r;
+    };
+  })();
 
   let tries = 0;
   (function wait() {
@@ -10930,8 +10976,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
 // Invitaciones (invitaciones.js):
 //  - Al entrar con una cuenta nueva que llego por un enlace de invitacion, se
 //    anota quien la invito (el enlace lo guardo login.js).
-//  - "🤝 Invitar gente" en la tarjeta de perfil propia: tu enlace para copiar o
-//    compartir, y cuantas personas trajiste.
+//  - "🤝 Invitar gente" en la tarjeta de perfil propia (y el boton "Invitar usuarios"
+//    de la columna derecha): tu enlace para copiar o compartir, y cuantas personas trajiste.
 (function () {
   'use strict';
   const storage = (fn) => { try { return fn(); } catch { return null; } };
@@ -10989,6 +11035,14 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     share.addEventListener('click', () => { navigator.share({ title: '__PUENTE_APP__', text }).catch(() => {}); });
   }
   window.puenteInvitar = open;
+  // El boton "Invitar usuarios" de la columna derecha abria la ventana de Haven (enlaces con
+  // canales, usos y vencimiento), que mareaba: abre esta. Quien se registra ve todos los canales
+  // abiertos igual, con o sin enlace. La de Haven sigue en Ajustes para los administradores.
+  document.addEventListener('click', (e) => {
+    if (!(e.target instanceof Element) || !e.target.closest('#right-btn-invite-popout')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    open();
+  }, true);
 
   const style = el('style');
   style.textContent = `
