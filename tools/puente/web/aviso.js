@@ -2161,9 +2161,9 @@ function leido(sc) {
   function signals(m) {
     const out = [];
     if (m.admin) out.push(['Admin', 'admin']);
-    if (m.enLinea) out.push(['En línea', 'ok']);
     if (m.invitado) out.push(['Invitado', 'gris']);
-    if (!m.discord && !m.invitado) out.push(['Sin vincular', 'aviso']);
+    // ("En línea" ya va en la columna "Última vez")
+    if (!m.discord && !m.invitado) out.push(['Sin Discord', 'aviso']);
     if (m.denuncias) out.push([m.denuncias + (m.denuncias === 1 ? ' denuncia' : ' denuncias'), 'mal']);
     if (m.dosPasos) out.push(['2 pasos', 'ok']);
     return out;
@@ -11758,6 +11758,26 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (body) body.scrollTop = 0;
     refs.content.scrollTop = 0;
     if (cat.extra === 'vinculos') { fillLinks(); textosCuenta(); }
+    const partes = [...refs.modal.querySelectorAll('.admin-settings')];
+    partes.forEach(x => x.classList.remove('pas-primera'));
+    const primera = partes.find(x => x.offsetParent !== null);
+    if (primera) primera.classList.add('pas-primera');
+    textosAjustes();
+  }
+  // Textos de Haven que quedaban en ingles, nombrando a Haven o poco claros
+  function textosAjustes() {
+    const fila = (input) => { const i = document.getElementById(input); return i && i.closest('label'); };
+    const ayuda = (lab) => { let n = lab && lab.nextElementSibling; return n && n.matches('.settings-hint') ? n : null; };
+    const poner = (input, nombre, explica) => {
+      const lab = fila(input); if (!lab) return;
+      const sp = lab.querySelector('span'); if (sp && nombre) sp.textContent = nombre;
+      const h = ayuda(lab); if (h && explica) h.textContent = explica;
+    };
+    poner('update-channel-early', 'Recibir las versiones nuevas antes', 'Llegan apenas salen, antes de ser estables (más o menos una vez por semana): tenés los arreglos antes, pero a veces con algún error.');
+    poner('server-title-input', null, 'Se muestra en la pantalla para entrar, debajo del logo.');
+    for (const h of refs.modal.querySelectorAll('.settings-hint')) {
+      if (/CV Chat Desktop/.test(h.textContent)) h.textContent = h.textContent.replace(/CV Chat Desktop/g, 'la app de PC');
+    }
   }
   function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
 
@@ -11807,31 +11827,43 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (sec) sec.classList.toggle('pas-2fa-apagada', !!(off && off.style.display !== 'none'));
   }
 
-  // "Mi cuenta": la misma cuenta en la pagina y el foro, email de recuperacion y Discord vinculado
+  // "Mi cuenta": la misma cuenta en la pagina y el foro, Discord vinculado y el email de recuperacion,
+  // en una sola tarjeta: una fila por cuenta, con su foto, el usuario de cada una y el email a la vista
   async function fillLinks() {
     const box = refs.links;
-    box.textContent = '';
     const token = (() => { try { return localStorage.getItem('haven_token'); } catch { return null; } })();
-    const st = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
-    const row = (icon, title, sub, label, fn) => {
-      const r = el('div', 'pas-fila');
-      const t = el('div', 'pas-fila-texto'); t.append(el('b', null, icon + ' ' + title), el('span', null, sub));
-      const b = el('button', 'pas-boton', label); b.type = 'button'; b.addEventListener('click', fn);
-      r.append(t, b); box.appendChild(r);
+    const pedir = (u) => fetch(u, { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const [st, fo, em] = await Promise.all([pedir('/puente/api/estado'), pedir('/puente/api/foro/estado'), window.puenteEmail ? pedir('/puente/api/email/estado') : null]);
+    box.textContent = '';
+    const caja = el('div', 'settings-section pas-cuentas');
+    caja.appendChild(el('h5', 'settings-section-title', '🔗 Tus cuentas'));
+    const yo = (window.app && window.app.user) || {};
+    const row = (foto, icon, title, valor, bien, label, fn) => {
+      const r = el('div', 'pas-cta');
+      const ic = el('div', 'pas-cta-ico');
+      if (foto) { const i = el('img'); i.src = foto; i.alt = ''; i.addEventListener('error', () => { i.remove(); ic.textContent = icon; }); ic.appendChild(i); } else ic.textContent = icon;
+      const t = el('div', 'pas-cta-texto'); t.append(el('b', null, title), el('span', 'pas-cta-valor' + (bien ? ' bien' : ''), valor));
+      const b = el('button', 'pas-cta-boton', label); b.type = 'button'; b.addEventListener('click', fn);
+      r.append(ic, t, b); caja.appendChild(r);
     };
-    // La pagina y el foro: la misma cuenta (en el foro, la cuenta del foro unida; si no hay, se crea sola al entrar)
+    // La pagina: la misma cuenta que el chat
     const web = 'https://' + location.hostname.replace(/^chat\./, '');
-    row('🌐', 'Página', 'La misma cuenta: con esta entrás a la página del club.', 'Ver', () => { window.open(web + '/cuenta', '_blank', 'noopener'); });
-    const fo = await fetch('/puente/api/foro/estado', { headers: { Authorization: 'Bearer ' + token } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    row(st && st.avatar, '🌐', 'Página y chat', '@' + (yo.username || '') + ' · la misma cuenta', true, 'Ver', () => { window.open(web + '/cuenta', '_blank', 'noopener'); });
+    // El foro (si no esta unida, la cuenta del foro se crea sola la primera vez que entra)
     if (fo && fo.disponible) {
-      row('💬', 'Foro', fo.vinculado ? `La misma cuenta: en el foro sos ${fo.foro && fo.foro.usuario}.` : 'Sin unir: si ya tenías cuenta en el foro, unila. Si no, se crea sola la primera vez que entrás.',
+      const ff = fo.foro && fo.foro.avatar && /^https:\/\//.test(fo.foro.avatar) ? fo.foro.avatar : null;
+      row(ff, '💬', 'Foro', fo.vinculado ? (fo.foro && fo.foro.usuario) + ' · la misma cuenta' : 'Sin unir · se crea sola al entrar al foro', !!fo.vinculado,
         fo.vinculado ? 'Ver' : 'Unir', () => { location.href = '/puente/vincular'; });
     }
     if (st && st.disponible) {
-      row('🔗', 'Discord', st.vinculado ? `Vinculada con @${st.discord && st.discord.usuario}` : 'Sin vincular: vinculala para recuperar tu historial y verificar tu nombre.',
+      row(st.vinculado && st.discord && st.discord.avatar, '🎮', 'Discord', st.vinculado ? '@' + (st.discord && st.discord.usuario) : 'Sin vincular · para recuperar tu historial', !!st.vinculado,
         st.vinculado ? 'Administrar' : 'Vincular', () => { location.href = '/puente/vincular'; });
     }
-    if (window.puenteEmail) row('✉️', 'Email de recuperación', 'Para recuperar la contraseña si te la olvidás.', 'Cambiar', () => window.puenteEmail.open());
+    if (window.puenteEmail) {
+      const valor = em && em.email ? em.email + (em.confirmado ? ' · confirmado' : ' · sin confirmar') : 'Sin email · para recuperar la contraseña';
+      row(null, '✉️', 'Email de recuperación', valor, !!(em && em.confirmado), em && em.email ? 'Cambiar' : 'Agregar', () => window.puenteEmail.open());
+    }
+    box.appendChild(caja);
   }
 
   function build(modal) {
@@ -11940,11 +11972,54 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     #settings-modal .pas-fila-texto span { color: #949ba4; font-size: .875rem; }
     #settings-modal .pas-boton { flex: 0 0 auto; min-height: 2.25rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
     #settings-modal .pas-boton:hover { background: #4752c4; }
+    /* Todas las categorias: cada opcion en una fila (nombre a la izquierda, el control a la derecha) y su
+       explicacion debajo, a la izquierda; textos de 14-15 px */
+    #settings-modal .pas-contenido .toggle-row, #settings-modal .pas-contenido .select-row, #settings-modal .pas-contenido .volume-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.5rem; margin: .375rem 0 0 !important; padding: 0 !important; font-size: .9375rem !important; color: #f2f3f5; }
+    #settings-modal .pas-contenido .toggle-row > span, #settings-modal .pas-contenido .select-row > span, #settings-modal .pas-contenido .volume-row > span { flex: 1 1 auto; min-width: 0; font-size: .9375rem !important; font-weight: 500; color: #f2f3f5; }
+    #settings-modal .pas-contenido .volume-row input[type="range"] { margin-left: auto !important; flex: 0 1 10rem; }
+    #settings-modal .pas-contenido .vol-readout { min-width: 3rem; font-size: .875rem !important; color: #b5bac1; }
+    #settings-modal .pas-contenido .settings-hint, #settings-modal .pas-contenido small.settings-hint { display: block; text-align: left !important; margin: .125rem 0 .5rem !important; padding: 0 !important; border: 0 !important; font-size: .875rem !important; line-height: 1.45; color: #949ba4; }
+    #settings-modal .pas-contenido .settings-hint:empty { display: none; }
+    #settings-modal .pas-contenido .settings-hint { white-space: normal !important; min-height: 0 !important; flex: none !important; height: auto !important; }
+    #settings-modal .pas-contenido .admin-settings { gap: .25rem !important; }
+    /* Listas y botones chicos de Haven (valores para miembros nuevos, roles, insignias, idioma, accesibilidad) */
+    #settings-modal .pas-contenido .member-defaults-row, #settings-modal .pas-contenido .member-defaults-row span, #settings-modal .pas-contenido .role-preview-item span, #settings-modal .pas-contenido .badge-admin-how, #settings-modal .pas-contenido .density-label, #settings-modal .pas-contenido .a11y-reset-btn, #settings-modal .pas-contenido .lang-name, #settings-modal .pas-contenido .zoom-value, #settings-modal .pas-contenido .whitelist-username, #settings-modal .pas-contenido .whitelist-username * { font-size: .875rem !important; }
+    #settings-modal .pas-contenido .badge-admin-group-label, #settings-modal .pas-contenido .muted-text { font-size: .8125rem !important; }
+    #settings-modal .pas-contenido .notif-settings { gap: 0 !important; }
+    #settings-modal .pas-contenido select { min-height: 2.5rem; font-size: .9375rem !important; padding: 0 2rem 0 .75rem; flex: 0 1 16rem; max-width: 60%; }
+    #settings-modal .pas-contenido .select-row input.settings-text-input { flex: 0 1 18rem; max-width: 60%; font-size: .9375rem !important; }
+    /* Administracion: subtitulos como los titulos de las tarjetas, y cada parte separada por una linea */
+    #settings-modal .pas-contenido .admin-settings { margin-top: 1.25rem !important; padding-top: 1.25rem !important; border-top: 1px solid #2b2b31 !important; }
+    #settings-modal .pas-contenido .admin-settings.pas-primera { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+    #settings-modal .pas-contenido .settings-section-subtitle { margin: 0 0 .5rem !important; padding: 0 !important; border: 0 !important; font-size: 1rem !important; font-weight: 700; text-transform: none !important; letter-spacing: 0 !important; color: #f2f3f5 !important; }
+    #settings-modal .pas-contenido .settings-section-subtitle span { font-size: 1rem !important; }
+    #settings-modal .pas-contenido .settings-section-subtitle::after, #settings-modal .pas-contenido .settings-section-title::after { display: none !important; }
+    #settings-modal .pas-contenido .settings-group-label { font-size: .875rem !important; font-weight: 600; text-transform: none !important; letter-spacing: 0 !important; color: #dbdee1 !important; }
+    #settings-modal .pas-contenido .settings-group { padding-left: 0 !important; border-left: 0 !important; }
+    #settings-modal .pas-contenido .settings-btn-grid { grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)) !important; gap: .5rem !important; margin: .5rem 0 .75rem; }
+    #settings-modal .pas-contenido .settings-btn-grid button { white-space: normal; text-align: center; line-height: 1.2; min-height: 2.5rem; }
+    #settings-modal .pas-contenido #admin-mod-panel > .settings-section-title:empty, #settings-modal .pas-contenido #admin-mod-panel > hr:first-child { display: none; }
+    @media (max-width: 768px) {
+      #settings-modal .pas-contenido select, #settings-modal .pas-contenido .select-row input.settings-text-input { max-width: 55%; }
+      #settings-modal .pas-contenido .volume-row input[type="range"] { flex-basis: 7rem; }
+    }
+    /* "Tus cuentas": una fila compacta por cuenta */
+    #settings-modal .pas-cuentas { padding-bottom: .375rem !important; }
+    #settings-modal .pas-cta { display: flex; align-items: center; gap: .75rem; padding: .625rem 0; border-top: 1px solid #2b2b31; }
+    #settings-modal .pas-cuentas .settings-section-title + .pas-cta { border-top: 0; padding-top: .25rem; }
+    #settings-modal .pas-cta-ico { flex: 0 0 2.25rem; width: 2.25rem; height: 2.25rem; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #2b2a30; font-size: 1.125rem; }
+    #settings-modal .pas-cta-ico img { width: 100%; height: 100%; object-fit: cover; }
+    #settings-modal .pas-cta-texto { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .0625rem; }
+    #settings-modal .pas-cta-texto b { color: #f2f3f5; font-size: .9375rem; font-weight: 700; }
+    #settings-modal .pas-cta-valor { color: #b5bac1; font-size: .875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #settings-modal .pas-cta-valor.bien { color: #dbdee1; }
+    #settings-modal .pas-cta-boton { flex: 0 0 auto; min-height: 2.125rem; padding: 0 .875rem; border: 1px solid #3a3a42; border-radius: .5rem; background: transparent; color: #f2f3f5; font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    #settings-modal .pas-cta-boton:hover { background: #2b2a30; border-color: #4e4e57; }
     #settings-modal .pas-contenido .settings-hint, #settings-modal .pas-contenido p.settings-hint { font-size: .875rem; line-height: 1.45; color: #b5bac1; }
     #settings-modal .pas-contenido input[type="text"], #settings-modal .pas-contenido input[type="password"], #settings-modal .pas-contenido input[type="email"] { font-size: 1rem; min-height: 2.75rem; }
     #settings-modal .pas-contenido .btn-sm { min-height: 2.5rem; font-size: .9375rem; }
     /* "Mi cuenta": titulos como los de las filas de arriba (Pagina, Foro...), sin mayusculas chiquitas */
-    #settings-modal #settings-body-user .settings-section-title { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem; padding: 0; border: 0; font-size: 1rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: #f2f3f5; }
+    #settings-modal #settings-body-user .settings-section-title, #settings-modal .pas-cuentas .settings-section-title { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem; padding: 0; border: 0; font-size: 1rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: #f2f3f5; }
     #settings-modal #settings-body-user .settings-section-title::after { display: none; }
     #settings-modal #settings-body-user .password-change-form, #settings-modal #settings-body-user .form-group.compact { display: flex; flex-direction: column; gap: .5rem; margin: 0; }
     #settings-modal #settings-body-user .password-change-form { margin-top: .75rem; }

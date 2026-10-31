@@ -53,7 +53,9 @@
       else av.textContent = (d.nombre || '?').charAt(0).toUpperCase();
       $('c-nombre').textContent = d.nombre;
       $('c-usuario').textContent = '@' + d.usuario + (d.admin ? ' · administrador' : '') + (d.email ? (d.email.confirmado ? ' · email confirmado' : ' · email sin confirmar') : ' · sin email');
-      // CV Chat y la pagina son la misma cuenta
+      // CV Chat y la pagina son la misma cuenta: las dos con tu foto
+      if (d.avatar) ['v-web', 'v-chat'].forEach(function (id) { var ic = $(id).querySelector('.vinculo__icono'); ic.innerHTML = ''; var f = document.createElement('img'); f.src = d.avatar; f.alt = ''; ic.appendChild(f); });
+      $('v-web').querySelector('.vinculo__estado').textContent = 'Esta es tu cuenta: @' + d.usuario;
       var ec = $('v-chat').querySelector('.vinculo__estado'); ec.textContent = 'La misma cuenta: @' + d.usuario + ' · ';
       var ab = document.createElement('a'); ab.href = CHAT + '/app'; ab.textContent = 'abrir'; ec.appendChild(ab);
       var dp = $('c-dos-pasos'); dp.textContent = '';
