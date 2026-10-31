@@ -148,6 +148,7 @@ function start(deps) {
   require('./presencia.js').setup({ db, io, log, warn });
   require('./panel-estadisticas.js').setup({ db, io, log, warn });
   require('./actividad.js').setup({ db, io, log, warn });
+  require('./guardados.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });
   require('./funball.js').setup({ db, io, log, warn });
   require('./ajedrez.js').setup({ db, io, log, warn });

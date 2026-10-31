@@ -631,7 +631,7 @@ function sheetDrag(sheet, opts) {
   if (!matchMedia('(pointer: coarse)').matches) return;
   const GROUPS = [
     ['reply', 'thread', 'quote'],
-    ['edit', 'copy-text', 'copy-link', 'pin', 'unpin'],
+    ['edit', 'copy-text', 'copy-link', 'puente-guardar', 'pin', 'unpin'],
     [], // el resto (proteger, mensaje oficial, etiquetas...)
     ['puente-denunciar', 'delete'],
   ];
@@ -756,6 +756,16 @@ function sheetDrag(sheet, opts) {
       den.append(el('span', 'puente-sheet-icon', '🚩'), el('span', '', 'Denunciar mensaje'));
       den.addEventListener('click', (ev) => { ev.stopPropagation(); hide(app); window.puenteDenunciar.abrir(app, msgEl); });
       buttons.push(den);
+    }
+
+    // Guardar (como el marcador de X) o quitar de guardados
+    if (window.puenteGuardados && msgId) {
+      const g = el('button', 'channel-ctx-item');
+      g.type = 'button';
+      g.dataset.puenteAction = 'puente-guardar';
+      g.append(el('span', 'puente-sheet-icon', '🔖'), el('span', '', window.puenteGuardados.es(msgId) ? 'Quitar de guardados' : 'Guardar mensaje'));
+      g.addEventListener('click', (ev) => { ev.stopPropagation(); hide(app); window.puenteGuardados.alternar(msgId); });
+      buttons.push(g);
     }
 
     const actionOf = (b) => b.dataset.action || b.dataset.puenteAction;
@@ -2893,6 +2903,203 @@ function leido(sc) {
     }
     // Si se abre "Miembros", esta se cierra
     new MutationObserver(() => { if (page && document.getElementById('puente-miembros')) close(); }).observe(document.body, { childList: true });
+    addEventListener('resize', () => { if (page && !page.classList.contains('pm-celular')) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
+  })();
+})();
+
+// Guardados (guardados.js), como los marcadores de X: cada uno guarda mensajes desde la barrita del
+// mensaje (el marcador), el menu del mensaje o la hoja del celular, y los ve en "Guardados", arriba de
+// los canales al lado de "Actividad": lo ultimo guardado primero, tocando uno se va al mensaje.
+// window.puenteGuardados lo usan la barrita y los menus (mas abajo) para guardar y pintar el marcador.
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const mobile = () => matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+  const VACIO = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 2h12a1 1 0 0 1 1 1v19l-7-4.5L5 22V3a1 1 0 0 1 1-1Zm1 2v14.3l5-3.2 5 3.2V4H7Z"/></svg>';
+  const LLENO = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M6 2h12a1 1 0 0 1 1 1v19l-7-4.5L5 22V3a1 1 0 0 1 1-1Z"/></svg>';
+  const ids = new Set();
+  let cargados = false;
+
+  function cargarIds() {
+    const tk = token();
+    if (!tk) return Promise.resolve(false);
+    return fetch('/puente/api/guardados/ids', { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!d || !Array.isArray(d.ids)) return false;
+        ids.clear(); d.ids.forEach(i => ids.add(i)); cargados = true;
+        document.querySelectorAll('[data-guardar-id]').forEach(pintar);
+        return true;
+      }).catch(() => false);
+  }
+  // Un boton o item con data-guardar-id: el marcador lleno si esta guardado
+  function pintar(b) {
+    const si = ids.has(Number(b.dataset.guardarId));
+    b.classList.toggle('puente-guardado', si);
+    const ic = b.querySelector('.puente-guardar-ico') || (b.classList.contains('puente-tb-guardar') ? b : null);
+    if (ic) ic.innerHTML = si ? LLENO : VACIO;
+    const lb = b.querySelector('.puente-guardar-txt');
+    if (lb) lb.textContent = si ? 'Quitar de guardados' : 'Guardar mensaje';
+    if (b.classList.contains('puente-tb-guardar')) b.dataset.tip = si ? 'Quitar de guardados' : 'Guardar';
+  }
+  function alternar(id) {
+    id = Number(id);
+    const tk = token();
+    if (!id || !tk) return Promise.resolve(null);
+    const si = !ids.has(id);
+    const toast = (t, k) => { try { window.app && window.app._showToast && window.app._showToast(t, k); } catch { /* sin aviso */ } };
+    return fetch('/puente/api/guardados', { method: 'POST', headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ id, si }) })
+      .then(r => r.json().catch(() => ({})).then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) { toast(d.error || 'No se pudo guardar.', 'error'); return null; }
+        if (si) ids.add(id); else ids.delete(id);
+        document.querySelectorAll('[data-guardar-id="' + id + '"]').forEach(pintar);
+        toast(si ? '🔖 Guardado en Guardados' : 'Se quitó de Guardados', 'success');
+        return si;
+      }).catch(() => { toast('No se pudo guardar. Probá de nuevo.', 'error'); return null; });
+  }
+
+  // ── La seccion "Guardados" ──
+  let page = null, pushed = false, antes = null;
+  function ago(iso) {
+    const s = Math.max(0, (Date.now() - (typeof iso === 'number' ? iso : Date.parse(iso))) / 1000);
+    for (const [sec, one, many] of [[31536000, 'año', 'años'], [2592000, 'mes', 'meses'], [86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) if (s >= sec) { const k = Math.floor(s / sec); return 'hace ' + k + ' ' + (k === 1 ? one : many); }
+    return 'recién';
+  }
+  function conEmojis(texto, pers) {
+    const span = el('span');
+    let ultimo = 0;
+    const t = String(texto || '');
+    for (const m of t.matchAll(/:([\w~-]+):/g)) {
+      if (!pers[m[1]]) continue;
+      span.appendChild(document.createTextNode(t.slice(ultimo, m.index)));
+      const img = el('img', 'pa-emoji'); img.src = pers[m[1]]; img.alt = m[0]; span.appendChild(img);
+      ultimo = m.index + m[0].length;
+    }
+    span.appendChild(document.createTextNode(t.slice(ultimo)));
+    return span;
+  }
+  function avatar(p) {
+    const av = el('div', 'pm-avatar pa-avatar');
+    if (p && p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.loading = 'lazy'; av.appendChild(i); }
+    else av.textContent = String((p && p.nombre) || '?').charAt(0).toUpperCase();
+    return av;
+  }
+  function close(fromBack) {
+    if (!page) return;
+    page.remove(); page = null; document.removeEventListener('keydown', onKey, true);
+    if (pushed) { pushed = false; if (fromBack !== true && history.state && history.state.puenteGuardados) history.back(); }
+  }
+  addEventListener('popstate', () => { if (page && pushed) { pushed = false; close(true); } });
+  function onKey(e) { if (e.key === 'Escape' && page) { e.stopPropagation(); close(); } }
+  function ir(url) { close(); if (!(window.puenteEnlaces && window.puenteEnlaces.abrir(url))) location.href = url; }
+
+  function item(m, pers) {
+    const caja = el('div', 'pe-caja pg-item');
+    const cab = el('div', 'pg-cab');
+    cab.appendChild(el('span', 'pg-canal', m.privado ? '🔒 ' + m.canal : '#' + m.canal));
+    cab.appendChild(el('span', 'pg-cuando', 'guardado ' + ago(m.guardado)));
+    const q = el('button', 'pg-quitar'); q.type = 'button'; q.title = 'Quitar de guardados'; q.setAttribute('aria-label', 'Quitar de guardados'); q.innerHTML = LLENO;
+    q.addEventListener('click', (e) => {
+      e.stopPropagation();
+      alternar(m.id).then(si => { if (si === false) { caja.classList.add('pg-sale'); setTimeout(() => { caja.remove(); vacio(); }, 200); } });
+    });
+    cab.appendChild(q);
+    const msg = el('button', 'pa-msg'); msg.type = 'button';
+    msg.appendChild(avatar(m.autor));
+    const cuerpo = el('div', 'pa-msg-c');
+    const c2 = el('div', 'pa-msg-cab'); c2.append(el('span', 'pa-msg-n', m.autor.nombre), el('span', 'pa-msg-f', ago(m.fecha)));
+    cuerpo.appendChild(c2);
+    if (m.privado) cuerpo.appendChild(el('div', 'pa-msg-t pg-privado', 'Mensaje privado cifrado: tocalo para verlo.'));
+    else {
+      if (m.texto || !m.foto) { const tx = el('div', 'pa-msg-t'); tx.appendChild(conEmojis(m.texto || '[sin texto]', pers)); cuerpo.appendChild(tx); }
+      if (m.foto) { const f = el('img', 'pa-foto'); f.src = m.foto; f.alt = ''; f.loading = 'lazy'; cuerpo.appendChild(f); }
+    }
+    msg.appendChild(cuerpo);
+    msg.addEventListener('click', () => ir(m.url));
+    caja.append(cab, msg);
+    return caja;
+  }
+  function vacio() {
+    const box = page && page.querySelector('.pg-lista');
+    if (box && !box.querySelector('.pg-item') && !box.querySelector('.pm-sin')) {
+      box.appendChild(el('div', 'pm-sin', 'Todavía no guardaste mensajes. Tocá el marcador 🔖 de un mensaje (en el celular, mantenelo apretado) y lo vas a encontrar acá.'));
+    }
+  }
+  function cargar(mas) {
+    if (!page) return;
+    const box = page.querySelector('.pg-lista');
+    const boton = page.querySelector('.pg-mas');
+    if (!mas) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…')); antes = null; }
+    if (boton) boton.disabled = true;
+    fetch('/puente/api/guardados' + (mas && antes ? '?antes=' + antes : ''), { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => {
+        if (!page) return;
+        if (!mas) box.textContent = '';
+        for (const m of d.mensajes) box.appendChild(item(m, d.personalizados || {}));
+        antes = d.antes;
+        if (boton) { boton.hidden = !d.mas; boton.disabled = false; }
+        vacio();
+      }).catch(() => { if (page && !mas) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar. Probá de nuevo en un rato.')); } if (boton) boton.disabled = false; });
+  }
+  function open() {
+    close();
+    // Una sola pagina a la vez: se cierran Actividad y Miembros
+    const act = document.getElementById('puente-actividad'); if (act) document.getElementById('puente-actividad-btn')?.click();
+    const mie = document.getElementById('puente-miembros'); if (mie && !mie.classList.contains('puente-actividad')) mie.querySelector('.pm-cerrar')?.click();
+    const side = document.querySelector('aside.sidebar');
+    page = el('div', 'puente-miembros puente-actividad puente-guardados'); page.id = 'puente-guardados';
+    const small = mobile();
+    if (small) page.classList.add('pm-celular');
+    page.style.left = (small ? 0 : side ? side.getBoundingClientRect().right : 0) + 'px';
+    const head = el('div', 'pm-head');
+    const title = el('div', 'pm-titulo'); title.innerHTML = LLENO; title.appendChild(el('span', 'pg-titulo', 'Guardados'));
+    const x = el('button', 'pm-cerrar'); x.type = 'button'; x.title = 'Cerrar (Esc)';
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+    x.addEventListener('click', close);
+    head.append(title, x);
+    const vista = el('div', 'pe-vista pa-vista');
+    const col = el('div', 'pg-columna');
+    col.appendChild(el('div', 'pa-intro', 'Los mensajes que guardaste. Solo los ves vos.'));
+    col.appendChild(el('div', 'pg-lista'));
+    const mas = el('button', 'pa-boton pg-mas', 'Ver más'); mas.type = 'button'; mas.hidden = true;
+    mas.addEventListener('click', () => cargar(true));
+    col.appendChild(mas);
+    vista.appendChild(col);
+    page.append(head, vista);
+    document.body.appendChild(page);
+    document.addEventListener('keydown', onKey, true);
+    if (small) { try { history.pushState({ puenteGuardados: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
+    cargar(false);
+  }
+
+  window.puenteGuardados = { es: (id) => ids.has(Number(id)), alternar, pintar, abrir: open, VACIO, LLENO, cargados: () => cargados };
+
+  function addEntry() {
+    const list = document.getElementById('channel-list');
+    if (!list || document.getElementById('puente-guardados-btn')) return;
+    const b = el('button', 'puente-miembros-btn'); b.id = 'puente-guardados-btn'; b.type = 'button';
+    b.innerHTML = LLENO; b.appendChild(el('span', '', 'Guardados'));
+    b.addEventListener('click', () => (page ? close() : open()));
+    list.parentElement.insertBefore(b, list);
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.user || !document.getElementById('channel-list')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    cargarIds();
+    // despues de "Miembros" y "Actividad", asi quedan en ese orden
+    setTimeout(addEntry, 900);
+    if (typeof app.switchChannel === 'function') {
+      const orig = app.switchChannel;
+      app.switchChannel = function (...args) { close(); return orig.apply(this, args); };
+    }
+    // Si se abre Actividad o Miembros, esta se cierra
+    new MutationObserver(() => {
+      if (!page) return;
+      const otra = document.getElementById('puente-actividad') || [...document.querySelectorAll('#puente-miembros')].find(p => p !== page);
+      if (otra) close();
+    }).observe(document.body, { childList: true });
     addEventListener('resize', () => { if (page && !page.classList.contains('pm-celular')) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
   })();
 })();
@@ -6581,19 +6788,20 @@ document.addEventListener('pointerdown', (ev) => {
     more: svg('M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'),
     eyes: svg('M12 4.5C7 4.5 2.7 7.6 1 12c1.7 4.4 6 7.5 11 7.5s9.3-3.1 11-7.5c-1.7-4.4-6-7.5-11-7.5Zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z'),
     close: svg('M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z'),
+    bookmark: svg('M6 2h12a1 1 0 0 1 1 1v19l-7-4.5L5 22V3a1 1 0 0 1 1-1Zm1 2v14.3l5-3.2 5 3.2V4H7Z'),
     flag: svg('M5 2h2v1.2C8.6 2.5 10.4 2.3 12.3 3c1.6.6 3.2.7 4.9.2L19 2.7V14l-1.4.5c-2.1.7-4.1.6-6-.1-1.6-.6-3.1-.6-4.6 0V22H5V2Z'),
     chevron: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.6 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>',
   };
   // Opciones de Haven: nombre como en Discord, icono y grupo
   const ITEMS = {
     edit: ['Editar mensaje', I.edit, 1], reply: ['Responder', I.reply, 1], quote: ['Citar', I.quote, 1], thread: ['Crear hilo', I.thread, 1],
-    'puente-copiar': ['Copiar texto', I.copy, 2], pin: ['Fijar mensaje', I.pin, 2], unpin: ['Desfijar mensaje', I.pin, 2],
+    'puente-copiar': ['Copiar texto', I.copy, 2], 'puente-guardar': [null, I.bookmark, 2], pin: ['Fijar mensaje', I.pin, 2], unpin: ['Desfijar mensaje', I.pin, 2],
     'copy-link': ['Copiar enlace del mensaje', I.link, 2], 'copy-href': ['Copiar dirección del enlace', I.link, 2],
     archive: [null, I.shield, 3], unarchive: [null, I.shield, 3], 'edit-tags': [null, I.tag, 3], 'edit-role-menu': [null, I.tag, 3],
     'highlight-on': [null, I.megaphone, 3], 'highlight-off': [null, I.megaphone, 3],
     'puente-denunciar': ['Denunciar mensaje', I.flag, 4], delete: ['Eliminar mensaje', I.trash, 4],
   };
-  const ORDER = ['edit', 'reply', 'quote', 'thread', 'puente-copiar', 'pin', 'unpin', 'copy-link', 'copy-href'];
+  const ORDER = ['edit', 'reply', 'quote', 'thread', 'puente-copiar', 'puente-guardar', 'pin', 'unpin', 'copy-link', 'copy-href'];
 
   let quick = null;
   function loadQuick() {
@@ -6727,6 +6935,14 @@ document.addEventListener('pointerdown', (ev) => {
     if (tb.querySelector('[data-action="edit"]')) { const edit = btn('', 'Editar', I.edit); edit.dataset.action = 'edit'; row.appendChild(edit); }
     const reply = btn('', 'Responder', I.reply); reply.dataset.action = 'reply'; row.appendChild(reply);
     const quote = btn('', 'Citar', I.quote); quote.dataset.action = 'quote'; row.appendChild(quote);
+    // Guardar (como el marcador de X): lleno si ya esta guardado
+    if (window.puenteGuardados && msgEl.dataset.msgId) {
+      const g = btn('puente-tb-guardar', 'Guardar');
+      g.dataset.guardarId = msgEl.dataset.msgId;
+      window.puenteGuardados.pintar(g);
+      g.addEventListener('click', (e) => { e.stopPropagation(); window.puenteGuardados.alternar(msgEl.dataset.msgId); });
+      row.appendChild(g);
+    }
     const more = btn('puente-tb-more', 'Más', I.more);
     more.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -6770,6 +6986,14 @@ document.addEventListener('pointerdown', (ev) => {
       den.dataset.action = 'puente-denunciar';
       den.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); window.puenteDenunciar.abrir(app, msgEl); });
       by.set('puente-denunciar', den);
+    }
+    // Guardar (como el marcador de X) o quitar de guardados
+    if (window.puenteGuardados && msgEl.dataset.msgId) {
+      const g = el('button', 'channel-ctx-item');
+      g.dataset.action = 'puente-guardar';
+      g.appendChild(el('span', '', window.puenteGuardados.es(msgEl.dataset.msgId) ? 'Quitar de guardados' : 'Guardar mensaje'));
+      g.addEventListener('click', (e) => { e.stopPropagation(); app._hideMessageContextMenu(); window.puenteGuardados.alternar(msgEl.dataset.msgId); });
+      by.set('puente-guardar', g);
     }
     // El nombre de Haven esta en su <span>; sin <span>, se le saca el emoji del principio
     const label = (b, a) => {

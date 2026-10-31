@@ -1820,6 +1820,23 @@ html body .pip-input-resizer { display: none !important; }
 .pa-cuerpo.pa-ladrillos { grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); grid-auto-rows: 4px; row-gap: 0; column-gap: 1rem; }
 .pa-cuerpo.pa-ladrillos > * { align-self: start; }
 .pm-celular .pa-cuerpo.pa-ladrillos { grid-template-columns: minmax(0, 1fr); }
+/* Guardados (aviso.js): una columna como la de X, lo ultimo guardado arriba */
+.pg-columna { max-width: 46rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
+.pg-lista { display: flex; flex-direction: column; gap: 0.75rem; }
+.pg-titulo { margin-left: 0.5rem; font-size: 1.0625rem; font-weight: 700; color: #fbfbfb; }
+.puente-guardados .pm-titulo { display: flex; align-items: center; color: #fbfbfb; }
+.pg-item { display: flex; flex-direction: column; gap: 0.375rem; transition: opacity 0.2s, transform 0.2s; }
+.pg-item.pg-sale { opacity: 0; transform: scale(0.98); }
+.pg-cab { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.pg-canal { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; font-weight: 700; color: #f2f3f5; }
+.pg-cuando { flex: 0 0 auto; font-size: 0.8125rem; color: #80848e; }
+.pg-quitar { flex: 0 0 auto; margin-left: auto; display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #5865f2; cursor: pointer; }
+.pg-quitar:hover { background: rgba(88, 101, 242, 0.15); }
+.pg-privado { color: #b5bac1; font-style: italic; }
+.pg-mas { align-self: center; }
+.pg-mas[hidden] { display: none; }
+/* El marcador de la barrita del mensaje, lleno y azul si esta guardado */
+.puente-tb-guardar.puente-guardado { color: #5865f2 !important; }
 .pa-intro { grid-column: 1 / -1; color: #b5bac1; font-size: 0.9375rem; }
 .pe-caja .pa-intro { margin: -0.25rem 0 0.5rem; font-size: 0.875rem; }
 .pa-canal { display: flex; flex-direction: column; gap: 0.25rem; }
