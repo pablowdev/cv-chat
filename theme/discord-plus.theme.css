@@ -1812,6 +1812,51 @@ html body .pip-input-resizer { display: none !important; }
 .pm-celular .pe-calor { grid-template-columns: 2rem repeat(24, minmax(0, 1fr)); gap: 1px; }
 .pm-celular .pe-calor-c { height: 0.875rem; }
 
+/* "Actividad" para todos (aviso.js, actividad.js) */
+.pa-vista { display: block; }
+.pa-cuerpo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.pa-intro { grid-column: 1 / -1; color: #b5bac1; font-size: 0.9375rem; }
+.pe-caja .pa-intro { margin: -0.25rem 0 0.5rem; font-size: 0.875rem; }
+.pa-canal { display: flex; flex-direction: column; gap: 0.25rem; }
+.pa-canal-t { align-self: flex-start; padding: 0; margin-bottom: 0.25rem; border: 0; background: transparent; color: #fbfbfb; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+.pa-canal-t:hover { text-decoration: underline; }
+.pa-msg { display: flex; gap: 0.75rem; width: 100%; padding: 0.625rem; border: 0; border-radius: 0.5rem; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.pa-msg:hover { background: #26252b; }
+.pa-avatar { width: 2.25rem; height: 2.25rem; font-size: 0.875rem; }
+.pa-msg-c { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.25rem; }
+.pa-msg-cab { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.8125rem; color: #96969e; }
+.pa-msg-n { font-size: 0.9375rem; font-weight: 600; color: #fbfbfb; }
+.pa-msg-t { font-size: 0.9375rem; color: #dbdee1; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: break-word; }
+.pa-emoji { width: 1.25rem; height: 1.25rem; object-fit: contain; vertical-align: -0.25rem; }
+.pa-emoji-t { font-size: 1.25rem; margin-right: 0.25rem; }
+.pa-reacs { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.pa-reac { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 0.5rem; background: #2b2a30; font-size: 0.8125rem; font-weight: 600; color: #dbdee1; }
+.pa-reac .pa-emoji { width: 1rem; height: 1rem; vertical-align: middle; }
+.pa-horas { display: flex; align-items: flex-end; gap: 2px; height: 6rem; margin-top: 0.5rem; }
+.pa-hora { flex: 1 1 0; min-height: 4%; border-radius: 2px 2px 0 0; background: #4e5bd6; opacity: 0.75; }
+.pa-hora.pico { background: #5865f2; opacity: 1; }
+.pa-horas-eje { display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.6875rem; color: #80848e; }
+.pa-linea { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; margin-bottom: 0.625rem; color: #dbdee1; font-size: 0.9375rem; }
+.pa-linea-l { color: #b5bac1; }
+.pa-boton { grid-column: 1 / -1; justify-self: start; padding: 0.625rem 1rem; border: 0; border-radius: 0.5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.pa-boton:hover { background: #4752c4; }
+.pa-mes { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.75rem; }
+.pa-mes-n { font-size: 1.0625rem; font-weight: 700; color: #fbfbfb; }
+.pa-mes .pe-rango:disabled { opacity: 0.35; cursor: default; }
+.pa-rank { display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.25rem; border-radius: 0.375rem; }
+.pa-rank.yo { background: rgba(88, 101, 242, 0.14); }
+.pa-rank-p { width: 1.75rem; text-align: center; font-weight: 800; color: #b5bac1; font-size: 0.9375rem; }
+.pa-rank-n { flex: 1 1 auto; min-width: 0; color: #fbfbfb; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-rank-v { color: #b5bac1; font-size: 0.875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pa-pie { grid-column: 1 / -1; }
+.pa-foto { display: block; max-width: min(100%, 16rem); max-height: 10rem; border-radius: 0.375rem; object-fit: cover; background: #2b2a30; }
+.pm-celular .pa-cuerpo { grid-template-columns: minmax(0, 1fr); }
+/* Celular: las pestañas se deslizan y la ✕ de cerrar queda siempre a la vista */
+.pm-celular .pm-titulo { flex: 1 1 auto; min-width: 0; }
+.pm-celular .pm-pestanas { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.pm-celular .pm-pestana { white-space: nowrap; }
+.pm-celular .pm-cerrar { flex: 0 0 auto; }
+
 /* La campanita al lado del nombre del servidor (aviso.js, campana.js) */
 html body .sidebar-header .brand { display: flex; align-items: center; min-width: 0; }
 html body .sidebar-header .brand .brand-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

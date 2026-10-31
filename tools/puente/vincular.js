@@ -1134,6 +1134,10 @@ async function handle(req, res) {
     const r = await campana.handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p.startsWith('/puente/api/actividad/')) {
+    const r = await require('./actividad.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/estadisticas') {
     const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;

@@ -15,7 +15,7 @@ const TANDA = 5000;
 const AR = 3 * 3600 * 1000; // Argentina, UTC-3 todo el año
 
 let db = null, warn = () => {}, log = () => {};
-let corriendo = false, timer = null, armando = false;
+let corriendo = false, timer = null;
 const cache = new Map();
 
 // 'YYYY-MM-DD HH:MM:SS' (UTC, como lo guarda Haven) -> dia y hora de Argentina
@@ -37,6 +37,11 @@ function setup(ctx) {
     ) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS puente_est_estado (clave TEXT PRIMARY KEY, valor INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS puente_activos (dia TEXT NOT NULL, user_id INTEGER NOT NULL, PRIMARY KEY (dia, user_id)) WITHOUT ROWID;
+    -- Por persona (cuenta de Haven), mes y canal: para el "Ranking del mes" (actividad.js)
+    CREATE TABLE IF NOT EXISTS puente_est_u (
+      user_id INTEGER NOT NULL, mes TEXT NOT NULL, canal_id INTEGER NOT NULL, n INTEGER NOT NULL,
+      PRIMARY KEY (user_id, mes, canal_id)
+    ) WITHOUT ROWID;
   `);
   // Quien se conecto hoy
   const activo = db.prepare('INSERT OR IGNORE INTO puente_activos (dia, user_id) VALUES (?, ?)');
@@ -47,37 +52,57 @@ function setup(ctx) {
   timer = setTimeout(avanzar, 20 * 1000); // un rato despues de arrancar
 }
 
-// Suma al resumen la proxima tanda de mensajes (por numero de mensaje)
+// Los dos resumenes: cada uno con su propio contador (el numero del ultimo mensaje que ya sumo),
+// asi uno nuevo arranca de cero aunque el otro ya este al dia
+const RESUMENES = [
+  { clave: 'ultimo', nombre: 'mensajes por dia y canal', sumar: (f, dh, suma) => {
+    const origen = f.is_dm ? 'dm' : (f.dc || f.imported_from) ? 'dc' : 'cv';
+    const k = dh.dia + '|' + dh.hora + '|' + (f.is_dm ? -1 : f.channel_id) + '|' + origen;
+    suma.set(k, (suma.get(k) || 0) + 1);
+  }, guardar: () => {
+    const put = db.prepare('INSERT INTO puente_est (dia, hora, canal_id, origen, n) VALUES (?, ?, ?, ?, ?) ON CONFLICT(dia, hora, canal_id, origen) DO UPDATE SET n = n + excluded.n');
+    return (k, n) => { const [dia, hora, canal, origen] = k.split('|'); put.run(dia, Number(hora), Number(canal), origen, n); };
+  } },
+  { clave: 'ultimo_u', nombre: 'mensajes por persona y mes', sumar: (f, dh, suma) => {
+    if (f.is_dm) return; // los privados no cuentan para nada que vean otros
+    const k = f.user_id + '|' + dh.dia.slice(0, 7) + '|' + f.channel_id;
+    suma.set(k, (suma.get(k) || 0) + 1);
+  }, guardar: () => {
+    const put = db.prepare('INSERT INTO puente_est_u (user_id, mes, canal_id, n) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, mes, canal_id) DO UPDATE SET n = n + excluded.n');
+    return (k, n) => { const [u, mes, canal] = k.split('|'); put.run(Number(u), mes, Number(canal), n); };
+  } },
+];
+const armandoDe = new Set();
+// Suma a un resumen la proxima tanda de mensajes (por numero de mensaje). Devuelve si quedan mas
+function paso(r) {
+  const desde = (db.prepare('SELECT valor FROM puente_est_estado WHERE clave = ?').get(r.clave) || { valor: 0 }).valor;
+  const filas = db.prepare(`SELECT m.id, m.channel_id, m.created_at, m.user_id, m.is_webhook, m.imported_from, c.is_dm, (a.message_id IS NOT NULL) dc
+                            FROM messages m LEFT JOIN channels c ON c.id = m.channel_id LEFT JOIN puente_autores a ON a.message_id = m.id
+                            WHERE m.id > ? ORDER BY m.id LIMIT ?`).all(desde, TANDA);
+  if (!filas.length) return false;
+  const suma = new Map();
+  for (const f of filas) {
+    if (f.is_webhook || !f.user_id) continue; // bots, avisos del servidor
+    const dh = diaHora(f.created_at);
+    if (dh) r.sumar(f, dh, suma);
+  }
+  const put = r.guardar();
+  db.transaction(() => {
+    for (const [k, n] of suma) put(k, n);
+    db.prepare('INSERT INTO puente_est_estado (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor').run(r.clave, filas[filas.length - 1].id);
+  })();
+  const lleno = filas.length === TANDA;
+  if (lleno) armandoDe.add(r.clave);
+  else if (armandoDe.delete(r.clave)) log('estadisticas: resumen de ' + r.nombre + ' al dia (hasta el mensaje ' + filas[filas.length - 1].id + ')');
+  return lleno;
+}
 function avanzar() {
   if (corriendo || !db) return;
   corriendo = true;
   let lleno = false;
-  try {
-    const desde = (db.prepare("SELECT valor FROM puente_est_estado WHERE clave = 'ultimo'").get() || { valor: 0 }).valor;
-    const filas = db.prepare(`SELECT m.id, m.channel_id, m.created_at, m.user_id, m.is_webhook, m.imported_from, c.is_dm, (a.message_id IS NOT NULL) dc
-                              FROM messages m LEFT JOIN channels c ON c.id = m.channel_id LEFT JOIN puente_autores a ON a.message_id = m.id
-                              WHERE m.id > ? ORDER BY m.id LIMIT ?`).all(desde, TANDA);
-    if (filas.length) {
-      const suma = new Map();
-      for (const f of filas) {
-        if (f.is_webhook || !f.user_id) continue; // bots, avisos del servidor
-        const dh = diaHora(f.created_at);
-        if (!dh) continue;
-        const origen = f.is_dm ? 'dm' : (f.dc || f.imported_from) ? 'dc' : 'cv';
-        const canal = f.is_dm ? -1 : f.channel_id;
-        const k = dh.dia + '|' + dh.hora + '|' + canal + '|' + origen;
-        suma.set(k, (suma.get(k) || 0) + 1);
-      }
-      const put = db.prepare('INSERT INTO puente_est (dia, hora, canal_id, origen, n) VALUES (?, ?, ?, ?, ?) ON CONFLICT(dia, hora, canal_id, origen) DO UPDATE SET n = n + excluded.n');
-      db.transaction(() => {
-        for (const [k, n] of suma) { const [dia, hora, canal, origen] = k.split('|'); put.run(dia, Number(hora), Number(canal), origen, n); }
-        db.prepare("INSERT INTO puente_est_estado (clave, valor) VALUES ('ultimo', ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor").run(filas[filas.length - 1].id);
-      })();
-      lleno = filas.length === TANDA;
-      if (lleno) armando = true;
-      else if (armando) { armando = false; log('estadisticas: resumen de mensajes al dia (hasta el mensaje ' + filas[filas.length - 1].id + ')'); }
-    }
-  } catch (err) { warn('estadisticas:', err.message); }
+  for (const r of RESUMENES) {
+    try { if (paso(r)) lleno = true; } catch (err) { warn('estadisticas (' + r.nombre + '):', err.message); }
+  }
   corriendo = false;
   clearTimeout(timer);
   timer = setTimeout(avanzar, lleno ? 40 : 5 * 60 * 1000);

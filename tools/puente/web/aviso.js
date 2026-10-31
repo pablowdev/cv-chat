@@ -2576,6 +2576,253 @@ function leido(sc) {
   })();
 })();
 
+// "Actividad" para todos (actividad.js y "Tu historia" de logros.js): arriba de los canales, al lado
+// de "Miembros". Tres pestañas: lo mejor de la semana (los mensajes con mas reacciones, de los
+// canales que ve cada uno), tu resumen (lo de "Tu historia", en corto) y el ranking del mes.
+// En la PC va al lado de los canales; en el celular ocupa la pantalla y el "atras" la cierra.
+(function () {
+  'use strict';
+  const mobile = () => matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const fmt = n => Number(n || 0).toLocaleString('es-AR');
+  const ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 20h16v2H4v-2Zm1-2V10h3v8H5Zm5.5 0V4h3v14h-3ZM16 18v-6h3v6h-3Z"/></svg>';
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const pedir = (url) => fetch(url, { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : Promise.reject(r.status)));
+  function ago(iso) {
+    const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+    for (const [sec, one, many] of [[86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) if (s >= sec) { const k = Math.floor(s / sec); return 'hace ' + k + ' ' + (k === 1 ? one : many); }
+    return 'recién';
+  }
+  // Texto con los emojis del servidor (:nombre:) como imagen, sin meter HTML de nadie
+  function conEmojis(texto, pers) {
+    const span = el('span');
+    let ultimo = 0;
+    const t = String(texto || '');
+    for (const m of t.matchAll(/:([\w~-]+):/g)) {
+      if (!pers[m[1]]) continue;
+      span.appendChild(document.createTextNode(t.slice(ultimo, m.index)));
+      const img = el('img', 'pa-emoji'); img.src = pers[m[1]]; img.alt = m[0]; span.appendChild(img);
+      ultimo = m.index + m[0].length;
+    }
+    span.appendChild(document.createTextNode(t.slice(ultimo)));
+    return span;
+  }
+  function avatar(p) {
+    const av = el('div', 'pm-avatar pa-avatar');
+    if (p && p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.loading = 'lazy'; av.appendChild(i); }
+    else av.textContent = String((p && p.nombre) || '?').charAt(0).toUpperCase();
+    return av;
+  }
+
+  let page = null, pushed = false, tab = 'mejor', mesRanking = null;
+  function close(fromBack) {
+    if (!page) return;
+    page.remove(); page = null; document.removeEventListener('keydown', onKey, true);
+    if (pushed) { pushed = false; if (fromBack !== true && history.state && history.state.puenteActividad) history.back(); }
+  }
+  addEventListener('popstate', () => { if (page && pushed) { pushed = false; close(true); } });
+  function onKey(e) { if (e.key === 'Escape' && page) { e.stopPropagation(); close(); } }
+  function ir(url) { close(); if (!(window.puenteEnlaces && window.puenteEnlaces.abrir(url))) location.href = url; }
+
+  // ── Lo mejor de la semana ──
+  function pintarMejor(box, d) {
+    box.textContent = '';
+    if (!d.canales.length) { box.appendChild(el('div', 'pm-sin', 'Esta semana todavía no hay mensajes con reacciones en tus canales.')); return; }
+    box.appendChild(el('div', 'pa-intro', 'Los mensajes con más reacciones de los últimos 7 días, en tus canales.'));
+    for (const c of d.canales) {
+      const sec = el('div', 'pe-caja pa-canal');
+      const t = el('button', 'pa-canal-t', '#' + c.canal); t.type = 'button';
+      t.addEventListener('click', () => { close(); if (window.app) window.app.switchChannel(c.code); });
+      sec.appendChild(t);
+      for (const m of c.mensajes) {
+        const it = el('button', 'pa-msg'); it.type = 'button';
+        it.appendChild(avatar(m.autor));
+        const cuerpo = el('div', 'pa-msg-c');
+        const cab = el('div', 'pa-msg-cab'); cab.append(el('span', 'pa-msg-n', m.autor.nombre), el('span', 'pa-msg-f', ago(m.fecha)));
+        const tx = el('div', 'pa-msg-t'); if (m.texto || !m.foto) tx.appendChild(conEmojis(m.texto || '[sin texto]', d.personalizados));
+        const foto = m.foto ? el('img', 'pa-foto') : null;
+        if (foto) { foto.src = m.foto; foto.alt = ''; foto.loading = 'lazy'; }
+        const rs = el('div', 'pa-reacs');
+        for (const r of m.reacciones) {
+          const chip = el('span', 'pa-reac');
+          const k = /^:([\w~-]+):$/.exec(r.emoji);
+          if (k && d.personalizados[k[1]]) { const i = el('img', 'pa-emoji'); i.src = d.personalizados[k[1]]; i.alt = r.emoji; chip.appendChild(i); }
+          else chip.appendChild(document.createTextNode(r.emoji));
+          chip.appendChild(el('span', '', fmt(r.n)));
+          rs.appendChild(chip);
+        }
+        cuerpo.append(cab);
+        if (tx.childNodes.length) cuerpo.appendChild(tx);
+        if (foto) cuerpo.appendChild(foto);
+        cuerpo.appendChild(rs);
+        it.appendChild(cuerpo);
+        it.addEventListener('click', () => ir(m.url));
+        sec.appendChild(it);
+      }
+      box.appendChild(sec);
+    }
+  }
+
+  // ── Tu resumen (lo de "Tu historia") ──
+  function pintarResumen(box, h) {
+    box.textContent = '';
+    if (!h || !h.mensajes) {
+      box.appendChild(el('div', 'pm-sin', 'Todavía no escribiste en los canales. Cuando escribas, acá vas a ver tu resumen: tus canales, tu horario, tus reacciones y tu racha.'));
+      return;
+    }
+    const datos = el('div', 'pe-totales');
+    const dato = (l, v, extra) => { const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', l)); const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', v)); if (extra) f.appendChild(el('span', 'pe-var', extra)); c.appendChild(f); datos.appendChild(c); };
+    dato('Mensajes', fmt(h.mensajes), h.puesto ? 'puesto ' + fmt(h.puesto) + ' de ' + fmt(h.de) : '');
+    dato('Reacciones que recibiste', fmt(h.reacciones));
+    dato('Palabras', fmt(h.palabras));
+    if (h.racha) dato('Racha', fmt(h.racha.actual) + (h.racha.actual === 1 ? ' día' : ' días'), 'la mejor: ' + fmt(h.racha.mejor));
+    box.appendChild(datos);
+    // Tus canales
+    if (h.canales && h.canales.length) {
+      const c = el('div');
+      const max = h.canales[0].n || 1;
+      for (const x of h.canales) {
+        const f = el('div', 'pe-fila');
+        const top = el('div', 'pe-fila-top'); top.append(el('span', 'pe-fila-n', '#' + x.nombre), el('span', 'pe-fila-v', fmt(x.n)));
+        const fondo = el('div', 'pe-fila-fondo'); const llena = el('div', 'pe-fila-llena'); llena.style.width = Math.max(2, (x.n / max) * 100) + '%'; fondo.appendChild(llena);
+        f.append(top, fondo); c.appendChild(f);
+      }
+      const caja = el('div', 'pe-caja'); caja.append(el('div', 'pe-titulo', 'Tus canales'), c); box.appendChild(caja);
+    }
+    // Tu horario (hora de Argentina)
+    if (h.horas) {
+      const max = Math.max(1, ...h.horas);
+      const pico = h.horas.indexOf(Math.max(...h.horas));
+      const g = el('div', 'pa-horas');
+      h.horas.forEach((v, i) => { const b = el('div', 'pa-hora' + (i === pico ? ' pico' : '')); b.style.height = Math.max(4, (v / max) * 100) + '%'; b.title = i + ' h: ' + fmt(v); g.appendChild(b); });
+      const ej = el('div', 'pa-horas-eje'); for (const t of ['0', '6', '12', '18', '23']) ej.appendChild(el('span', '', t));
+      const caja = el('div', 'pe-caja'); caja.append(el('div', 'pe-titulo', 'Tu horario'), el('div', 'pa-intro', 'Escribís más a las ' + pico + ' h.'), g, ej); box.appendChild(caja);
+    }
+    // Tus emojis y a quien mas le respondes
+    const otros = el('div', 'pe-caja');
+    otros.appendChild(el('div', 'pe-titulo', 'Lo tuyo'));
+    if (h.emojis && h.emojis.length) {
+      const f = el('div', 'pa-linea'); f.appendChild(el('span', 'pa-linea-l', 'Tus emojis:'));
+      for (const e of h.emojis) { if (e.url) { const i = el('img', 'pa-emoji'); i.src = e.url; i.alt = ':' + e.nombre + ':'; f.appendChild(i); } else f.appendChild(el('span', 'pa-emoji-t', e.e)); }
+      otros.appendChild(f);
+    }
+    if (h.respuestas && h.respuestas.length) otros.appendChild(el('div', 'pa-linea', 'A quien más le respondés: ' + h.respuestas.map(r => r.nombre).join(', ')));
+    if (h.masReaccionado) {
+      const b = el('button', 'pa-msg'); b.type = 'button';
+      const cuerpo = el('div', 'pa-msg-c');
+      cuerpo.append(el('div', 'pa-msg-cab', 'Tu mensaje con más reacciones (' + fmt(h.masReaccionado.n) + ') · #' + h.masReaccionado.canal));
+      const tx = el('div', 'pa-msg-t'); tx.appendChild(conEmojis(h.masReaccionado.texto, h.personalizados || {})); cuerpo.appendChild(tx);
+      b.appendChild(cuerpo);
+      b.addEventListener('click', () => ir(h.masReaccionado.url));
+      otros.appendChild(b);
+    }
+    box.appendChild(otros);
+    if (window.puenteHistoria) {
+      const ver = el('button', 'pa-boton', '📖 Ver tu historia completa'); ver.type = 'button';
+      ver.addEventListener('click', () => { close(); window.puenteHistoria.abrir(); });
+      box.appendChild(ver);
+    }
+  }
+
+  // ── Ranking del mes ──
+  function pintarRanking(box, d) {
+    box.textContent = '';
+    const [a, m] = d.mes.split('-').map(Number);
+    const hoy = new Date();
+    const actual = a === hoy.getFullYear() && m === hoy.getMonth() + 1;
+    const cab = el('div', 'pa-mes');
+    const ant = el('button', 'pe-rango', '‹'); ant.type = 'button'; ant.title = 'Mes anterior';
+    ant.addEventListener('click', () => { const d2 = new Date(Date.UTC(a, m - 2, 1)); mesRanking = d2.toISOString().slice(0, 7); cargar(); });
+    const sig = el('button', 'pe-rango', '›'); sig.type = 'button'; sig.title = 'Mes siguiente'; sig.disabled = actual;
+    sig.addEventListener('click', () => { const d2 = new Date(Date.UTC(a, m, 1)); mesRanking = d2.toISOString().slice(0, 7); cargar(); });
+    cab.append(ant, el('span', 'pa-mes-n', MESES[m - 1] + ' ' + a + (actual ? ' (hasta hoy)' : '')), sig);
+    box.appendChild(cab);
+    const col = (titulo, r, unidad) => {
+      const caja = el('div', 'pe-caja');
+      caja.appendChild(el('div', 'pe-titulo', titulo));
+      if (!r.top.length) caja.appendChild(el('div', 'pe-nota', 'Todavía nadie este mes.'));
+      for (const p of r.top) {
+        const f = el('div', 'pa-rank' + (p.yo ? ' yo' : ''));
+        f.appendChild(el('span', 'pa-rank-p', p.puesto <= 3 ? ['🥇', '🥈', '🥉'][p.puesto - 1] : String(p.puesto)));
+        f.appendChild(avatar(p));
+        f.appendChild(el('span', 'pa-rank-n', p.nombre + (p.yo ? ' (vos)' : '')));
+        f.appendChild(el('span', 'pa-rank-v', fmt(p.n) + ' ' + unidad));
+        caja.appendChild(f);
+      }
+      if (r.yo && r.yo.puesto > 10) caja.appendChild(el('div', 'pe-nota', 'Vos: puesto ' + fmt(r.yo.puesto) + ' de ' + fmt(r.yo.de) + ' (' + fmt(r.yo.n) + ' ' + unidad + ').'));
+      else if (!r.yo) caja.appendChild(el('div', 'pe-nota', 'Vos todavía no entrás en este ranking.'));
+      return caja;
+    };
+    box.appendChild(col('Los que más escribieron', d.mensajes, 'mensajes'));
+    box.appendChild(col('Los que más reacciones recibieron', d.reacciones, 'reacciones'));
+    box.appendChild(el('div', 'pe-nota pa-pie', 'Cuentan los mensajes de los canales abiertos a todos, escritos desde CV Chat o desde Discord con la cuenta vinculada.'));
+  }
+
+  function cargar() {
+    if (!page) return;
+    page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === tab));
+    const box = page.querySelector('.pa-cuerpo');
+    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…'));
+    const fallo = () => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar. Probá de nuevo en un rato.')); } };
+    if (tab === 'mejor') pedir('/puente/api/actividad/destacados').then(d => { if (page && tab === 'mejor') pintarMejor(box, d); }).catch(fallo);
+    else if (tab === 'resumen') pedir('/puente/api/logros/historia').then(d => { if (page && tab === 'resumen') pintarResumen(box, d); }).catch(fallo);
+    else pedir('/puente/api/actividad/ranking' + (mesRanking ? '?mes=' + mesRanking : '')).then(d => { if (page && tab === 'ranking') pintarRanking(box, d); }).catch(fallo);
+  }
+  function open() {
+    close();
+    const otra = document.getElementById('puente-miembros'); if (otra) { const x = otra.querySelector('.pm-cerrar'); if (x) x.click(); }
+    const side = document.querySelector('aside.sidebar');
+    page = el('div', 'puente-miembros puente-actividad'); page.id = 'puente-actividad';
+    const small = mobile();
+    if (small) page.classList.add('pm-celular');
+    page.style.left = (small ? 0 : side ? side.getBoundingClientRect().right : 0) + 'px';
+    const head = el('div', 'pm-head');
+    const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
+    const tabs = el('div', 'pm-pestanas');
+    for (const [v, label] of [['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']]) {
+      const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
+      t.addEventListener('click', () => { tab = v; cargar(); });
+      tabs.appendChild(t);
+    }
+    title.appendChild(tabs);
+    const x = el('button', 'pm-cerrar'); x.type = 'button'; x.title = 'Cerrar (Esc)';
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+    x.addEventListener('click', close);
+    head.append(title, x);
+    const vista = el('div', 'pe-vista pa-vista');
+    vista.appendChild(el('div', 'pa-cuerpo'));
+    page.append(head, vista);
+    document.body.appendChild(page);
+    document.addEventListener('keydown', onKey, true);
+    if (small) { try { history.pushState({ puenteActividad: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
+    cargar();
+  }
+
+  function addEntry() {
+    const list = document.getElementById('channel-list');
+    if (!list || document.getElementById('puente-actividad-btn')) return;
+    const b = el('button', 'puente-miembros-btn'); b.id = 'puente-actividad-btn'; b.type = 'button';
+    b.innerHTML = ICON; b.appendChild(el('span', '', 'Actividad'));
+    b.addEventListener('click', () => (page ? close() : open()));
+    list.parentElement.insertBefore(b, list);
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || !app.user || !document.getElementById('channel-list')) { if (++tries < 120) setTimeout(wait, 500); return; }
+    // despues de "Miembros" (los admins lo tienen), asi quedan en ese orden
+    setTimeout(addEntry, 600);
+    if (typeof app.switchChannel === 'function') {
+      const orig = app.switchChannel;
+      app.switchChannel = function (...args) { close(); return orig.apply(this, args); };
+    }
+    // Si se abre "Miembros", esta se cierra
+    new MutationObserver(() => { if (page && document.getElementById('puente-miembros')) close(); }).observe(document.body, { childList: true });
+    addEventListener('resize', () => { if (page && !page.classList.contains('pm-celular')) { const s = document.querySelector('aside.sidebar'); page.style.left = (s ? s.getBoundingClientRect().right : 0) + 'px'; } });
+  })();
+})();
+
 // PC: los resultados de la busqueda como los de Discord. Arriba "N resultados"
 // con los botones Filtros y Ordenar; los mensajes agrupados por canal (con su
 // categoria a la derecha), cada uno con la foto de quien lo escribio y las
@@ -6539,6 +6786,7 @@ document.addEventListener('pointerdown', (ev) => {
     document.addEventListener('keydown', onKey, true);
     frame.addEventListener('load', () => { try { frame.contentWindow.focus(); } catch { /* sigue */ } });
   }
+  window.puenteHistoria = { abrir: openHistoria };
   window.addEventListener('message', (e) => {
     if (e.origin !== location.origin || !e.data || e.data.puente !== 'historia') return;
     if (e.data.accion === 'cerrar') closeHistoria();
