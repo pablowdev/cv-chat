@@ -2636,6 +2636,11 @@ function leido(sc) {
   function ir(url) { close(); if (!(window.puenteEnlaces && window.puenteEnlaces.abrir(url))) location.href = url; }
 
   // ── Lo mejor de la semana ──
+  // Los canales encajan como ladrillos: cada tarjeta ocupa las filas chiquitas (4 px) que mide, asi la de
+  // abajo sube hasta donde termina la de arriba en su columna; se reacomoda sola cuando cargan las fotos
+  const FILA = 4, HUECO = 16;
+  let ladrillos = null;
+  const acomodar = (t) => { t.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((t.getBoundingClientRect().height + HUECO) / FILA)); };
   function pintarMejor(box, d) {
     box.textContent = '';
     if (!d.canales.length) { box.appendChild(el('div', 'pm-sin', 'Esta semana todavía no hay mensajes con reacciones en tus canales.')); return; }
@@ -2671,6 +2676,13 @@ function leido(sc) {
         sec.appendChild(it);
       }
       box.appendChild(sec);
+    }
+    box.classList.add('pa-ladrillos');
+    const tarjetas = [...box.children];
+    tarjetas.forEach(acomodar);
+    if (typeof ResizeObserver === 'function') {
+      ladrillos = new ResizeObserver((cambios) => { for (const c of cambios) acomodar(c.target); });
+      tarjetas.forEach(t => ladrillos.observe(t));
     }
   }
 
@@ -2818,6 +2830,8 @@ function leido(sc) {
     if (!page) return;
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === tab));
     const box = page.querySelector('.pa-cuerpo');
+    if (ladrillos) { ladrillos.disconnect(); ladrillos = null; }
+    box.classList.remove('pa-ladrillos');
     box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…'));
     const fallo = () => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar. Probá de nuevo en un rato.')); } };
     if (tab === 'mejor') pedir('/puente/api/actividad/destacados').then(d => { if (page && tab === 'mejor') pintarMejor(box, d); }).catch(fallo);
