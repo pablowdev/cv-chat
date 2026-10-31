@@ -205,12 +205,12 @@
     poli(L, [[32, 33], [48, 33], [46, 38], [34, 38]], 'e');
     // brazo levantado con la pinta, y el otro en la cintura
     poli(L, [[30, 38], [22, 44], [16, 50], [20, 53], [29, 46]], R.T);
-    ovalo(L, 17.5, 52, 2.6, 2.6, 'f');
+    ovalo(L, 17.5, 52, 2.6, 2.6, 'p');
     poli(L, [[50, 38], [56, 48], [53, 58], [49, 56], [51, 48]], R.T);
-    ovalo(L, 51, 58, 2.4, 2.4, 'f');
-    cabeza(L, 40, 26, false);
-    gorro(L, 40, 20, R.U, R.V === 'y' ? 'y' : 'q');
-    pinta(L, palo, 16, 38, palo === 'espada' || palo === 'basto' ? 0.95 : 0.85);
+    ovalo(L, 51, 58, 2.4, 2.4, 'p');
+    pinta(L, palo, 16, 40, palo === 'espada' || palo === 'basto' ? 0.95 : 0.85);
+    magaiba(L, 41, 25, 1.4);
+    gorro(L, 44, 15, R.U, R.V === 'y' ? 'y' : 'q');
   }
   function caballo(L, palo) {
     const R = ROPA[palo];
@@ -237,10 +237,10 @@
     poli(L, [[37, 38], [53, 38], [54, 62], [36, 62]], R.T);
     poli(L, [[40, 35], [50, 35], [49, 40], [41, 40]], 'e');
     poli(L, [[38, 41], [31, 44], [27, 48], [31, 51], [37, 48]], R.T);
-    ovalo(L, 28, 50, 2.4, 2.4, 'f');
-    cabeza(L, 45, 28, false);
-    gorro(L, 45, 22, R.U, R.V === 'y' ? 'y' : 'q');
-    pinta(L, palo, 26, 37, palo === 'espada' || palo === 'basto' ? 0.85 : 0.75);
+    ovalo(L, 28, 50, 2.4, 2.4, 'p');
+    pinta(L, palo, 25, 39, palo === 'espada' || palo === 'basto' ? 0.85 : 0.75);
+    magaiba(L, 46, 27, 1.3);
+    gorro(L, 49, 18, R.U, R.V === 'y' ? 'y' : 'q');
   }
 
   // ── La carta ──
@@ -310,18 +310,30 @@
     }
     return cv;
   }
+  // Dorso: guarda de rombos bordo y dorado, y al medio Magaiba con corona en un medallon con las cuatro pintas
   function dorso() {
     const L = nuevo();
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const dx = Math.min(x, W - 1 - x), dy = Math.min(y, H - 1 - y);
       if (dx + dy < 2) continue;
       if (dx === 0 || dy === 0 || (dx === 1 && dy === 1)) { L.px[y * W + x] = 'k'; continue; }
-      if (dx <= 3 || dy <= 3) { L.px[y * W + x] = 'c'; continue; }
-      if (dx === 4 || dy === 4) { L.px[y * W + x] = 'B'; continue; }
-      L.px[y * W + x] = ((x + y) % 8 === 0 || (x - y + 240) % 8 === 0) ? 'l' : 'b';
+      if (dx <= 2 || dy <= 2) { L.px[y * W + x] = 'c'; continue; }
+      if (dx === 3 || dy === 3 || dx === 5 || dy === 5) { L.px[y * W + x] = 'Y'; continue; }
+      if (dx === 4 || dy === 4) { L.px[y * W + x] = 'y'; continue; }
+      const a = (x + y) % 10, b = (x - y + 400) % 10;
+      L.px[y * W + x] = a === 0 || b === 0 ? 'Y' : (a === 5 && b === 5) ? 'y' : 'R';
     }
+    ovalo(L, 40, 60, 27, 33, 'Y');
+    ovalo(L, 40, 60, 25, 31, 'c');
+    ovalo(L, 40, 60, 23.5, 29.5, 'C', false);
+    ovalo(L, 40, 60, 22, 28, 'c', false);
+    pinta(L, 'oro', 40, 36, 0.55);
+    pinta(L, 'copa', 29, 81, 0.4); pinta(L, 'espada', 40, 81, 0.32); pinta(L, 'basto', 51, 81, 0.32);
+    magaiba(L, 45, 57, 1.4);
+    corona(L, 47, 46);
     return pintar(L);
   }
+
 
   // ── Banner de la sala del truco: grilla de 360x240 agrandada 3 veces (1080x720) ──
   // Paño verde con marco dorado, cinco cartas en abanico (el rey de Magaiba al medio) y "TRUCO" abajo.
