@@ -11716,7 +11716,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const mobile = () => matchMedia('(max-width: 768px)').matches;
   const USER = [
-    { id: 'cuenta', icon: '👤', name: 'Mi cuenta', extra: 'vinculos', ids: ['section-password', 'section-2fa', 'section-sessions', 'section-recovery', 'section-e2e-passphrase', 'section-delete-account'] },
+    { id: 'cuenta', icon: '👤', name: 'Mi cuenta', extra: 'vinculos', ids: ['section-password', 'section-2fa', 'section-sessions', 'section-recovery', 'section-delete-account'] },
     { id: 'perfil', icon: '✨', name: 'Perfil', extra: 'perfil', ids: [] },
     { id: 'notif', icon: '🔔', name: 'Notificaciones', ids: ['section-push', 'section-sounds'] },
     { id: 'idioma', icon: '🌐', name: 'Idioma y hora', ids: ['section-language'] },
@@ -11732,6 +11732,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   const REMOVED = ['section-layout', 'section-reaction-size', 'section-role-display', 'section-toolbar-icons', 'section-image-display', 'section-embed-size',
     'section-banner-display', 'section-toggle-style', 'section-statusbar', 'section-soundboard-mode', 'section-activity', 'section-score-badges', 'section-plugins',
     'section-debug', 'section-desktop-shortcuts', 'section-desktop-app',
+    // La frase de cifrado de Haven: el cifrado de los privados ya es automatico (cifrado.js) y casi
+    // nadie entendia para que era. Si alguien ya tenia una, Haven se la sigue pidiendo en su ventana
+    'section-e2e-passphrase',
     'section-ferry', 'section-import', 'section-tunnel', 'section-guests', 'section-whitelist', 'section-template', 'section-extension-updates',
     'section-large-server', 'section-sounds-admin', 'section-bots', 'section-tags-admin'];
   const ALL = [...USER, ...ADMIN].flatMap(c => c.ids).concat(REMOVED);
@@ -11754,9 +11757,55 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const body = refs.modal.querySelector(isAdminCat(cat) ? '#settings-body-admin' : '#settings-body-user');
     if (body) body.scrollTop = 0;
     refs.content.scrollTop = 0;
-    if (cat.extra === 'vinculos') fillLinks();
+    if (cat.extra === 'vinculos') { fillLinks(); textosCuenta(); }
   }
   function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
+
+  // Los textos de "Mi cuenta", en castellano de aca y mas claros. Se ponen cada vez que se abre
+  // (si Haven vuelve a traducir la pagina, quedan los suyos hasta la proxima vez)
+  const TEXTOS = [
+    ['#section-password .settings-section-title span', 'Contraseña'],
+    ['#current-password', 'Tu contraseña actual', 'placeholder'],
+    ['#new-password', 'Contraseña nueva (8 caracteres o más)', 'placeholder'],
+    ['#confirm-password', 'Repetí la contraseña nueva', 'placeholder'],
+    ['#change-password-btn', 'Cambiar contraseña'],
+    ['#section-2fa .settings-section-title span', 'Verificación en dos pasos'],
+    ['#totp-enable-area .settings-hint', 'Además de tu contraseña, para entrar te va a pedir un código de 6 números que te da una app en el celular (Google Authenticator, Authy). Aunque alguien sepa tu contraseña, sin tu celular no puede entrar.'],
+    ['#totp-enable-btn', 'Activar verificación en dos pasos'],
+    ['#totp-setup-area > .settings-hint:first-child', '1. Abrí la app (Google Authenticator, Authy…) y escaneá este código:'],
+    ['#totp-setup-area > .settings-hint:nth-of-type(2)', 'Si no podés escanearlo, cargá esta clave a mano:'],
+    ['#totp-setup-password', '2. Tu contraseña de CV Chat', 'placeholder'],
+    ['#totp-verify-code', '3. El código de 6 números que muestra la app', 'placeholder'],
+    ['#totp-verify-setup-btn', 'Verificar y activar'],
+    ['#totp-backup-area .settings-hint', 'Guardá estos códigos en un lugar seguro: si perdés el celular, cada uno te deja entrar una vez.'],
+    ['#totp-disable-password', 'Tu contraseña, para hacer cambios', 'placeholder'],
+    ['#totp-manage-area .settings-hint:first-child span', 'La verificación en dos pasos está activada'],
+    ['#totp-disable-btn', 'Desactivar'],
+    ['#totp-regen-backup-btn', 'Nuevos códigos de respaldo'],
+    ['#totp-backup-area h5 span', 'Códigos de respaldo'],
+    ['#totp-copy-backup-btn span', 'Copiar los códigos'],
+    ['#section-sessions .settings-hint[data-i18n]', 'Los dispositivos que tienen CV Chat abierto ahora. Si creés que alguien más entró a tu cuenta, cerrá la sesión en los demás y cambiá la contraseña.'],
+    ['#revoke-sessions-btn', 'Cerrar sesión en los demás dispositivos'],
+    ['#section-recovery .settings-section-title span', 'Códigos de recuperación'],
+    ['#section-recovery > .settings-hint[data-i18n]', 'Códigos para volver a entrar si te olvidás la contraseña y no podés usar tu email. Guardalos en un lugar seguro: cada uno sirve una sola vez.'],
+    ['#recovery-e2e-warning > span', '⚠️ Ojo: si cambiás la contraseña con uno de estos códigos, tus mensajes privados anteriores ya no se van a poder leer.'],
+    ['#recovery-gen-password', 'Tu contraseña', 'placeholder'],
+    ['#recovery-generate-btn', 'Crear códigos de recuperación'],
+    ['#section-delete-account > .settings-section-title span', 'Eliminar cuenta'],
+    ['#section-delete-account > .settings-hint', 'Borra tu cuenta para siempre. No se puede deshacer.'],
+    ['#delete-account-btn', 'Eliminar mi cuenta'],
+  ];
+  function textosCuenta() {
+    for (const [sel, txt, attr] of TEXTOS) {
+      const e = document.querySelector('#settings-modal ' + sel);
+      if (!e) continue;
+      if (attr) e.setAttribute(attr, txt); else e.textContent = txt;
+    }
+    // "Recomendado" al lado del titulo mientras no esta activada
+    const sec = document.getElementById('section-2fa');
+    const off = document.getElementById('totp-enable-area');
+    if (sec) sec.classList.toggle('pas-2fa-apagada', !!(off && off.style.display !== 'none'));
+  }
 
   // "Mi cuenta": la misma cuenta en la pagina y el foro, email de recuperacion y Discord vinculado
   async function fillLinks() {
@@ -11837,6 +11886,11 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (navOld) navOld.classList.add('pas-fuera');
     box.querySelector('#settings-tab-bar')?.classList.add('pas-fuera');
     for (const id of REMOVED) { document.getElementById(id)?.classList.add('pas-fuera'); navItemFor(id)?.classList.add('pas-fuera'); }
+    const pw = document.getElementById('section-password'), tf = document.getElementById('section-2fa');
+    if (pw && tf) pw.insertAdjacentElement('afterend', tf);
+    // Al activarla o desactivarla Haven muestra otra parte: el "Recomendado" se acomoda solo
+    const zona = document.getElementById('totp-enable-area');
+    if (zona && tf) new MutationObserver(() => tf.classList.toggle('pas-2fa-apagada', zona.style.display !== 'none')).observe(zona, { attributes: true, attributeFilter: ['style'] });
     refs = { modal: box, nav, content, title, links, extras: [links, perfil] };
   }
 
@@ -11886,6 +11940,39 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     #settings-modal .pas-fila-texto span { color: #949ba4; font-size: .875rem; }
     #settings-modal .pas-boton { flex: 0 0 auto; min-height: 2.25rem; padding: 0 1rem; border: 0; border-radius: .5rem; background: #5865f2; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
     #settings-modal .pas-boton:hover { background: #4752c4; }
+    #settings-modal .pas-contenido .settings-hint, #settings-modal .pas-contenido p.settings-hint { font-size: .875rem; line-height: 1.45; color: #b5bac1; }
+    #settings-modal .pas-contenido input[type="text"], #settings-modal .pas-contenido input[type="password"], #settings-modal .pas-contenido input[type="email"] { font-size: 1rem; min-height: 2.75rem; }
+    #settings-modal .pas-contenido .btn-sm { min-height: 2.5rem; font-size: .9375rem; }
+    /* "Mi cuenta": titulos como los de las filas de arriba (Pagina, Foro...), sin mayusculas chiquitas */
+    #settings-modal #settings-body-user .settings-section-title { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem; padding: 0; border: 0; font-size: 1rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: #f2f3f5; }
+    #settings-modal #settings-body-user .settings-section-title::after { display: none; }
+    #settings-modal #settings-body-user .password-change-form, #settings-modal #settings-body-user .form-group.compact { display: flex; flex-direction: column; gap: .5rem; margin: 0; }
+    #settings-modal #settings-body-user .password-change-form { margin-top: .75rem; }
+    /* Las acciones principales, en azul */
+    #settings-modal #change-password-btn, #settings-modal #totp-verify-setup-btn, #settings-modal #recovery-generate-btn, #settings-modal #totp-enable-btn, #settings-modal #totp-backup-done-btn, #settings-modal #recovery-codes-done-btn { background: #5865f2 !important; color: #fff !important; border: 0 !important; opacity: 1 !important; }
+    #settings-modal #change-password-btn:hover, #settings-modal #totp-verify-setup-btn:hover, #settings-modal #recovery-generate-btn:hover, #settings-modal #totp-enable-btn:hover { background: #4752c4 !important; }
+    #settings-modal #change-password-btn { margin-top: .25rem; }
+    #settings-modal #totp-verify-setup-btn { margin-top: .625rem; }
+    #settings-modal #totp-cancel-setup-btn { background: transparent !important; color: #b5bac1 !important; border: 0 !important; opacity: 1 !important; }
+    /* Verificacion en dos pasos: resaltada mientras no esta activada */
+    #settings-modal #section-2fa.pas-2fa-apagada { background: linear-gradient(135deg, rgba(88,101,242,.16), rgba(88,101,242,.05)); box-shadow: inset 0 0 0 1px rgba(88,101,242,.55); }
+    #settings-modal #section-2fa.pas-2fa-apagada .settings-section-title::after { content: 'Recomendado'; display: inline-block; margin-left: .375rem; padding: .125rem .5rem; border-radius: 1rem; background: #5865f2; color: #fff; font-size: .75rem; font-weight: 700; }
+    #settings-modal #totp-enable-btn { min-height: 2.75rem; font-size: 1rem; font-weight: 700; }
+    #settings-modal #totp-enable-area .settings-hint { margin: 0 0 .875rem !important; }
+    #settings-modal #totp-setup-area img#totp-qr-img { max-width: 13rem !important; }
+    #settings-modal #totp-secret-text { font-size: .9375rem !important; color: #f2f3f5; }
+    #settings-modal #totp-verify-code { letter-spacing: .375rem; }
+    #settings-modal #totp-verify-code::placeholder { letter-spacing: normal; font-size: .9375rem; }
+    #settings-modal #totp-manage-area .settings-hint:first-child { color: #23a55a !important; font-weight: 700; font-size: .9375rem; }
+    #settings-modal #totp-manage-area .form-group.compact { margin-bottom: .625rem; }
+    #settings-modal #totp-disable-btn { background: transparent !important; color: #f23f43 !important; border: 1px solid rgba(242,63,67,.6) !important; }
+    #settings-modal #totp-disable-btn:hover { background: rgba(242,63,67,.1) !important; }
+    /* Cerrar sesion en los demas: sin el boton rojo gigante (no es peligroso, solo corta las otras sesiones) */
+    #settings-modal #revoke-sessions-btn { width: auto !important; max-width: 100%; min-height: 2.5rem; margin-top: .75rem; padding: .5rem 1rem; white-space: normal; background: transparent !important; color: #f23f43 !important; border: 1px solid rgba(242,63,67,.6) !important; font-size: .9375rem; font-weight: 600; }
+    #settings-modal #revoke-sessions-btn:hover { background: rgba(242,63,67,.1) !important; }
+    #settings-modal #recovery-e2e-warning { background: rgba(240,178,50,.1) !important; border-color: rgba(240,178,50,.45) !important; font-size: .875rem !important; line-height: 1.45; color: #dbdee1 !important; }
+    #settings-modal #recovery-generate-area { display: flex; flex-direction: column; gap: .5rem; }
+    #settings-modal #delete-account-btn { min-height: 2.5rem; font-size: .9375rem; }
     @media (max-width: 768px) {
       #settings-modal .modal.pas { width: 100vw; height: 100%; border-radius: 0; border: 0; }
       #settings-modal .pas-nav { flex: 1 1 auto; border-right: 0; background: #1a1a1e; padding: .5rem 1rem 1rem; }
