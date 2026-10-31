@@ -395,7 +395,7 @@ function injectScript(req, res, src) {
         if (email.on() && html.includes('id="no-channel-msg"') && !html.includes('/puente/email.js')) {
           html = html.replace('</body>', '<script src="/puente/email.js" defer></script></body>');
         }
-        html = shareTags(html);
+        html = shareTags(html, req.url);
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         if (this.statusCode === 200) {
           const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 27) + '"';
@@ -674,6 +674,15 @@ async function handle(req, res) {
     const file = path.join(STATIC, 'cartas', naipe[1] + '.webp');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin dibujo');
     return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
+  // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg, propias
+  // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|juegos)\.jpg$/.exec(p);
+  if (tapa) {
+    const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
+    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
+    return send(res, 200, 'image/jpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=86400' });
   }
 
   // Dibujos del Funball: tools/puente/web/funball/ (piezas, piedra, logo, losa y fondo .webp), propios de cada
@@ -1216,20 +1225,36 @@ async function handle(req, res) {
 // Titulo y vista previa al compartir el enlace (WhatsApp, Telegram, X, Discord):
 // esos sitios leen la pagina sin ejecutarla, asi que va escrito en el HTML. En
 // lugar de "Haven | Login", el nombre de la app (PUENTE_TITULO) con el logo y
-// una descripcion corta.
-function shareTags(html) {
+// una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
+// muestran la tapa del juego en vez del logo.
+const JUEGOS_ENLACE = {
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball y Ajedrez para jugar con la gente del chat.' },
+  truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
+  funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
+  ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
+};
+function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;
   const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const row = db.prepare("SELECT value FROM server_settings WHERE key = 'server_name'").get();
-  const title = appName();
   const server = String((row && row.value) || '').trim();
-  const desc = server ? `El chat de ${server}. Entrá y creá tu cuenta.` : 'Entrá y creá tu cuenta.';
-  const image = publicUrl ? `${publicUrl}/puente/logo-carga.png` : '/puente/logo-carga.png';
+  let title = appName();
+  let desc = server ? `El chat de ${server}. Entrá y creá tu cuenta.` : 'Entrá y creá tu cuenta.';
+  let image = '/puente/logo-carga.png', grande = false, enlace = '/';
+  const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
+  const juego = q && JUEGOS_ENLACE[q[1] || 'juegos'];
+  if (juego && fs.existsSync(path.join(STATIC, 'tapas', (q[1] || 'juegos') + '.jpg'))) {
+    title = `${juego.nombre} · ${title}`; desc = juego.desc;
+    image = `/puente/tapas/${q[1] || 'juegos'}.jpg`; grande = true;
+    enlace = q[1] ? `/app?juegos=${q[1]}` : '/app?juegos';
+  }
+  if (publicUrl) image = publicUrl + image;
   const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +
     `<meta property="og:site_name" content="${esc(server || title)}"><meta property="og:description" content="${esc(desc)}">` +
     `<meta name="description" content="${esc(desc)}"><meta property="og:image" content="${esc(image)}">` +
-    (publicUrl ? `<meta property="og:url" content="${esc(publicUrl + '/')}">` : '') +
-    `<meta name="twitter:card" content="summary"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">`;
+    (grande ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '') +
+    (publicUrl ? `<meta property="og:url" content="${esc(publicUrl + enlace)}">` : '') +
+    `<meta name="twitter:card" content="${grande ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">`;
   return html.replace(/<title[^>]*>[^<]*<\/title>/i, `<title>${esc(title)}</title>`).replace('</head>', tags + '</head>');
 }
 
