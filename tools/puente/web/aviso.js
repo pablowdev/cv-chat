@@ -4457,6 +4457,16 @@ document.addEventListener('pointerdown', (ev) => {
       known.set(id, d.embeds);
       document.querySelectorAll('[data-msg-id="' + id + '"]').forEach(m => { defer(m, true); render(app, m, d.embeds); });
     });
+    // Al abrir la app Haven puede pedir sus vistas previas antes de que esto este listo, y llegan
+    // despues de la de Discord: en un mensaje que ya tiene la de Discord, la de Haven no queda
+    const sobra = (lp) => { const m = lp.closest('[data-msg-id]'); if (m && m.querySelector('.puente-embeds')) lp.remove(); };
+    new MutationObserver((muts) => {
+      for (const mu of muts) for (const n of mu.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.classList.contains('link-preview')) sobra(n);
+        else if (n.firstElementChild) n.querySelectorAll('.link-preview').forEach(sobra);
+      }
+    }).observe(document.body, { childList: true, subtree: true });
   })();
 })();
 
