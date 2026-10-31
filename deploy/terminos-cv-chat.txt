@@ -1,0 +1,50 @@
+TÉRMINOS Y CONDICIONES DE CV CHAT
+Última actualización: 31 de octubre de 2026
+
+CV Chat es el chat de Círculo Vicioso Club (circulovicioso.club). La misma cuenta sirve para el chat, la página y el foro. Al crear una cuenta o usar CV Chat aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
+
+1. Edad
+CV Chat es solo para mayores de 18 años. Al crear tu cuenta declarás que tenés 18 años o más. Si sabemos que una cuenta es de un menor, la borramos.
+
+2. Tu cuenta
+Sos responsable de tu cuenta y de lo que se haga con ella. Cuidá tu contraseña y tu email, y no le des tu cuenta a nadie. Te recomendamos activar la verificación en dos pasos. No te hagas pasar por otra persona ni crees cuentas para saltear una suspensión.
+
+3. Convivencia
+Queremos un lugar donde se pueda hablar con libertad, con humor y con respeto. No está permitido:
+- Material sexual de menores o cualquier forma de sexualizar a menores. Tolerancia cero: se borra, se banea para siempre y se denuncia a las autoridades.
+- Amenazas, acoso o perseguir a alguien, dentro o fuera del club.
+- Publicar datos personales de otra persona sin su permiso (dirección, teléfono, documentos, fotos privadas).
+- Estafas, spam, virus, enlaces engañosos o intentar entrar a cuentas ajenas.
+- Contenido ilegal, o promover delitos o la violencia.
+- Intentar romper, sobrecargar o vulnerar el servicio.
+Cada canal puede tener además sus propias reglas.
+
+4. Lo que publicás
+Lo que escribís y subís es tuyo, y sos responsable de eso. Al publicarlo nos das permiso para guardarlo y mostrarlo en CV Chat (y, en los canales conectados, en el servidor de Discord del club) mientras no lo borres. Solo subí cosas que tengas derecho a compartir.
+
+5. Mensajes privados
+Los mensajes privados están cifrados de punta a punta: solo los pueden leer quienes participan de la conversación. Si alguien te manda algo que rompe estas reglas, podés denunciarlo.
+
+6. Marketplace
+Las publicaciones del Marketplace son entre los miembros. El club no vende, no compra, no cobra ni garantiza nada: cualquier acuerdo, pago o entrega es responsabilidad de quienes lo hacen. Desconfiá de lo que parezca demasiado bueno y no pagues por adelantado a desconocidos.
+
+7. Moderación
+Los administradores y moderadores pueden borrar contenido, silenciar, suspender o banear cuentas que no respeten estos términos, sin aviso previo cuando sea grave. Si ves algo que rompe las reglas, usá "Denunciar mensaje" o escribile a un administrador.
+
+8. Tus datos
+Cómo guardamos y usamos tus datos está en la política de privacidad: https://circulovicioso.club/legal
+Podés borrar tu cuenta cuando quieras desde los ajustes del chat, o pedírnoslo por email.
+
+9. El servicio
+CV Chat lo mantiene el club por gusto, sin fines de lucro. Hacemos lo posible para que funcione bien y sea seguro, pero se ofrece tal como está: puede tener cortes, errores o cambios, y no garantizamos que esté siempre disponible ni que no se pierda información. En la medida que lo permita la ley, el club no se hace responsable por daños que surjan del uso del servicio ni por lo que publiquen los miembros.
+
+10. Cambios
+Podemos cambiar estos términos. Si el cambio es importante, lo avisamos en el chat. Si seguís usando CV Chat después del aviso, aceptás los términos nuevos.
+
+11. Ley aplicable
+Estos términos se rigen por las leyes de la República Argentina.
+
+12. Contacto
+Por cualquier duda o reclamo, escribinos a circuloviciosomedia@gmail.com. Responsable: PabloW (pablowdev@gmail.com).
+
+CV Chat usa software de código abierto con licencia AGPL-3.0. El código está disponible en https://github.com/pabwass/haven-discord-puente

@@ -11723,10 +11723,10 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     { id: 'acces', icon: '♿', name: 'Accesibilidad y chat', ids: ['section-zoom', 'section-chat-behavior'] },
   ];
   const ADMIN = [
-    { id: 'servidor', icon: '🏠', name: 'Servidor', ids: ['section-update', 'section-branding', 'section-presence', 'section-custom-tos', 'section-connectivity'] },
-    { id: 'personas', icon: '🛡️', name: 'Miembros y moderación', ids: ['section-members', 'section-roles', 'section-moderation', 'section-security', 'section-automod', 'section-invite'] },
+    { id: 'servidor', icon: '🏠', name: 'Servidor', ids: ['section-branding', 'section-presence', 'section-custom-tos'] },
+    { id: 'personas', icon: '🛡️', name: 'Miembros y moderación', ids: ['section-members', 'section-roles', 'section-moderation', 'section-security', 'section-automod'] },
     { id: 'contenido', icon: '😀', name: 'Emojis, stickers y archivos', ids: ['section-emojis', 'section-stickers', 'section-uploads'] },
-    { id: 'manten', icon: '🧰', name: 'Mantenimiento', ids: ['section-backup', 'section-cleanup', 'section-modmode', 'section-audit-log'] },
+    { id: 'manten', icon: '🧰', name: 'Mantenimiento', ids: ['section-backup', 'section-audit-log'] },
   ];
   // Lo que no se usa en CV Chat (o choca con su diseño): no se muestra
   const REMOVED = ['section-layout', 'section-reaction-size', 'section-role-display', 'section-toolbar-icons', 'section-image-display', 'section-embed-size',
@@ -11736,7 +11736,12 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     // nadie entendia para que era. Si alguien ya tenia una, Haven se la sigue pidiendo en su ventana
     'section-e2e-passphrase',
     'section-ferry', 'section-import', 'section-tunnel', 'section-guests', 'section-whitelist', 'section-template', 'section-extension-updates',
-    'section-large-server', 'section-sounds-admin', 'section-bots', 'section-tags-admin'];
+    'section-large-server', 'section-sounds-admin', 'section-bots', 'section-tags-admin',
+    // De Haven y CV Chat no las usa: actualizar Haven desde aca (romperia lo propio; se actualiza a mano y
+    // probado), la voz (apagada en todos los canales), sus insignias (CV Chat tiene sus medallas), sus codigos
+    // de invitacion ("Invitar gente" los reemplaza), la limpieza automatica (borraria mensajes) y su editor
+    // de diseño (choca con el de CV Chat)
+    'section-update', 'section-connectivity', 'section-badges', 'section-invite', 'section-cleanup', 'section-modmode'];
   const ALL = [...USER, ...ADMIN].flatMap(c => c.ids).concat(REMOVED);
   let built = false, current = null, refs = {};
 
@@ -11775,6 +11780,10 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     };
     poner('update-channel-early', 'Recibir las versiones nuevas antes', 'Llegan apenas salen, antes de ser estables (más o menos una vez por semana): tenés los arreglos antes, pero a veces con algún error.');
     poner('server-title-input', null, 'Se muestra en la pantalla para entrar, debajo del logo.');
+    const tos = document.querySelector('#section-custom-tos .settings-hint');
+    if (tos) tos.textContent = 'Los términos de CV Chat: se muestran al crear una cuenta, para aceptarlos. Texto sin formato; una línea en blanco separa los párrafos.';
+    const tosT = document.querySelector('#section-custom-tos .settings-section-subtitle span');
+    if (tosT) tosT.textContent = 'Términos y condiciones';
     for (const h of refs.modal.querySelectorAll('.settings-hint')) {
       if (/CV Chat Desktop/.test(h.textContent)) h.textContent = h.textContent.replace(/CV Chat Desktop/g, 'la app de PC');
     }
@@ -11787,6 +11796,40 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }
   }
   function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
+
+  // Partes de otras secciones que son de Haven y CV Chat no usa (se ocultan; lo guardado sigue igual)
+  function sinHaven() {
+    const fuera = (e) => { if (e) e.classList.add('pas-fuera'); };
+    const fila = (id) => { const i = document.getElementById(id); return i && i.closest('label'); };
+    const conAyuda = (lab) => { if (!lab) return; fuera(lab); for (let n = lab.nextElementSibling; n && n.matches('.settings-hint'); n = n.nextElementSibling) fuera(n); };
+    const grupo = (id) => { const i = document.getElementById(id); return i && i.closest('.settings-group'); };
+    // Un grupo de Seguridad: su titulo y todo lo que sigue hasta el proximo titulo
+    const bloque = (clave) => {
+      const t = document.querySelector('.settings-group-label span[data-i18n="' + clave + '"]');
+      const lbl = t && t.closest('.settings-group-label');
+      if (!lbl) return;
+      fuera(lbl);
+      for (let n = lbl.nextElementSibling; n && !n.matches('.settings-group-label'); n = n.nextElementSibling) fuera(n);
+    };
+    // Servidor: el banner ancho, los temas de Haven (el diseño de CV Chat es fijo) y sus valores para miembros nuevos
+    fuera(grupo('server-banner-file'));
+    conAyuda(fila('default-theme-select'));
+    fuera(document.getElementById('member-defaults-group'));
+    fuera(grupo('admin-theme-list'));
+    // Miembros: las versiones nuevas de Haven
+    conAyuda(fila('update-banner-admin-only'));
+    conAyuda(fila('update-channel-early'));
+    // Seguridad: inicio de sesion externo, referrer y privacidad de la voz
+    bloque('settings.admin.oidc_group');
+    bloque('settings.admin.referrer_policy_group');
+    bloque('settings.admin.voice_privacy_group');
+    // Notificaciones: lo de la voz
+    fuera(fila('voice-master-volume'));
+    fuera(fila('soundboard-master-volume'));
+    for (const id of ['auto-accept-streams', 'hide-voice-panel', 'sidebar-voice-controls', 'notif-voice-action-cues-enabled']) conAyuda(fila(id));
+    for (const id of ['notif-join-volume', 'notif-join-sound', 'notif-leave-volume', 'notif-leave-sound']) fuera(fila(id));
+    fuera(document.getElementById('open-sound-manager-user-btn'));
+  }
 
   // Los textos de "Mi cuenta", en castellano de aca y mas claros. Se ponen cada vez que se abre
   // (si Haven vuelve a traducir la pagina, quedan los suyos hasta la proxima vez)
@@ -11925,6 +11968,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (navOld) navOld.classList.add('pas-fuera');
     box.querySelector('#settings-tab-bar')?.classList.add('pas-fuera');
     for (const id of REMOVED) { document.getElementById(id)?.classList.add('pas-fuera'); navItemFor(id)?.classList.add('pas-fuera'); }
+    sinHaven();
     const pw = document.getElementById('section-password'), tf = document.getElementById('section-2fa');
     if (pw && tf) pw.insertAdjacentElement('afterend', tf);
     // Al activarla o desactivarla Haven muestra otra parte: el "Recomendado" se acomoda solo

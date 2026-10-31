@@ -99,3 +99,8 @@ html body.auth-page .puente-nota-chica { margin: 0.75rem 0 0; font-size: 0.8125r
 .puente-invito { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 18px; padding: 10px 14px; border-radius: 10px; background: rgba(88, 101, 242, .15); border: 1px solid rgba(88, 101, 242, .45); font-size: 15px; color: #dbdee1; }
 .puente-invito img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .puente-invito b { color: #fff; }
+
+/* Terminos: con los de CV Chat cargados (custom_tos), sin los de Haven que Haven agrega debajo */
+#eula-modal:has(#custom-tos-section[style*="block"]) .eula-content[data-i18n-html="auth.eula.terms_body"],
+#eula-modal #custom-tos-section [data-i18n="auth.eula.default_terms"] { display: none !important; }
+#eula-modal #custom-tos-content { border-bottom: 0 !important; padding-bottom: 0 !important; }
