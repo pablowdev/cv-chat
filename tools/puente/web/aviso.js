@@ -6813,6 +6813,80 @@ document.addEventListener('pointerdown', (ev) => {
   })();
 })();
 
+// Ventanas de Haven sin el emoji del título ("📊 Crear encuesta" -> "Crear encuesta"), como las de
+// CV Chat; tambien el 📌 de "Mensajes fijados". Las que se arman despues tambien.
+(function () {
+  'use strict';
+  const EMOJI = /^[\s\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\uFE0F\u200D]+/u;
+  function limpiar(raiz) {
+    const titulos = raiz.querySelectorAll ? raiz.querySelectorAll('.modal-overlay > .modal > h3, #pinned-count') : [];
+    for (const h of titulos) {
+      const t = h.firstChild;
+      if (t && t.nodeType === 3 && EMOJI.test(t.nodeValue) && h.textContent.replace(EMOJI, '').trim()) t.nodeValue = t.nodeValue.replace(EMOJI, '');
+    }
+  }
+  function empezar() {
+    limpiar(document);
+    new MutationObserver((muts) => {
+      for (const mu of muts) for (const n of mu.addedNodes) if (n.nodeType === 1 && (n.classList.contains('modal-overlay') || n.querySelector('.modal-overlay, #pinned-count'))) limpiar(n.parentNode || document);
+    }).observe(document.body, { childList: true });
+    // El contador de fijados se reescribe al cambiar de canal ("📌 3 mensajes fijados")
+    const pc = document.getElementById('pinned-count');
+    if (pc) new MutationObserver(() => limpiar(pc.parentNode)).observe(pc, { childList: true, characterData: true, subtree: true });
+  }
+  if (document.body) empezar(); else document.addEventListener('DOMContentLoaded', empezar);
+})();
+
+// Celular: el menu del canal (mantener apretado) es una hoja desde abajo, como en la app de Discord,
+// sin los emojis de Haven delante de cada opcion (el de la PC esta mas arriba)
+(function () {
+  'use strict';
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  function sinIconos(menu) {
+    for (const b of menu.querySelectorAll('.channel-ctx-item')) {
+      const t = b.firstChild;
+      if (t && t.nodeType === 3) {
+        const m = /^\s*(\S+)\s*([\s\S]*)$/.exec(t.nodeValue);
+        if (m && !/[a-z0-9áéíóúñ]/i.test(m[1])) t.nodeValue = m[2];
+      }
+    }
+  }
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._openChannelCtxMenu !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    const abrir = app._openChannelCtxMenu;
+    app._openChannelCtxMenu = function (...a) {
+      const r = abrir.apply(this, a);
+      const menu = document.getElementById('channel-ctx-menu');
+      if (menu && window.innerWidth <= 768) { menu.classList.add('puente-canal-hoja'); sinIconos(menu); }
+      else if (menu) menu.classList.remove('puente-canal-hoja');
+      return r;
+    };
+  })();
+})();
+
+// Lista de hilos: el comienzo de cada uno se ve sin las marcas de formato ("**Juntadas**", "> cita"),
+// como en Discord, en vez del texto crudo
+(function () {
+  'use strict';
+  const limpio = (t) => t.replace(/\*\*|__|~~|\|\||`/g, '').replace(/(^|\n)\s*>\s?/g, '$1').replace(/\s+/g, ' ').trim();
+  function arreglar(raiz) {
+    for (const p of raiz.querySelectorAll('.thread-list-preview')) {
+      if (p.dataset.puenteLimpio === p.textContent) continue;
+      const t = limpio(p.textContent);
+      if (t !== p.textContent) p.textContent = t;
+      p.dataset.puenteLimpio = t;
+    }
+  }
+  let tries = 0;
+  (function wait() {
+    const m = document.getElementById('threads-list-modal');
+    if (!m) { if (++tries < 120) setTimeout(wait, 500); return; }
+    new MutationObserver(() => arreglar(m)).observe(m, { childList: true, subtree: true });
+  })();
+})();
+
 // El menu: reacciones rapidas arriba, "Agregar reaccion", y las opciones de Haven
 // ordenadas como en Discord, con su icono a la derecha y "Copiar texto". Son las
 // mismas acciones y permisos de Haven; solo cambian el aspecto y el orden.
@@ -7275,13 +7349,18 @@ document.addEventListener('pointerdown', (ev) => {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
       a.href = '/puente/historia';
-      a.textContent = '📖 Tu historia';
+      a.textContent = 'Tu historia';
       a.addEventListener('click', (e) => { e.preventDefault(); openHistoria(); });
       (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', a);
       const inv = document.createElement('button');
-      inv.type = 'button'; inv.className = 'puente-invitar-btn'; inv.textContent = '🤝 Invitar gente';
+      inv.type = 'button'; inv.className = 'puente-invitar-btn'; inv.textContent = 'Invitar gente';
       inv.addEventListener('click', () => { try { window.app._closeProfilePopup(); } catch { /* sigue */ } if (window.puenteInvitar) window.puenteInvitar(); });
       a.insertAdjacentElement('afterend', inv);
+      // "✏️ Editar perfil" y "📝 Notas personales" de Haven, sin el emoji (como los demas botones)
+      for (const b of popup.querySelectorAll('.profile-popup-action-btn')) {
+        const t = b.firstChild;
+        if (t && t.nodeType === 3) t.nodeValue = t.nodeValue.replace(/^[\s\p{Extended_Pictographic}️‍]+/u, '');
+      }
     }
   }
 

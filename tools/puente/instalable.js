@@ -166,7 +166,10 @@ function locale(file) {
   const st = fs.statSync(file);
   const hit = localeCache.get(file);
   if (hit && hit.mtime === st.mtimeMs && hit.name === title()) return hit.body;
-  const body = Buffer.from(JSON.stringify(rename(JSON.parse(fs.readFileSync(file, 'utf8')), title())), 'utf8');
+  let textos = rename(JSON.parse(fs.readFileSync(file, 'utf8')), title());
+  // En español, con el vos de aca (voseo.js); si algo falla, quedan los de Haven
+  if (path.basename(file) === 'es.json') { try { textos = require('./voseo.js').aplicar(textos); } catch (e) { console.warn('[puente] voseo:', e.message); } }
+  const body = Buffer.from(JSON.stringify(textos), 'utf8');
   localeCache.set(file, { mtime: st.mtimeMs, name: title(), body });
   return body;
 }
