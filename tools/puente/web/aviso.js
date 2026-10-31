@@ -8773,7 +8773,7 @@ document.addEventListener('pointerdown', (ev) => {
   // Cada servidor puede tener su dibujo para cada carta (/puente/cartas/<palo>-<n>.webp,
   // no va al repositorio); si no esta, la carta simple con el numero y el palo
   let conDibujos = true;
-  const CARTAS_V = 2; // subir cuando se cambian los dibujos, para que no quede la version vieja guardada
+  const CARTAS_V = 3; // subir cuando se cambian los dibujos, para que no quede la version vieja guardada
   // Los palos dibujados como en la baraja española: el oro dorado, la copa roja con pie
   // dorado, la espada de hoja clara con empuñadura azul y el basto verde con nudos
   const PALO_SVG = {
