@@ -1,4 +1,16 @@
+# Cabeceras de seguridad: siempre por https (HSTS, un año), sin adivinar el tipo de los archivos y
+# sin decir que programa atiende. Con "?" solo se ponen si la app no las puso (cada una por
+# separado: juntas, Caddy las pone solo si no falta ninguna)
+(seguridad) {
+	header ?Strict-Transport-Security "max-age=31536000"
+	header ?X-Content-Type-Options "nosniff"
+	header ?Referrer-Policy "strict-origin-when-cross-origin"
+	header -Server
+	header -X-Powered-By
+}
+
 chat.example.com {
+	import seguridad
 	encode gzip
 	reverse_proxy haven:3000
 }

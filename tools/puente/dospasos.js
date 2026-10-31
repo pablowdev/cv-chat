@@ -178,4 +178,4 @@ function alRegistrar(req, res) {
   envolver(req, res, (d, status) => (status < 300 && d && d.token && d.user && d.user.id ? { cookie: recordar(req, d.user.id) } : null));
 }
 
-module.exports = { setup, on, handle, confiable, recordar, pedir, alEntrar, alTotp, alRegistrar, tieneTotp };
+module.exports = { setup, on, handle, confiable, recordar, pedir, alEntrar, alTotp, alRegistrar, tieneTotp, envolver };

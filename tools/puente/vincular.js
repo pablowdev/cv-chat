@@ -170,6 +170,21 @@ function hookHttp() {
         const admin = who && db.prepare('SELECT is_admin FROM users WHERE id = ?').get(who.id);
         if (!admin || !admin.is_admin) { send(res, 403, 'application/json', JSON.stringify({ error: 'Las personas son solo para administradores.' })); return true; }
       }
+      // Activar la verificacion con una app de codigos (Authy, Google Authenticator): Haven arma el QR
+      // como "Haven: usuario"; se rehace como "CV Chat: usuario" con el logo de la app (las apps que
+      // aceptan logo lo toman de ahi). La clave secreta es la misma, asi que los codigos no cambian
+      if (req.method === 'POST' && url.split('?')[0] === '/api/auth/totp/setup') dospasos.envolver(req, res, (d, status) => {
+        if (status >= 300 || !d || typeof d.otpauthUri !== 'string') return null;
+        const o = new URL(d.otpauthUri);
+        const secret = o.searchParams.get('secret');
+        const usuario = decodeURIComponent(o.pathname.replace(/^\/+/, '')).split(':').pop();
+        if (!secret || !usuario) return null;
+        const emisor = appName();
+        const q = new URLSearchParams({ secret, issuer: emisor, algorithm: o.searchParams.get('algorithm') || 'SHA1', digits: o.searchParams.get('digits') || '6', period: o.searchParams.get('period') || '30' });
+        if (publicUrl) q.set('image', String(publicUrl).replace(/\/+$/, '') + '/puente/icono-512.png');
+        const uri = 'otpauth://totp/' + encodeURIComponent(emisor) + ':' + encodeURIComponent(usuario) + '?' + q.toString().replace(/\+/g, '%20');
+        return require('/app/node_modules/qrcode').toDataURL(uri, { width: 256, margin: 2 }).then(qr => ({ body: { ...d, otpauthUri: uri, qrDataUrl: qr } }));
+      });
       // Codigo por email en cada dispositivo nuevo (dospasos.js): al iniciar sesion; el codigo de la app
       // (TOTP) y registrarse dejan recordado el dispositivo
       if (req.method === 'POST' && dospasos.on()) {
@@ -504,6 +519,8 @@ function sessionUser(req) {
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   const decoded = token ? verifyToken(token) : null;
   if (!decoded || !decoded.id) return null;
+  // Una cuenta baneada no usa nada de esto (Haven ya le corta el chat; su sesion sigue firmada)
+  try { if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(decoded.id)) return null; } catch { /* sin la tabla */ }
   return db.prepare('SELECT id, username, display_name FROM users WHERE id = ?').get(decoded.id) || null;
 }
 
