@@ -13785,16 +13785,20 @@ var puenteSinUbicacion = (function () {
     let n = 0, toco = false;
     // (si la persona ya empezo a usarlo, se deja de insistir)
     ['pointerdown', 'keydown'].forEach(e => document.addEventListener(e, (ev) => { if (ev.isTrusted) toco = true; }, { capture: true, once: true }));
+    // Hasta que esta la lista de mensajes la ventanita no se ve (el servidor la manda escondida):
+    // asi no aparece el chat entero un segundo
+    const mostrar = () => document.documentElement.classList.add('puente-ventana-lista');
     (function mensajes() {
-      if (toco) return;
+      if (toco) { mostrar(); return; }
       const app = window.app, side = document.querySelector('.sidebar'), body = byId('app-body');
       const listo = side && side.classList.contains('puente-ver-dms') && (!byId('mobile-menu-btn') || !byId('mobile-menu-btn').offsetParent || (body && body.classList.contains('mobile-sidebar-open')));
+      if (listo) mostrar();
       if (listo && n > 3) return;
       if (app && side) {
         if (!side.classList.contains('puente-ver-dms')) { const b = document.querySelector('.puente-rail-dm') || document.querySelector('.puente-pc-dm'); if (b) b.click(); }
         else if (body && !body.classList.contains('mobile-sidebar-open')) { const m = byId('mobile-menu-btn'); if (m && m.offsetParent) m.click(); }
       }
-      if (++n < 40) setTimeout(mensajes, 700);
+      if (++n < 40) setTimeout(mensajes, 700); else mostrar();
     })();
   }
 })();

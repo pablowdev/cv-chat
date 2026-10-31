@@ -348,6 +348,12 @@ function injectScript(req, res, src) {
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
         // La lista de mensajes directos aparece ya ordenada (aviso.js le pone puente-ordenada); si no, igual a los 3 s
         if (src === '/puente/aviso.js' && html.includes('</head>') && !html.includes('puente-ordenada')) html = html.replace('</head>', '<style>@keyframes puente-ver{to{visibility:visible}}#dm-list:not(.puente-ordenada){visibility:hidden;animation:puente-ver 0s 3s forwards}</style></head>');
+        // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
+        // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
+        if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
+          // mientras tanto, una ruedita en el medio
+          '@keyframes puente-ventana-gira{to{transform:rotate(360deg)}}@keyframes puente-ventana-fin{to{visibility:hidden}}' +
+          'html:not(.puente-ventana-lista)::after{content:"";position:fixed;left:50%;top:45%;width:1.75rem;height:1.75rem;margin:-0.875rem;box-sizing:border-box;border:3px solid #4e5058;border-top-color:#5865f2;border-radius:50%;animation:puente-ventana-gira .8s linear infinite,puente-ventana-fin 0s 4s forwards}</style></head>');
         // Pantalla de inicio de sesion ("/"): el logo y el nombre del servidor en vez
         // de "HAVEN" y su lema, con el aspecto de la app (login.css). "by Haven" queda
         // chiquito abajo, junto a la version.

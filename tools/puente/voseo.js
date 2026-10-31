@@ -91,6 +91,8 @@ const TRADUCCIONES = {
   'modals.hidden_channels.desc': 'Los canales ocultos no aparecen en tu lista, pero seguís teniendo acceso. Mostrá uno para que vuelva.',
   'context_menu.channel.hide': 'Ocultar canal',
   'users.connections.client_secret': 'Clave secreta del cliente',
+  'settings.admin.update_early_label': 'Actualizaciones anticipadas',
+  'settings.admin.update_early_hint': 'Ofrece las versiones nuevas apenas salen, antes de que sean estables (más o menos una por semana). Tenés los arreglos y las novedades antes, y a veces algún error que la versión estable no tiene. Docker: usá la imagen :beta en vez de :latest.',
 };
 
 function aplicar(obj) {
