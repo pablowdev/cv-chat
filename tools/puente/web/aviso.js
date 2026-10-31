@@ -6887,6 +6887,26 @@ document.addEventListener('pointerdown', (ev) => {
   (function wait() { if (!poner() && ++tries < 120) setTimeout(wait, 500); })();
 })();
 
+// El español con la bandera argentina: el selector de idioma de Haven le pone la de España
+// (/emoji/flags/es.svg); aca va la de Argentina (ar.svg, que Haven tambien trae)
+(function () {
+  'use strict';
+  const cambiar = (raiz) => {
+    for (const i of raiz.querySelectorAll('img.lang-flag[src$="/emoji/flags/es.svg"]')) i.src = '/emoji/flags/ar.svg';
+  };
+  function empezar() {
+    cambiar(document);
+    new MutationObserver((muts) => {
+      for (const mu of muts) for (const n of mu.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.matches('img.lang-flag')) cambiar(n.parentNode || document);
+        else if (n.firstElementChild) cambiar(n);
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+  if (document.body) empezar(); else document.addEventListener('DOMContentLoaded', empezar);
+})();
+
 // Celular: el menu del canal (mantener apretado) es una hoja desde abajo, como en la app de Discord,
 // sin los emojis de Haven delante de cada opcion (el de la PC esta mas arriba)
 (function () {
