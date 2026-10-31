@@ -64,6 +64,7 @@ function todas() {
         visto: new Date(r.visto).toISOString(),
         desde: r.plataforma ? PLATAFORMAS[r.plataforma] : null,
         usadas: Object.keys(usadas).sort((a, b) => usadas[b] - usadas[a]).map(k => PLATAFORMAS[k]).filter(Boolean),
+        cuando: Object.fromEntries(Object.entries(usadas).filter(([k]) => PLATAFORMAS[k]).map(([k, ms]) => [PLATAFORMAS[k], ms])),
       });
     }
   } catch { /* sin la tabla todavia */ }

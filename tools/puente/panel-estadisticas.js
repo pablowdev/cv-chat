@@ -210,11 +210,16 @@ function calcular(rango) {
     ['Volvieron otro día', nuevosLista.filter(volvio).length],
   ];
 
-  // Dispositivos: desde donde entro la ultima vez quien estuvo en el periodo
+  // Dispositivos: cuanta gente uso cada uno en el periodo (alguien con la app de PC y la de Android
+  // cuenta en los dos; personasDispositivo es cuantas personas distintas, para los porcentajes)
   const dispositivos = {};
-  for (const m of lista) {
-    if (!m.entraDesde || !m.visto || Date.parse(m.visto) < msIniDia) continue;
-    dispositivos[m.entraDesde] = (dispositivos[m.entraDesde] || 0) + 1;
+  let personasDispositivo = 0;
+  let presencia = new Map();
+  try { presencia = require('./presencia.js').todas(); } catch { /* sin presencia */ }
+  for (const p of presencia.values()) {
+    const usados = Object.entries(p.cuando || {}).filter(([, ms]) => ms >= msIniDia);
+    if (usados.length) personasDispositivo++;
+    for (const [k] of usados) dispositivos[k] = (dispositivos[k] || 0) + 1;
   }
 
   return {
@@ -226,7 +231,7 @@ function calcular(rango) {
       reacciones: [reacciones, reaccionesAnt], partidas: [partidas, partidasAnt], publicaciones: [publicaciones, publicacionesAnt],
       activos: [activosTot.size, activosAnt.size],
     },
-    calor, canales: listaCanales.slice(0, 25), embudo, dispositivos,
+    calor, canales: listaCanales.slice(0, 25), embudo, dispositivos, personasDispositivo,
     activosDesde: desdeActivos,
     resumenListo: resumenListo(),
   };

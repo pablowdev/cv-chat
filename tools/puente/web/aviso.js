@@ -2417,9 +2417,10 @@ function leido(sc) {
     // Dispositivos
     const dis = el('div');
     const lista = Object.entries(d.dispositivos).sort((a, b) => b[1] - a[1]);
-    const totD = lista.reduce((s, [, v]) => s + v, 0);
+    const totD = d.personasDispositivo || lista.reduce((s, [, v]) => s + v, 0);
     for (const [k, v] of lista) dis.appendChild(filaBarra(k, v, totD, Math.round((v / totD) * 100) + '% · ' + fmt(v)));
     if (!lista.length) dis.appendChild(el('div', 'pe-nota', 'Todavía no hay datos: se empezó a anotar hace poco.'));
+    else if (d.personasDispositivo) dis.appendChild(el('div', 'pe-nota', 'De las ' + fmt(d.personasDispositivo) + ' personas que entraron en este período. Quien usa más de uno cuenta en cada uno.'));
     box.appendChild(tarjeta('Dispositivo', dis));
   }
   function cargarEstadisticas() {
