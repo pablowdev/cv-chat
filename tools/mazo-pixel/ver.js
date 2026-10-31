@@ -32,7 +32,17 @@ const [, , modo, destino, ...cartas] = process.argv;
       const data = await ev(`(k==='dorso'?mazoPixel.dorso():mazoPixel.dibujar('${p}',${Number(n) || 0})).toDataURL('image/webp',1)`.replace("(k==='dorso'", `('${k}'==='dorso'`));
       fs.writeFileSync(path.join(destino, k + '.webp'), Buffer.from(data.split(',')[1], 'base64'));
     }
-    console.log('guardadas', lista.length);
+    const ban = await ev(`mazoPixel.banner().toDataURL('image/webp',0.92)`);
+    fs.writeFileSync(path.join(destino, 'banner.webp'), Buffer.from(ban.split(',')[1], 'base64'));
+    console.log('guardadas', lista.length, '+ banner');
+  } else if (modo === 'banner') {
+    await send('Emulation.setDeviceMetricsOverride', { width: 1080, height: 720, deviceScaleFactor: 1, mobile: false }, S);
+    await send('Page.navigate', { url: 'data:text/html,<body style="margin:0"></body>' }, S); await sleep(400);
+    await ev(codigo + `;document.body.appendChild(mazoPixel.banner());1`);
+    await sleep(300);
+    const clip = process.env.CLIP ? (([x, y, width, height]) => ({ x, y, width, height, scale: 2 }))(process.env.CLIP.split(',').map(Number)) : undefined;
+    const s = await send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) }, S);
+    fs.writeFileSync(destino, Buffer.from(s.result.data, 'base64'));
   }
   await send('Target.closeTarget', { targetId }); process.exit(0);
 })().catch(e => { console.error(e.message); process.exit(1); });

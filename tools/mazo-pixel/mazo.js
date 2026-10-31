@@ -274,20 +274,20 @@
   }
   const FY = [31, 60, 89];
   const LUGARES = {
-    2: [[40, 32], [40, 88, 1]], 3: [[40, 28], [40, 60], [40, 92, 1]], 4: [[26, 34], [54, 34], [26, 86, 1], [54, 86, 1]],
-    5: [[26, 31], [54, 31], [40, 60], [26, 89, 1], [54, 89, 1]], 6: [[26, FY[0]], [54, FY[0]], [26, FY[1]], [54, FY[1]], [26, FY[2], 1], [54, FY[2], 1]],
-    7: [[26, 28], [54, 28], [40, 47], [26, 66], [54, 66], [26, 92, 1], [54, 92, 1]],
+    2: [[40, 31], [40, 89, 1]], 3: [[40, 27], [40, 60], [40, 93, 1]], 4: [[24, 33], [56, 33], [24, 87, 1], [56, 87, 1]],
+    5: [[24, 31], [56, 31], [40, 60], [24, 89, 1], [56, 89, 1]], 6: [[24, FY[0]], [56, FY[0]], [24, FY[1]], [56, FY[1]], [24, FY[2], 1], [56, FY[2], 1]],
+    7: [[24, 27], [56, 27], [40, 47], [24, 67], [56, 67], [24, 94, 1], [56, 94, 1]],
   };
   const FILA = { 2: [[28, 60], [52, 60]], 3: [[20, 60], [40, 60], [60, 60]] };
   function dibujar(palo, n) {
     const L = nuevo();
     fondo(L, palo);
-    if (n === 1) pinta(L, palo, W / 2, H / 2, palo === 'oro' ? 2.9 : palo === 'copa' ? 2.6 : 2.5);
+    if (n === 1) pinta(L, palo, W / 2, H / 2, palo === 'oro' ? 3.2 : palo === 'copa' ? 2.9 : palo === 'espada' ? 2.85 : 2.75);
     else if (n <= 7) {
-      const s = palo === 'oro' ? (n <= 3 ? 1.6 : n === 4 ? 1.45 : n <= 6 ? 1.2 : 1) : palo === 'copa' ? (n === 2 ? 1.6 : n === 3 ? 1.3 : n === 4 ? 1.45 : n <= 6 ? 1.05 : 0.85) : 1;
+      const s = palo === 'oro' ? (n === 2 ? 1.85 : n === 3 ? 1.72 : n === 4 ? 1.65 : n <= 6 ? 1.38 : 1.2) : palo === 'copa' ? (n === 2 ? 1.8 : n === 3 ? 1.33 : n === 4 ? 1.6 : n <= 6 ? 1.18 : 1) : 1;
       const largo = palo === 'espada' || palo === 'basto';
-      if (largo && n <= 3) for (const [cx, cy] of FILA[n]) pinta(L, palo, cx, cy, 1.7);
-      else for (const [cx, cy, inv] of LUGARES[n]) pinta(L, palo, cx, cy, largo ? (n <= 4 ? 1.15 : n === 5 ? 0.9 : 0.8) : s, !!inv && largo);
+      if (largo && n <= 3) for (const [cx, cy] of FILA[n]) pinta(L, palo, cx, cy, n === 2 ? 1.95 : 1.85);
+      else for (const [cx, cy, inv] of LUGARES[n]) pinta(L, palo, cx, cy, largo ? (n <= 4 ? 1.3 : n === 5 ? 1 : palo === 'espada' ? 0.84 : 0.9) : s, !!inv && largo);
     } else {
       TR = [0.88, 4.8, 4, n === 11 && (palo === 'espada' || palo === 'basto')];
       if (n === 10) sota(L, palo); else if (n === 11) caballo(L, palo); else rey(L, palo);
@@ -323,5 +323,68 @@
     return pintar(L);
   }
 
-  window.mazoPixel = { dibujar, dorso, PALOS: ['oro', 'copa', 'espada', 'basto'], NUMEROS: [1, 2, 3, 4, 5, 6, 7, 10, 11, 12] };
+  // ── Banner de la sala del truco: grilla de 360x240 agrandada 3 veces (1080x720) ──
+  // Paño verde con marco dorado, cinco cartas en abanico (el rey de Magaiba al medio) y "TRUCO" abajo.
+  const LETRAS = {
+    T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+    R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+    U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+    C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
+    O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+  };
+  function banner() {
+    const BW = 360, BH = 240, Z = 3;
+    const cv = document.createElement('canvas');
+    cv.width = BW * Z; cv.height = BH * Z;
+    const ctx = cv.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    const caja = (x, y, w, h, c) => { ctx.fillStyle = COL[c] || c; ctx.fillRect(x * Z, y * Z, w * Z, h * Z); };
+    // paño con un rombo apenas marcado y los bordes más oscuros
+    for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
+      const borde = Math.min(x, BW - 1 - x, y, BH - 1 - y);
+      const rombo = (x + y) % 12 === 0 || (x - y + 480) % 12 === 0;
+      caja(x, y, 1, 1, borde < 14 ? (rombo ? '#0d2117' : '#0a1a12') : rombo ? '#163a26' : '#123020');
+    }
+    // marco dorado con esquinas
+    for (const [a, c] of [[6, 'k'], [7, 'Y'], [8, 'y'], [9, 'k']]) {
+      caja(a, a, BW - 2 * a, 1, c); caja(a, BH - 1 - a, BW - 2 * a, 1, c);
+      caja(a, a, 1, BH - 2 * a, c); caja(BW - 1 - a, a, 1, BH - 2 * a, c);
+    }
+    for (const [x, y] of [[8, 8], [BW - 9, 8], [8, BH - 9], [BW - 9, BH - 9]])
+      for (let d = -4; d <= 4; d++) { const r = 4 - Math.abs(d); caja(x - r, y + d, 2 * r + 1, 1, Math.abs(d) === 4 || r === 0 ? 'k' : 'y'); }
+    // cartas: sombra y la carta dibujada a la mitad (cada pixel de la carta queda de 3x3)
+    const carta = (cvc, x, y) => {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect((x + 3) * Z, (y + 4) * Z, 80 * Z, 120 * Z);
+      ctx.drawImage(cvc, x * Z, y * Z, 80 * Z, 120 * Z);
+    };
+    carta(dibujar('espada', 7), 22, 40);
+    carta(dibujar('oro', 7), 258, 40);
+    carta(dibujar('espada', 1), 80, 26);
+    carta(dibujar('basto', 1), 200, 26);
+    carta(dibujar('copa', 12), 140, 14);
+    // cartel con TRUCO
+    const LZ = 6, ancho = 5 * 5 * LZ + 4 * LZ, tx = Math.round((BW - ancho) / 2), ty = 174;
+    const px0 = tx - 16, py0 = ty - 10, pw = ancho + 32, ph = 7 * LZ + 20;
+    caja(px0 + 3, py0 + 4, pw, ph, 'rgba(0,0,0,0.5)');
+    caja(px0, py0, pw, ph, 'k'); caja(px0 + 1, py0 + 1, pw - 2, ph - 2, 'Y'); caja(px0 + 2, py0 + 2, pw - 4, ph - 4, 'y');
+    caja(px0 + 4, py0 + 4, pw - 8, ph - 8, 'k'); caja(px0 + 5, py0 + 5, pw - 10, ph - 10, '#2a1712');
+    const letra = (ch, x, y, c, borde) => LETRAS[ch].forEach((f, j) => [...f].forEach((b, i) => {
+      if (b !== '1') return;
+      if (borde) caja(x + i * LZ - 2, y + j * LZ - 2, LZ + 4, LZ + 4, c); else caja(x + i * LZ, y + j * LZ, LZ, LZ, c);
+    }));
+    [...'TRUCO'].forEach((ch, k) => {
+      const x = tx + k * 6 * LZ;
+      for (let d = 0; d <= 3; d++) letra(ch, x, ty + d, 'k', true);
+      letra(ch, x, ty + 3, 'R', false);
+    });
+    [...'TRUCO'].forEach((ch, k) => {
+      const x = tx + k * 6 * LZ;
+      // crema arriba y dorado abajo, como un brillo
+      LETRAS[ch].forEach((f, j) => [...f].forEach((b, i) => {
+        if (b === '1') caja(x + i * LZ, ty + j * LZ, LZ, LZ, j <= 2 ? 'e' : j <= 4 ? 'w' : 'y');
+      }));
+    });
+    return cv;
+  }
+
+  window.mazoPixel = { dibujar, dorso, banner, PALOS: ['oro', 'copa', 'espada', 'basto'], NUMEROS: [1, 2, 3, 4, 5, 6, 7, 10, 11, 12] };
 })();
