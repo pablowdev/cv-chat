@@ -7,6 +7,9 @@
 //
 //  GET /puente/api/actividad/destacados          (sesion)
 //  GET /puente/api/actividad/ranking?mes=YYYY-MM (sesion; el mes actual si no se dice)
+//  GET /puente/api/actividad/canal?code=         (sesion; hora pico del canal, si esta en el)
+//  GET /puente/api/actividad/perfil?u=ID         (sesion; para la tarjeta de perfil)
+//  GET /puente/api/actividad/anio?anio=YYYY      (sesion; "Tu año en CV Chat")
 // Los mensajes por persona y mes salen del resumen de panel-estadisticas.js (puente_est_u).
 
 const AR = 3 * 3600 * 1000; // Argentina, UTC-3
@@ -124,7 +127,84 @@ function ranking(mes, userId) {
   return { mes, mensajes: gente(datos.mensajes), reacciones: gente(datos.reacciones) };
 }
 
+// Hora pico de un canal (ultimos 28 dias, hora de Argentina): las dos horas seguidas con mas mensajes.
+// Solo para quien esta en el canal, y solo si hay movimiento suficiente para que diga algo
+function canal(code, userId) {
+  const c = db.prepare('SELECT id FROM channels WHERE code = ? AND is_dm = 0').get(String(code || ''));
+  if (!c || !db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(c.id, userId)) return { pico: null };
+  const key = 'canal' + c.id;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.datos;
+  const desde = new Date(Date.now() - AR - 28 * 864e5).toISOString().slice(0, 10);
+  const horas = Array(24).fill(0);
+  for (const r of db.prepare("SELECT hora, SUM(n) n FROM puente_est WHERE canal_id = ? AND dia >= ? AND origen != 'dm' GROUP BY hora").all(c.id, desde)) horas[r.hora] = r.n;
+  const total = horas.reduce((a, b) => a + b, 0);
+  let mejor = 0, h0 = 0;
+  for (let h = 0; h < 24; h++) { const s = horas[h] + horas[(h + 1) % 24]; if (s > mejor) { mejor = s; h0 = h; } }
+  const datos = total >= 30 ? { pico: [h0, (h0 + 2) % 24], total } : { pico: null, total };
+  cache.set(key, { at: Date.now(), datos });
+  return datos;
+}
+
+// Para la tarjeta de perfil: mensajes en los canales abiertos, su canal favorito y el puesto del mes
+function perfil(uid) {
+  const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(Number(uid) || 0);
+  if (!u || u.username === 'discord-historial') return null;
+  const pub = [...abiertos()];
+  if (!pub.length) return null;
+  const filas = db.prepare(`SELECT canal_id, SUM(n) n FROM puente_est_u WHERE user_id = ? AND canal_id IN (${pub.join(',')}) GROUP BY canal_id ORDER BY n DESC`).all(u.id);
+  const mensajes = filas.reduce((a, r) => a + r.n, 0);
+  const fav = filas[0] && db.prepare('SELECT name FROM channels WHERE id = ?').get(filas[0].canal_id);
+  const mes = new Date(Date.now() - AR).toISOString().slice(0, 7);
+  const r = ranking(mes, u.id);
+  return { mensajes, canal: fav ? fav.name : null, puestoMes: r.mensajes.yo ? r.mensajes.yo.puesto : null };
+}
+
+// "Tu año en CV Chat": el año de la persona en los canales abiertos
+function anio(uid, a) {
+  const key = 'anio' + uid + '-' + a;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 60 * 60 * 1000) return hit.datos;
+  const pub = [...abiertos()];
+  const enPub = pub.length ? `(${pub.join(',')})` : '(-1)';
+  const g = ghost();
+  const porMes = db.prepare(`SELECT mes, SUM(n) n FROM puente_est_u WHERE user_id = ? AND mes LIKE ? AND canal_id IN ${enPub} GROUP BY mes`).all(uid, a + '-%');
+  const mensajes = porMes.reduce((s, r) => s + r.n, 0);
+  const meses = Array(12).fill(0); for (const r of porMes) meses[Number(r.mes.slice(5, 7)) - 1] = r.n;
+  const mejorMes = mensajes ? meses.indexOf(Math.max(...meses)) : null;
+  const canales = db.prepare(`SELECT c.name, SUM(e.n) n FROM puente_est_u e JOIN channels c ON c.id = e.canal_id WHERE e.user_id = ? AND e.mes LIKE ? AND e.canal_id IN ${enPub} GROUP BY e.canal_id ORDER BY n DESC LIMIT 3`).all(uid, a + '-%');
+  // Puesto entre todos en el año
+  const kt = 'anioTodos' + a;
+  if (!cache.get(kt) || Date.now() - cache.get(kt).at > CACHE_MS) cache.set(kt, { at: Date.now(), datos: db.prepare(`SELECT user_id, SUM(n) n FROM puente_est_u WHERE mes LIKE ? AND canal_id IN ${enPub} AND user_id != ? GROUP BY user_id ORDER BY n DESC`).all(a + '-%', g) });
+  const todos = cache.get(kt).datos;
+  const i = todos.findIndex(r => r.user_id === uid);
+  // Reacciones que recibieron sus mensajes del año (sin las propias)
+  const ini = sqlFecha(Date.UTC(a, 0, 1) + AR), fin = sqlFecha(Date.UTC(a + 1, 0, 1) + AR);
+  let reacciones = 0;
+  try {
+    reacciones = db.prepare(`SELECT COUNT(*) n FROM reactions r JOIN messages m ON m.id = r.message_id
+                             WHERE m.user_id = ? AND m.created_at >= ? AND m.created_at < ? AND r.created_at >= ? AND r.user_id != m.user_id AND m.channel_id IN ${enPub}`).get(uid, ini, fin, ini).n;
+  } catch { /* sin reacciones */ }
+  let dias = 0;
+  try { dias = db.prepare('SELECT COUNT(*) n FROM puente_dias WHERE haven_user_id = ? AND dia LIKE ?').get(uid, a + '-%').n; } catch { /* sin dias */ }
+  const datos = { anio: a, mensajes, meses, mejorMes, canales, puesto: i >= 0 ? i + 1 : null, de: todos.length, reacciones, dias };
+  cache.set(key, { at: Date.now(), datos });
+  return datos;
+}
+
 async function handle(req, res, p, u, h) {
+  if (p === '/puente/api/actividad/canal' || p === '/puente/api/actividad/perfil' || p === '/puente/api/actividad/anio') {
+    if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
+    const user = h.sessionUser(req);
+    if (!user) return h.json(res, 401, { error: 'sin sesion' });
+    try {
+      if (p === '/puente/api/actividad/canal') return h.json(res, 200, canal(u.searchParams.get('code'), user.id));
+      if (p === '/puente/api/actividad/perfil') return h.json(res, 200, perfil(u.searchParams.get('u')) || {});
+      const hoy = new Date(Date.now() - AR).getUTCFullYear();
+      const a = Number(u.searchParams.get('anio')) || hoy;
+      return h.json(res, 200, anio(user.id, Math.min(hoy, Math.max(2020, a))));
+    } catch (err) { warn('actividad:', err.message); return h.json(res, 500, { error: 'No se pudo cargar.' }); }
+  }
   if (p !== '/puente/api/actividad/destacados' && p !== '/puente/api/actividad/ranking') return false;
   if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
   const user = h.sessionUser(req);

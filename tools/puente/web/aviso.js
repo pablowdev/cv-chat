@@ -2578,7 +2578,8 @@ function leido(sc) {
 
 // "Actividad" para todos (actividad.js y "Tu historia" de logros.js): arriba de los canales, al lado
 // de "Miembros". Tres pestañas: lo mejor de la semana (los mensajes con mas reacciones, de los
-// canales que ve cada uno), tu resumen (lo de "Tu historia", en corto) y el ranking del mes.
+// canales que ve cada uno), tu resumen (lo de "Tu historia", en corto) y el ranking del mes. En
+// diciembre (y hasta el 21 de enero) se suma "Tu año": el año entero de cada uno.
 // En la PC va al lado de los canales; en el celular ocupa la pantalla y el "atras" la cierra.
 (function () {
   'use strict';
@@ -2759,6 +2760,51 @@ function leido(sc) {
     box.appendChild(el('div', 'pe-nota pa-pie', 'Cuentan los mensajes de los canales abiertos a todos, escritos desde CV Chat o desde Discord con la cuenta vinculada.'));
   }
 
+  // ── Tu año en CV Chat: en diciembre y las primeras semanas de enero (el año que termino) ──
+  function anioVisible() {
+    const d = new Date(Date.now() - 3 * 3600 * 1000); // hora de Argentina
+    const m = d.getUTCMonth(), dia = d.getUTCDate(), a = d.getUTCFullYear();
+    if (m === 11) return a;
+    if (m === 0 && dia <= 21) return a - 1;
+    return window.puenteAnioSiempre ? a : null;
+  }
+  function pintarAnio(box, d) {
+    box.textContent = '';
+    const tapa = el('div', 'pe-caja pa-anio-tapa');
+    tapa.append(el('div', 'pa-anio-a', String(d.anio)), el('div', 'pa-anio-s', 'Tu año en CV Chat'));
+    box.appendChild(tapa);
+    if (!d.mensajes) {
+      box.appendChild(el('div', 'pm-sin', 'Este año no escribiste en los canales abiertos. ¡El que viene puede ser tu año!'));
+      return;
+    }
+    const datos = el('div', 'pe-totales');
+    const dato = (l, v, extra) => { const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', l)); const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', v)); if (extra) f.appendChild(el('span', 'pe-var', extra)); c.appendChild(f); datos.appendChild(c); };
+    dato('Mensajes', fmt(d.mensajes), d.puesto ? 'puesto ' + fmt(d.puesto) + ' de ' + fmt(d.de) : '');
+    dato('Reacciones que recibiste', fmt(d.reacciones));
+    if (d.dias) dato('Días que escribiste desde la app', fmt(d.dias));
+    if (d.mejorMes != null) dato('Tu mejor mes', MESES[d.mejorMes], fmt(d.meses[d.mejorMes]) + ' mensajes');
+    box.appendChild(datos);
+    // Mes a mes
+    const max = Math.max(1, ...d.meses);
+    const g = el('div', 'pa-horas pa-meses');
+    d.meses.forEach((v, i) => { const b = el('div', 'pa-hora' + (i === d.mejorMes ? ' pico' : '')); b.style.height = Math.max(4, (v / max) * 100) + '%'; b.title = MESES[i] + ': ' + fmt(v); g.appendChild(b); });
+    const ej = el('div', 'pa-horas-eje pa-meses-eje'); for (const t of MESES) ej.appendChild(el('span', '', t.charAt(0).toUpperCase()));
+    const caja = el('div', 'pe-caja'); caja.append(el('div', 'pe-titulo', 'Mes a mes'), g, ej); box.appendChild(caja);
+    // Tus canales del año
+    if (d.canales && d.canales.length) {
+      const c = el('div');
+      const top = d.canales[0].n || 1;
+      for (const x of d.canales) {
+        const f = el('div', 'pe-fila');
+        const t = el('div', 'pe-fila-top'); t.append(el('span', 'pe-fila-n', '#' + x.name), el('span', 'pe-fila-v', fmt(x.n)));
+        const fondo = el('div', 'pe-fila-fondo'); const llena = el('div', 'pe-fila-llena'); llena.style.width = Math.max(2, (x.n / top) * 100) + '%'; fondo.appendChild(llena);
+        f.append(t, fondo); c.appendChild(f);
+      }
+      const cc = el('div', 'pe-caja'); cc.append(el('div', 'pe-titulo', 'Donde más escribiste'), c); box.appendChild(cc);
+    }
+    box.appendChild(el('div', 'pe-nota pa-pie', 'Cuentan los mensajes de los canales abiertos a todos, escritos desde CV Chat o desde Discord con la cuenta vinculada.'));
+  }
+
   function cargar() {
     if (!page) return;
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === tab));
@@ -2767,6 +2813,7 @@ function leido(sc) {
     const fallo = () => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar. Probá de nuevo en un rato.')); } };
     if (tab === 'mejor') pedir('/puente/api/actividad/destacados').then(d => { if (page && tab === 'mejor') pintarMejor(box, d); }).catch(fallo);
     else if (tab === 'resumen') pedir('/puente/api/logros/historia').then(d => { if (page && tab === 'resumen') pintarResumen(box, d); }).catch(fallo);
+    else if (tab === 'anio') pedir('/puente/api/actividad/anio?anio=' + anioVisible()).then(d => { if (page && tab === 'anio') pintarAnio(box, d); }).catch(fallo);
     else pedir('/puente/api/actividad/ranking' + (mesRanking ? '?mes=' + mesRanking : '')).then(d => { if (page && tab === 'ranking') pintarRanking(box, d); }).catch(fallo);
   }
   function open() {
@@ -2780,7 +2827,11 @@ function leido(sc) {
     const head = el('div', 'pm-head');
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']]) {
+    const anio = anioVisible();
+    if (tab === 'anio' && !anio) tab = 'mejor';
+    const pestanas = [['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']];
+    if (anio) pestanas.push(['anio', 'Tu ' + anio]);
+    for (const [v, label] of pestanas) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => { tab = v; cargar(); });
       tabs.appendChild(t);
@@ -6831,7 +6882,32 @@ document.addEventListener('pointerdown', (ev) => {
     return data;
   }
 
-  function paint(popup, profile, data, isSelf) {
+  // Sus numeros en los canales abiertos (actividad.js): mensajes, canal favorito y puesto del mes
+  const stats = new Map();
+  function loadStats(id) {
+    const hit = stats.get(id);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.p;
+    const tk = token();
+    if (!tk) return Promise.resolve(null);
+    const p = fetch('/puente/api/actividad/perfil?u=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    stats.set(id, { at: Date.now(), p });
+    return p;
+  }
+  function paintStats(popup, profile, d) {
+    if (!d || !d.mensajes || !popup.isConnected || popup.dataset.puenteMedallas !== String(profile.id) || popup.querySelector('.puente-perfil-est')) return;
+    const names = popup.querySelector('.profile-popup-names');
+    if (!names) return;
+    const row = document.createElement('div');
+    row.className = 'puente-perfil-est';
+    const dato = (n, t, tip) => { const b = document.createElement('span'); b.className = 'puente-perfil-dato'; b.title = tip; const x = document.createElement('b'); x.textContent = n; b.append(x, ' ' + t); row.appendChild(b); };
+    dato(d.mensajes.toLocaleString('es-AR'), d.mensajes === 1 ? 'mensaje' : 'mensajes', 'Mensajes en los canales abiertos de CV Chat');
+    if (d.canal) dato('#' + d.canal, '', 'Donde más escribe');
+    if (d.puestoMes) dato('#' + d.puestoMes, 'del mes', 'Puesto en el ranking de mensajes de este mes');
+    (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', row);
+  }
+
+  function paint(popup, profile, data, isSelf, st) {
     if (!popup.isConnected || popup.dataset.puenteMedallas === String(profile.id)) return;
     const names = popup.querySelector('.profile-popup-names');
     if (!names) return;
@@ -6860,6 +6936,7 @@ document.addEventListener('pointerdown', (ev) => {
       }
       names.insertAdjacentElement('afterend', row);
     }
+    if (st) st.then(d => paintStats(popup, profile, d));
     if (isSelf) {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
@@ -6886,7 +6963,8 @@ document.addEventListener('pointerdown', (ev) => {
         if (popup && profile && profile.id != null && profile.username !== 'discord-historial') {
           const isSelf = !!(this.user && profile.id === this.user.id);
           if (window.puentePerfil) window.puentePerfil.paintPopup(popup, profile.id);
-          load(profile.id).then(data => paint(popup, profile, data, isSelf)).catch(() => paint(popup, profile, null, isSelf));
+          const st = loadStats(profile.id);
+          load(profile.id).then(data => paint(popup, profile, data, isSelf, st)).catch(() => paint(popup, profile, null, isSelf, st));
         }
       } catch (err) { console.warn('[puente] medallas:', err); }
       return r;
@@ -6916,7 +6994,8 @@ document.addEventListener('pointerdown', (ev) => {
         if (!mobile() || !window.app || !window.app.currentChannel) return;
         const ch = current(window.app);
         if (!ch || ch.is_dm) return;
-        if (!ch.topic && !canEdit(window.app)) return;
+        const hit = picos.get(ch.code);
+        if (!ch.topic && !canEdit(window.app) && !(hit && hit.listo && hit.listo.pico)) return;
         e.preventDefault();
         openSheet(window.app, ch);
       });
@@ -6926,6 +7005,41 @@ document.addEventListener('pointerdown', (ev) => {
     line.textContent = topic;
     line.hidden = !topic;
     info.classList.toggle('puente-con-tema', !!topic);
+    pintarPico(info, ch);
+  }
+
+  // Hora pico del canal: las dos horas con mas mensajes de las ultimas 4 semanas (actividad.js).
+  // En la PC va al lado del nombre; en el celular, en la hoja de la descripcion
+  const picos = new Map();
+  const textoPico = (p) => `${p[0]} a ${p[1]} h`;
+  function pico(code) {
+    const hit = picos.get(code);
+    if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.p;
+    const tk = localStorage.getItem('haven_token');
+    if (!tk) return Promise.resolve({ pico: null });
+    const p = fetch('/puente/api/actividad/canal?code=' + encodeURIComponent(code), { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => r.ok ? r.json() : { pico: null }).catch(() => ({ pico: null }));
+    const hit2 = { at: Date.now(), p, listo: null };
+    p.then(d => { hit2.listo = d; });
+    picos.set(code, hit2);
+    return p;
+  }
+  function pintarPico(info, ch) {
+    let chip = info.querySelector('.puente-pico');
+    if (!ch || ch.is_dm) { if (chip) chip.hidden = true; return; }
+    if (!chip) {
+      chip = document.createElement('span');
+      chip.className = 'puente-pico';
+      chip.title = 'Las dos horas con más mensajes de las últimas 4 semanas';
+      info.appendChild(chip);
+    }
+    const code = ch.code;
+    chip.hidden = true;
+    pico(code).then(d => {
+      if (!chip.isConnected || !window.app || window.app.currentChannel !== code) return;
+      chip.textContent = d && d.pico ? '🔥 Más movido de ' + textoPico(d.pico) : '';
+      chip.hidden = !(d && d.pico);
+    });
   }
 
   // Texto con los enlaces tocables (sin HTML del usuario)
@@ -6964,6 +7078,14 @@ document.addEventListener('pointerdown', (ev) => {
     const body = document.createElement('div'); body.className = 'puente-tema-texto';
     if (ch.topic) fill(body, String(ch.topic)); else { body.textContent = 'Este canal todavía no tiene descripción.'; body.classList.add('vacio'); }
     sheet.append(handle, title, label, body);
+    const hit = picos.get(ch.code);
+    if (hit && hit.listo && hit.listo.pico) {
+      const pl = document.createElement('div'); pl.className = 'puente-tema-etiqueta puente-tema-pico-t';
+      pl.textContent = 'Cuándo hay más gente';
+      const pv = document.createElement('div'); pv.className = 'puente-tema-texto puente-tema-pico';
+      pv.textContent = '🔥 De ' + textoPico(hit.listo.pico) + ' es cuando más se escribe acá (últimas 4 semanas).';
+      sheet.append(pl, pv);
+    }
     if (canEdit(app)) {
       const edit = document.createElement('button');
       edit.type = 'button'; edit.className = 'puente-tema-editar';

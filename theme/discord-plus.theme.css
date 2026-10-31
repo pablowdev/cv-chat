@@ -904,7 +904,7 @@ html body #profile-popup.puente-profile-sheet {
 .puente-profile-sheet .profile-popup-body { display: flex; flex-direction: column; padding: 0.75rem 1.25rem 0; }
 .puente-profile-sheet .profile-popup-names { order: 1; }
 /* Medallas y "Tu historia" (aviso.js): debajo del nombre, como en la PC */
-.puente-profile-sheet .puente-medallas, .puente-profile-sheet .puente-historia-btn { order: 1; }
+.puente-profile-sheet .puente-medallas, .puente-profile-sheet .puente-perfil-est, .puente-profile-sheet .puente-historia-btn { order: 1; }
 .puente-profile-sheet .profile-popup-displayname { font-size: 1.75rem; font-weight: 800; color: #fbfbfb; line-height: 1.2; }
 .puente-profile-sheet .profile-popup-username { font-size: 1rem; color: #dbdee1; }
 .puente-profile-sheet #profile-popup-status-slot { order: 2; }
@@ -1849,6 +1849,20 @@ html body .pip-input-resizer { display: none !important; }
 .pa-rank-n { flex: 1 1 auto; min-width: 0; color: #fbfbfb; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pa-rank-v { color: #b5bac1; font-size: 0.875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pa-pie { grid-column: 1 / -1; }
+/* "Tu año en CV Chat" (aviso.js, en diciembre) */
+.pa-anio-tapa { grid-column: 1 / -1; text-align: center; padding: 1.5rem 1rem; background: linear-gradient(135deg, #5865f2, #a243c9); border: 0; }
+.pa-anio-a { font-size: 3rem; font-weight: 800; line-height: 1; color: #fff; }
+.pa-anio-s { margin-top: 0.375rem; font-size: 1.125rem; font-weight: 700; color: rgba(255, 255, 255, 0.92); }
+.pa-meses { gap: 4px; }
+.pa-meses-eje span { flex: 1 1 0; text-align: center; }
+/* Numeros en la tarjeta de perfil (aviso.js): mensajes, canal favorito y puesto del mes */
+.puente-perfil-est { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 2px; font-size: 12px; color: #b5bac1; }
+.puente-perfil-dato b { color: #f2f3f5; font-weight: 700; }
+/* Hora pico del canal (aviso.js): en la PC, gris al lado del nombre; en el celular va en la hoja de la descripcion */
+header.channel-header .puente-pico { margin-left: 0.75rem; font-size: 0.8125rem; font-weight: 500; color: #949ba4; white-space: nowrap; cursor: default; }
+header.channel-header .puente-pico[hidden] { display: none; }
+@media (max-width: 768px) { html body header.channel-header .puente-pico { display: none; } }
+#puente-tema-hoja .puente-tema-pico-t { margin-top: 1rem; }
 .pa-foto { display: block; max-width: min(100%, 16rem); max-height: 10rem; border-radius: 0.375rem; object-fit: cover; background: #2b2a30; }
 .pm-celular .pa-cuerpo { grid-template-columns: minmax(0, 1fr); }
 /* Celular: las pestañas se deslizan y la ✕ de cerrar queda siempre a la vista */
