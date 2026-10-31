@@ -2457,7 +2457,6 @@ function leido(sc) {
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === v));
     page.querySelector('.pm-card').hidden = v !== 'miembros';
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
-    const dl = page.querySelector('.pm-descargar'); if (dl) dl.hidden = v !== 'miembros';
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
   function armarVistaEstadisticas() {
@@ -2498,25 +2497,7 @@ function leido(sc) {
     const x = el('button', 'pm-cerrar'); x.type = 'button'; x.title = 'Cerrar (Esc)';
     x.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
     x.addEventListener('click', close);
-    // Los emails de todas las cuentas, en una planilla
-    const dl = el('button', 'pm-descargar'); dl.type = 'button'; dl.title = 'Descargar los emails de todas las cuentas (planilla)';
-    dl.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3V3ZM4 18h16v2H4v-2Z"/></svg>';
-    dl.appendChild(el('span', '', 'Emails'));
-    dl.addEventListener('click', () => {
-      dl.disabled = true;
-      fetch('/puente/api/miembros/emails.csv', { headers: { Authorization: 'Bearer ' + token() } })
-        .then(r => (r.ok ? r.blob() : Promise.reject(r.status)))
-        .then(blob => {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = 'emails-' + new Date().toISOString().slice(0, 10) + '.csv';
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        })
-        .catch(() => { if (window.app && window.app._showToast) window.app._showToast('No se pudo descargar la lista', 'error'); })
-        .finally(() => { dl.disabled = false; });
-    });
-    head.append(title, dl, x);
+    head.append(title, x);
     const card = el('div', 'pm-card');
     const bar = el('div', 'pm-bar');
     const h = el('div', 'pm-sub'); h.append(el('span', '', 'Miembros recientes'), el('span', 'pm-total', ''));
@@ -6869,6 +6850,41 @@ document.addEventListener('pointerdown', (ev) => {
     app._fmtDate = function (value, opts = {}) { return tlds.call(comoFecha(value), 'es-AR', this._dtOpts(soloFecha(opts))); };
     app._fmtDateTime = function (value, opts = {}) { return tls.call(comoFecha(value), 'es-AR', this._dtOpts(fechaHora(opts))); };
   })();
+})();
+
+// Configuración → Miembros y moderación (solo administradores): "Descargar emails" baja una planilla
+// con los emails de todas las cuentas. Estaba en la página Admin y se tocaba sin querer.
+(function () {
+  'use strict';
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  function poner() {
+    const app = window.app;
+    const grilla = document.querySelector('#section-members .settings-btn-grid');
+    if (!app || !app.user || !grilla) return false;
+    if (!app.user.isAdmin || document.getElementById('puente-emails-btn')) return true;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn-sm btn-accent'; b.id = 'puente-emails-btn';
+    b.textContent = '📧 Descargar emails'; // con su icono, como los demas botones de esa fila
+    b.title = 'Una planilla con los emails de todas las cuentas';
+    b.addEventListener('click', () => {
+      b.disabled = true;
+      fetch('/puente/api/miembros/emails.csv', { headers: { Authorization: 'Bearer ' + token() } })
+        .then(r => (r.ok ? r.blob() : Promise.reject(r.status)))
+        .then(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'emails-' + new Date().toISOString().slice(0, 10) + '.csv';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        })
+        .catch(() => { if (window.app && window.app._showToast) window.app._showToast('No se pudo descargar la lista', 'error'); })
+        .finally(() => { b.disabled = false; });
+    });
+    grilla.appendChild(b);
+    return true;
+  }
+  let tries = 0;
+  (function wait() { if (!poner() && ++tries < 120) setTimeout(wait, 500); })();
 })();
 
 // Celular: el menu del canal (mantener apretado) es una hoja desde abajo, como en la app de Discord,
