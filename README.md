@@ -1,10 +1,21 @@
-# Puente Discord ↔ Haven
+# CV Chat
 
-Herramientas para **migrar una comunidad de Discord a [Haven](https://github.com/ancsemi/Haven)** sin cortar con Discord: las dos plataformas funcionan a la vez, en tiempo real y con la identidad de cada persona verificada. Funcionan sobre Haven 4.26 **sin modificar sus archivos** (salvo un parche pequeño, explicado abajo).
+CV Chat es el chat de [Círculo Vicioso Club](https://circulovicioso.club): la casa propia de una comunidad que nació en Discord, con su diseño, sus apps y una sola cuenta para el chat, la página y el foro.
 
-> **English summary for Haven developers:** a Discord ↔ Haven bridge that runs inside the Haven process. It hooks `initFerry` through a `--require` preload to reach the same `db` and `io`, so no core files are touched. It adds live two-way relay (including threads, edits and deletes), Discord account linking via OAuth2 `identify`, unforgeable verified identity on relayed messages, channel access mirrored from Discord permissions, Discord-based password recovery, full-history sync and member counter channels. See the issues on ancsemi/Haven for the bugs and proposals that came out of this work.
+- **Como Discord, pero propio:** el diseño y la forma de usarlo de Discord, en la web ([chat.circulovicioso.club](https://chat.circulovicioso.club)), en Android y en Windows.
+- **Conectado a Discord durante la mudanza:** lo que se escribe en un lado aparece en el otro al instante, con las cuentas vinculadas, la identidad verificada, los mismos accesos según los roles y todo el historial desde 2020.
+- **Una sola cuenta:** la misma para el chat, la página y el foro, con verificación en dos pasos y código por email en cada dispositivo nuevo.
+- **Mensajes privados cifrados de punta a punta,** sin que nadie tenga que configurar nada.
+- **Lo de la comunidad:** Marketplace, juegos (Truco, Funball, Ajedrez), wiki, medallas y rachas, "Tu historia", Actividad, el ranking del mes y "Tu año en CV Chat".
+- **Para administrar:** miembros, estadísticas, denuncias y moderación.
 
-## Qué hace
+## Basado en Haven
+
+CV Chat funciona sobre [Haven](https://github.com/ancsemi/Haven), un chat libre y autoalojado (licencia AGPL-3.0). Haven corre sin modificar sus archivos (salvo un parche pequeño, explicado abajo) y todo lo de CV Chat se suma desde afuera, dentro del mismo proceso.
+
+> **English summary for Haven developers:** CV Chat runs on top of Haven 4.26 without touching its core files. It hooks `initFerry` through a `--require` preload to reach the same `db` and `io`. It adds a live two-way Discord relay (including threads, edits and deletes), Discord account linking via OAuth2 `identify`, unforgeable verified identity on relayed messages, channel access mirrored from Discord permissions, Discord-based password recovery, full-history sync and member counter channels, plus its own UI and apps. See the issues on ancsemi/Haven for the bugs and proposals that came out of this work.
+
+## Cómo funciona (detalle técnico)
 
 | Parte | Archivo | Descripción |
 |---|---|---|
@@ -100,4 +111,4 @@ Los mensajes importados se guardan a nombre de un usuario técnico `discord-hist
 
 ## Licencia
 
-[AGPL-3.0](LICENSE), igual que Haven. Si ofrecés una versión modificada de Haven a otras personas, la licencia te pide poner a su disposición el código de esas modificaciones. Este repositorio sirve justamente para eso.
+[AGPL-3.0](LICENSE), igual que Haven. Como CV Chat es una versión modificada de Haven que la gente usa por internet, la licencia pide que su código esté a disposición de quien lo use: este repositorio sirve justamente para eso.

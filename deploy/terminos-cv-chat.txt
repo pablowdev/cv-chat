@@ -47,4 +47,4 @@ Estos términos se rigen por las leyes de la República Argentina.
 12. Contacto
 Por cualquier duda o reclamo, escribinos a circuloviciosomedia@gmail.com. Responsable: PabloW (pablowdev@gmail.com).
 
-CV Chat usa software de código abierto con licencia AGPL-3.0. El código está disponible en https://github.com/pabwass/haven-discord-puente
+CV Chat usa software de código abierto con licencia AGPL-3.0. El código está disponible en https://github.com/pabwass/cv-chat
