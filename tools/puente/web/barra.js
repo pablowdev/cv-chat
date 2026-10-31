@@ -87,7 +87,19 @@
     const r = desde && desde.getBoundingClientRect();
     ventana.style.top = Math.max(0, Math.round(r ? r.bottom : 0)) + 'px';
     ventana.classList.add('es-abierta');
+    ajustarAlto();
   }
+  // El alto no pasa de lo que se ve de verdad: en Android 100vh puede ir por debajo de la barra de
+  // abajo del sistema (y del teclado), y ahi quedaba tapado el cuadro de escribir
+  function ajustarAlto() {
+    if (!ventana || !ventana.classList.contains('es-abierta')) return;
+    const vv = window.visualViewport;
+    const visible = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const margen = window.innerWidth <= 560 ? 0 : 8;
+    ventana.style.maxHeight = Math.max(200, Math.floor(visible - (parseFloat(ventana.style.top) || 0) - margen)) + 'px';
+  }
+  if (window.visualViewport) { visualViewport.addEventListener('resize', ajustarAlto); visualViewport.addEventListener('scroll', ajustarAlto); }
+  window.addEventListener('resize', ajustarAlto);
   function cerrarVentana() {
     if (!ventana) return;
     ventana.classList.remove('es-abierta');
