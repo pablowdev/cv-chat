@@ -250,3 +250,28 @@
     location.replace('/app');
   }).catch(() => {});
 })();
+
+// El paso del codigo de la app (verificacion en dos pasos): con los 6 numeros entra solo, sin tocar
+// "Verificar" (un codigo de respaldo, con letras y guion, sigue con el boton). Y sus textos, de aca
+(function () {
+  'use strict';
+  const form = document.getElementById('totp-form'), input = document.getElementById('totp-code');
+  if (!form || !input) return;
+  let enviado = '';
+  input.addEventListener('input', () => {
+    const v = input.value.trim();
+    if (!/^\d{6}$/.test(v)) { enviado = ''; return; }
+    if (v === enviado) return; // el mismo codigo no se manda dos veces
+    enviado = v;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.querySelector('button[type="submit"]')?.click();
+  });
+  const textos = () => {
+    const t = (sel, txt) => { const e = form.querySelector(sel); if (e && e.textContent !== txt) e.textContent = txt; };
+    t('[data-i18n="auth.totp.instruction"]', '🔐 Escribí el código de 6 números que te muestra la app del celular');
+    t('[data-i18n="auth.totp.code_label"]', 'Código de la app');
+    t('[data-i18n="auth.totp.back"]', '← Volver');
+  };
+  textos();
+  // Haven vuelve a traducir la pagina al cambiar el idioma o al mostrar este paso
+  new MutationObserver(textos).observe(form, { attributes: true, attributeFilter: ['style'] });
+})();

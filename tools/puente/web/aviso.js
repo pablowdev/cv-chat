@@ -11778,6 +11778,13 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     for (const h of refs.modal.querySelectorAll('.settings-hint')) {
       if (/CV Chat Desktop/.test(h.textContent)) h.textContent = h.textContent.replace(/CV Chat Desktop/g, 'la app de PC');
     }
+    // Ejemplos que nombraban a Haven: el nombre del servidor y la direccion de vuelta del inicio de sesion externo (la de aca)
+    const nombre = document.getElementById('server-name-input');
+    if (nombre && /haven/i.test(nombre.placeholder)) nombre.placeholder = 'CV Chat';
+    for (const c of refs.modal.querySelectorAll('code')) {
+      if (/your-haven-address/.test(c.textContent)) c.textContent = c.textContent.replace(/https?:\/\/your-haven-address/g, location.origin);
+      else if (/haven\.db\.pre-restore/.test(c.textContent)) c.textContent = c.textContent.replace(/haven\.db\.pre-restore/g, 'la base anterior (.pre-restore)');
+    }
   }
   function backToList() { refs.modal.classList.remove('pas-detalle'); current = null; }
 
