@@ -32,8 +32,8 @@
       return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(d.error || 'No se pudo. Probá de nuevo.'); e.status = r.status; e.data = d; throw e; } return d; });
     });
   }
-  var fecha = function (t) { return new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }); };
-  var fechaCorta = function (t) { return new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }); };
+  var fecha = function (t) { return new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  var fechaCorta = function (t) { return new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
   var entrar = function () { return CHAT + '/?volver=' + encodeURIComponent(location.href); };
   var urlEntrada = function (slug) { return '/wiki/' + encodeURIComponent(slug); };
   function titulo(t) { document.title = (t ? t + ' · ' : '') + 'Wiki - Círculo Vicioso Club'; }

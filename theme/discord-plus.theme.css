@@ -1770,6 +1770,8 @@ html body .modal-overlay > .modal .modal-controls .modal-expand-btn:hover { back
 html body .puente-historia-btn, html body .puente-invitar-btn, html body #profile-popup-edit-btn ~ .profile-dm-btn { background: #2e2d32 !important; color: #efeff1 !important; }
 html body .puente-historia-btn:hover, html body .puente-invitar-btn:hover, html body #profile-popup-edit-btn ~ .profile-dm-btn:hover { background: #3a3a40 !important; }
 html body .puente-profile-sheet :is(.puente-historia-btn, .puente-invitar-btn) { min-height: 2.75rem; border-radius: 0.5rem; font-size: 1rem; }
+/* Sin lo de las donaciones a Haven: ni el ❤️ ni su ventana */
+html body #donors-btn, html body #donors-modal { display: none !important; }
 /* Panel de fijados: el encabezado sin el 📌 (aviso.js) y legible */
 html body #pinned-panel .pinned-panel-header #pinned-count { font-size: 0.875rem; font-weight: 600; color: #dbdee1; }
 html body .panel-title .title-emoji { display: none; }

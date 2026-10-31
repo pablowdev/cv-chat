@@ -2151,7 +2151,7 @@ function leido(sc) {
     for (const [sec, one, many] of units) if (s >= sec) { const n = Math.floor(s / sec); return 'hace ' + n + ' ' + (n === 1 ? one : many); }
     return 'recién';
   }
-  const fecha = iso => (iso ? new Date(iso).toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' }) : '');
+  const fecha = iso => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
   let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '', filtro = 'todos';
   const inicioHoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -6835,6 +6835,40 @@ document.addEventListener('pointerdown', (ev) => {
     if (pc) new MutationObserver(() => limpiar(pc.parentNode)).observe(pc, { childList: true, characterData: true, subtree: true });
   }
   if (document.body) empezar(); else document.addEventListener('DOMContentLoaded', empezar);
+})();
+
+// Fechas siempre dd/mm/aaaa (31/10/2026), como se escriben aca. Haven las armaba segun el idioma
+// del navegador ("Oct 31, 2026", "5/15/2024 11:02 PM"); todas pasan por _fmtDate y _fmtDateTime, y
+// las pocas que llaman a toLocaleString() sin nada tambien. La hora sigue la preferencia de 12/24 h.
+(function () {
+  'use strict';
+  const FECHA = { day: '2-digit', month: '2-digit', year: 'numeric' };
+  // Solo la fecha: sin año si Haven pidio dia y mes nada mas (los cumpleaños: "31/10")
+  function soloFecha(o) {
+    const r = { ...FECHA };
+    if (o && o.month && o.day && o.year === undefined && !o.dateStyle) delete r.year;
+    if (o && o.weekday) r.weekday = o.weekday;
+    if (o && o.timeZone) r.timeZone = o.timeZone;
+    return r;
+  }
+  function fechaHora(o) {
+    const r = soloFecha(o);
+    r.hour = '2-digit'; r.minute = '2-digit';
+    if (o && (o.second || o.timeStyle === 'medium' || o.timeStyle === 'long')) r.second = '2-digit';
+    for (const k of ['hour12', 'hourCycle']) if (o && o[k] !== undefined) r[k] = o[k];
+    return r;
+  }
+  const comoFecha = (v) => (v instanceof Date ? v : new Date(v));
+  const tls = Date.prototype.toLocaleString, tlds = Date.prototype.toLocaleDateString;
+  Date.prototype.toLocaleString = function (...a) { return a.length ? tls.apply(this, a) : tls.call(this, 'es-AR', fechaHora()); };
+  Date.prototype.toLocaleDateString = function (...a) { return a.length ? tlds.apply(this, a) : tlds.call(this, 'es-AR', FECHA); };
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._fmtDate !== 'function' || typeof app._dtOpts !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
+    app._fmtDate = function (value, opts = {}) { return tlds.call(comoFecha(value), 'es-AR', this._dtOpts(soloFecha(opts))); };
+    app._fmtDateTime = function (value, opts = {}) { return tls.call(comoFecha(value), 'es-AR', this._dtOpts(fechaHora(opts))); };
+  })();
 })();
 
 // Celular: el menu del canal (mantener apretado) es una hoja desde abajo, como en la app de Discord,
@@ -13351,7 +13385,7 @@ var puenteSinUbicacion = (function () {
       for (const t of d.resultados) {
         const a = el('a', 'pfb-item'); a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
         a.appendChild(el('div', 'pfb-t', t.tema));
-        a.appendChild(el('div', 'pfb-m', t.canal + ' · ' + t.autor + ' · ' + new Date(t.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) + (t.respuestas ? ' · ' + t.respuestas + (t.respuestas === 1 ? ' respuesta' : ' respuestas') : '')));
+        a.appendChild(el('div', 'pfb-m', t.canal + ' · ' + t.autor + ' · ' + new Date(t.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + (t.respuestas ? ' · ' + t.respuestas + (t.respuestas === 1 ? ' respuesta' : ' respuestas') : '')));
         if (t.texto) a.appendChild(el('div', 'pfb-x2', t.texto));
         const pegar = el('button', 'pfb-pegar', 'Pegar el enlace en el mensaje');
         pegar.type = 'button';
@@ -13438,7 +13472,7 @@ var puenteSinUbicacion = (function () {
   const byId = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
-  const fecha = (t) => new Date(t).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fecha = (t) => new Date(t).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const api = (q) => fetch('/puente/api/foro/privados' + q, { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).catch(() => null);
   const chans = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels : []);
   const dmCon = (id) => chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id);

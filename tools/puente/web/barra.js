@@ -191,7 +191,7 @@
   function hace(t) {
     const s = Math.max(1, Math.round((Date.now() - t) / 1000));
     if (s < 60) return 'recién'; if (s < 3600) return 'hace ' + Math.round(s / 60) + ' min'; if (s < 86400) return 'hace ' + Math.round(s / 3600) + ' h';
-    return new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+    return new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
   function campanita(yo) {
     const wrap = el('div', 'cv-barra__campana');

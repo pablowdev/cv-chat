@@ -37,7 +37,7 @@
     var fin = Math.min(hasta + POR_PAGINA, todos.length);
     for (var i = hasta; i < fin; i++) {
       var r = todos[i];
-      var fecha = r.upload_date ? new Date(r.upload_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+      var fecha = r.upload_date ? new Date(r.upload_date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
       var art = document.createElement('article');
       art.className = 'caja ffs__item';
       art.innerHTML = '<div class="ffs__video"><lite-youtube videoid="' + esc(r.video_id) + '" params="start=' + Math.max(0, (r.start_seconds || 0) - 4) + '" videotitle="' + esc(r.video_title) + '"></lite-youtube></div>' +
