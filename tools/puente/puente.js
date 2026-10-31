@@ -161,6 +161,9 @@ function start(deps) {
   require('./buscar.js').setup({ db, io, log, warn });
   embeds.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn });
   require('./mudanza.js').setup({ db, api: (m, e, b) => api(m, e, b), log, warn, appName, publicUrl });
+  // La mudanza con fecha: el cronograma que el servidor cumple solo (mudanza-plan.js)
+  require('./mudanza-plan.js').setup({ db, api: (m, e, b) => api(m, e, b), log, warn, appName, publicUrl, getGuildId: () => guildId,
+    getBotUserId: () => botUserId, postInHaven: msg => inboundCreate({ ...msg, guild_id: msg.guild_id || guildId }, true) });
   miniaturas.setup({ log, warn });
   stickers.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   hookHavenEmits();
@@ -447,6 +450,8 @@ async function inboundCreate(msg, ownBot = false) {
   if (msg.webhook_id && ourWebhookIds.has(msg.webhook_id)) return; // eco de lo que publicamos
   if (!ownBot && botUserId && msg.author && msg.author.id === botUserId) return;
   if (msg.type !== 0 && msg.type !== 19) return;
+  // #pasate-a-cv-chat (mudanza-plan.js): no se puentea; el bot le contesta como pasarse
+  if (!ownBot) require('./mudanza-plan.js').enPasate(msg);
   const content = buildContent(msg, await adjuntos.localizeAll(msg));
   if (!content) return;
   const S = stmts();

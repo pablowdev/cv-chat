@@ -325,6 +325,8 @@ function medallas(havenId, pre) {
   let tr = null;
   try { tr = require('./truco.js').stats(havenId); } catch { /* sin juegos */ }
   if (tr && tr.ganadas >= 10) add('truquero', '🃏', 'Viejo truquero', `Ganó ${tr.ganadas} partidas de truco en ${appName()}`);
+  // La mudanza (mudanza-plan.js): Fundador y Campeón de la Copa
+  try { for (const m of require('./mudanza-plan.js').insignias(havenId)) add(...m); } catch { /* sin mudanza */ }
   if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',
     `Trajo ${inv === 1 ? 'a 1 persona' : `a ${inv} personas`} a ${appName()}`);
   if (!pre) cache.set(key, { at: Date.now(), data: list });

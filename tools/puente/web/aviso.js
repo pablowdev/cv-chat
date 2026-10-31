@@ -2457,8 +2457,93 @@ function leido(sc) {
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === v));
     page.querySelector('.pm-card').hidden = v !== 'miembros';
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
+    const mz = page.querySelector('.pmz-vista'); if (mz) mz.hidden = v !== 'mudanza';
+    if (v === 'mudanza') cargarMudanza();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
+  // Pestaña "Mudanza" (mudanza-plan.js): el cronograma que el servidor cumple solo, como va, y los
+  // botones para pausar, posponer, hacer un paso ahora, cambiar un texto o deshacer lo de Discord
+  function armarVistaMudanza() {
+    const v = el('div', 'pmz-vista'); v.hidden = true;
+    v.appendChild(el('div', 'pmz-cuerpo'));
+    return v;
+  }
+  const fechaMz = (ms) => new Date(ms).toLocaleString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
+  const ESTADOS_MZ = { pendiente: 'Programado', 'en curso': 'En curso', hecho: 'Hecho', error: 'Con error', vencido: 'Se salteó', salteado: 'Salteado' };
+  async function mudanzaApi(body) {
+    const r = await fetch('/puente/api/mudanza', body
+      ? { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      : { headers: { Authorization: 'Bearer ' + token() } });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((d && d.error) || 'No se pudo.');
+    return d;
+  }
+  function cargarMudanza(datos) {
+    const cuerpo = page && page.querySelector('.pmz-cuerpo');
+    if (!cuerpo) return;
+    if (!datos) {
+      if (!cuerpo.childNodes.length) cuerpo.appendChild(el('div', 'pm-sin', 'Cargando…'));
+      mudanzaApi().then(cargarMudanza).catch(e => { cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', e.message)); });
+      return;
+    }
+    const aviso = (t) => { if (window.app && window.app._showToast) window.app._showToast(t, 'error'); };
+    const hacer = (body, pregunta) => {
+      if (pregunta && !confirm(pregunta)) return;
+      mudanzaApi(body).then(d => { cargarMudanza(d); if (body.accion === 'ejecutar') setTimeout(() => cargarMudanza(), 4000); }).catch(e => aviso(e.message));
+    };
+    cuerpo.textContent = '';
+    // Como esta y los botones generales
+    const cab = el('div', 'pmz-cab');
+    cab.appendChild(el('div', 'pmz-estado' + (datos.estado === 'activo' ? ' activo' : ''),
+      datos.estado === 'activo' ? 'En marcha: el servidor cumple el cronograma solo, aunque nadie tenga la compu prendida.' : 'En pausa: no se hace nada hasta que lo reanudes.'));
+    if (datos.ensayo) cab.appendChild(el('div', 'pmz-ensayo', 'Copia de prueba: no toca Discord ni manda emails, solo anota lo que haría.'));
+    const acc = el('div', 'pmz-acciones');
+    const boton = (txt, cls, fn) => { const b = el('button', 'pmz-btn' + (cls ? ' ' + cls : ''), txt); b.type = 'button'; b.addEventListener('click', fn); acc.appendChild(b); };
+    boton(datos.estado === 'activo' ? 'Pausar todo' : 'Reanudar', datos.estado === 'activo' ? '' : 'pmz-azul', () => hacer({ accion: datos.estado === 'activo' ? 'pausar' : 'reanudar' }));
+    boton('Posponer una semana', '', () => hacer({ accion: 'posponer', dias: 7 }, 'Se corre una semana todo lo que falta. Los anuncios dicen fechas: después revisá los textos. ¿Seguimos?'));
+    if (datos.soloLectura || datos.lento) boton('Deshacer en Discord', 'pmz-rojo', () => hacer({ accion: 'deshacer' }, 'Los permisos y el modo lento de Discord vuelven a como estaban antes de la mudanza. ¿Seguimos?'));
+    cab.appendChild(acc);
+    cuerpo.appendChild(cab);
+    // Numeros
+    const n = datos.numeros || {};
+    const nums = el('div', 'pm-resumen pmz-numeros');
+    for (const [num, label] of [[n.discordPorcentaje + '%', 'escrito desde Discord (7 días)'], [n.enDiscordConCuenta, 'escriben en Discord teniendo cuenta'],
+      [n.enDiscordSinCuenta, 'escriben en Discord sin cuenta'], [n.cuentas, 'cuentas en CV Chat'], [n.fundadores, 'fundadores'], [n.privados + ' · ' + n.emails, 'privados · emails mandados']]) {
+      const d = el('div', 'pm-dato'); d.append(el('div', 'pm-dato-n', String(num)), el('div', 'pm-dato-l', label)); nums.appendChild(d);
+    }
+    cuerpo.appendChild(nums);
+    cuerpo.appendChild(el('div', 'pmz-copa', '🏆 Copa de la Mudanza: ' + (n.copa && n.copa.length ? n.copa.map((x, i) => (i + 1) + '. ' + x.nombre + ' (' + x.puntos + ')').join(' · ') : 'todavía sin partidas')));
+    // El cronograma
+    const lista = el('div', 'pmz-pasos');
+    for (const p of datos.pasos || []) {
+      const fila = el('div', 'pmz-paso pmz-' + p.estado.replace(' ', '-'));
+      const top = el('div', 'pmz-paso-top');
+      top.append(el('span', 'pmz-cuando', fechaMz(p.cuando)), el('span', 'pmz-nombre', p.nombre), el('span', 'pmz-chip', ESTADOS_MZ[p.estado] || p.estado));
+      fila.appendChild(top);
+      if (p.detalle) fila.appendChild(el('div', 'pmz-detalle', p.detalle + (p.hecho ? ' · ' + fechaMz(p.hecho) : '')));
+      const ops = el('div', 'pmz-paso-ops');
+      const link = (txt, fn) => { const b = el('button', 'pmz-link', txt); b.type = 'button'; b.addEventListener('click', fn); ops.appendChild(b); };
+      if (p.texto) link(p.estado === 'pendiente' ? 'Ver o cambiar el texto' : 'Ver el texto', () => editor(fila, p));
+      if (p.estado === 'pendiente') {
+        link('Hacerlo ahora', () => hacer({ accion: 'ejecutar', clave: p.clave }, '¿Hacer "' + p.nombre + '" ahora, sin esperar al ' + fechaMz(p.cuando) + '?'));
+        link('Saltear', () => hacer({ accion: 'saltear', clave: p.clave }, '¿Saltear "' + p.nombre + '"? No se va a hacer.'));
+      }
+      if (ops.childNodes.length) fila.appendChild(ops);
+      lista.appendChild(fila);
+    }
+    cuerpo.appendChild(lista);
+    function editor(fila, p) {
+      const ya = fila.querySelector('.pmz-editor');
+      if (ya) { ya.remove(); return; }
+      const box = el('div', 'pmz-editor');
+      const ta = el('textarea', 'pmz-texto'); ta.value = p.texto; ta.readOnly = p.estado !== 'pendiente'; ta.rows = Math.min(16, p.texto.split('\n').length + 2);
+      box.appendChild(ta);
+      box.appendChild(el('div', 'pmz-ayuda', '{enlace} es el enlace para pasarse; {copa}, {cuentas}, {fundadores} y {campeon} se completan solos al mandarlo.'));
+      if (p.estado === 'pendiente') { const g = el('button', 'pmz-btn pmz-azul', 'Guardar el texto'); g.type = 'button'; g.addEventListener('click', () => hacer({ accion: 'texto', clave: p.clave, texto: ta.value })); box.appendChild(g); }
+      fila.appendChild(box);
+    }
+  }
+
   function armarVistaEstadisticas() {
     const v = el('div', 'pe-vista'); v.hidden = true;
     const barra = el('div', 'pe-barra');
@@ -2488,7 +2573,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -2553,7 +2638,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);

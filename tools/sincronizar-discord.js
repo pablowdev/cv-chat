@@ -359,7 +359,10 @@ async function main() {
   if (all.__error) throw new Error(`Discord respondio ${all.__error} al listar canales.`);
   // SYNC_SOLO=nombre1,nombre2 limita la sincronizacion a esos canales (para pruebas).
   const only = process.env.SYNC_SOLO ? new Set(process.env.SYNC_SOLO.split(',')) : null;
-  const wanted = c => !only || only.has(c.name);
+  // #pasate-a-cv-chat (la mudanza, puente/mudanza-plan.js) es solo de Discord: no se trae
+  let pasate = null;
+  try { pasate = (db.prepare("SELECT valor FROM puente_mudanza_config WHERE clave = 'canal_pasate'").get() || {}).valor || null; } catch { /* sin mudanza */ }
+  const wanted = c => (!only || only.has(c.name)) && c.id !== pasate;
   const textChannels = all.filter(c => TEXT_TYPES.has(c.type) && wanted(c));
   const forums = all.filter(c => FORUM_TYPES.has(c.type) && wanted(c));
   const byId = new Map(all.map(c => [c.id, c]));

@@ -1732,6 +1732,45 @@ html body .pip-input-resizer { display: none !important; }
   html body #message-input-area .input-actions-box:not(.open) > #gif-btn:hover > span { background: #dbdee1; }
 }
 
+/* Pagina Admin, pestaña "Mudanza" (mudanza-plan.js): estado, numeros y el cronograma */
+.pmz-vista { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.pmz-vista[hidden] { display: none !important; }
+.pmz-cuerpo { max-width: 56rem; margin: 0 auto; padding: 1rem 1.25rem 2rem; }
+.pmz-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+.pmz-estado { flex: 1 1 18rem; padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: #3a2a1a; color: #f0b232; font-size: 0.875rem; font-weight: 600; }
+.pmz-estado.activo { background: #1b3326; color: #6fd49a; }
+.pmz-ensayo { flex: 1 1 100%; padding: 0.5rem 0.875rem; border-radius: 0.5rem; background: #2e2d32; color: #b5bac1; font-size: 0.8125rem; }
+.pmz-acciones { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pmz-btn { min-height: 2.25rem; padding: 0 0.875rem; border: 0; border-radius: 0.375rem; background: #2e2d32; color: #dbdee1; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+.pmz-btn:hover { background: #3a3a40; color: #fff; }
+.pmz-btn.pmz-azul { background: #5865f2; color: #fff; }
+.pmz-btn.pmz-azul:hover { background: #4752c4; }
+.pmz-btn.pmz-rojo { background: transparent; color: #f23f43; border: 1px solid #f23f43; }
+.pmz-btn.pmz-rojo:hover { background: #f23f43; color: #fff; }
+.pmz-numeros { padding: 0 !important; margin-bottom: 0.75rem; }
+.pmz-copa { margin-bottom: 1rem; padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: #232228; color: #dbdee1; font-size: 0.875rem; }
+.pmz-pasos { display: flex; flex-direction: column; gap: 0.375rem; }
+.pmz-paso { padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: #1e1e22; border-left: 3px solid #4e5058; }
+.pmz-paso.pmz-hecho { border-left-color: #23a55a; }
+.pmz-paso.pmz-error { border-left-color: #f23f43; }
+.pmz-paso.pmz-en-curso { border-left-color: #5865f2; }
+.pmz-paso.pmz-vencido, .pmz-paso.pmz-salteado { opacity: 0.6; }
+.pmz-paso-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.75rem; }
+.pmz-cuando { flex: 0 0 auto; color: #96969e; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.pmz-nombre { flex: 1 1 12rem; color: #efeff1; font-size: 0.9375rem; font-weight: 600; }
+.pmz-chip { flex: 0 0 auto; padding: 0.125rem 0.5rem; border-radius: 999px; background: #2e2d32; color: #b5bac1; font-size: 0.75rem; font-weight: 700; }
+.pmz-hecho .pmz-chip { background: #1b3326; color: #6fd49a; }
+.pmz-error .pmz-chip { background: #3d1a1c; color: #f8a5a7; }
+.pmz-detalle { margin-top: 0.25rem; color: #a3a6ad; font-size: 0.8125rem; }
+.pmz-paso-ops { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.375rem; }
+.pmz-link { padding: 0; border: 0; background: none; color: #949cf7; font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+.pmz-link:hover { text-decoration: underline; }
+.pmz-editor { margin-top: 0.5rem; }
+.pmz-texto { width: 100%; box-sizing: border-box; padding: 0.625rem 0.75rem; border: 1px solid #2e2d32; border-radius: 0.375rem; background: #121214; color: #efeff1; font: inherit; font-size: 0.875rem; line-height: 1.45; resize: vertical; }
+.pmz-texto:focus { border-color: #5865f2; outline: none; }
+.pmz-ayuda { margin: 0.375rem 0 0.5rem; color: #96969e; font-size: 0.75rem; }
+.pm-celular .pmz-cuerpo { padding: 0.75rem; }
+
 /* Ventanas de Haven (encuesta, enviar más tarde, invitaciones, editar perfil, las de administración...)
    con el aspecto de las de CV Chat: textos y botones legibles, campos que se distinguen del fondo, la ✕
    sin recuadro. La de Configuración tiene el suyo. (aviso.js les saca el emoji del título) */
