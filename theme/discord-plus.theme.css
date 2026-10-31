@@ -2038,7 +2038,8 @@ html body .sidebar-header .brand .brand-text { min-width: 0; white-space: nowrap
 .puente-campana-n { position: absolute; top: -0.125rem; right: -0.25rem; min-width: 1rem; height: 1rem; padding: 0 0.25rem; box-sizing: border-box; border-radius: 999px; background: #f23f43; color: #fff; font-size: 0.6875rem; font-weight: 800; line-height: 1rem; text-align: center; border: 2px solid #121214; }
 .puente-campana-n[hidden] { display: none; }
 .puente-campana-panel { position: fixed; z-index: 10040; width: min(24rem, calc(100vw - 16px)); max-height: min(32rem, calc(100vh - 80px)); display: flex; flex-direction: column; border: 1px solid #29292d; border-radius: 0.625rem; background: #1e1e22; color: #dbdee1; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); overflow: hidden; }
-.puente-campana-panel.pc-celular { inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top, 0px); }
+/* En el celular ocupa toda la pantalla, por encima del panel de canales (z-index 100000) */
+.puente-campana-panel.pc-celular { z-index: 100008; inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top, 0px); }
 .pc-cab { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid #29292d; }
 .pc-titulo { font-size: 1rem; font-weight: 700; color: #fbfbfb; }
 .pc-cerrar { border: 0; background: transparent; color: #b5bac1; font-size: 1.125rem; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 0.375rem; }
