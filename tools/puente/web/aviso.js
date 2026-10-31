@@ -2536,6 +2536,25 @@ function leido(sc) {
     }
     // Resumen (se llena con los datos) y filtros rapidos
     const stats = el('div', 'pm-resumen');
+    // Una flechita pliega todo lo de arriba (buscador, orden, resumen y filtros) para ver mas lista;
+    // se recuerda en este dispositivo
+    const plegar = el('button', 'pm-plegar'); plegar.type = 'button';
+    plegar.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8.6l6.3 6.3-1.4 1.4L12 11.4l-4.9 4.9-1.4-1.4L12 8.6Z"/></svg>';
+    const plegado = (si) => {
+      card.classList.toggle('pm-plegado', si);
+      plegar.title = si ? 'Mostrar el buscador, el resumen y los filtros' : 'Esconder el buscador, el resumen y los filtros';
+      plegar.setAttribute('aria-label', plegar.title);
+      plegar.setAttribute('aria-expanded', String(!si));
+    };
+    let oculto = false;
+    try { oculto = localStorage.getItem('puente_pm_menu') === 'plegado'; } catch { /* sin almacenamiento */ }
+    plegado(oculto);
+    plegar.addEventListener('click', () => {
+      oculto = !card.classList.contains('pm-plegado');
+      plegado(oculto);
+      try { localStorage.setItem('puente_pm_menu', oculto ? 'plegado' : 'abierto'); } catch { /* sin almacenamiento */ }
+    });
+    h.appendChild(plegar);
     const filtros = el('div', 'pm-filtros');
     for (const [k, label] of FILTROS) {
       const b = el('button', 'pm-filtro', label); b.type = 'button'; b.dataset.f = k;
@@ -2568,7 +2587,7 @@ function leido(sc) {
       }).catch(() => { if (page) { rows.textContent = ''; rows.appendChild(el('div', 'pm-sin', 'No hay conexión.')); } });
   }
 
-  // "Miembros" arriba de los canales, como en Discord
+  // "Admin" arriba de los canales (la pagina de miembros y estadisticas)
   function addEntry(app) {
     if (!app.user || !app.user.isAdmin) return;
     const pane = document.getElementById('channels-pane');
@@ -2577,7 +2596,7 @@ function leido(sc) {
     const b = el('button', 'puente-miembros-btn');
     b.id = 'puente-miembros-btn'; b.type = 'button';
     b.innerHTML = ICON;
-    b.appendChild(el('span', '', 'Miembros'));
+    b.appendChild(el('span', '', 'Admin'));
     b.addEventListener('click', () => (page ? close() : open()));
     list.parentElement.insertBefore(b, list);
   }
