@@ -6783,6 +6783,26 @@ document.addEventListener('pointerdown', (ev) => {
   revisar();
 })();
 
+// Panel de la derecha: los grupos dicen "En línea — 4" como en Discord (Haven pone "En línea (4)")
+(function () {
+  'use strict';
+  function grupos() {
+    const box = document.getElementById('online-users');
+    if (!box) return;
+    for (const g of box.querySelectorAll('.user-group-label')) {
+      const m = /^(.*\S)\s*\((\d+)\)\s*$/.exec(g.textContent);
+      if (m) g.textContent = m[1] + ' — ' + m[2];
+    }
+  }
+  let tries = 0;
+  (function wait() {
+    const box = document.getElementById('online-users');
+    if (!box) { if (++tries < 120) setTimeout(wait, 500); return; }
+    new MutationObserver(grupos).observe(box, { childList: true });
+    grupos();
+  })();
+})();
+
 // El menu: reacciones rapidas arriba, "Agregar reaccion", y las opciones de Haven
 // ordenadas como en Discord, con su icono a la derecha y "Copiar texto". Son las
 // mismas acciones y permisos de Haven; solo cambian el aspecto y el orden.
