@@ -39,6 +39,7 @@
 //  GET  /puente/api/mercado/reputacion?u
 //  GET  /puente/api/mercado/pendientes
 //  GET  /puente/api/mercado/personas?q  (para elegir a quien se le vendio)
+//  GET  /puente/api/mercado/admin       (administradores: ventas, opiniones, publicaciones, denuncias)
 
 const fs = require('fs');
 const path = require('path');
@@ -133,7 +134,7 @@ function setup(ctx) {
   `);
   // Con el foro (foro-mercado.js)
   const cols = new Set(db.prepare('PRAGMA table_info(puente_mercado)').all().map(c => c.name));
-  for (const [c, t] of [['origen', "TEXT NOT NULL DEFAULT 'cv'"], ['foro_nodo', 'INTEGER'], ['foro_url', 'TEXT'], ['foro_autor', 'TEXT'], ['foro_hash', 'TEXT'], ['foro_editado', 'INTEGER']]) {
+  for (const [c, t] of [['origen', "TEXT NOT NULL DEFAULT 'cv'"], ['foro_nodo', 'INTEGER'], ['foro_url', 'TEXT'], ['foro_autor', 'TEXT'], ['foro_hash', 'TEXT'], ['foro_editado', 'INTEGER'], ['vendida_en', 'INTEGER']]) {
     if (!cols.has(c)) db.exec(`ALTER TABLE puente_mercado ADD COLUMN ${c} ${t}`);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_puente_mercado_foro ON puente_mercado(foro_nodo) WHERE foro_nodo IS NOT NULL');
@@ -441,7 +442,7 @@ async function handle(req, res, p, u, h) {
     const r = ownItem(body.id);
     if (!r) return h.json(res, 404, { error: 'Esa publicación no es tuya o ya no está.' });
     if (body.fuera) {
-      db.prepare("UPDATE puente_mercado SET estado = 'vendida' WHERE id = ?").run(r.id);
+      db.prepare("UPDATE puente_mercado SET estado = 'vendida', vendida_en = ? WHERE id = ?").run(now(), r.id);
       return h.json(res, 200, { ok: true });
     }
     const buyer = Number(body.comprador);
@@ -450,7 +451,7 @@ async function handle(req, res, p, u, h) {
       return h.json(res, 409, { error: 'Ya marcaste esta venta para esa persona.' });
     }
     // Un servicio se puede vender muchas veces: sigue activo. Un producto pasa a vendido.
-    if (r.tipo === 'producto') db.prepare("UPDATE puente_mercado SET estado = 'vendida' WHERE id = ?").run(r.id);
+    if (r.tipo === 'producto') db.prepare("UPDATE puente_mercado SET estado = 'vendida', vendida_en = ? WHERE id = ?").run(now(), r.id);
     db.prepare('INSERT INTO puente_mercado_ventas (item_id, vendedor_id, comprador_id, creado) VALUES (?, ?, ?, ?)').run(r.id, me, buyer, now());
     ping(buyer);
     return h.json(res, 200, { ok: true });
@@ -518,6 +519,46 @@ async function handle(req, res, p, u, h) {
     db.prepare('UPDATE puente_mercado SET oculta = ? WHERE id = ?').run(body.si ? 1 : 0, r.id);
     log(`mercado: ${user.username} ${body.si ? 'ocultó' : 'mostró'} "${r.titulo}"`);
     return h.json(res, 200, { ok: true });
+  }
+
+  // Lo que pasa en el Marketplace, para el panel de los administradores (web/aviso.js, pestaña "Marketplace"):
+  // numeros, cada venta con las opiniones, las publicaciones, las denuncias y la reputacion de cada uno
+  if (p === '/puente/api/mercado/admin' && req.method === 'GET') {
+    if (!isAdmin(me)) return h.json(res, 403, { error: 'Solo administradores.' });
+    const t = now();
+    const cuenta = (sql, ...a) => db.prepare(sql).get(...a).n;
+    const opinionesDe = id => db.prepare('SELECT * FROM puente_mercado_opiniones WHERE venta_id = ? ORDER BY creado').all(id)
+      .map(o => ({ de: person(o.de_id), para: person(o.para_id), rol: o.rol, positiva: !!o.positiva, comentario: o.comentario, creado: o.creado }));
+    const itemCorto = r => ({ id: r.id, titulo: r.titulo, tipo: r.tipo, precio: r.precio, moneda: r.moneda, estado: r.estado });
+    const ventas = db.prepare('SELECT v.*, m.titulo, m.tipo, m.precio, m.moneda, m.estado AS item_estado FROM puente_mercado_ventas v JOIN puente_mercado m ON m.id = v.item_id ORDER BY v.creado DESC').all()
+      .map(v => ({ id: v.id, creado: v.creado, estado: v.estado, item: itemCorto({ ...v, id: v.item_id, estado: v.item_estado }), vendedor: person(v.vendedor_id), comprador: person(v.comprador_id), opiniones: opinionesDe(v.id) }));
+    const fuera = db.prepare(`SELECT * FROM puente_mercado m WHERE m.estado = 'vendida' AND m.origen != 'foro'
+      AND NOT EXISTS (SELECT 1 FROM puente_mercado_ventas v WHERE v.item_id = m.id AND v.estado != 'rechazada') ORDER BY COALESCE(m.vendida_en, m.renovado) DESC`).all()
+      .map(r => ({ ...itemCorto(r), vendedor: person(r.user_id), vendidaEn: r.vendida_en || null }));
+    const publicaciones = db.prepare("SELECT m.*, (SELECT COUNT(*) FROM puente_mercado_guardados g WHERE g.item_id = m.id) guardados, (SELECT COUNT(*) FROM puente_mercado_denuncias d WHERE d.item_id = m.id) denuncias FROM puente_mercado m WHERE m.origen != 'foro' ORDER BY m.creado DESC").all()
+      .map(r => ({ ...itemCorto(r), condicion: r.condicion, zona: r.zona, oculta: !!r.oculta, vencida: r.estado === 'activa' && vence(r) < t, creado: r.creado, renovado: r.renovado,
+        vendidaEn: r.vendida_en || null, fotos: fotosOf(r).length, guardados: r.guardados, denuncias: r.denuncias, vendedor: person(r.user_id) }));
+    const denuncias = db.prepare('SELECT d.*, m.titulo, m.estado, m.oculta FROM puente_mercado_denuncias d JOIN puente_mercado m ON m.id = d.item_id ORDER BY d.creado DESC').all()
+      .map(d => ({ item: { id: d.item_id, titulo: d.titulo, estado: d.estado, oculta: !!d.oculta }, de: person(d.user_id), motivo: d.motivo, creado: d.creado }));
+    const ids = db.prepare(`SELECT user_id id FROM puente_mercado WHERE origen != 'foro' UNION SELECT vendedor_id FROM puente_mercado_ventas UNION SELECT comprador_id FROM puente_mercado_ventas`).all().map(r => r.id);
+    const personas = ids.map(id => ({ persona: person(id), publicaciones: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE user_id = ? AND origen != 'foro'", id),
+      activas: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE user_id = ? AND origen != 'foro' AND estado = 'activa' AND renovado >= ?", id, t - DURA), ...reputation(id) }))
+      .filter(x => x.persona).sort((a, b) => (b.ventas + b.compras) - (a.ventas + a.compras) || b.publicaciones - a.publicaciones);
+    const porEstado = e => cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE origen != 'foro' AND estado = ?", e);
+    const resumen = {
+      activas: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE origen != 'foro' AND estado = 'activa' AND renovado >= ?", t - DURA),
+      vencidas: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE origen != 'foro' AND estado = 'activa' AND renovado < ?", t - DURA),
+      vendidas: porEstado('vendida'), borradas: porEstado('borrada'), ocultas: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE origen != 'foro' AND oculta = 1 AND estado != 'borrada'"),
+      ventasConfirmadas: cuenta("SELECT COUNT(*) n FROM puente_mercado_ventas WHERE estado = 'confirmada'"),
+      ventasPendientes: cuenta("SELECT COUNT(*) n FROM puente_mercado_ventas WHERE estado = 'pendiente'"),
+      ventasRechazadas: cuenta("SELECT COUNT(*) n FROM puente_mercado_ventas WHERE estado = 'rechazada'"),
+      vendidasFuera: fuera.length,
+      opinionesPositivas: cuenta('SELECT COUNT(*) n FROM puente_mercado_opiniones WHERE positiva = 1'),
+      opinionesNegativas: cuenta('SELECT COUNT(*) n FROM puente_mercado_opiniones WHERE positiva = 0'),
+      denuncias: denuncias.length, guardados: cuenta('SELECT COUNT(*) n FROM puente_mercado_guardados'),
+      personas: personas.length, delForo: cuenta("SELECT COUNT(*) n FROM puente_mercado WHERE origen = 'foro'"),
+    };
+    return h.json(res, 200, { resumen, ventas, fuera, publicaciones, denuncias, personas });
   }
 
   if (p === '/puente/api/mercado/reputacion' && req.method === 'GET') {

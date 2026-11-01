@@ -1977,6 +1977,33 @@ html body #right-sidebar #online-users .user-group-label.offline-label { margin-
 .pe-fila-llena { height: 100%; border-radius: 999px; background: #5865f2; }
 .pm-celular .pe-vista { padding: 0.75rem; }
 .pm-celular .pe-cuerpo { grid-template-columns: minmax(0, 1fr); }
+/* Con cuatro pestañas en el celular: se corren de costado */
+.pm-celular .pm-pestanas { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.pm-celular .pm-pestana { flex: 0 0 auto; }
+/* Pestaña "Marketplace" (aviso.js, mercado.js /admin) */
+.pk-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
+.pk-vista[hidden] { display: none !important; }
+.pk-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.pk-cuerpo .pe-caja > div:last-child { display: flex; flex-direction: column; gap: 0.375rem; }
+.pk-link { flex: 1 1 12rem; min-width: 0; padding: 0; border: 0; background: none; color: #efeff1; font: inherit; font-size: 0.9375rem; font-weight: 600; text-align: left; cursor: pointer; }
+.pk-link:hover { color: #fbfbfb; text-decoration: underline; }
+.pk-precio { flex: 0 0 auto; color: #dbdee1; font-variant-numeric: tabular-nums; }
+.pk-sub { margin: 0.75rem 0 0.25rem; color: #b5bac1; font-size: 0.875rem; font-weight: 700; }
+.pmz-paso.pk-confirmada, .pmz-paso.pk-activa { border-left-color: #23a55a; }
+.pmz-paso.pk-pendiente { border-left-color: #f0b232; }
+.pmz-paso.pk-rechazada, .pmz-paso.pk-borrada, .pmz-paso.pk-vencida { opacity: 0.6; }
+.pmz-paso.pk-vendida, .pmz-paso.pk-fuera { border-left-color: #5865f2; }
+.pmz-paso.pk-denuncia { border-left-color: #f23f43; }
+.pk-opinion { margin-top: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.375rem; background: #232228; border-left: 3px solid #23a55a; }
+.pk-opinion.pk-mala { border-left-color: #f23f43; }
+.pk-op-q { color: #b5bac1; font-size: 0.8125rem; }
+.pk-op-t { margin-top: 0.25rem; color: #efeff1; font-size: 0.9375rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pk-tabla { display: flex; flex-direction: column; overflow-x: auto; }
+.pk-fila { display: grid; grid-template-columns: minmax(10rem, 2fr) repeat(4, minmax(3.5rem, 0.6fr)) minmax(9rem, 1.4fr); gap: 0.5rem; padding: 0.375rem 0; border-bottom: 1px solid #29292d; color: #dbdee1; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.pk-fila.pk-cab { color: #96969e; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.pk-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #efeff1; }
+.pm-celular .pk-vista { padding: 0.75rem; }
+.pm-celular .pk-fila { grid-template-columns: minmax(8rem, 2fr) repeat(4, 3rem) minmax(8rem, 1.4fr); min-width: 34rem; }
 .pm-celular .pe-totales { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pm-celular .pe-calor { grid-template-columns: 2rem repeat(24, minmax(0, 1fr)); gap: 1px; }
 .pm-celular .pe-calor-c { height: 0.875rem; }

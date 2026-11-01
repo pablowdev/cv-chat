@@ -2458,7 +2458,9 @@ function leido(sc) {
     page.querySelector('.pm-card').hidden = v !== 'miembros';
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
     const mz = page.querySelector('.pmz-vista'); if (mz) mz.hidden = v !== 'mudanza';
+    const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     if (v === 'mudanza') cargarMudanza();
+    if (v === 'marketplace') cargarMarketplace();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
   // Pestaña "Mudanza" (mudanza-plan.js): el cronograma que el servidor cumple solo, como va, y los
@@ -2544,6 +2546,113 @@ function leido(sc) {
     }
   }
 
+  // Pestaña "Marketplace" (mercado.js, /admin): numeros, ventas con lo que opinaron, las publicaciones de
+  // cada uno, denuncias y reputacion. Tocar una publicacion la abre en el Marketplace
+  function armarVistaMarketplace() {
+    const v = el('div', 'pk-vista'); v.hidden = true;
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'Marketplace'));
+    const act = el('button', 'pe-rango', 'Actualizar'); act.type = 'button'; act.addEventListener('click', () => cargarMarketplace(true));
+    barra.appendChild(act);
+    v.append(barra, el('div', 'pk-cuerpo'));
+    return v;
+  }
+  const fechaMk = (ms) => (ms ? new Date(ms).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' }) : '—');
+  const precioMk = (it) => (it.precio == null ? 'A convenir' : ({ ARS: '$', USD: 'US$', USDT: 'USDT ' }[it.moneda] || '$') + fmt(it.precio));
+  const quienMk = (p) => (p ? p.nombre + (p.usuario && p.usuario !== p.nombre ? ' (@' + p.usuario + ')' : '') : 'alguien que ya no está');
+  const ESTADO_PUB = { activa: 'Activa', vendida: 'Vendida', borrada: 'Borrada' };
+  const ESTADO_VENTA = { pendiente: 'Esperando que el comprador confirme', confirmada: 'Confirmada', rechazada: 'El comprador dijo que no' };
+  function cargarMarketplace(forzar) {
+    const cuerpo = page && page.querySelector('.pk-cuerpo');
+    if (!cuerpo || (cuerpo.childNodes.length && !forzar)) return;
+    cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', 'Cargando…'));
+    fetch('/puente/api/mercado/admin', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarMarketplace(cuerpo, d); })
+      .catch(() => { if (page) { cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', 'No se pudo cargar la actividad del Marketplace.')); } });
+  }
+  function pintarMarketplace(box, d) {
+    box.textContent = '';
+    const abrir = (id) => { close(); setTimeout(() => { const a = document.createElement('a'); a.href = location.origin + '/app?mercado=' + id; document.body.appendChild(a); a.click(); a.remove(); }, 50); };
+    const enlace = (it) => { const a = el('button', 'pk-link', it.titulo); a.type = 'button'; a.title = 'Abrir en el Marketplace'; a.addEventListener('click', () => abrir(it.id)); return a; };
+    const R = d.resumen;
+    const tot = el('div', 'pe-totales');
+    for (const [n, label] of [[R.activas, 'Publicaciones activas'], [R.vendidas, 'Marcadas como vendidas'], [R.ventasConfirmadas, 'Ventas confirmadas'],
+      [R.ventasPendientes, 'Ventas sin confirmar'], [R.opinionesPositivas + ' 👍 · ' + R.opinionesNegativas + ' 👎', 'Opiniones'], [R.denuncias, 'Denuncias'],
+      [R.guardados, 'Guardadas por alguien'], [R.personas, 'Personas que usaron el Marketplace']]) {
+      const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', label));
+      const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', typeof n === 'number' ? fmt(n) : n)); c.appendChild(f);
+      tot.appendChild(c);
+    }
+    box.appendChild(tot);
+    // Ventas, con lo que se escribieron
+    const vs = el('div');
+    for (const v of d.ventas) {
+      const f = el('div', 'pmz-paso pk-venta pk-' + v.estado);
+      const top = el('div', 'pmz-paso-top');
+      top.append(el('span', 'pmz-cuando', fechaMk(v.creado)), enlace(v.item), el('span', 'pk-precio', precioMk(v.item)), el('span', 'pmz-chip', ESTADO_VENTA[v.estado] || v.estado));
+      f.appendChild(top);
+      f.appendChild(el('div', 'pmz-detalle', 'Vendió ' + quienMk(v.vendedor) + ' · compró ' + quienMk(v.comprador)));
+      for (const o of v.opiniones) {
+        const op = el('div', 'pk-opinion' + (o.positiva ? '' : ' pk-mala'));
+        op.append(el('span', 'pk-op-q', (o.positiva ? '👍 ' : '👎 ') + quienMk(o.de) + ' sobre ' + quienMk(o.para) + ' (' + (o.rol === 'vendedor' ? 'como vendedor' : 'como comprador') + ') · ' + fechaMk(o.creado)));
+        if (o.comentario) op.appendChild(el('div', 'pk-op-t', '“' + o.comentario + '”'));
+        f.appendChild(op);
+      }
+      if (v.estado === 'confirmada' && v.opiniones.length < 2) f.appendChild(el('div', 'pmz-detalle', v.opiniones.length ? 'Falta que opine uno de los dos.' : 'Todavía no opinó ninguno.'));
+      vs.appendChild(f);
+    }
+    if (!d.ventas.length) vs.appendChild(el('div', 'pe-nota', 'Todavía nadie marcó una venta a otra persona del club (eso es lo que habilita confirmar y opinar).'));
+    if (d.fuera.length) {
+      vs.appendChild(el('div', 'pk-sub', 'Marcadas como "vendido fuera de la app" (sin comprador, así que sin opiniones)'));
+      for (const it of d.fuera) {
+        const f = el('div', 'pmz-paso pk-fuera'); const top = el('div', 'pmz-paso-top');
+        top.append(el('span', 'pmz-cuando', it.vendidaEn ? fechaMk(it.vendidaEn) : 'fecha no anotada'), enlace(it), el('span', 'pk-precio', precioMk(it)));
+        f.append(top, el('div', 'pmz-detalle', 'De ' + quienMk(it.vendedor)));
+        vs.appendChild(f);
+      }
+    }
+    box.appendChild(tarjeta('Ventas y opiniones', vs, 'pe-ancha'));
+    // Denuncias
+    if (d.denuncias.length) {
+      const dn = el('div');
+      for (const x of d.denuncias) {
+        const f = el('div', 'pmz-paso pk-denuncia'); const top = el('div', 'pmz-paso-top');
+        top.append(el('span', 'pmz-cuando', fechaMk(x.creado)), enlace(x.item), el('span', 'pmz-chip', x.item.oculta ? 'Oculta' : ESTADO_PUB[x.item.estado] || x.item.estado));
+        f.append(top, el('div', 'pmz-detalle', 'Denunció ' + quienMk(x.de) + (x.motivo ? ': “' + x.motivo + '”' : ' (sin motivo)')));
+        dn.appendChild(f);
+      }
+      box.appendChild(tarjeta('Denuncias', dn, 'pe-ancha'));
+    }
+    // Personas: lo que publico cada una y su reputacion
+    const ps = el('div', 'pk-tabla');
+    const cab = el('div', 'pk-fila pk-cab'); for (const t of ['Persona', 'Publicó', 'Activas', 'Ventas', 'Compras', 'Reputación']) cab.appendChild(el('span', '', t)); ps.appendChild(cab);
+    for (const x of d.personas) {
+      const f = el('div', 'pk-fila');
+      f.append(el('span', 'pk-nombre', quienMk(x.persona)), el('span', '', fmt(x.publicaciones)), el('span', '', fmt(x.activas)), el('span', '', fmt(x.ventas)), el('span', '', fmt(x.compras)),
+        el('span', '', x.porcentaje == null ? 'sin opiniones' : x.porcentaje + '% · ' + x.positivas + ' 👍 ' + x.negativas + ' 👎'));
+      ps.appendChild(f);
+    }
+    box.appendChild(tarjeta('Personas', ps, 'pe-ancha'));
+    // Todas las publicaciones de CV Chat
+    const pb = el('div');
+    for (const it of d.publicaciones) {
+      const f = el('div', 'pmz-paso pk-pub pk-' + it.estado + (it.vencida ? ' pk-vencida' : ''));
+      const top = el('div', 'pmz-paso-top');
+      top.append(el('span', 'pmz-cuando', fechaMk(it.creado)), it.estado === 'borrada' ? el('span', 'pmz-nombre', it.titulo) : enlace(it), el('span', 'pk-precio', precioMk(it)),
+        el('span', 'pmz-chip', it.oculta ? 'Oculta' : it.vencida ? 'Vencida' : ESTADO_PUB[it.estado] || it.estado));
+      f.appendChild(top);
+      const det = ['De ' + quienMk(it.vendedor), it.tipo === 'servicio' ? 'servicio' : it.condicion || 'producto', it.zona, it.fotos + (it.fotos === 1 ? ' foto' : ' fotos'),
+        it.guardados ? 'guardada por ' + it.guardados : '', it.denuncias ? it.denuncias + (it.denuncias === 1 ? ' denuncia' : ' denuncias') : '',
+        it.renovado !== it.creado ? 'renovada ' + fechaMk(it.renovado) : '', it.vendidaEn ? 'vendida ' + fechaMk(it.vendidaEn) : ''].filter(Boolean);
+      f.appendChild(el('div', 'pmz-detalle', det.join(' · ')));
+      pb.appendChild(f);
+    }
+    if (!d.publicaciones.length) pb.appendChild(el('div', 'pe-nota', 'Todavía no hay publicaciones.'));
+    pb.appendChild(el('div', 'pe-nota', 'Los ' + fmt(R.delForo) + ' avisos que se habían traído de tejemanejes quedan guardados pero no se muestran.'));
+    box.appendChild(tarjeta('Publicaciones (' + fmt(d.publicaciones.length) + ')', pb, 'pe-ancha'));
+  }
+
   function armarVistaEstadisticas() {
     const v = el('div', 'pe-vista'); v.hidden = true;
     const barra = el('div', 'pe-barra');
@@ -2573,7 +2682,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -2638,7 +2747,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaMarketplace(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);
