@@ -2252,7 +2252,7 @@ function leido(sc) {
       } else mail.appendChild(el('span', 'pm-vacio', '—'));
       const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
       // y de donde llego (origenes.js)
-      if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente)); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
+      if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente + (m.origen.estimado ? ' (estimado)' : ''))); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
       // Discord: el @usuario y la antiguedad de esa cuenta
       const dc = el('div', 'pm-c pm-dos');
       if (m.discord) {
@@ -2377,7 +2377,7 @@ function leido(sc) {
     const fondo = el('div', 'pe-fila-fondo'); const llena = el('div', 'pe-fila-llena'); llena.style.width = (total ? Math.max(1, (valor / total) * 100) : 0) + '%';
     fondo.appendChild(llena); f.append(top, fondo); return f;
   }
-  function pintarEstadisticas(box, d) {
+  function pintarEstadisticas(box, d, o) {
     box.textContent = '';
     if (!d.resumenListo) box.appendChild(el('div', 'pe-aviso', 'Armando el resumen de mensajes por primera vez: los números de mensajes pueden estar incompletos unos minutos.'));
     // Totales con su variacion respecto del periodo anterior
@@ -2404,7 +2404,8 @@ function leido(sc) {
     const g = el('div'); g.innerHTML = barras([S.cv, S.dc], d.etiquetas, d.paso, ['#5865f2', '#9b84ec']);
     mud.append(cab, ley, g);
     box.appendChild(tarjeta('Termómetro de la mudanza', mud, 'pe-ancha'));
-    box.appendChild(tarjeta('Nuevos miembros', barras([S.nuevos], d.etiquetas, d.paso, ['#3ba55d'])));
+    // Nuevos miembros, segun de donde llegaron (origenes.js); si eso no cargo, solo cuantos
+    box.appendChild(o ? nuevosPorOrigen(o) : tarjeta('Nuevos miembros', barras([S.nuevos], d.etiquetas, d.paso, ['#3ba55d'])));
     const act = el('div'); act.innerHTML = barras([S.activos], d.etiquetas, d.paso, ['#f0b232']);
     if (d.activosDesde && d.activosDesde > d.desde) act.appendChild(el('div', 'pe-nota', 'Se anota desde el ' + etiqueta(d.activosDesde, 'dia') + ': antes no hay datos.'));
     box.appendChild(tarjeta(d.paso === 'dia' ? 'Activos por día' : d.paso === 'semana' ? 'Activos por semana' : 'Activos por mes', act));
@@ -2449,9 +2450,9 @@ function leido(sc) {
     if (!box) return;
     page.querySelectorAll('.pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoEst));
     box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
-    fetch('/puente/api/estadisticas?rango=' + rangoEst, { headers: { Authorization: 'Bearer ' + token() } })
-      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(d => { if (page) pintarEstadisticas(box, d); })
+    const pedir = u => fetch(u, { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : Promise.reject(r.status)));
+    Promise.all([pedir('/puente/api/estadisticas?rango=' + rangoEst), pedir('/puente/api/origen/admin?rango=' + rangoEst).catch(() => null)])
+      .then(([d, o]) => { if (page) { pintarEstadisticas(box, d, o); if (o) pintarOrigen(box, o); } })
       .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar las estadísticas.')); } });
   }
   function verVista(v) {
@@ -2460,15 +2461,10 @@ function leido(sc) {
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === v));
     page.querySelector('.pm-card').hidden = v !== 'miembros';
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
-    const po = page.querySelector('.po-vista'); if (po) po.hidden = v !== 'origen';
     const mz = page.querySelector('.pmz-vista'); if (mz) mz.hidden = v !== 'mudanza';
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     if (v === 'mudanza') cargarMudanza();
     if (v === 'marketplace') cargarMarketplace();
-    if (v === 'origen') {
-      if (!page.querySelector('.po-cuerpo').childNodes.length) cargarOrigen();
-      else page.querySelectorAll('.po-vista .pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoOrigen));
-    }
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
   // Pestaña "Mudanza" (mudanza-plan.js): el cronograma que el servidor cumple solo, como va, y los
@@ -2556,61 +2552,30 @@ function leido(sc) {
 
   // Pestaña "Marketplace" (mercado.js, /admin): numeros, ventas con lo que opinaron, las publicaciones de
   // cada uno, denuncias y reputacion. Tocar una publicacion la abre en el Marketplace
-  // ── Pestaña "Origen" (origenes.js): de donde llega la gente que se crea la cuenta ──
-  let rangoOrigen = '30d';
+  // ── De donde llega la gente (origenes.js), dentro de "Estadisticas" ──
   const COLORES_ORIGEN = ['#5865f2', '#3ba55d', '#f0b232', '#ee2d6f', '#9b84ec', '#80848e', '#4e5058'];
-  function armarVistaOrigen() {
-    const v = el('div', 'pe-vista po-vista'); v.hidden = true;
-    const barra = el('div', 'pe-barra');
-    barra.appendChild(el('div', 'pm-sub', 'De dónde llega la gente'));
-    const rangos = el('div', 'pe-rangos');
-    for (const [k, label, t] of [['30d', '30D', 'Últimos 30 días'], ['90d', '3M', 'Últimos 3 meses'], ['1a', '1A', 'Último año'], ['todo', 'Todo', 'Desde que se anota']]) {
-      const b = el('button', 'pe-rango', label); b.type = 'button'; b.dataset.r = k; b.title = t;
-      b.addEventListener('click', () => { rangoOrigen = k; cargarOrigen(); });
-      rangos.appendChild(b);
-    }
-    barra.appendChild(rangos);
-    v.append(barra, el('div', 'pe-cuerpo po-cuerpo'));
-    return v;
-  }
-  function cargarOrigen() {
-    const box = page && page.querySelector('.po-cuerpo');
-    if (!box) return;
-    page.querySelectorAll('.po-vista .pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoOrigen));
-    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
-    fetch('/puente/api/origen/admin?rango=' + rangoOrigen, { headers: { Authorization: 'Bearer ' + token() } })
-      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(d => { if (page) pintarOrigen(box, d); })
-      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar de dónde llega la gente.')); } });
-  }
-  function pintarOrigen(box, d) {
-    box.textContent = '';
-    if (!d.medidoDesde) box.appendChild(el('div', 'pe-aviso', 'Se empieza a anotar ahora: las cuentas de antes salen como "Sin dato". Los números aparecen a medida que llega gente nueva.'));
-    else box.appendChild(el('div', 'pe-nota po-nota', 'Se anota desde el ' + new Date(d.medidoDesde).toLocaleDateString('es-AR') + ': las cuentas de antes salen como "Sin dato".'));
-    const totales = el('div', 'pe-totales');
-    const conv = d.visitasTotal ? Math.round((d.conDato / d.visitasTotal) * 1000) / 10 + '%' : '—';
-    for (const [n, label] of [[fmt(d.cuentas), 'Cuentas nuevas'], [fmt(d.conDato), 'Con origen anotado'], [fmt(d.visitasTotal), 'Visitas que llegaron'], [conv, 'Se crearon la cuenta']]) {
-      const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', label));
-      const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', n)); c.appendChild(f); totales.appendChild(c);
-    }
-    box.appendChild(totales);
-    // Cuentas nuevas por fuente, en el tiempo
+  const estimadoTxt = 'Las cuentas de antes de que se empezara a anotar (el 1/11/2026) están estimadas: quien entró con Discord o con el foro, o los vinculó al crear la cuenta, vino de ahí.';
+  function nuevosPorOrigen(d) {
     const colorDe = new Map(d.serie.map((s, i) => [s.fuente, s.fuente === 'Sin dato' ? '#3a3940' : COLORES_ORIGEN[i % COLORES_ORIGEN.length]]));
     const g = el('div');
     const ley = el('div', 'pe-leyenda po-leyenda');
     for (const s of d.serie) { const sp = el('span'); const i = el('i'); i.style.background = colorDe.get(s.fuente); sp.append(i, s.fuente); ley.appendChild(sp); }
     const graf = el('div'); graf.innerHTML = barras(d.serie.map(s => s.v), d.etiquetas, d.paso, d.serie.map(s => colorDe.get(s.fuente)));
     g.append(ley, graf);
-    box.appendChild(tarjeta('Cuentas nuevas, según de dónde llegaron', g, 'pe-ancha'));
+    if (d.estimadas) g.appendChild(el('div', 'pe-nota', estimadoTxt));
+    return tarjeta('Nuevos miembros, según de dónde llegaron', g, 'pe-ancha');
+  }
+  function pintarOrigen(box, d) {
     // Cada fuente: cuentas, visitas y cuantos de los que llegaron se crearon la cuenta
     const lista = el('div');
     const maxF = Math.max(1, ...d.fuentes.map(f => f.cuentas));
     for (const f of d.fuentes) {
       const pct = f.visitas ? ' · ' + Math.round((f.cuentas / f.visitas) * 100) + '% de ' + fmt(f.visitas) + (f.visitas === 1 ? ' visita' : ' visitas') : '';
-      lista.appendChild(filaBarra(f.fuente, f.cuentas, maxF, fmt(f.cuentas) + (f.cuentas === 1 ? ' cuenta' : ' cuentas') + pct));
+      const est = f.estimadas ? ' (' + (f.estimadas === f.cuentas ? 'estimado' : fmt(f.estimadas) + ' estimadas') + ')' : '';
+      lista.appendChild(filaBarra(f.fuente, f.cuentas, maxF, fmt(f.cuentas) + (f.cuentas === 1 ? ' cuenta' : ' cuentas') + est + pct));
     }
     if (!d.fuentes.length) lista.appendChild(el('div', 'pe-nota', 'Todavía no hay datos en este período.'));
-    box.appendChild(tarjeta('De dónde llegan', lista));
+    box.appendChild(tarjeta('De dónde llegan los nuevos', lista));
     const vis = el('div'); vis.innerHTML = barras([d.visitasSerie], d.etiquetas, d.paso, ['#f0b232']);
     vis.appendChild(el('div', 'pe-nota', 'Navegadores que llegaron a la web, el foro o el chat desde algún lado (sin contar a los miembros que ya tenían la sesión abierta).'));
     box.appendChild(tarjeta(d.paso === 'dia' ? 'Visitas por día' : d.paso === 'semana' ? 'Visitas por semana' : 'Visitas por mes', vis));
@@ -2628,14 +2593,14 @@ function leido(sc) {
       const av = el('div', 'pm-avatar');
       if (r.avatar) { const im = el('img'); im.src = r.avatar; im.alt = ''; im.loading = 'lazy'; av.appendChild(im); } else av.textContent = String(r.nombre).charAt(0).toUpperCase();
       const info = el('div', 'po-info');
-      info.append(el('div', 'pm-n1', r.nombre + ' · ' + r.fuente), el('div', 'pm-n2', [r.detalle, r.campania, r.dispositivo, r.aterrizaje ? 'entró por ' + r.aterrizaje : '', ago(r.desde)].filter(Boolean).join(' · ')));
+      info.append(el('div', 'pm-n1', r.nombre + ' · ' + r.fuente + (r.estimado ? ' (estimado)' : '')), el('div', 'pm-n2', [r.detalle, r.campania, r.dispositivo, r.aterrizaje ? 'entró por ' + r.aterrizaje : '', ago(r.desde)].filter(Boolean).join(' · ')));
       f.append(av, info);
       f.title = fecha(r.desde);
       f.addEventListener('click', () => { const app = window.app; if (!app || !app.socket) return; app._isHoverPopup = false; app._hoverTarget = null; app._profilePopupAnchor = av; app.socket.emit('get-user-profile', { userId: r.id }); });
       rec.appendChild(f);
     }
-    if (!d.recientes.length) rec.appendChild(el('div', 'pe-nota', 'Todavía no hay cuentas nuevas con el origen anotado.'));
-    box.appendChild(tarjeta('Las últimas cuentas', rec, 'pe-ancha'));
+    if (!d.recientes.length) rec.appendChild(el('div', 'pe-nota', 'No hay cuentas nuevas en este período.'));
+    box.appendChild(tarjeta('Los nuevos, uno por uno', rec, 'pe-ancha'));
     // Enlaces con etiqueta: para saber cuantos llegan por WhatsApp, Telegram o una publicacion
     const arma = el('div', 'po-arma');
     const nombre = el('input', 'pm-buscar po-etiqueta'); nombre.type = 'text'; nombre.placeholder = 'Etiqueta: whatsapp, x, instagram, video-220…'; nombre.maxLength = 40;
@@ -2795,7 +2760,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['origen', 'Origen'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -2860,7 +2825,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaOrigen(), armarVistaMarketplace(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaMarketplace(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);

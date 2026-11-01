@@ -3,6 +3,11 @@
 const fs = require('fs'), path = require('path');
 const CHAT = 'https://chat.circulovicioso.club', FORO = 'https://foro.circulovicioso.club';
 const out = process.argv[2] || path.join(__dirname, 'listo');
+// Los estilos y scripts propios con su version (?v=): asi el navegador no se queda con uno viejo cuando cambian
+const ver = u => {
+  if (!u.startsWith('/')) return u;
+  try { return u + '?v=' + require('crypto').createHash('sha1').update(fs.readFileSync(path.join(__dirname, u))).digest('hex').slice(0, 10); } catch { return u; }
+};
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', 'Full Fat Search', '/full-fat-search'],
@@ -28,10 +33,10 @@ ${canonica ? `<link rel="canonical" href="https://circulovicioso.club${canonica}
 <meta name="theme-color" content="#211c1f">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/cv.css">
-${css.map(c => `<link rel="stylesheet" href="${c}">`).join('\n')}
+<link rel="stylesheet" href="${ver('/css/cv.css')}">
+${css.map(c => `<link rel="stylesheet" href="${ver(c)}">`).join('\n')}
 <link rel="stylesheet" href="${CHAT}/puente/barra.css"><script src="${CHAT}/puente/barra.js" defer></script>
-${js.map(j => `<script src="${j}" defer></script>`).join('\n')}
+${js.map(j => `<script src="${ver(j)}" defer></script>`).join('\n')}
 </head>
 <body>
 <a class="saltar" href="#contenido">Ir al contenido</a>

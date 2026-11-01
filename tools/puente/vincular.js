@@ -130,7 +130,7 @@ function setup(ctx) {
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
   // Las vistas previas de los enlaces (la imagen con un pedacito del chat, del foro o de la web)
   require('./vistas.js').setup({ db, log, warn, publicUrl });
-  // De donde llega la gente que se crea la cuenta (la pestaña "Origen" de la pagina "Miembros")
+  // De donde llega la gente que se crea la cuenta (la pestaña "Estadisticas" de la pagina "Miembros")
   require('./origenes.js').setup({ db, log, warn });
   // El equipo sin verificacion en dos pasos queda como miembro comun hasta que la prende
   require('./equipo.js').setup({ db, io, log, warn });

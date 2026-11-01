@@ -5,6 +5,10 @@
 	root * /srv
 	# Las letras de la web tambien las usa el estilo del foro (deploy/foro/estilo)
 	header /fonts/* Access-Control-Allow-Origin "https://foro.circulovicioso.club"
+	# Las paginas, los estilos y los scripts se vuelven a preguntar siempre (si no cambiaron, el navegador
+	# recibe un 304 chiquito): asi nadie se queda con una version vieja despues de un cambio
+	@siempre not path /images/* /fonts/*
+	header @siempre Cache-Control "no-cache"
 	@wiki path /wiki /wiki/ /wiki/* /wiki-categorias/*
 	rewrite @wiki /wiki.html
 	try_files {path} {path}.html

@@ -1,6 +1,7 @@
 // De donde llega la gente (parte del puente): por que enlace o sitio entro cada persona que se creo la
 // cuenta (X, Discord, WhatsApp, YouTube, Google, una invitacion...), para la pagina "Miembros" de los
-// administradores (la columna "Miembro desde" y la pestaña "Origen", con sus graficos).
+// administradores (la columna "Miembro desde" y la pestaña "Estadisticas", con sus graficos). Las cuentas
+// de antes de que se anotara, estimadas con lo que se sabe de cada una (estimados).
 //
 //  - web/origen.js, en la web, el foro (desde barra.js) y CV Chat, anota en una cookie del dominio
 //    (cv_origen, 90 dias) por donde se llego: el sitio de donde venia (sin lo que va despues del "?"),
@@ -10,7 +11,7 @@
 //    sin datos de nadie), y la cuenta nueva (de menos de 48 horas) lo reclama una sola vez
 //    (puente_origenes). Las cuentas de antes quedan "sin dato".
 //  - WhatsApp y Telegram casi nunca dicen de donde viene alguien (abren el enlace sin "sitio anterior"):
-//    para esos estan los enlaces con etiqueta (?de=whatsapp), que se arman en la pestaña "Origen".
+//    para esos estan los enlaces con etiqueta (?de=whatsapp), que se arman en "Estadisticas".
 //
 //  POST /puente/api/origen/visita     (sin sesion, desde las paginas propias) { r, l, d, c, m, i, a }
 //  POST /puente/api/origen/reclamar   (sesion) { r, l, d, c, m, i, a }
@@ -155,8 +156,34 @@ async function handle(req, res, p, u, h) {
   return h.json(res, 404, { error: 'no existe' });
 }
 
+// Las cuentas sin nada anotado (las de antes): una estimacion con lo que se sabe de cada una. Quien
+// entro con Discord o con "Entrar con el foro", o vinculo Discord al crearla, vino de ahi; quien vinculo
+// Discord despues ya estaba ahi. La cuenta del foro no cuenta sola: la cuenta unica la crea al rato de
+// registrarse. Sin ninguna pista, "Sin dato". Guardado 10 minutos
+let estCache = null;
+function estimados() {
+  if (estCache && Date.now() - estCache.at < 10 * 60e3) return estCache.map;
+  const out = new Map();
+  const ms = s => (s ? Date.parse(String(s).replace(' ', 'T') + (/Z$/.test(String(s)) ? '' : 'Z')) : 0);
+  const q = sql => { try { return db.prepare(sql).all(); } catch { return []; } };
+  const email = new Map(q('SELECT haven_user_id, origen FROM puente_emails').map(r => [r.haven_user_id, r.origen]));
+  const dc = new Map(q('SELECT haven_user_id, linked_at FROM puente_vinculos').map(r => [r.haven_user_id, ms(r.linked_at)]));
+  const inv = new Map(q('SELECT i.invitado_id, u.username FROM puente_invitaciones i JOIN users u ON u.id = i.invita_id').map(r => [r.invitado_id, r.username]));
+  for (const u of q("SELECT id, created_at FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0")) {
+    const c = ms(u.created_at), cerca = t => !!t && Math.abs(t - c) < 30 * 60e3;
+    let e = null;
+    if (inv.has(u.id)) e = { fuente: 'Invitación', detalle: '@' + inv.get(u.id) };
+    else if (email.get(u.id) === 'foro') e = { fuente: 'El foro', detalle: 'entró con su cuenta del foro' };
+    else if (email.get(u.id) === 'discord' || cerca(dc.get(u.id))) e = { fuente: 'Discord', detalle: 'entró con su cuenta de Discord' };
+    else if (dc.has(u.id)) e = { fuente: 'Discord', detalle: 'ya estaba en Discord (lo vinculó después)' };
+    if (e) out.set(u.id, { ...e, estimado: true });
+  }
+  estCache = { at: Date.now(), map: out };
+  return out;
+}
+
 // ── Para los administradores ──
-const RANGOS = { '30d': 30, '90d': 90, '1a': 365, todo: 3650 };
+const RANGOS = { '7d': 7, '4s': 28, '3m': 90, '1a': 365, '30d': 30, '90d': 90, todo: 3650 };
 function resumen(rango) {
   const dias = RANGOS[rango] || 30;
   const desde = Date.now() - dias * DAY;
@@ -172,13 +199,17 @@ function resumen(rango) {
   const utc = s => Date.parse(String(s).replace(' ', 'T') + (/Z$/.test(String(s)) ? '' : 'Z'));
   const cuentas = db.prepare("SELECT u.id, u.username, COALESCE(u.display_name, u.username) nombre, u.avatar, u.created_at FROM users u WHERE u.username != 'discord-historial' AND COALESCE(u.is_guest, 0) = 0").all()
     .map(c => ({ ...c, ms: utc(c.created_at) })).filter(c => c.ms >= desde);
-  const origen = new Map(db.prepare('SELECT * FROM puente_origenes').all().map(r => [r.user_id, r]));
+  // Lo anotado y, para las cuentas sin nada anotado (las de antes), la estimacion
+  const anotado = new Map(db.prepare('SELECT * FROM puente_origenes').all().map(r => [r.user_id, r]));
+  const est = estimados();
+  const origen = new Map(cuentas.map(c => [c.id, anotado.get(c.id) || est.get(c.id)]).filter(([, o]) => o));
   const medidoDesde = (db.prepare('SELECT MIN(creado) m FROM puente_origenes').get() || {}).m || null;
-  const fuentes = new Map(), detalles = new Map();
+  const fuentes = new Map(), estimadas = new Map(), detalles = new Map();
   for (const c of cuentas) {
     const o = origen.get(c.id);
     const f = o ? o.fuente : 'Sin dato';
     fuentes.set(f, (fuentes.get(f) || 0) + 1);
+    if (o && o.estimado) estimadas.set(f, (estimadas.get(f) || 0) + 1);
     if (o && o.detalle) { const k = f + ' · ' + o.detalle; detalles.set(k, (detalles.get(k) || 0) + 1); }
   }
   const visitas = new Map();
@@ -201,9 +232,9 @@ function resumen(rango) {
   const todas = new Set([...fuentes.keys(), ...visitas.keys()]);
   return {
     rango, paso, etiquetas, medidoDesde,
-    cuentas: cuentas.length, conDato: cuentas.filter(c => origen.has(c.id)).length,
+    cuentas: cuentas.length, conDato: cuentas.filter(c => anotado.has(c.id)).length, estimadas: cuentas.filter(c => !anotado.has(c.id) && est.has(c.id)).length,
     visitasTotal: [...visitas.values()].reduce((s, n) => s + n, 0),
-    fuentes: [...todas].map(f => ({ fuente: f, cuentas: fuentes.get(f) || 0, visitas: visitas.get(f) || 0 }))
+    fuentes: [...todas].map(f => ({ fuente: f, cuentas: fuentes.get(f) || 0, estimadas: estimadas.get(f) || 0, visitas: visitas.get(f) || 0 }))
       .sort((a, b) => (a.fuente === 'Sin dato') - (b.fuente === 'Sin dato') || b.cuentas - a.cuentas || b.visitas - a.visitas),
     detalles: [...detalles.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k, n]) => ({ detalle: k, cuentas: n })),
     serie: Object.entries(series).filter(([, v]) => v.some(Boolean)).map(([fuente, v]) => ({ fuente, v })),
@@ -211,16 +242,18 @@ function resumen(rango) {
     recientes: cuentas.filter(c => origen.has(c.id)).sort((a, b) => b.ms - a.ms).slice(0, 40).map(c => {
       const o = origen.get(c.id);
       return { id: c.id, nombre: c.nombre, usuario: c.username, avatar: c.avatar || null, desde: new Date(c.ms).toISOString(),
-        fuente: o.fuente, detalle: o.detalle, aterrizaje: o.aterrizaje, campania: o.campania, dispositivo: o.dispositivo };
+        fuente: o.fuente, detalle: o.detalle, aterrizaje: o.aterrizaje || null, campania: o.campania || null, dispositivo: o.dispositivo || null, estimado: !!o.estimado };
     }),
     dominio: dominio(),
   };
 }
 
-// Para la pagina "Miembros" (vincular.js): de donde llego cada cuenta
+// Para la pagina "Miembros" (vincular.js): de donde llego cada cuenta (lo anotado, o si no la estimacion)
 function deCadaUno() {
-  try { return new Map(db.prepare('SELECT user_id, fuente, detalle FROM puente_origenes').all().map(r => [r.user_id, { fuente: r.fuente, detalle: r.detalle }])); }
-  catch { return new Map(); }
+  const out = new Map();
+  try { for (const [id, e] of estimados()) out.set(id, e); } catch { /* sin estimacion */ }
+  try { for (const r of db.prepare('SELECT user_id, fuente, detalle FROM puente_origenes').all()) out.set(r.user_id, { fuente: r.fuente, detalle: r.detalle }); } catch { /* sin la tabla */ }
+  return out;
 }
 
 module.exports = { setup, handle, deCadaUno, clasificar };

@@ -1980,7 +1980,7 @@ html body #right-sidebar #online-users .user-group-label.offline-label { margin-
 /* Con cuatro pestañas en el celular: se corren de costado */
 .pm-celular .pm-pestanas { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .pm-celular .pm-pestana { flex: 0 0 auto; }
-/* Pestaña "Origen" (aviso.js, origenes.js): de donde llega la gente */
+/* De donde llega la gente, en "Estadisticas" (aviso.js, origenes.js) */
 .po-nota { grid-column: 1 / -1; margin-top: 0; }
 .po-leyenda { flex-wrap: wrap; gap: 0.5rem 1rem; }
 .po-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 0.25rem 1rem; }
