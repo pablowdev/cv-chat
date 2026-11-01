@@ -4222,6 +4222,46 @@ document.addEventListener('pointerdown', (ev) => {
     prev.nodeValue = prev.nodeValue.slice(0, -1);
   }
 
+  // Debajo del mensaje, un pedacito del canal (o de alrededor del mensaje), como la vista previa de
+  // cualquier enlace: uno por mensaje, solo en el chat y en los hilos. Tocarlo lleva ahi
+  const vistas = new Map();
+  function vista(a, p, r) {
+    const cont = a.closest('.message-content, .thread-msg-content');
+    if (!cont || !cont.closest('#messages, #thread-panel') || cont.dataset.puenteVista) return;
+    cont.dataset.puenteVista = '1';
+    const tk = token();
+    if (!tk) return;
+    if (!vistas.has(p.key)) {
+      vistas.set(p.key, fetch('/puente/api/mensaje?' + p.q + '&vista=1', { headers: { Authorization: 'Bearer ' + tk } })
+        .then(x => (x.ok ? x.json() : null)).catch(() => null)
+        .then(d => { if (!d) vistas.delete(p.key); return d; }));
+    }
+    vistas.get(p.key).then(d => {
+      if (!d || !d.vista || !d.vista.length || !cont.isConnected || (cont.nextElementSibling && cont.nextElementSibling.classList.contains('puente-vista-chat'))) return;
+      const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+      const box = el('div', 'puente-vista-chat');
+      box.setAttribute('role', 'link'); box.tabIndex = 0; box.title = 'Abrir en CV Chat';
+      box.append(el('div', 'puente-vista-cab', '#' + r.canal));
+      for (const m of d.vista) {
+        const fila = el('div', 'puente-vista-fila' + (m.marcado ? ' marcado' : ''));
+        if (m.foto) { const i = el('img', 'puente-vista-foto'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; fila.append(i); }
+        else fila.append(el('span', 'puente-vista-foto', (m.autor || '?').trim().charAt(0).toUpperCase()));
+        const der = el('div', 'puente-vista-der');
+        const cab = el('div', 'puente-vista-quien');
+        cab.append(el('b', '', m.autor), el('span', '', ' ' + (m.hora || '')));
+        der.append(cab);
+        if (m.texto) der.append(el('div', 'puente-vista-texto', m.texto));
+        if (m.imagen) { const i = el('img', 'puente-vista-imagen'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; der.append(i); }
+        fila.append(der);
+        box.append(fila);
+      }
+      const ir = (e) => { e.preventDefault(); e.stopPropagation(); if (window.app) open(window.app, r); };
+      box.addEventListener('click', ir);
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter') ir(e); });
+      cont.after(box);
+    });
+  }
+
   function label(a) {
     unbracket(a);
     if (a.dataset.puenteEnlace) return;
@@ -4237,6 +4277,7 @@ document.addEventListener('pointerdown', (ev) => {
         a.dataset.discord = a.href;
         a.href = location.origin + '/app?channel=' + r.codigo + (r.mensaje ? '&message=' + r.mensaje : '') + (r.hilo ? '&thread=' + r.hilo : '');
       }
+      if (r.canal) vista(a, p, r);
       if (!showsUrl) return;
       a.title = 'Abrir en CV Chat';
       a.classList.add('puente-enlace-msj');

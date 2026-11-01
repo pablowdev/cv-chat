@@ -16,6 +16,7 @@
 //     del sitio y Opciones -> Configuracion de URL)
 //  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
 // 10. tejemanejes oculto: la compra/venta va en el Marketplace (panel: Foros -> Permisos del canal)
+// 11. La vista previa de los enlaces a los temas: una imagen con un pedacito (panel: Productos y ganchos -> Ganchos)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -298,6 +299,39 @@ if ($teje) {
     $cp->setPermissions($tid, $g, $p);
     $dijo("tejemanejes: oculto para el grupo $g");
   }
+}
+
+// 11. La vista previa de los enlaces al foro (WhatsApp, Telegram, X, CV Chat...): en los temas y los foros, una
+//     imagen con el titulo, quien lo escribio y el principio del texto (tools/puente/vistas.js, en CV Chat). Un
+//     gancho de plantilla en la cabecera (panel: Productos y ganchos -> Ganchos, "CV: vista previa de los enlaces")
+//     con su plantilla (cv_vista_previa); la imagen de siempre (Opciones -> Facebook, "Imagen") pasa a esa plantilla
+//     para el resto de las paginas, asi no quedan dos. Se apaga desde el panel: desactivar el gancho y volver a poner la imagen
+$vpTitulo = 'CV: vista previa de los enlaces';
+if (!$db->getRow('hook', ['title' => $vpTitulo])) {
+  $logo = (string) vB::getDatastore()->getOption('facebookfeedimageurl');
+  if ($logo === '') { fwrite(STDERR, "vista previa: no hay imagen en Opciones -> Facebook: revisar a mano\n"); exit(1); }
+  $tpl = '<vb:comment>La imagen de la vista previa de los enlaces (CV Chat arma la de los temas y los foros: tools/puente/vistas.js)</vb:comment>' . "\n"
+    . '<vb:if condition="$vboptions[\'show_opengraph_tags\']">' . "\n"
+    . '<vb:if condition="!empty($cvnodo) AND !empty($cvurl)">' . "\n"
+    . '	<meta property="og:image" content="https://chat.circulovicioso.club/puente/vista/foro.jpg?u={vb:var cvurl}" />' . "\n"
+    . '	<meta property="og:image:width" content="1200" />' . "\n"
+    . '	<meta property="og:image:height" content="630" />' . "\n"
+    . '	<meta name="twitter:card" content="summary_large_image" />' . "\n"
+    . '<vb:else />' . "\n"
+    . '	<meta property="og:image" content="' . htmlspecialchars($logo) . '" />' . "\n"
+    . '</vb:if>' . "\n"
+    . '</vb:if>';
+  $tl = vB_Library::instance('template');
+  $opts = ['forcenotextonly' => true, 'textonly' => 0];
+  try { $tl->insert(-1, 'cv_vista_previa', $tpl, 'vbulletin', false, '', false, $opts); }
+  catch (vB_Exception_Api $e) { $tl->update($tl->getTemplateID('cv_vista_previa', -1), 'cv_vista_previa', $tpl, 'vbulletin', false, false, '', false, $opts); }
+  // Lo mismo que hace Productos y ganchos -> Agregar gancho (vB_Api_Hook::saveHook pide una sesion del panel)
+  $hk = vB_Api::instanceInternal('Hook');
+  $db->insert('hook', ['hookname' => 'header_head', 'title' => $vpTitulo, 'arguments' => serialize($hk->encodeArguments("cvurl=page.url\ncvnodo=page.nodeid")),
+    'product' => 'vbulletin', 'active' => 1, 'template' => 'cv_vista_previa', 'hookorder' => 10]);
+  vB::getDatastore()->build('hooks', serialize($db->getRows('getHookProductList')), 1);
+  $opcion('facebookfeedimageurl', '');
+  $dijo('vista previa de los enlaces: gancho agregado');
 }
 
 // Que el foro vuelva a leer todo (como Mantenimiento -> Borrar la cache del sistema)

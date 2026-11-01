@@ -128,6 +128,8 @@ function setup(ctx) {
   require('./cifrado.js').setup({ db, io, log, warn, publicUrl, email, campana, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) });
   foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a), campana } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
+  // Las vistas previas de los enlaces (la imagen con un pedacito del chat, del foro o de la web)
+  require('./vistas.js').setup({ db, log, warn, publicUrl });
   // El equipo sin verificacion en dos pasos queda como miembro comun hasta que la prende
   require('./equipo.js').setup({ db, io, log, warn });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
@@ -609,6 +611,10 @@ const STATIC = path.join(__dirname, 'web');
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
+  if (p.startsWith('/puente/vista/')) {
+    const r = await require('./vistas.js').handle(req, res, p, u, { send });
+    if (r !== false) return;
+  }
   if (p.startsWith('/puente/api/auth/codigo')) {
     const r = await dospasos.handle(req, res, p, { json, readJson });
     if (r !== false) return;
@@ -894,7 +900,10 @@ async function handle(req, res) {
     const admin = (db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id) || {}).is_admin;
     const member = ch && db.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').get(ch.id, user.id);
     if (!ch || !(member || (admin && !ch.is_dm))) return json(res, 404, { error: 'no esta' });
-    return json(res, 200, { codigo: ch.code, canal: ch.is_dm ? null : ch.name, mensaje: m ? m.id : null, hilo: m && m.thread_id ? m.thread_id : null });
+    const out = { codigo: ch.code, canal: ch.is_dm ? null : ch.name, mensaje: m ? m.id : null, hilo: m && m.thread_id ? m.thread_id : null };
+    // Con &vista=1, un pedacito del canal (o de alrededor del mensaje) para mostrar debajo del enlace (aviso.js)
+    if (sp.get('vista') === '1' && !ch.is_dm) { try { out.vista = require('./vistas.js').pedacitoDatos(ch, m ? m.id : null); } catch (err) { warn('vistas: pedacito:', err.message); } }
+    return json(res, 200, out);
   }
 
   // Canales con candadito en la lista (accesos.js): solo de los canales que la persona ya ve
@@ -1266,6 +1275,17 @@ function shareTags(html, url) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;
     image = `/puente/tapas/${q[1] || 'juegos'}.jpg`; grande = true;
     enlace = q[1] ? `/app?juegos=${q[1]}` : '/app?juegos';
+  }
+  // Un canal o un mensaje de un canal que ve cualquiera con cuenta: un pedacito del chat (vistas.js)
+  const chq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;
+  if (chq && /^[a-f0-9]{8}$/i.test(chq.get('channel') || '')) {
+    const msg = /^\d+$/.test(chq.get('message') || '') ? chq.get('message') : null;
+    let v = null;
+    try { v = require('./vistas.js').chatEnlace(chq.get('channel'), msg); } catch (err) { warn('vistas: enlace:', err.message); }
+    if (v) {
+      title = `${v.title} · ${title}`; desc = v.desc; image = v.image; grande = true;
+      enlace = `/app?channel=${chq.get('channel')}` + (msg ? `&message=${msg}` : '');
+    }
   }
   if (publicUrl) image = publicUrl + image;
   const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +

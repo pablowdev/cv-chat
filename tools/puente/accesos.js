@@ -362,4 +362,6 @@ function lockedChannelIds() {
   return ids;
 }
 
-module.exports = { setup, onDispatch, recomputeUser, recomputeUnlinked, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled, openToUnlinked: () => OPEN_UNLINKED };
+module.exports = { setup, onDispatch, recomputeUser, recomputeUnlinked, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled, openToUnlinked: () => OPEN_UNLINKED,
+  // Ya estan los roles de Discord (hasta entonces lockedChannelIds no sabe cuales de Discord van con candadito)
+  listo: () => { const g = getGuildId ? getGuildId() : null; return !!(g && roles.has(g)); } };

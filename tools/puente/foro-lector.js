@@ -158,6 +158,18 @@ async function tarjeta(d) {
   }
   return null;
 }
+// Lo que da el lector de un tema, un canal o un miembro, tal cual (vistas.js dibuja la imagen), guardado 10 minutos
+const crudos = new Map();
+async function datos(d) {
+  if (!d || !on()) return null;
+  const k = JSON.stringify(d), c = crudos.get(k);
+  if (c && Date.now() - c.at < 10 * 60 * 1000) return c.data;
+  const r = d.tipo === 'tema' ? await lector(`/tema?id=${d.id}`) : d.tipo === 'canal' ? await lector(`/canal?ruta=${encodeURIComponent(d.ruta)}`) : d.tipo === 'miembro' ? await lector(`/miembro?id=${d.id}`) : null;
+  const data = r ? (r.tema || r.canal || r.miembro || null) : null;
+  crudos.set(k, { at: Date.now(), data });
+  if (crudos.size > 1000) crudos.delete(crudos.keys().next().value);
+  return data;
+}
 const cache = new Map();
 async function vistaPrevia(enlace) {
   const d = nodoDe(enlace);
@@ -200,4 +212,4 @@ async function handle(req, res, p, u) {
   catch (err) { warn('foro: buscar:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
 }
 
-module.exports = { setup, handle, vistaPrevia, nodoDe, on };
+module.exports = { setup, handle, vistaPrevia, nodoDe, on, datos };
