@@ -37,20 +37,36 @@ if (!$volver) {
   preg_match_all('/<template name="([^"]+)"[^>]*><!\[CDATA\[(.*?)\]\]><\/template>/s', $xml, $t, PREG_SET_ORDER);
   // vBulletin guarda las plantillas con CRLF y sin el salto del final
   $norm = fn($s) => trim(str_replace("\r\n", "\n", $s));
-  // A veces la primera subida deja una plantilla como estaba: se sube de nuevo hasta que todo quede
-  // como dice el XML (subirlo dos veces da lo mismo)
-  for ($vez = 1; ; $vez++) {
-    try {
-      xml_import_style($xml, $ya ? (int)$ya['styleid'] : -1, PADRE, TITULO, true, 2, true, null, null, true);
-    } catch (Exception $e) { fwrite(STDERR, 'no se pudo subir: ' . $e->getMessage() . "\n"); exit(1); }
-    $ya = $db->getRow('style', ['title' => TITULO]);
-    if (!$ya) { fwrite(STDERR, "no quedo el estilo\n"); exit(1); }
-    $mal = 0;
-    foreach ($m as [, $id, $v]) { $r = $db->getRow('stylevar', ['styleid' => $ya['styleid'], 'stylevarid' => $id]); if (!$r || $r['value'] !== base64_decode($v)) $mal++; }
-    foreach ($t as [, $id, $v]) { $r = $db->getRow('template', ['styleid' => $ya['styleid'], 'title' => $id]); if (!$r || $norm($r['template_un']) !== $norm($v)) $mal++; }
-    if (!$mal) break;
-    if ($vez === 3) { fwrite(STDERR, "$mal variables o plantillas no quedaron como en el XML\n"); exit(1); }
+  // Al pisar un estilo que ya esta, si cambian sus datos (la fecha del XML, por ejemplo) vBulletin
+  // 5.7.5 se confunde y sube las plantillas y variables al estilo 1 ("Default Style"): se dejan antes
+  // los datos como los va a poner, asi no cambia nada y sube todo al estilo que es
+  if ($ya) {
+    preg_match('/<style [^>]*dateline="(\d+)"/', $xml, $d);
+    $db->update('style', ['title' => TITULO, 'parentid' => PADRE, 'displayorder' => 2, 'userselect' => 1,
+      'styleattributes' => vB_Library_Style::ATTR_DEFAULT, 'dateline' => (int)($d[1] ?? 0)], ['styleid' => $ya['styleid']]);
   }
+  // Lo que ya hay en los demas estilos, para ver despues que no se toco
+  $otros = function () use ($vbulletin, $ya) {
+    $id = $ya ? (int)$ya['styleid'] : 0; $h = '';
+    foreach (["SELECT styleid, stylevarid, value FROM " . TABLE_PREFIX . "stylevar WHERE styleid <> $id ORDER BY styleid, stylevarid",
+      "SELECT styleid, title, MD5(template_un) FROM " . TABLE_PREFIX . "template WHERE styleid NOT IN (-1, -10, $id) ORDER BY styleid, title"] as $sql) {
+      $q = $vbulletin->db->query_read($sql);
+      while ($r = $vbulletin->db->fetch_row($q)) $h = md5($h . implode('|', $r));
+    }
+    return $h;
+  };
+  $antes = $otros();
+  try {
+    xml_import_style($xml, $ya ? (int)$ya['styleid'] : -1, PADRE, TITULO, true, 2, true, null, null, true);
+  } catch (Exception $e) { fwrite(STDERR, 'no se pudo subir: ' . $e->getMessage() . "\n"); exit(1); }
+  $nuevo = !$ya;
+  $ya = $db->getRow('style', ['title' => TITULO]);
+  if (!$ya) { fwrite(STDERR, "no quedo el estilo\n"); exit(1); }
+  if (!$nuevo && $otros() !== $antes) { fwrite(STDERR, "la subida toco otros estilos: revisar (hay copia antes de correr esto?)\n"); exit(1); }
+  $mal = 0;
+  foreach ($m as [, $id, $v]) { $r = $db->getRow('stylevar', ['styleid' => $ya['styleid'], 'stylevarid' => $id]); if (!$r || $r['value'] !== base64_decode($v)) $mal++; }
+  foreach ($t as [, $id, $v]) { $r = $db->getRow('template', ['styleid' => $ya['styleid'], 'title' => $id]); if (!$r || $norm($r['template_un']) !== $norm($v)) $mal++; }
+  if ($mal) { fwrite(STDERR, "$mal variables o plantillas no quedaron como en el XML\n"); exit(1); }
   echo "estilo " . $ya['styleid'] . " subido (" . count($m) . " variables, " . count($t) . " plantillas)\n";
 }
 if ($pred || $volver) {
