@@ -12,7 +12,8 @@
 //  6. Textos que estaban en ingles, en castellano (panel: Idiomas y frases -> Buscar frases)
 //  7. El codigo [tweet], seguro (tweet.html): el enlace va en un atributo y no adentro del codigo, y solo
 //     se arma el tweet si es un enlace de twitter.com o x.com (panel: Codigos BB -> Codigos BB propios)
-//  8. Las direcciones de los foros sin tildes ni simbolos; las viejas siguen andando (Constructor del sitio)
+//  8. Las direcciones de los foros y de los temas sin tildes ni simbolos; las viejas siguen andando (Constructor
+//     del sitio y Opciones -> Configuracion de URL)
 //  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
 //
 // Uso: php ajustes.php
@@ -164,6 +165,14 @@ $frases = [
   'navbarlinks' => [
     'navbar_mark_channels_read' => 'Marcar todo como leído',
   ],
+  // Los botones de arriba del menu del panel: en castellano no entraban y se cortaban (tablet, celu)
+  'cpglobal' => [
+    'save_prefs' => 'Guardar menú',
+  ],
+  'cphome' => [
+    'revert_prefs' => 'Revertir menú',
+    'control_panel_home' => 'Inicio del panel',
+  ],
 ];
 $n = 0;
 foreach ($frases as $campo => $lista) foreach ($lista as $var => $texto) {
@@ -211,6 +220,20 @@ foreach ($rutas as $r) {
   vB5_Route::updateRoute((int)$r['routeid'], ['prefix' => $cand]);
   $dijo("direccion: {$r['prefix']} -> $cand");
 }
+
+// 8b. Los temas, tambien sin tildes: la opcion de vBulletin "Usar caracteres ASCII en las URL" (Opciones ->
+//     Configuracion de URL) para lo nuevo, y lo que ya estaba armado de nuevo con la misma funcion de vBulletin
+//     (con la opcion prendida). vBulletin busca cada tema por su numero, asi que los enlaces viejos siguen andando
+if ($opcion('asciiurls', 1)) { vB::getDatastore()->build_options(); $dijo('direcciones: opcion de solo ASCII prendida'); }
+$q = $vbulletin->db->query_read("SELECT nodeid, title, urlident FROM " . TABLE_PREFIX . "node WHERE urlident REGEXP '[^ -~]' AND title <> ''");
+$n = 0;
+while ($r = $vbulletin->db->fetch_array($q)) {
+  $nueva = vB_String::getUrlIdent(vB_String::unHtmlSpecialChars($r['title']));
+  if ($nueva === '' || $nueva === $r['urlident'] || preg_match('/[^ -~]/', $nueva)) continue;
+  $db->update('vBForum:node', ['urlident' => $nueva], ['nodeid' => (int)$r['nodeid']]);
+  $n++;
+}
+if ($n) $dijo("direcciones: $n temas sin tildes");
 
 // 9. El foro que se actualiza solo (tools/puente/web/foro-vivo.js, desde CV Chat): un anuncio en el
 //    "modulo de HTML de cabecera", que esta en todas las paginas. Se apaga o se borra desde el
