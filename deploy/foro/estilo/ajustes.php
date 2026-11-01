@@ -15,7 +15,7 @@
 //  8. Las direcciones de los foros y de los temas sin tildes ni simbolos; las viejas siguen andando (Constructor
 //     del sitio y Opciones -> Configuracion de URL)
 //  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
-// 10. tejemanejes de archivo: la compra/venta va en el Marketplace (panel: Foros -> Permisos del canal)
+// 10. tejemanejes oculto: la compra/venta va en el Marketplace (panel: Foros -> Permisos del canal)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -90,6 +90,16 @@ if ($ultimos) {
   $cfg['resultsPerPage'] = '5';
   // los temas con la ultima respuesta mas nueva, de cualquier fecha (asi nunca queda vacio)
   $cfg['searchJSON'] = '{"starter_only":1,"sort":{"lastcontent":"desc"},"view":"topic","exclude_type":["vBForum_PrivateMessage"],"approved_only":1,"has_answer":"-1"}';
+  // de todos los foros (los nuevos tambien) menos tejemanejes, que quedo oculto (paso 10): asi no sale ni
+  // para los superadministradores, que ven todo. Es "Canales: excluir" del modulo. Blogs, grupos, articulos
+  // y albumes afuera, como con "Foro" solo
+  $cl = vB_Library::instance('content_channel');
+  $fuera = [];
+  foreach ([vB_Channel::DEFAULT_BLOG_PARENT, vB_Channel::DEFAULT_SOCIALGROUP_PARENT, vB_Channel::DEFAULT_ARTICLE_PARENT, vB_Channel::ALBUM_CHANNEL] as $guid)
+    if ($id = (int)$cl->fetchChannelIdByGUID($guid)) $fuera[] = $id;
+  $t = $db->getRow('vBForum:node', ['parentid' => 26, 'urlident' => 'tejemanejes']);
+  if ($t) $fuera[] = (int)$t['nodeid'];
+  $cfg['module_filter_nodes'] = ['exclude' => $fuera, 'include_children' => true];
   $db->update('widgetinstance', ['adminconfig' => serialize($cfg)], ['widgetinstanceid' => 7]);
   // arriba de todo en la columna principal (la seccion 0), antes de la lista de foros
   if ((int)$ultimos['displaysection'] !== 0 || (int)$ultimos['displayorder'] !== 0) {
@@ -108,6 +118,15 @@ if ($db->getRow('widgetinstance', ['widgetinstanceid' => 10, 'pagetemplateid' =>
 if ($db->getRow('widgetinstance', ['widgetinstanceid' => 6, 'pagetemplateid' => 1])) {
   vB_Library::instance('widget')->deleteWidgetInstances([6]);
   $dijo('portada: sin el recuadro de bienvenida');
+}
+// sin esos dos, la columna de la derecha quedo vacia: la portada a una sola columna, para que lo de abajo
+// ocupe todo el ancho de la cabecera (Constructor del sitio -> Editar pagina -> Diseño "Completo")
+$completo = $db->getRow('screenlayout', ['varname' => 'full']);
+$plantilla = $db->getRow('pagetemplate', ['pagetemplateid' => 1]);
+if ($completo && $plantilla && (int)$plantilla['screenlayoutid'] !== (int)$completo['screenlayoutid']
+    && !$db->getRow('widgetinstance', ['pagetemplateid' => 1, 'displaysection' => 1])) {
+  $db->update('pagetemplate', ['screenlayoutid' => (int)$completo['screenlayoutid']], ['pagetemplateid' => 1]);
+  $dijo('portada: una sola columna');
 }
 $widgets->clearCaches();
 
@@ -255,9 +274,7 @@ if (!$db->getRow('ad', ['title' => $vivoTitulo])) {
   $dijo('foro en vivo: agregado (modulo de HTML de cabecera)');
 }
 
-// 10. tejemanejes, de archivo: la compra/venta se mudo al Marketplace de CV Chat. Los temas viejos se siguen
-//     leyendo, pero no se abren temas ni se responde (panel: Foros -> Permisos del canal; administradores y
-//     super moderadores quedan como estaban). Se vuelve a abrir desde ahi, borrando esos permisos del canal
+// 10. tejemanejes: la compra/venta se mudo al Marketplace de CV Chat (panel: Foros -> Permisos del canal)
 $teje = $db->getRow('vBForum:node', ['parentid' => $foroRaiz, 'urlident' => 'tejemanejes']);
 if ($teje) {
   $tid = (int)$teje['nodeid'];
@@ -267,15 +284,19 @@ if ($teje) {
     if (is_array($r) && isset($r['errors'])) { fwrite(STDERR, 'no se pudo cambiar tejemanejes: ' . json_encode($r['errors']) . "\n"); exit(1); }
     $dijo('tejemanejes: descripcion de archivo');
   }
+  // Oculto del todo, para todos (tambien administradores): no se ve, no se busca y no sale en "Ultimos temas"
+  // ni en lo nuevo. Los temas quedan guardados; se vuelve a mostrar borrando estos permisos del canal
   $cp = vB_ChannelPermission::instance();
-  $sinPublicar = 16 | 32 | 16384; // canpostnew, canreply, canpostpoll
+  $oculto = 1 | 2 | 4 | 524288 | 16 | 32 | 16384; // canview, canviewothers, cansearch, canviewthreads, canpostnew, canreply, canpostpoll
   foreach ($db->assertQuery('vBForum:permission', ['nodeid' => 1]) as $raiz) {
     $g = (int)$raiz['groupid'];
-    if (in_array($g, [5, 6], true) || $db->getRow('vBForum:permission', ['nodeid' => $tid, 'groupid' => $g])) continue;
+    $quiero = (int)$raiz['forumpermissions'] & ~$oculto;
+    $ya = $db->getRow('vBForum:permission', ['nodeid' => $tid, 'groupid' => $g]);
+    if ($ya && (int)$ya['forumpermissions'] === $quiero) continue;
     $p = $raiz; unset($p['permissionid'], $p['nodeid'], $p['groupid']);
-    $p['forumpermissions'] = (int)$p['forumpermissions'] & ~$sinPublicar;
+    $p['forumpermissions'] = $quiero;
     $cp->setPermissions($tid, $g, $p);
-    $dijo("tejemanejes: grupo $g sin abrir temas ni responder");
+    $dijo("tejemanejes: oculto para el grupo $g");
   }
 }
 
