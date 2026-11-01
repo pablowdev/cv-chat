@@ -9001,7 +9001,7 @@ document.addEventListener('pointerdown', (ev) => {
       r.addEventListener('click', fn);
       return r;
     };
-    const rules = (m) => `A ${m.puntos} · ${m.flor ? 'con flor' : 'sin flor'}`;
+    const rules = (m) => `A ${m.puntos} · ${m.flor ? 'con flor' : 'sin flor'}${m.libre ? ' · sin límite' : ''}`;
     section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => joinGame(a.id)));
     section('Tus partidas', d.mias, (m) => {
       const who = m.rival || m.invitado || { nombre: '?' };
@@ -9040,7 +9040,7 @@ document.addEventListener('pointerdown', (ev) => {
     page.appendChild(head('Nueva partida'));
     const b = el('div', 'jg-cuerpo'); page.appendChild(b);
     const f = el('div', 'jg-form'); b.appendChild(f);
-    const data = { puntos: 30, flor: false, modo: 'abierta', rival: null };
+    const data = { puntos: 30, flor: false, libre: true, modo: 'abierta', rival: null };
     const seg = (label, key, opts, onChange) => {
       const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
       const s = el('div', 'jg-seg');
@@ -9053,6 +9053,10 @@ document.addEventListener('pointerdown', (ev) => {
     };
     seg('A cuántos puntos', 'puntos', [[15, 'A 15'], [30, 'A 30']]);
     seg('Flor', 'flor', [[false, 'Sin flor'], [true, 'Con flor']]);
+    // Sin limite: cada uno juega cuando puede (te avisa al celular cuando te toca)
+    const THINT = { true: 'Cada uno juega cuando puede: te avisa al celular cuando te toca. Si pasan 7 días sin que juegues, perdés por abandono.', false: 'Para jugar en el momento: 2 minutos por jugada; si se te pasa, la compu juega por vos.' };
+    seg('Tiempo', 'libre', [[true, 'Sin límite'], [false, '2 min por jugada']], () => { th.textContent = THINT[data.libre]; });
+    const th = el('div', 'jg-ayuda', THINT.true); f.appendChild(th);
     seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; hint.textContent = HINT[data.modo]; });
     const HINT = {
       abierta: 'La mesa queda en la sala y la toma el primero que quiera jugar.',
@@ -9093,7 +9097,7 @@ document.addEventListener('pointerdown', (ev) => {
       err.textContent = '';
       if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
       go2.disabled = true;
-      const r = await emit('truco:crear', { puntos: data.puntos, flor: data.flor, modo: data.modo, rival: data.rival && data.rival.id });
+      const r = await emit('truco:crear', { puntos: data.puntos, flor: data.flor, libre: data.libre, modo: data.modo, rival: data.rival && data.rival.id });
       go2.disabled = false;
       if (r.error) { err.textContent = r.error; return; }
       if (data.modo === 'desafio') { challenge(data.rival, r.id, data); return; }
@@ -9104,7 +9108,7 @@ document.addEventListener('pointerdown', (ev) => {
   // Mensaje directo al desafiado, con el enlace ya escrito (sin mandar)
   function challenge(p, id, data) {
     const a = app();
-    const text = `¡Te desafío a un truco a ${data.puntos}${data.flor ? ' con flor' : ''}! Entrá acá: ${location.origin}/app?truco=${id}`;
+    const text = `¡Te desafío a un truco a ${data.puntos}${data.flor ? ' con flor' : ''}${data.libre ? ', sin límite de tiempo (jugamos cuando podamos)' : ''}! Entrá acá: ${location.origin}/app?truco=${id}`;
     let done = false;
     const fill = () => {
       if (done) return; done = true;
@@ -9179,7 +9183,7 @@ document.addEventListener('pointerdown', (ev) => {
     botonSalir(mesa.menu, s);
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && mesa && mesa.id === s.id) { stack.pop(); go('mesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
-    if (t) t.textContent = `Truco a ${s.puntos} · ${s.flor ? 'con flor' : 'sin flor'}`;
+    if (t) t.textContent = `Truco a ${s.puntos} · ${s.flor ? 'con flor' : 'sin flor'}${s.libre ? ' · sin límite' : ''}`;
     // La mesa es la parte de la izquierda (se arma de nuevo en cada cambio); el costado con el
     // tanteador de fosforos y el chat se arma una sola vez, asi no se pierde lo que se esta escribiendo
     const b0 = page.querySelector('.jg-mesa');

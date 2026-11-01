@@ -1,13 +1,14 @@
 // Truco argentino (parte del puente), para la seccion Juegos de la app.
 // 1 contra 1, contra otra persona o contra la compu, a 15 o 30 puntos, con o
-// sin flor. El servidor reparte (sorteo con crypto), conoce las reglas y decide
+// sin flor, con 2 minutos por jugada o sin limite (cada uno juega cuando puede y le
+// avisa al celular cuando le toca; si pasan 7 dias sin que juegue, pierde por abandono). El servidor reparte (sorteo con crypto), conoce las reglas y decide
 // que puede hacer cada uno: a cada jugador le manda solo lo que puede ver (nunca
 // las cartas del otro). Las partidas en curso se guardan en la base (sobreviven
 // a un reinicio) y las terminadas quedan para las estadisticas y el ranking.
 //
 // Por el socket de Haven (con respuesta):
 //   truco:inicio                      -> { abiertas, mias, ranking, stats }
-//   truco:crear  { puntos, flor, modo: 'abierta'|'compu'|'desafio', rival }
+//   truco:crear  { puntos, flor, modo: 'abierta'|'compu'|'desafio', rival, libre }
 //   truco:unirse { id }   truco:cancelar { id }   truco:ver { id }
 //   truco:accion { id, tipo, carta?, grito? }   (jugar, truco, retruco, vale4,
 //       envido, real, falta, flor, quiero, noquiero, mazo, grito, abandonar, revancha,
@@ -26,6 +27,7 @@ const crypto = require('crypto');
 const BOT = -1;
 const BOT_NAME = 'La Compu';
 const TURNO_MS = 2 * 60 * 1000;
+const LIBRE_MS = 7 * 24 * 3600e3; // sin limite: si el que tiene que jugar no juega en 7 dias, pierde por abandono
 const PALOS = ['espada', 'basto', 'oro', 'copa'];
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
 const GRITOS = ['¡Mirá lo que tengo!', '¡Qué suerte!', 'Buena jugada', 'Jajaja', 'Dale que se enfría', 'Me voy a dormir', '¿Y ahora?', 'Uh, me la hiciste'];
@@ -61,7 +63,7 @@ function setup(ctx) {
       if (g.estado === 'terminada' && Date.now() - (g.fin || 0) > 3600e3) { db.prepare('DELETE FROM puente_truco_mesas WHERE id = ?').run(r.id); continue; }
       if (g.estado === 'esperando' && Date.now() - g.creado > 24 * 3600e3) { db.prepare('DELETE FROM puente_truco_mesas WHERE id = ?').run(r.id); continue; }
       games.set(g.id, g);
-      if (g.estado === 'jugando') { g.deadline = Date.now() + TURNO_MS; arm(g); }
+      if (g.estado === 'jugando') { g.deadline = g.libre ? null : Date.now() + TURNO_MS; arm(g); }
     } catch { /* fila rota */ }
   }
   setInterval(sweep, 10 * 60 * 1000).unref();
@@ -138,6 +140,11 @@ function sweep() {
   const now = Date.now();
   for (const g of [...games.values()]) {
     if (g.estado === 'terminada' && now - (g.fin || 0) > 3600e3) drop(g);
+    else if (g.estado === 'jugando' && g.libre && now - (g.movido || g.inicio || now) > LIBRE_MS && g.jugadores[actor(g)] !== BOT) {
+      const i = actor(g);
+      note(g, `${nameOf(g.jugadores[i]).nombre} no jugó en 7 días.`);
+      finish(g, other(i), 'abandono'); push(g, true);
+    }
     else if (g.estado === 'esperando' && now - g.creado > 24 * 3600e3) { drop(g); changed(); }
   }
 }
@@ -155,12 +162,12 @@ function create(me, d) {
   const g = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos, flor: !!d.flor, publica: modo === 'abierta',
     invitado: rival, compu: modo === 'compu', jugadores: [me], puntaje: [0, 0], manoDe: 0, manos: 0,
-    estado: 'esperando', log: [], grito: null, revancha: [false, false], timeouts: [0, 0],
+    estado: 'esperando', log: [], grito: null, revancha: [false, false], timeouts: [0, 0], libre: d.libre !== false,
   };
   games.set(g.id, g);
   if (modo === 'compu') { g.jugadores.push(BOT); start(g); }
   else { save(g); changed(); }
-  log(`truco: ${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''})`);
+  log(`truco: ${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''}${g.libre ? ', sin límite' : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -540,7 +547,7 @@ function handWinner(r, mano) {
 
 function rematch(g) {
   const n = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos: g.puntos, flor: g.flor, publica: false, invitado: null, compu: g.compu,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos: g.puntos, flor: g.flor, libre: !!g.libre, publica: false, invitado: null, compu: g.compu,
     jugadores: g.jugadores.slice(), puntaje: [0, 0], manoDe: 0, manos: 0, estado: 'esperando', log: [], grito: null, revancha: [false, false], timeouts: [0, 0],
   };
   games.set(n.id, n);
@@ -552,7 +559,8 @@ function rematch(g) {
 
 // ── Despues de cada cambio: guardar, avisar, el reloj y la compu ──
 function tick(g) {
-  g.deadline = g.estado === 'jugando' ? Date.now() + TURNO_MS : null;
+  g.deadline = g.estado === 'jugando' && !g.libre ? Date.now() + TURNO_MS : null;
+  g.movido = Date.now();
   arm(g);
   push(g, false);
 }
@@ -562,6 +570,7 @@ function arm(g) {
   if (g.estado !== 'jugando') return;
   const who = actor(g);
   if (g.jugadores[who] === BOT) { timers.set(g.id, setTimeout(() => botMove(g), 900 + crypto.randomInt(900) + Math.max(0, (g.pausa || 0) - Date.now()))); return; }
+  if (g.libre) return; // sin limite: nadie juega por vos (sweep, a los 7 dias)
   timers.set(g.id, setTimeout(() => timeout(g), Math.max(1000, (g.deadline || Date.now()) - Date.now())));
 }
 
@@ -642,7 +651,7 @@ function view(g, me) {
   const o = other(pov);
   const P = g.jugadores.map(nameOf);
   const out = {
-    id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, compu: g.compu, publica: g.publica,
+    id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, compu: g.compu, publica: g.publica,
     yo: P[pov] ? { ...P[pov], puntos: g.puntaje[pov] } : null, rival: P[o] ? { ...P[o], puntos: g.puntaje[o] } : null,
     invitado: g.invitado ? nameOf(g.invitado) : null, soyJugador: i >= 0, soyCreador: g.jugadores[0] === me,
     log: g.log.slice(-6).map(x => x.text), grito: g.grito && Date.now() - g.grito.t < 6000 ? { mio: g.grito.de === pov, text: g.grito.text } : null,
@@ -697,7 +706,7 @@ function notifyTurn(g) {
   const rival = nameOf(g.jugadores[other(actor(g))]).nombre;
   const payload = JSON.stringify({ title: 'Truco', body: `Te toca contra ${rival}`, url: `/app?truco=${g.id}`, tag: 'truco-' + g.id, __puente: 1 });
   for (const sub of db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(uid)) {
-    webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 600 }).catch(() => {});
+    webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: g.libre ? 24 * 3600 : 600 }).catch(() => {});
   }
 }
 
@@ -726,13 +735,13 @@ function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, puntos: g.puntos, flor: g.flor, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
+    .map(g => ({ id: g.id, puntos: g.puntos, flor: g.flor, libre: !!g.libre, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
   const mias = all.filter(g => g.jugadores.includes(me) && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const i = seat(g, me), o = other(i);
       return {
-        id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, compu: g.compu, rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null,
+        id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, compu: g.compu, rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null,
         invitado: g.invitado ? nameOf(g.invitado) : null, yo: g.puntaje[i], el: g.puntaje[o],
         teToca: g.estado === 'jugando' && actor(g) === i, ganaste: g.estado === 'terminada' ? g.ganador === i : null,
       };
@@ -742,4 +751,4 @@ function lobby(me) {
   return { abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, BOT } };
+module.exports = { setup, stats, _test: { rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };
