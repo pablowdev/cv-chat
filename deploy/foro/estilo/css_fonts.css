@@ -1,0 +1,6 @@
+<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
+@font-face {
+	font-family: "Redaction 35";
+	src: url("https://circulovicioso.club/fonts/Redaction35-Regular.otf") format("opentype");
+	font-display: swap;
+}

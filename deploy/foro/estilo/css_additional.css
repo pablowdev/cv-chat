@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
+<vb:comment>/* Circulo Vicioso: lo que las variables de estilo no alcanzan. Los colores salen de la paleta
+   (Variables de estilo -> global_palette_*), asi que se cambian desde el panel */</vb:comment>
+
+<vb:comment>/* Cabecera y menu: recuadros con borde fino, como la web */</vb:comment>
+#header { border: 1px solid {vb:stylevar global_palette_text_01.color}; border-bottom: 0; }
+#channel-tabbar { border: 1px solid {vb:stylevar global_palette_text_01.color}; }
+#channel-tabbar li { border-right: 1px solid {vb:stylevar global_palette_text_01.color}; }
+#channel-tabbar li a { font-style: italic; font-weight: 700; letter-spacing: .04em; }
+#channel-subtabbar { border: 1px solid rgba(243, 247, 226, .18); border-top: 0; }
+#channel-subtabbar a:hover { color: {vb:stylevar global_palette_accent_02.color}; }
+
+<vb:comment>/* Titulos: la serif grande de la web; los de cada recuadro, chicos y en rosa */</vb:comment>
+.main-title, h1.main-title, .b-post__title, .widget-header .main-title { letter-spacing: .01em; }
+.widget-header .module-title, .b-module .widget-header h1, .widget-header h2 { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+
+<vb:comment>/* Tablas de foros y temas */</vb:comment>
+.forum-list-container th, .topic-list-container th, .forum-list-header, .topic-list-header { text-transform: uppercase; letter-spacing: .06em; }
+.forum-list-container tr:hover td, .topic-list-container tr:hover td { background-color: {vb:stylevar global_palette_fill_02.color}; }
+.lastpost .username, .lastpost-by a, .b-post__author .author, .b-userinfo__details .author a { color: {vb:stylevar global_palette_accent_02.color}; }
+
+<vb:comment>/* Botones planos, rectos y en mayusculas, como los de la web */</vb:comment>
+.b-button, .b-button--primary, .b-button--secondary, .b-button--special, .b-button--primary-light { background-image: none; border-radius: 0; text-transform: uppercase; letter-spacing: .04em; }
+.b-button--secondary { border: 1px solid {vb:stylevar global_palette_text_01.color}; }
+.b-comp-menu-dropdown .b-comp-menu-dropdown__content-item a { text-decoration: none; }
+.b-post-control__bubble-flyout { background: {vb:stylevar global_palette_accent_01.color}; color: {vb:stylevar global_palette_text_01.color}; border: 1px solid {vb:stylevar global_palette_accent_01.color}; }
+.b-post-control__bubble-flyout u, .b-post-control__bubble-flyout i { border-right-color: {vb:stylevar global_palette_accent_01.color}; }
+
+<vb:comment>/* Los mensajes: la letra comoda, mas grande y con aire */</vb:comment>
+.b-post__content, .js-post__content-text { font-size: 1.5rem; line-height: 1.6; }
+.b-post { border: 1px solid rgba(243, 247, 226, .18); }
+.bbcode_quote { border-left: 3px solid {vb:stylevar global_palette_accent_02.color}; }
+
+<vb:comment>/* Los iconos verdes de cada foro, en rosa */</vb:comment>
+.forum-icon, .b-icon__forum, .icon-forum { filter: hue-rotate(-140deg) saturate(1.6); }
+
+<vb:comment>/* Lo que vBulletin trae en azul fijo: el "le gusta" del celu, el registro, la busqueda avanzada y el calendario */</vb:comment>
+.l-small .b-post-control--responsive, #regStep2Btn, form.vbform.block .blockfoot input { background-color: {vb:stylevar global_palette_accent_02.color}; color: {vb:stylevar global_palette_text_01.color}; border-radius: 0; }
+div.sb-dialog.advancedSearchFields a { color: {vb:stylevar global_palette_accent_02.color}; }
+.flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange, .flatpickr-day.selected:hover { background: {vb:stylevar global_palette_accent_02.color}; border-color: {vb:stylevar global_palette_accent_02.color}; }
+body .profile_sidebar_content .b-button.b-button--primary { background: {vb:stylevar global_palette_accent_02.color}; border-color: {vb:stylevar global_palette_accent_02.color}; }
+
+<vb:comment>/* Los avisos de error: el rosa claro de vBulletin no se leia con letra clara */</vb:comment>
+.error { background: {vb:stylevar global_palette_fill_02.color}; border: 1px solid {vb:stylevar global_palette_accent_02.color}; border-radius: 0; color: {vb:stylevar global_palette_text_01.color}; }

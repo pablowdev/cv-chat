@@ -3,6 +3,8 @@
 # igual (/cuenta, /legal, /full-fat-search...), y lo que no existe muestra el 404 propio.
 :80 {
 	root * /srv
+	# Las letras de la web tambien las usa el estilo del foro (deploy/foro/estilo)
+	header /fonts/* Access-Control-Allow-Origin "https://foro.circulovicioso.club"
 	@wiki path /wiki /wiki/ /wiki/* /wiki-categorias/*
 	rewrite @wiki /wiki.html
 	try_files {path} {path}.html

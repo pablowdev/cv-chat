@@ -44,6 +44,30 @@ En el Caddy de CV Chat: el servicio `caddy` también en la red `foro-frente` (ex
 El sitio principal (`../sitio`) son páginas fijas servidas por un Caddy chico de solo lectura en la misma
 red `foro-frente`.
 
+## El estilo "Círculo Vicioso"
+
+El foro usa un estilo propio (`estilo/`), hijo del Dark con el logo del club, con los colores y las letras
+de la web: fondo bordó oscuro, crema, rosa, Space Mono en menús y botones, la serif Redaction en los
+títulos e Inter en los mensajes. Es un estilo normal de vBulletin: se cambia desde el panel (Estilos →
+Administrador de estilos → Círculo Vicioso). Casi todo sale de la paleta (variables `global_palette_*`);
+lo que las variables no alcanzan está en la plantilla `css_additional.css`.
+
+- `estilo-cv.xml`: el estilo, como lo exporta el panel (Estilos → Descargar/Subir). Se puede subir desde ahí.
+- `generar.php`: lo arma desde el Dark (le pasa los colores a la paleta de la web) y los dos `.css`.
+- `instalar.php`: lo sube como el estilo "Círculo Vicioso" (o lo pisa si ya está) y rehace las hojas de estilo.
+  Con `--predeterminado` queda como el de todos; con `--volver` vuelve el Dark (el estilo nuevo queda, sin usar).
+
+Se corren montando la carpeta en `/estilo`, como el actualizador de abajo (sin `:ro` para `generar.php`):
+
+```
+docker run --rm --network foro-datos --user 33:33 -v /opt/foro/codigo:/var/www/html:ro \
+  -v /opt/foro/escribible/cache:/var/www/html/cache -v /opt/foro/escribible/core-cache:/var/www/html/core/cache \
+  -v /ruta/a/estilo:/estilo:ro -w /var/www/html/core foro-web:local php /estilo/instalar.php --predeterminado /estilo
+```
+
+La serif viene de `circulovicioso.club/fonts`, que por eso deja que el foro la use (`../sitio/Caddyfile`).
+Si se cambia el estilo desde el panel, conviene volver a exportarlo a `estilo-cv.xml`.
+
 ## Actualizar vBulletin
 
 1. Copiar el `upload/` del paquete nuevo en `codigo/`, sin pisar `config.php` ni `core/includes/config.php`.
