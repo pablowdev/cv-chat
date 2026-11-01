@@ -40,6 +40,7 @@
 //  GET  /puente/api/mercado/reputacion?u
 //  GET  /puente/api/mercado/pendientes
 //  GET  /puente/api/mercado/personas?q  (para elegir a quien se le vendio)
+//  GET  /puente/api/mercado/portada.jpg (sin sesion: la imagen de la vista previa del Marketplace)
 //  GET  /puente/api/mercado/admin       (administradores: ventas, opiniones, publicaciones, denuncias)
 
 const fs = require('fs');
@@ -329,6 +330,73 @@ function vistaPrevia(id) {
     image: f ? (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + URL_DIR + f : undefined };
 }
 
+// La portada: la vista previa de un enlace al Marketplace entero (la web sin ?id, o /app?mercado), con
+// una imagen armada con las ultimas publicaciones (/puente/api/mercado/portada.jpg, tambien el og:image
+// de la pagina). Las activas con foto, de la mas nueva; si faltan, las vencidas, apagadas
+function esPortada(enlace, chatHost) {
+  try {
+    const t = new URL(enlace);
+    if (t.host === chatHost && /^\/app(?:\.html)?$/.test(t.pathname)) return t.searchParams.has('mercado') && !t.searchParams.get('mercado');
+    return !!DOMINIO() && (t.hostname === DOMINIO() || t.hostname === 'www.' + DOMINIO()) && /^\/marketplace\/?$/.test(t.pathname) && !t.searchParams.get('id');
+  } catch { return false; }
+}
+const PORTADA = 6;
+function portadaItems() {
+  const corte = now() - DURA;
+  const de = (cond, n) => db.prepare(`SELECT id, titulo, precio, moneda, fotos, renovado FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND fotos != '[]' AND ${cond} ORDER BY renovado DESC LIMIT ?`).all(corte, n);
+  const activas = de('renovado >= ?', PORTADA).filter(r => fotosOf(r).length);
+  const vencidas = activas.length < PORTADA ? de('renovado < ?', PORTADA - activas.length).filter(r => fotosOf(r).length).map(r => ({ ...r, vencida: true })) : [];
+  return activas.concat(vencidas);
+}
+function vistaPortada() {
+  const corte = now() - DURA;
+  const n = db.prepare("SELECT COUNT(*) n FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ?").get(corte).n;
+  const ult = db.prepare("SELECT titulo, precio, moneda FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ? ORDER BY renovado DESC LIMIT 4").all(corte);
+  const v = crypto.createHash('sha1').update(portadaItems().map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',')).digest('hex').slice(0, 10);
+  return { siteName: 'Marketplace · CV Chat', accentColor: '#ee2d6f', title: 'Marketplace de Círculo Vicioso',
+    description: (n ? `${n} ${n === 1 ? 'publicación activa' : 'publicaciones activas'}. Lo último: ` + ult.map(r => `${r.titulo} (${precioTexto(r)})`).join(' · ')
+      : 'La compra, venta y servicios entre los miembros del club.'),
+    image: (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + '/puente/api/mercado/portada.jpg?v=' + v };
+}
+let portadaHecha = null; // { clave, buf }
+async function portadaJpg() {
+  const items = portadaItems();
+  const clave = items.map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',');
+  if (portadaHecha && portadaHecha.clave === clave) return portadaHecha.buf;
+  const W = 1200, H = 630, CAB = 84, G = 6, TW = 396, TH = 270;
+  const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const corto = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+  const capas = [];
+  const fondo = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#211c1f"/>
+    <text x="40" y="56" font-family="DejaVu Sans" font-weight="bold" font-size="40" fill="#f2eef0">Marketplace</text>
+    <rect x="40" y="68" width="64" height="4" fill="#ee2d6f"/>
+    <text x="${W - 40}" y="54" text-anchor="end" font-family="DejaVu Sans Mono" font-size="22" fill="#a89ca2">circulovicioso.club</text></svg>`;
+  for (let i = 0; i < PORTADA; i++) {
+    const left = (i % 3) * (TW + G), top = CAB + Math.floor(i / 3) * (TH + G), r = items[i];
+    let foto = null;
+    if (r) try {
+      foto = sharp(path.join(DIR, path.basename(fotosOf(r)[0]))).rotate().resize(TW, TH, { fit: 'cover' });
+      if (r.vencida) foto = foto.grayscale().modulate({ brightness: 0.6 });
+      foto = await foto.toBuffer();
+    } catch { foto = null; }
+    if (!foto) {
+      capas.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${TW}" height="${TH}"><rect width="${TW}" height="${TH}" fill="#2b2528"/>
+        <text x="${TW / 2}" y="${TH / 2 + 8}" text-anchor="middle" font-family="DejaVu Sans" font-size="22" fill="#7d7277">Tu publicación acá</text></svg>`), left, top });
+      continue;
+    }
+    capas.push({ input: foto, left, top });
+    const linea1 = r.vencida ? 'Vencida' : precioTexto(r);
+    capas.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${TW}" height="${TH}">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".85"/></linearGradient></defs>
+      <rect y="${TH - 110}" width="${TW}" height="110" fill="url(#g)"/>
+      <text x="16" y="${TH - 46}" font-family="DejaVu Sans" font-weight="bold" font-size="28" fill="${r.vencida ? '#b8adb2' : '#ffffff'}">${x(corto(linea1, 22))}</text>
+      <text x="16" y="${TH - 16}" font-family="DejaVu Sans" font-size="20" fill="#e6dfe2">${x(corto(r.titulo, 32))}</text></svg>`), left, top });
+  }
+  const buf = await sharp(Buffer.from(fondo)).composite(capas).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
+  portadaHecha = { clave, buf };
+  return buf;
+}
+
 function lista(q, me) {
   const ver = q.get('ver');
   const cond = [], params = [];
@@ -396,6 +464,13 @@ async function handleWeb(req, res, p, u, h) {
 async function handle(req, res, p, u, h) {
   if (!p.startsWith('/puente/api/mercado/')) return false;
   if (p.startsWith('/puente/api/mercado/web/')) return handleWeb(req, res, p, u, h);
+  // La imagen de la portada, sin sesion: la piden la tarjeta del chat y los que leen el og:image de la web
+  if (p === '/puente/api/mercado/portada.jpg' && req.method === 'GET') {
+    if (!sharp) { res.writeHead(302, { Location: '/puente/icono-512.png' }); return res.end(); }
+    const buf = await portadaJpg();
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=900', 'X-Content-Type-Options': 'nosniff' });
+    return res.end(buf);
+  }
   const user = h.sessionUser(req);
   if (!user) return h.json(res, 401, { error: 'sin sesion' });
   const me = user.id;
@@ -647,4 +722,4 @@ function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace };
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada };

@@ -9,7 +9,7 @@ const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', '
   ['marketplace', 'Marketplace', '/marketplace'],
   ['foro', 'Foro', FORO + '/', true], ['chat', 'Chat', CHAT + '/app', true]];
 
-function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice }) {
+function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice, imagen }) {
   const desc = descripcion || 'Círculo Vicioso: club de amigos, comunidad online, rejunto de gordos.';
   return `<!DOCTYPE html>
 <html lang="es">
@@ -20,7 +20,7 @@ function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canoni
 <meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(titulo)}">
 <meta property="og:description" content="${esc(desc)}">
-<meta property="og:image" content="https://circulovicioso.club/images/social-img-3.png">
+<meta property="og:image" content="${esc(imagen || 'https://circulovicioso.club/images/social-img-3.png')}">${imagen ? '\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">' : ''}
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 ${canonica ? `<link rel="canonical" href="https://circulovicioso.club${canonica}">\n` : ''}${sinIndice ? '<meta name="robots" content="noindex">\n' : ''}<link rel="icon" href="/images/favicon.png">

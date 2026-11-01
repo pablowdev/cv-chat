@@ -209,7 +209,7 @@ function hookHttp() {
       if (url === '/app' || url.startsWith('/app?')) injectScript(req, res, '/puente/aviso.js');
       else if (url === '/' || url.startsWith('/?')) injectScript(req, res, '/puente/login.js');
       else if (url.startsWith('/api/link-preview?')) {
-        // Un enlace a una publicacion del Marketplace (/app?mercado=<id> o la web): su tarjeta (mercado.js)
+        // Un enlace a una publicacion del Marketplace (/app?mercado=<id> o la web) o al Marketplace: su tarjeta (mercado.js)
         if (mercadoPreview(req, res)) return true;
         // Un enlace a un mensaje (de CV Chat o de Discord) se ve como "#canal › mensaje"
         // (web/aviso.js): sin tarjeta de vista previa
@@ -255,10 +255,12 @@ function mercadoPreview(req, res) {
   try { target = new URL(new URL(req.url, 'http://x').searchParams.get('url') || ''); own = publicUrl ? new URL(publicUrl).host : null; } catch { return false; }
   const mercado = require('./mercado.js');
   const id = mercado.idDeEnlace(target.href, own);
-  if (!id) return false;
+  // el Marketplace entero: la portada, con las ultimas publicaciones
+  const portada = !id && mercado.esPortada(target.href, own);
+  if (!id && !portada) return false;
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ') || !verifyToken || !verifyToken(auth.slice(7))) return false;
-  const data = mercado.vistaPrevia(id);
+  const data = portada ? mercado.vistaPortada() : mercado.vistaPrevia(id);
   if (data) send(res, 200, 'application/json', JSON.stringify({ ...data, url: target.href }));
   else json(res, 404, { error: 'no esta' });
   return true;
