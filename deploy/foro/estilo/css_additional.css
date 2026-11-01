@@ -45,3 +45,6 @@ body .profile_sidebar_content .b-button.b-button--primary { background: {vb:styl
 
 <vb:comment>/* La cabecera mas baja: el logo mas chico, como en la web */</vb:comment>
 #header .site-logo img { max-height: 84px; width: auto; }
+
+<vb:comment>/* Lo de abajo, del mismo ancho que la cabecera: vBulletin le deja 20px de cada lado al contenido */</vb:comment>
+@media (min-width: 768px) { #content { padding-left: 0; padding-right: 0; } }

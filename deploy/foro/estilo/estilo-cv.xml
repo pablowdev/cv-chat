@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 
-<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793541064">
+<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793563575">
 	<templategroup name="Css">
-		<template name="css_additional.css" templatetype="template" date="1793541064" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
+		<template name="css_additional.css" templatetype="template" date="1793563575" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
 <vb:comment>/* Circulo Vicioso: lo que las variables de estilo no alcanzan. Los colores salen de la paleta
    (Variables de estilo -> global_palette_*), asi que se cambian desde el panel */</vb:comment>
 
@@ -49,8 +49,11 @@ body .profile_sidebar_content .b-button.b-button--primary { background: {vb:styl
 
 <vb:comment>/* La cabecera mas baja: el logo mas chico, como en la web */</vb:comment>
 #header .site-logo img { max-height: 84px; width: auto; }
+
+<vb:comment>/* Lo de abajo, del mismo ancho que la cabecera: vBulletin le deja 20px de cada lado al contenido */</vb:comment>
+@media (min-width: 768px) { #content { padding-left: 0; padding-right: 0; } }
 ]]></template>
-		<template name="css_fonts.css" templatetype="template" date="1793541064" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
+		<template name="css_fonts.css" templatetype="template" date="1793563575" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
 @font-face {
 	font-family: "Redaction 35";
 	src: url("https://circulovicioso.club/fonts/Redaction35-Regular.otf") format("opentype");
