@@ -6,7 +6,7 @@
 //     (panel: Estilos -> Administrador de estilos, y Opciones -> Estilo e idioma)
 //  2. Un solo idioma: el castellano (panel: Idiomas y frases -> Administrador de idiomas)
 //  3. El menu de arriba sin Blogs, Articulos, Grupos ni Calendario (Constructor del sitio -> Barra de navegacion)
-//  4. La portada: los ultimos temas arriba de la lista de foros y sin "Tendencias cluberas"
+//  4. La portada: los ultimos temas arriba de la lista de foros, sin "Tendencias cluberas" ni la bienvenida
 //     (Constructor del sitio -> Editar pagina)
 //  5. Los foros con menos movimiento juntos adentro de "Varios" (panel: Foros -> Administrador de foros)
 //  6. Textos que estaban en ingles, en castellano (panel: Idiomas y frases -> Buscar frases)
@@ -97,6 +97,11 @@ if ($ultimos) {
 if ($db->getRow('widgetinstance', ['widgetinstanceid' => 10, 'pagetemplateid' => 1])) {
   vB_Library::instance('widget')->deleteWidgetInstances([10]);
   $dijo('portada: sin Tendencias cluberas');
+}
+// y sin el recuadro de bienvenida "Circulo Vicioso Club" (HTML fijo)
+if ($db->getRow('widgetinstance', ['widgetinstanceid' => 6, 'pagetemplateid' => 1])) {
+  vB_Library::instance('widget')->deleteWidgetInstances([6]);
+  $dijo('portada: sin el recuadro de bienvenida');
 }
 $widgets->clearCaches();
 
