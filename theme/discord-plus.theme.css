@@ -3058,6 +3058,17 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
    dibujadas de nuevo (aviso.js) */
 /* Biblioteca de Juegos (aviso.js, biblioteca): tarjetas con la tapa de cada juego, como Steam */
 .puente-jg .jg-bib { max-width: 72rem; margin: 0 auto; padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
+/* La Copa de la Mudanza, arriba de la biblioteca */
+.puente-jg .jg-copa { margin-top: 1rem; padding: 1rem 1.125rem; border-radius: 1rem; background: linear-gradient(135deg, #3a2a06, #1f1c14 60%); border: 1px solid #6b5212; }
+.puente-jg .jg-copa-t { font-size: 1.125rem; font-weight: 800; color: #f8d36a; }
+.puente-jg .jg-copa-s { margin-top: 0.25rem; font-size: 0.9375rem; font-weight: 600; color: #f2f3f5; }
+.puente-jg .jg-copa-r { margin-top: 0.5rem; font-size: 0.875rem; line-height: 1.4; color: #d6cfbd; }
+.puente-jg .jg-copa-lista { margin: 0.75rem 0 0; padding: 0; list-style: none; counter-reset: copa; display: flex; flex-direction: column; gap: 0.25rem; }
+.puente-jg .jg-copa-lista li { counter-increment: copa; display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0.625rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.05); color: #f2f3f5; font-size: 0.9375rem; }
+.puente-jg .jg-copa-lista li::before { content: counter(copa); min-width: 1.25rem; font-weight: 800; color: #f8d36a; text-align: right; }
+.puente-jg .jg-copa-lista li:first-child::before { content: "🥇"; }
+.puente-jg .jg-copa-lista li.yo { background: rgba(240, 178, 50, 0.22); }
+.puente-jg .jg-copa-n { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .puente-jg .jg-bib-titulo { margin: 1.25rem 0 0.75rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #b5bac1; }
 .puente-jg .jg-tapas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(17rem, calc(50% - 0.5rem)), 1fr)); gap: 1.25rem 1rem; }
 .puente-jg .jg-tapa { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }

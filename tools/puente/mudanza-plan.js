@@ -535,6 +535,22 @@ async function deshacer() {
   return { estado: fallas.length ? 'error' : 'hecho', detalle: `${n} canales como estaban${fallas.length ? '; fallaron: ' + fallas.join(', ') : ''}` };
 }
 
+// La tabla de la Copa para cualquiera con sesion (la seccion Juegos de la app la muestra)
+function copaApi(req, res, h) {
+  const user = h.sessionUser(req);
+  if (!user) return h.json(res, 401, { error: 'sin sesion' });
+  if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
+  const todos = Date.now() >= INICIO_COPA ? copa(1e6) : [];
+  const k = todos.findIndex(x => x.id === user.id);
+  const campeones = db.prepare('SELECT user_id FROM puente_mudanza_campeones').all()
+    .map(r => db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(r.user_id)).filter(Boolean).map(u => u.display_name || u.username);
+  return h.json(res, 200, {
+    desde: INICIO_COPA, hasta: corteMs(), ahora: Date.now(),
+    tabla: todos.slice(0, 10).map(x => ({ nombre: x.nombre, puntos: x.puntos, yo: x.id === user.id })),
+    yo: k >= 0 ? { puesto: k + 1, puntos: todos[k].puntos } : null, campeones,
+  });
+}
+
 function congelarCopa() {
   if (db.prepare('SELECT COUNT(*) n FROM puente_mudanza_campeones').get().n) return;
   const c = copa(10);
@@ -569,6 +585,7 @@ async function resumen() {
 //                                           | texto {clave, texto} | deshacer | saltear {clave}
 //                                           | probar {canal}: solo lectura en un canal, para probar
 async function handle(req, res, p, u, h) {
+  if (p === '/puente/api/copa') return copaApi(req, res, h);
   if (p !== '/puente/api/mudanza') return false;
   const user = h.sessionUser(req);
   if (!user) return h.json(res, 401, { error: 'sin sesion' });

@@ -1174,7 +1174,7 @@ async function handle(req, res) {
     const r = await require('./actividad.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
-  if (p === '/puente/api/mudanza') {
+  if (p === '/puente/api/mudanza' || p === '/puente/api/copa') {
     const r = await require('./mudanza-plan.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
