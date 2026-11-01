@@ -3058,7 +3058,7 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
    dibujadas de nuevo (aviso.js) */
 /* Biblioteca de Juegos (aviso.js, biblioteca): tarjetas con la tapa de cada juego, como Steam */
 .puente-jg .jg-bib { max-width: 72rem; margin: 0 auto; padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
-/* La Copa de la Mudanza, arriba de la biblioteca */
+/* La Copa Mudanza, arriba de la biblioteca */
 .puente-jg .jg-copa { margin-top: 1rem; padding: 1rem 1.125rem; border-radius: 1rem; background: linear-gradient(135deg, #3a2a06, #1f1c14 60%); border: 1px solid #6b5212; }
 .puente-jg .jg-copa-t { font-size: 1.125rem; font-weight: 800; color: #f8d36a; }
 .puente-jg .jg-copa-s { margin-top: 0.25rem; font-size: 0.9375rem; font-weight: 600; color: #f2f3f5; }

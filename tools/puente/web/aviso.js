@@ -2512,7 +2512,7 @@ function leido(sc) {
       const d = el('div', 'pm-dato'); d.append(el('div', 'pm-dato-n', String(num)), el('div', 'pm-dato-l', label)); nums.appendChild(d);
     }
     cuerpo.appendChild(nums);
-    cuerpo.appendChild(el('div', 'pmz-copa', '🏆 Copa de la Mudanza: ' + (n.copa && n.copa.length ? n.copa.map((x, i) => (i + 1) + '. ' + x.nombre + ' (' + x.puntos + ')').join(' · ') : 'todavía sin partidas')));
+    cuerpo.appendChild(el('div', 'pmz-copa', '🏆 Copa Mudanza: ' + (n.copa && n.copa.length ? n.copa.map((x, i) => (i + 1) + '. ' + x.nombre + ' (' + x.puntos + ')').join(' · ') : 'todavía sin partidas')));
     // El cronograma
     const lista = el('div', 'pmz-pasos');
     for (const p of datos.pasos || []) {
@@ -8943,19 +8943,19 @@ document.addEventListener('pointerdown', (ev) => {
       l.appendChild(r);
     }
   }
-  // La Copa de la Mudanza (mudanza-plan.js): la tabla, del anuncio al corte y dos semanas despues
+  // La Copa Mudanza (mudanza-plan.js): la tabla, del anuncio al corte y dos semanas despues
   async function copaMudanza(box) {
     let d = null;
     try { const r = await fetch('/puente/api/copa', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('haven_token') || '') } }); if (r.ok) d = await r.json(); } catch { /* sin copa */ }
     if (!d || !box.isConnected || d.ahora > d.hasta + 14 * 864e5) return;
     const dia = (ms) => { const a = new Date(ms - 3 * 3600e3); return `${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][a.getUTCDay()]} ${a.getUTCDate()}/${a.getUTCMonth() + 1} a las ${a.getUTCHours()}${a.getUTCMinutes() ? ':' + String(a.getUTCMinutes()).padStart(2, '0') : ''}`; }; // hora de Argentina
     const w = el('div', 'jg-copa');
-    w.appendChild(el('div', 'jg-copa-t', '🏆 Copa de la Mudanza'));
+    w.appendChild(el('div', 'jg-copa-t', '🏆 Copa Mudanza'));
     const dias = Math.ceil((d.hasta - d.ahora) / 864e5);
     w.appendChild(el('div', 'jg-copa-s', d.ahora < d.desde ? `Arranca el ${dia(d.desde)} y termina el ${dia(d.hasta)}.`
       : d.ahora < d.hasta ? `Termina el ${dia(d.hasta)} · ${dias <= 1 ? 'último día' : `quedan ${dias} días`}.`
         : d.campeones.length ? `Terminó. ${d.campeones.length > 1 ? 'Campeones' : 'Campeón'}: ${d.campeones.join(' y ')} 🎉` : 'Terminó.'));
-    if (d.ahora < d.hasta) w.appendChild(el('div', 'jg-copa-r', 'Cada partida ganada de truco, ajedrez o funball suma: 3 puntos contra otra persona y 1 contra la compu (hasta 3 por día). El que más puntos tenga al final se lleva la insignia Campeón.'));
+    if (d.ahora < d.hasta) w.appendChild(el('div', 'jg-copa-r', 'Cada partida de truco que ganás suma: 3 puntos contra otra persona y 1 contra la compu (hasta 3 por día). El que más puntos tenga al final se lleva la insignia Campeón.'));
     if (d.ahora >= d.desde) {
       if (!d.tabla.length) w.appendChild(el('div', 'jg-copa-r', 'Todavía nadie ganó una partida: ¡arrancá vos!'));
       else {

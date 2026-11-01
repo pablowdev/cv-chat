@@ -13,7 +13,7 @@
 //  - resumen:      un email a los administradores con como va la mudanza
 //
 // Insignias (logros.js): "Fundador" a quien escribio en CV Chat antes del corte, y "Campeón de la Copa
-// de la Mudanza" a quien mas partidas gano de truco, ajedrez o funball entre el anuncio y el corte.
+// Mudanza" a quien mas partidas de truco gano entre el anuncio y el corte.
 //
 // Todo lo que toca Discord se puede deshacer: antes de cambiar un canal se guardan sus permisos y su
 // modo lento (puente_mudanza_permisos). Desde la pagina Admin (pestaña Mudanza) se ve el cronograma,
@@ -50,20 +50,20 @@ const T = {
     '',
     'Además: juegos (truco, ajedrez, funball), marketplace, guardados, archivos más pesados y el foro integrado. Sin publicidad y gratis.',
     '',
-    '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**. Y arranca la **Copa de la Mudanza**: quien más partidas gane de truco, ajedrez o funball hasta el 24/11 se lleva la de **Campeón**.',
+    '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**. Y arranca la **Copa Mudanza**: quien más partidas de truco gane hasta el 24/11 se lleva la de **Campeón**.',
     '',
     '👉 Entrá acá: {enlace}',
   ].join('\n'),
   recordatorio: [
     '@here 🏠 Recordatorio: desde el **martes 24/11** este Discord queda solo para leer y la charla sigue en CV Chat. Es un clic con tu Discord y tus mensajes de siempre se vienen con vos: {enlace}',
     'CV Chat es nuestro: servidor propio, reglas propias y la historia del club guardada para siempre.',
-    '🏆 Copa de la Mudanza: {copa}',
+    '🏆 Copa Mudanza: {copa}',
   ].join('\n'),
   semana: [
     '@everyone ⏳ **Falta una semana.** El **martes 24/11 a las 12** este Discord queda solo para leer.',
     'Desde hoy, acá hay **modo lento** (un mensaje por minuto). En CV Chat no hay límites.',
     'Ya somos **{cuentas}** en CV Chat. Pasate en un clic con tu Discord, con todo tu historial: {enlace}',
-    '🏅 Quien escriba en CV Chat antes del 24/11 queda como **Fundador**. 🏆 Copa de la Mudanza: {copa}',
+    '🏅 Quien escriba en CV Chat antes del 24/11 queda como **Fundador**. 🏆 Copa Mudanza: {copa}',
   ].join('\n'),
   martes: [
     '@here 📅 **El martes 24/11 a las 12, este Discord queda solo para leer.**',
@@ -76,11 +76,11 @@ const T = {
   ultimo: [
     '@everyone 🔒 **Mañana a las 12, este Discord queda solo para leer.** Vas a poder seguir viendo todo, pero para escribir hay que estar en CV Chat.',
     'Es un clic: {enlace}',
-    'Hasta mañana a las 12 todavía te llevás la insignia **Fundador**. 🏆 Copa de la Mudanza: {copa}',
+    'Hasta mañana a las 12 todavía te llevás la insignia **Fundador**. 🏆 Copa Mudanza: {copa}',
   ].join('\n'),
   corte: [
     '🏠 **Listo: nos mudamos.** Desde ahora la charla es en CV Chat y este Discord queda para leer.',
-    '🏅 Fundadores: **{fundadores}** personas. 🏆 Campeón de la Copa de la Mudanza: **{campeon}**.',
+    '🏅 Fundadores: **{fundadores}** personas. 🏆 Campeón de la Copa Mudanza: **{campeon}**.',
     '¿Te quedaste afuera? Entrá con tu Discord en {enlace} o escribí en #pasate-a-cv-chat.',
   ].join('\n'),
   privados1: [
@@ -211,7 +211,7 @@ function copa(limite = 5) {
   const sumar = (uid, n) => { if (uid > 0) pts.set(uid, (pts.get(uid) || 0) + n); };
   const compuPorDia = new Map(); // contra la compu: 1 punto, hasta 3 por persona y dia
   const tablas = [
-    ['puente_truco_partidas', 'ganador', 'compu', 'fin'], ['puente_ajedrez_partidas', 'ganador', 'compu', 'fin'], ['puente_funball_partidas', 'ganador', 'compu', 'fin'],
+    ['puente_truco_partidas', 'ganador', 'compu', 'fin'], // solo el truco
   ];
   for (const [t, g, c, f] of tablas) {
     let filas = [];
@@ -228,7 +228,7 @@ function copa(limite = 5) {
 }
 function copaTexto() {
   const c = copa(3);
-  if (!c.length) return 'todavía no hay partidas: arrancá vos (Juegos, en CV Chat)';
+  if (!c.length) return 'todavía no hay partidas: arrancá vos (Juegos → Truco, en CV Chat)';
   return 'va ganando **' + c[0].nombre + '** con ' + c[0].puntos + (c[0].puntos === 1 ? ' punto' : ' puntos') + (c[1] ? ', después ' + c[1].nombre + ' (' + c[1].puntos + ')' : '');
 }
 function completar(texto, extra = {}) {
@@ -289,7 +289,7 @@ function actualizarFundadores() {
 function insignias(userId) {
   const out = [];
   if (db.prepare('SELECT 1 FROM puente_mudanza_fundadores WHERE user_id = ?').get(userId)) out.push(['fundador', '🏠', 'Fundador', 'Se pasó a CV Chat antes de la mudanza (24/11/2026)']);
-  if (db.prepare('SELECT 1 FROM puente_mudanza_campeones WHERE user_id = ?').get(userId)) out.push(['campeon-mudanza', '🏆', 'Campeón de la Copa', 'Ganó la Copa de la Mudanza (noviembre 2026)']);
+  if (db.prepare('SELECT 1 FROM puente_mudanza_campeones WHERE user_id = ?').get(userId)) out.push(['campeon-mudanza', '🏆', 'Campeón de la Copa', 'Ganó la Copa Mudanza de truco (noviembre 2026)']);
   return out;
 }
 
@@ -568,7 +568,7 @@ async function resumen() {
     `Cuentas en CV Chat: ${n.cuentas}. Fundadores: ${n.fundadores}.`,
     `Siguen escribiendo en Discord: ${n.enDiscordConCuenta} con cuenta y ${n.enDiscordSinCuenta} sin cuenta.`,
     `Privados del bot mandados: ${n.privados}. Emails: ${n.emails}.`,
-    n.copa.length ? 'Copa de la Mudanza: ' + n.copa.map((x, i) => `${i + 1}. ${x.nombre} (${x.puntos})`).join(', ') + '.' : 'Copa de la Mudanza: sin partidas.',
+    n.copa.length ? 'Copa Mudanza: ' + n.copa.map((x, i) => `${i + 1}. ${x.nombre} (${x.puntos})`).join(', ') + '.' : 'Copa Mudanza: sin partidas.',
     'El detalle y los botones para pausar o deshacer están en la página Admin, pestaña Mudanza.',
   ];
   let ok = 0;
