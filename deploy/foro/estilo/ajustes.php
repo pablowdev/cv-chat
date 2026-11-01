@@ -48,6 +48,10 @@ foreach ($db->getRows('style', []) as $s) {
   if ((int)$s['userselect'] !== $quiero) { $db->update('style', ['userselect' => $quiero], ['styleid' => $s['styleid']]); $n++; }
 }
 $cambio = $opcion('allowchangestyles', 0);
+// Los administradores igual ven el estilo que eligieron alguna vez: todos al predeterminado
+// (es el campo "Estilo" de cada usuario en el panel)
+$vbulletin->db->query_write("UPDATE " . TABLE_PREFIX . "user SET styleid = 0 WHERE styleid <> 0");
+$n += $vbulletin->db->affected_rows();
 $dijo("estilos: $n cambiados" . ($cambio ? ', ya nadie puede elegir otro' : ''));
 
 // 2. Un solo idioma
