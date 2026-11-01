@@ -3,7 +3,8 @@
 //  - Canal del foro, apagado (el foro se abre adentro de CV Chat con su boton, aviso.js). Con FORO_CANAL (el
 //    nombre de un canal de texto que crea un administrador): cada tema nuevo del foro es un mensaje, y sus
 //    respuestas van en su hilo, con el webhook del canal, con el nombre y la foto de quien lo escribio en el
-//    foro. Empieza desde lo que haya cuando se prende: no trae lo viejo.
+//    foro. Empieza desde lo que haya cuando se prende: no trae lo viejo. Sin FORO_CANAL_RESPUESTAS=1 (lo de
+//    hoy, en #que-paso) solo avisa de cada tema nuevo, sin las respuestas.
 //  - Vista previa de los enlaces al foro (vincular.js la pide al pegar un enlace).
 //  - GET /puente/api/foro/buscar?q=  temas del foro (el "/foro <texto>" del chat, web/aviso.js)
 //
@@ -12,7 +13,7 @@
 const crypto = require('crypto');
 
 const CADA_MS = 60 * 1000, POR_VUELTA = 20;
-let db, log, warn, h, url = '', clave = '', canal = '', foroUrl = '';
+let db, log, warn, h, url = '', clave = '', canal = '', foroUrl = '', respuestas = false;
 let andando = false;
 
 function setup(ctx) {
@@ -20,6 +21,7 @@ function setup(ctx) {
   url = String(process.env.FORO_LECTOR_URL || '').replace(/\/+$/, '');
   clave = String(process.env.FORO_LECTOR_CLAVE || '');
   canal = String(process.env.FORO_CANAL || '').trim().toLowerCase();
+  respuestas = process.env.FORO_CANAL_RESPUESTAS === '1';
   foroUrl = String(process.env.FORO_URL || '').replace(/\/+$/, '');
   if (!url || clave.length < 32) return;
   db.exec(`
@@ -27,7 +29,7 @@ function setup(ctx) {
     CREATE TABLE IF NOT EXISTS puente_foro_temas (tema_id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, channel_id INTEGER NOT NULL);
   `);
   if (!canal) { log('foro: lector listo (vistas previas y busqueda; sin canal del foro)'); return; }
-  log(`foro: lector listo; el canal #${canal} recibe los temas nuevos`);
+  log(`foro: lector listo; el canal #${canal} recibe los temas nuevos${respuestas ? ' y sus respuestas' : ''}`);
   setTimeout(vuelta, 15000);
   setInterval(vuelta, CADA_MS);
 }
@@ -75,13 +77,21 @@ async function vuelta() {
   try {
     const w = webhook();
     if (!w) return; // todavia no hay #foro
-    let desde = estado('desde');
-    if (desde == null) { const u = await lector('/ultimo'); estado('desde', u.ultimo); log(`foro: #${canal} empieza desde el tema ${u.ultimo}`); return; }
+    // Hasta donde se publico, por canal: al cambiar de canal empieza de nuevo desde lo ultimo
+    const K = 'desde:' + canal;
+    let desde = estado(K);
+    if (desde == null) { const u = await lector('/ultimo'); estado(K, u.ultimo); log(`foro: #${canal} empieza desde el tema ${u.ultimo}`); return; }
     const d = await lector(`/novedades?desde=${Number(desde)}&limite=${POR_VUELTA}`);
     for (const n of d.novedades) {
       const map = db.prepare('SELECT message_id FROM puente_foro_temas WHERE tema_id = ? AND channel_id = ?').get(n.tema_id, w.id);
       let id;
-      if (n.es_tema) {
+      if (!respuestas) {
+        // Solo el aviso de cada tema nuevo
+        if (n.es_tema) {
+          await publicar(w, { username: nombre(n.autor), avatar_url: n.foto || undefined,
+            content: `📝 **Tema nuevo en el foro: ${n.tema}**\n${n.texto ? '> ' + corto(n.texto, 280).replace(/\n+/g, '\n> ') + '\n' : ''}[Leelo en el foro](${n.url}) · ${n.canal}` });
+        }
+      } else if (n.es_tema) {
         id = await publicar(w, { username: nombre(n.autor), avatar_url: n.foto || undefined,
           content: `**${n.tema}**\n${n.texto ? n.texto + '\n' : ''}\n[Leer en el foro](${n.url}) · ${n.canal}` });
         db.prepare('INSERT OR REPLACE INTO puente_foro_temas (tema_id, message_id, channel_id) VALUES (?, ?, ?)').run(n.tema_id, id, w.id);
@@ -93,9 +103,9 @@ async function vuelta() {
         await publicar(w, { username: nombre(n.autor), avatar_url: n.foto || undefined,
           content: `💬 respondió en **${n.tema}**\n${n.texto ? '> ' + corto(n.texto, 240) + '\n' : ''}[ver en el foro](${n.url})` });
       }
-      estado('desde', n.id);
+      estado(K, n.id);
     }
-    estado('desde', Math.max(Number(estado('desde')), d.hasta));
+    estado(K, Math.max(Number(estado(K)), d.hasta));
   } catch (err) {
     warn('foro: canal #' + canal + ':', err.message);
   } finally { andando = false; }
