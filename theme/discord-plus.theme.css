@@ -2965,6 +2965,17 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-muestra-r { font-weight: 700; color: #c9e6d4; }
 .puente-jg .jg-muestra.mintio .jg-muestra-r { color: #f0b232; }
 .puente-jg .jg-tanto-sel { min-height: 2.5rem; padding: 0 0.75rem; border-radius: 0.625rem; border: 1px solid #4e5058; background: #2b2a30; color: #f2f3f5; font: inherit; font-size: 0.9375rem; }
+/* Lo que va pasando en la mesa del Truco, que se lea bien */
+.puente-jg .jg-mesa2 .jg-ultimo { width: fit-content; max-width: 100%; margin: 0.375rem auto 0; padding: 0.3125rem 0.875rem; border-radius: 0.875rem; background: rgba(255, 255, 255, 0.08); font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: #e3e5e8; }
+.puente-jg .jg-mesa2 .jg-turno { font-size: 1.0625rem; }
+.puente-jg .jg-mesa2 .jg-envido { font-size: 0.875rem; color: #c4c9ce; }
+.puente-jg .jg-mesa2 .jg-reloj-t { color: #c4c9ce; }
+.puente-jg .jg-fin .jg-log { font-size: 0.875rem; color: #dcefe3; }
+/* La chicana: un boton que aparece un ratito sobre el paño, con una barrita que se acaba */
+.puente-jg .jg-chicana-w { position: absolute; left: 0; right: 0; bottom: 0.625rem; z-index: 6; display: flex; justify-content: center; padding: 0 0.5rem; pointer-events: none; }
+.puente-jg .jg-chicana { position: relative; overflow: hidden; max-width: 100%; padding: 0.625rem 1.125rem 0.75rem; border: 0; border-radius: 999px; background: #f0b232; color: #1a1a1e; font: inherit; font-size: 0.9375rem; font-weight: 800; cursor: pointer; pointer-events: auto; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45); animation: jg-salta 0.35s ease-out; }
+.puente-jg .jg-chicana::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: 4px; background: rgba(0, 0, 0, 0.35); transform-origin: left; animation: jg-chicana-t var(--dur, 6s) linear forwards; }
+@keyframes jg-chicana-t { to { transform: scaleX(0); } }
 .puente-jg .jg-palito { stroke: #f1dfb4; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45)); }
 .puente-jg .jg-cabeza { fill: #c8281e; stroke: #7a1208; stroke-width: 0.6; }
 .puente-jg .jg-malas { stroke: rgba(255,255,255,0.45); stroke-width: 1; stroke-dasharray: 3 2; }

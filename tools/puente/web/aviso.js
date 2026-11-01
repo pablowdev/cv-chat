@@ -9226,6 +9226,18 @@ document.addEventListener('pointerdown', (ev) => {
       seguir.addEventListener('click', () => { mesa.muestraFin = 0; m.remove(); });
       m.appendChild(seguir); felt.appendChild(m);
     }
+    // La chicana: aparece unos segundos sobre el paño y se va sola si no la tocás
+    if (s.chicana) {
+      if (mesa.chicanaK !== s.chicana.text) { mesa.chicanaK = s.chicana.text; mesa.chicanaFin = Date.now() + s.chicana.ms; }
+      const resta = mesa.chicanaFin - Date.now();
+      if (resta > 300) {
+        const w = el('div', 'jg-chicana-w'), x = el('button', 'jg-chicana', s.chicana.text);
+        x.type = 'button'; x.style.setProperty('--dur', resta + 'ms');
+        x.addEventListener('click', () => { w.remove(); mesa.chicanaFin = 0; play(s, { tipo: 'chicana' }); });
+        w.appendChild(x); felt.appendChild(w);
+        setTimeout(() => w.remove(), resta);
+      }
+    } else mesa.chicanaK = null;
     // Que pasa ahora
     const st = el('div', 'jg-status');
     if (s.tanto) {

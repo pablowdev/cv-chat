@@ -11,7 +11,7 @@
 //   truco:unirse { id }   truco:cancelar { id }   truco:ver { id }
 //   truco:accion { id, tipo, carta?, grito? }   (jugar, truco, retruco, vale4,
 //       envido, real, falta, flor, quiero, noquiero, mazo, grito, abandonar, revancha,
-//       tanto { valor }, buenas, ver)
+//       tanto { valor }, buenas, ver, chicana)
 // El envido querido se canta como en la mesa: el mano dice su tanto, el otro contesta "son
 // buenas" o "X son mejores", y se puede mentir. El que pierde puede pedir "las quiero ver en
 // mesa": al final de la mano se muestran las cartas y, si el ganador mintio, pierde esos puntos.
@@ -29,6 +29,10 @@ const TURNO_MS = 2 * 60 * 1000;
 const PALOS = ['espada', 'basto', 'oro', 'copa'];
 const NUMS = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
 const GRITOS = ['¡Mirá lo que tengo!', '¡Qué suerte!', 'Buena jugada', 'Jajaja', 'Dale que se enfría', 'Me voy a dormir', '¿Y ahora?', 'Uh, me la hiciste'];
+// Las chicanas: al pedir verlas, el otro tiene unos segundos para contestar la primera, y el que
+// las pidio, la segunda. No cambian nada del juego
+const CHICANAS = ['En mesa las verás, y el culo cerrarás', 'Si en mesa no las veo, el culo te pateo'];
+const CHICANA_MS = 6000;
 const TRUCO_VAL = { truco: 2, retruco: 3, vale4: 4 };
 const TRUCO_SIG = { truco: 'retruco', retruco: 'vale4' };
 const ENV_VAL = { envido: 2, real: 3 };
@@ -255,6 +259,13 @@ function cerrarTanto(g) {
   return addPoints(g, other(w), e.pts, 'tanto mentido');
 }
 
+// La chicana numero paso, para el jugador i (la compu a veces la dice sola)
+function abrirChicana(g, paso, i) {
+  if (paso >= CHICANAS.length) { g.chicana = null; return; }
+  const c = g.chicana = { paso, para: i, hasta: Date.now() + CHICANA_MS };
+  if (g.jugadores[i] === BOT && Math.random() < 0.7) setTimeout(() => { if (g.chicana === c) doAct(g, i, { tipo: 'chicana' }); }, 1300 + crypto.randomInt(1200));
+}
+
 function finish(g, winner, motivo) {
   if (g.estado === 'terminada') return;
   g.estado = 'terminada'; g.ganador = winner; g.motivo = motivo; g.fin = Date.now(); g.deadline = null;
@@ -361,6 +372,15 @@ function doAct(g, i, d) {
     g.grito = { de: i, text: GRITOS[k], t: Date.now() };
     push(g, false); return null;
   }
+  if (tipo === 'chicana') {
+    const c = g.chicana;
+    if (!c || c.para !== i || Date.now() > c.hasta) return { error: 'Ya pasó el momento.' };
+    const text = CHICANAS[c.paso];
+    g.grito = { de: i, text, t: Date.now() };
+    note(g, `${nameOf(g.jugadores[i]).nombre}: ${text}`);
+    abrirChicana(g, c.paso + 1, other(i));
+    push(g, false); return null;
+  }
   if (tipo === 'abandonar') {
     if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
     note(g, `${nameOf(g.jugadores[i]).nombre} abandonó.`);
@@ -431,6 +451,7 @@ function doAct(g, i, d) {
     h.env.ver = true;
     note(g, `${name}: ¡Las quiero ver en mesa!`);
     g.grito = { de: i, text: '¡Las quiero ver en mesa!', t: Date.now() };
+    abrirChicana(g, 0, o);
     push(g, false); return null;
   }
   if (tipo === 'flor') {
@@ -648,6 +669,7 @@ function view(g, me) {
     out.miEnvido = i >= 0 ? envido(h.cartas[pov].concat(h.bazas[0][pov] ? [h.bazas[0][pov]] : [])) : null;
     out.deadline = g.deadline;
   }
+  if (i >= 0 && g.chicana && g.chicana.para === pov && Date.now() < g.chicana.hasta) out.chicana = { text: CHICANAS[g.chicana.paso], ms: g.chicana.hasta - Date.now() };
   // Las cartas del tanto que se mostraron (un rato despues de mostrarlas)
   if (g.muestra && Date.now() - g.muestra.t < 20000) out.muestra = { ...g.muestra, de: g.muestra.de === pov ? 'yo' : 'rival' };
   return out;
