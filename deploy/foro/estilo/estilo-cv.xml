@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 
-<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793538423">
+<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793541064">
 	<templategroup name="Css">
-		<template name="css_additional.css" templatetype="template" date="1793538423" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
+		<template name="css_additional.css" templatetype="template" date="1793541064" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
 <vb:comment>/* Circulo Vicioso: lo que las variables de estilo no alcanzan. Los colores salen de la paleta
    (Variables de estilo -> global_palette_*), asi que se cambian desde el panel */</vb:comment>
 
@@ -46,8 +46,11 @@ body .profile_sidebar_content .b-button.b-button--primary { background: {vb:styl
 
 <vb:comment>/* Los avisos de error: el rosa claro de vBulletin no se leia con letra clara */</vb:comment>
 .error { background: {vb:stylevar global_palette_fill_02.color}; border: 1px solid {vb:stylevar global_palette_accent_02.color}; border-radius: 0; color: {vb:stylevar global_palette_text_01.color}; }
+
+<vb:comment>/* La cabecera mas baja: el logo mas chico, como en la web */</vb:comment>
+#header .site-logo img { max-height: 84px; width: auto; }
 ]]></template>
-		<template name="css_fonts.css" templatetype="template" date="1793538423" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
+		<template name="css_fonts.css" templatetype="template" date="1793541064" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
 @font-face {
 	font-family: "Redaction 35";
 	src: url("https://circulovicioso.club/fonts/Redaction35-Regular.otf") format("opentype");

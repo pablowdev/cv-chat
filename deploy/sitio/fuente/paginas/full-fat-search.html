@@ -14,6 +14,7 @@
 <p class="ffs__estado" id="ffs-estado" aria-live="polite"></p>
 <div class="ffs__resultados" id="ffs-resultados"></div>
 <div class="ffs__mas" id="ffs-mas" hidden><button class="btn" type="button" id="ffs-mas-btn">Ver más resultados</button></div>
+<p class="ffs__foro chico" id="ffs-foro" hidden>¿Lo hablaron en el foro? <a id="ffs-foro-a" href="https://foro.circulovicioso.club/search">Buscalo en el foro →</a></p>
 
 <script type="module" src="https://cdn.jsdelivr.net/npm/@justinribeiro/lite-youtube@1.5.0/lite-youtube.js"></script>
 <script>
@@ -56,6 +57,9 @@
     if (empujar) history.pushState(null, '', '?q=' + encodeURIComponent(consulta));
     document.title = consulta + ' · Full Fat Search - Círculo Vicioso';
     box.textContent = ''; mas.hidden = true; estado.textContent = 'Buscando…';
+    // Lo mismo, en los temas del foro (su propia busqueda)
+    document.getElementById('ffs-foro-a').href = 'https://foro.circulovicioso.club/search?searchJSON=' + encodeURIComponent(JSON.stringify({ keywords: consulta }));
+    document.getElementById('ffs-foro').hidden = false;
     try {
       var r = await fetch(API + encodeURIComponent(consulta));
       todos = await r.json(); hasta = 0;

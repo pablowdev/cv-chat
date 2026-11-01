@@ -42,3 +42,6 @@ body .profile_sidebar_content .b-button.b-button--primary { background: {vb:styl
 
 <vb:comment>/* Los avisos de error: el rosa claro de vBulletin no se leia con letra clara */</vb:comment>
 .error { background: {vb:stylevar global_palette_fill_02.color}; border: 1px solid {vb:stylevar global_palette_accent_02.color}; border-radius: 0; color: {vb:stylevar global_palette_text_01.color}; }
+
+<vb:comment>/* La cabecera mas baja: el logo mas chico, como en la web */</vb:comment>
+#header .site-logo img { max-height: 84px; width: auto; }

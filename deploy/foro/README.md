@@ -68,6 +68,11 @@ docker run --rm --network foro-datos --user 33:33 -v /opt/foro/codigo:/var/www/h
 La serif viene de `circulovicioso.club/fonts`, que por eso deja que el foro la use (`../sitio/Caddyfile`).
 Si se cambia el estilo desde el panel, conviene volver a exportarlo a `estilo-cv.xml`.
 
+`ajustes.php` (se corre igual, despues de `instalar.php`) deja el foro como esta hoy, con las mismas funciones que usa
+el panel, asi todo se ve y se cambia desde ahi: un solo estilo y un solo idioma, el menu sin Blogs, Articulos,
+Grupos ni Calendario, los ultimos temas arriba en la portada, "Varios" con los foros de menos movimiento (sus
+direcciones no cambian) y textos que estaban en ingles en castellano. Se puede correr mas de una vez.
+
 ## Actualizar vBulletin
 
 1. Copiar el `upload/` del paquete nuevo en `codigo/`, sin pisar `config.php` ni `core/includes/config.php`.

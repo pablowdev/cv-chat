@@ -8,6 +8,7 @@
 .ffs__boton { flex: 0 0 auto; padding: 0 26px; }
 .ffs__sugerencias { margin: 12px 0 0; }
 .ffs__estado { margin: 20px 0 12px; color: var(--fg-2); min-height: 1.6em; }
+.ffs__foro { margin: 20px 0 0; color: var(--fg-2); }
 .ffs__resultados { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .ffs__item { display: flex; flex-direction: column; }
 .ffs__video { aspect-ratio: 16 / 9; border-bottom: 1px solid var(--line); background: #000; }
