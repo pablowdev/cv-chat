@@ -128,6 +128,8 @@ function setup(ctx) {
   require('./cifrado.js').setup({ db, io, log, warn, publicUrl, email, campana, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) });
   foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a), campana } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
+  // El equipo sin verificacion en dos pasos queda como miembro comun hasta que la prende
+  require('./equipo.js').setup({ db, io, log, warn });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
   io.use((socket, next) => (appHaven(socket.handshake.headers['user-agent']) ? next(new Error(mensajeAppHaven())) : next()));
   hookHttp();

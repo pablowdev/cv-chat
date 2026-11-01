@@ -16,6 +16,8 @@
 //  GET  /privados?id=               los mensajes privados de esa cuenta (para leerlos en CV Chat), con nombres y fotos
 //  GET  /privados-nuevos?desde=&ids=  los privados que les llegaron a esas cuentas desde esa fecha (ms)
 //  POST /unidas   {ids}            las cuentas del foro unidas con verificacion en dos pasos (entran solo por CV Chat, cvpuerta.php)
+//  POST /equipo   {con2fa}         el equipo del foro sin verificacion en dos pasos en CV Chat queda como usuario registrado
+//                                  (y lo recupera al prenderla)
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -270,6 +272,84 @@ if ($ruta === '/unidas' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 	$archivo = '/var/www/html/cache/.cv_unidas.json';
 	if (file_put_contents($archivo . '.tmp', json_encode($out)) === false || !rename($archivo . '.tmp', $archivo)) salir(['error' => 'no se pudo guardar'], 500);
 	salir(['ok' => true, 'cuentas' => count($out['ids'])]);
+}
+
+// El equipo del foro (administradores, supermoderadores y moderadores) tiene que tener la verificacion en dos
+// pasos en su cuenta de CV Chat (con2fa: las cuentas del foro unidas que la tienen). Quien no, queda como usuario
+// registrado y sin moderar, como lo haria el panel (Usuarios -> Editar el grupo; Moderadores -> Quitar); lo que
+// tenia se guarda en la cache del foro (.cv_equipo.json, oculto) y se le devuelve solo cuando la prende.
+// Se le cierran las sesiones del foro y del panel, para que el cambio valga enseguida.
+if ($ruta === '/equipo' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+	if (!isset($cuerpo['con2fa']) || !is_array($cuerpo['con2fa'])) salir(['error' => 'falta con2fa'], 400);
+	$con = array_flip(array_map('intval', $cuerpo['con2fa']));
+	$archivo = '/var/www/html/cache/.cv_equipo.json';
+	$guardado = json_decode((string) @file_get_contents($archivo), true);
+	if (!is_array($guardado)) $guardado = [];
+	$guardar = function () use (&$guardado, $archivo) {
+		if (file_put_contents($archivo . '.tmp', json_encode($guardado)) === false || !rename($archivo . '.tmp', $archivo)) salir(['error' => 'no se pudo guardar'], 500);
+	};
+	$EQUIPO = [5, 6, 7]; // supermoderadores, administradores, moderadores
+	$esEquipo = function ($u) use ($EQUIPO) {
+		return in_array((int) $u['usergroupid'], $EQUIPO, true) || array_intersect($EQUIPO, array_map('intval', array_filter(explode(',', (string) $u['membergroupids']))));
+	};
+	$cambiar = function ($u, $datos) {
+		$dm = new vB_Datamanager_User(vB_DataManager_Constants::ERRTYPE_ARRAY);
+		$dm->set_existing($u);
+		foreach ($datos as $k => $v) $dm->set($k, $v);
+		$dm->save();
+		if (!empty($dm->errors)) throw new Exception('no se pudo cambiar la cuenta ' . $u['userid'] . ': ' . json_encode($dm->errors));
+	};
+	$cerrarSesiones = function ($id) use ($db) {
+		$db->delete('session', ['userid' => (int) $id]);
+		$db->delete('cpsession', ['userid' => (int) $id]);
+	};
+	$out = ['suspendidos' => [], 'devueltos' => [], 'equipo' => []];
+
+	// Quienes son del equipo hoy: por grupo o porque moderan algo
+	$ids = [];
+	foreach ((array) $db->getRows('user', ['usergroupid' => $EQUIPO]) as $u) $ids[(int) $u['userid']] = 1;
+	foreach ($db->assertQuery('user', [vB_dB_Query::CONDITIONS_KEY => [['field' => 'membergroupids', 'value' => '', 'operator' => vB_dB_Query::OPERATOR_NE]]]) as $u)
+		if ($esEquipo($u)) $ids[(int) $u['userid']] = 1;
+	foreach ((array) $db->getRows('vBForum:moderator', []) as $m) $ids[(int) $m['userid']] = 1;
+
+	foreach (array_keys($ids) as $id) {
+		$out['equipo'][] = $id;
+		if (isset($con[$id])) continue;
+		$u = $db->getRow('user', ['userid' => $id]);
+		if (!$u) continue;
+		// Primero se guarda lo que tenia, despues se cambia. Si ya estaba guardado (alguien le devolvio los
+		// permisos a mano sin que prendiera la verificacion) se le vuelven a sacar, sin pisar lo guardado
+		if (!isset($guardado[$id])) {
+			$guardado[$id] = ['usuario' => texto($u['username']), 'usergroupid' => (int) $u['usergroupid'], 'membergroupids' => (string) $u['membergroupids'],
+				'displaygroupid' => (int) $u['displaygroupid'], 'moderador' => array_values((array) $db->getRows('vBForum:moderator', ['userid' => $id])), 'desde' => time()];
+			$guardar();
+		}
+		$cambiar($u, ['usergroupid' => 2, 'membergroupids' => '', 'displaygroupid' => 0]);
+		$db->delete('vBForum:moderator', ['userid' => $id]);
+		$cerrarSesiones($id);
+		$out['suspendidos'][] = ['id' => $id, 'usuario' => $guardado[$id]['usuario']];
+	}
+
+	// Los que ya la prendieron: lo que tenian, de vuelta
+	foreach ($guardado as $id => $g) {
+		$id = (int) $id;
+		if (!isset($con[$id])) continue;
+		$u = $db->getRow('user', ['userid' => $id]);
+		if ($u) {
+			$cambiar($u, ['usergroupid' => (int) $g['usergroupid'], 'membergroupids' => (string) $g['membergroupids'], 'displaygroupid' => (int) $g['displaygroupid']]);
+			foreach ((array) ($g['moderador'] ?? []) as $m) {
+				unset($m['moderatorid']);
+				if (!$db->getRow('vBForum:moderator', ['userid' => $id, 'nodeid' => (int) $m['nodeid']])) $db->insert('vBForum:moderator', $m);
+			}
+			$cerrarSesiones($id);
+			$out['devueltos'][] = ['id' => $id, 'usuario' => $g['usuario']];
+		}
+		unset($guardado[$id]);
+		$guardar();
+	}
+	if ($out['suspendidos'] || $out['devueltos']) { vB_Cache::resetCache(); vB::getDatastore()->resetCache(); }
+	$out['esperando'] = array_map('intval', array_keys($guardado));
+	salir($out);
 }
 
 salir(['error' => 'no esta'], 404);

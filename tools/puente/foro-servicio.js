@@ -59,7 +59,20 @@ async function vuelta() {
   try { await avisos(); } catch (err) { warn('foro: avisos:', err.message); }
   try { await privadosNuevos(); } catch (err) { warn('foro: privados nuevos:', err.message); }
   try { await unidas(); } catch (err) { warn('foro: cuentas unidas:', err.message); }
+  try { await equipo(); } catch (err) { warn('foro: equipo con verificacion:', err.message); }
   andando = false;
+}
+
+// ── El equipo del foro (administradores y moderadores) tiene que tener la verificacion en dos pasos en su
+// cuenta de CV Chat: quien no, queda como usuario registrado hasta que la prende (servicio.php, /equipo).
+// Las cuentas del foro unidas con la verificacion prendida son las que pueden ser del equipo ──
+async function equipo() {
+  const con2fa = db.prepare('SELECT p.foro_user_id FROM puente_foro p JOIN users u ON u.id = p.haven_user_id WHERE u.totp_enabled = 1').all().map(r => r.foro_user_id);
+  // Nunca con la lista vacia: si algo falla aca, que no le saque los permisos a todo el equipo
+  if (!con2fa.length) return;
+  const r = await servicio('/equipo', { con2fa });
+  for (const x of r.suspendidos || []) log(`foro: ${x.usuario} (#${x.id}) del equipo sin verificacion en dos pasos en CV Chat: queda como usuario registrado hasta que la prenda`);
+  for (const x of r.devueltos || []) log(`foro: ${x.usuario} (#${x.id}) prendio la verificacion en dos pasos: vuelve a tener sus permisos del foro`);
 }
 
 // ── Las cuentas unidas con verificacion en dos pasos: en el foro entran solo por CV Chat (cvpuerta.php), que
