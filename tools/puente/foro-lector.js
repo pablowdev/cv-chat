@@ -170,7 +170,25 @@ async function vistaPrevia(enlace) {
   return data;
 }
 
+// El foro que se actualiza solo (web/foro-vivo.js, en cada pagina del foro): pregunta cada tanto cual es
+// el ultimo tema o respuesta y, si cambio, trae la parte de la pagina que cambio. Es un numero publico,
+// sin sesion, guardado unos segundos para que muchas pestañas abiertas no lleguen a la base
+let vivo = { at: 0, ultimo: null, pidiendo: null };
+async function ultimoPublico() {
+  if (Date.now() - vivo.at < 5000) return vivo.ultimo;
+  if (!vivo.pidiendo) vivo.pidiendo = lector('/vivo').then(r => { vivo = { at: Date.now(), ultimo: r ? r.ultimo : null, pidiendo: null }; return vivo.ultimo; })
+    .catch(err => { vivo.pidiendo = null; throw err; });
+  return vivo.pidiendo;
+}
+
 async function handle(req, res, p, u) {
+  if (p === '/puente/api/foro/vivo' && req.method === 'GET') {
+    const { json } = h;
+    if (foroUrl) { res.setHeader('Access-Control-Allow-Origin', new URL(foroUrl).origin); res.setHeader('Vary', 'Origin'); }
+    res.setHeader('Cache-Control', 'no-store');
+    if (!on()) return json(res, 503, { error: 'no' });
+    try { return json(res, 200, { u: await ultimoPublico() }); } catch { return json(res, 503, { error: 'no' }); }
+  }
   if (p !== '/puente/api/foro/buscar' || req.method !== 'GET') return false;
   const { json, sessionUser } = h;
   if (!sessionUser(req)) return json(res, 401, { error: 'sin sesion' });

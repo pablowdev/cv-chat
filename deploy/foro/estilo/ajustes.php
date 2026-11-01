@@ -13,6 +13,7 @@
 //  7. El codigo [tweet], seguro (tweet.html): el enlace va en un atributo y no adentro del codigo, y solo
 //     se arma el tweet si es un enlace de twitter.com o x.com (panel: Codigos BB -> Codigos BB propios)
 //  8. Las direcciones de los foros sin tildes ni simbolos; las viejas siguen andando (Constructor del sitio)
+//  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -209,6 +210,25 @@ foreach ($rutas as $r) {
   for ($n = 2, $cand = $limpia; $ocupada($cand, $r['contentid']); $n++) $cand = "$limpia-$n";
   vB5_Route::updateRoute((int)$r['routeid'], ['prefix' => $cand]);
   $dijo("direccion: {$r['prefix']} -> $cand");
+}
+
+// 9. El foro que se actualiza solo (tools/puente/web/foro-vivo.js, desde CV Chat): un anuncio en el
+//    "modulo de HTML de cabecera", que esta en todas las paginas. Se apaga o se borra desde el
+//    Constructor del sitio (o Publicidad), y este paso no lo vuelve a prender si ya existe
+$vivoTitulo = 'Foro en vivo (se actualiza solo)';
+if (!$db->getRow('ad', ['title' => $vivoTitulo])) {
+  if ($db->getRow('ad', ['adlocation' => 'header', 'active' => 1])) { fwrite(STDERR, "ya hay otro anuncio en la cabecera: revisar a mano\n"); exit(1); }
+  // Lo mismo que hace Publicidad -> Guardar (vB_Api_Ad::save pide una sesion del panel): el anuncio, y la
+  // plantilla ad_header armada como la arma vBulletin para un anuncio sin condiciones
+  $snippet = '<script src="https://chat.circulovicioso.club/puente/foro-vivo.js" defer></script>';
+  $adid = $db->insert('ad', ['title' => $vivoTitulo, 'adlocation' => 'header', 'displayorder' => 1, 'active' => 1, 'snippet' => $snippet]);
+  if (is_array($adid)) $adid = array_pop($adid);
+  $tpl = '<div class="ad_header_inner"><vb:literal>' . $snippet . '</vb:literal><vb:if condition="$' . 'adsshown[] = ' . (int)$adid . '"></vb:if></div>';
+  $tl = vB_Library::instance('template');
+  $opts = ['forcenotextonly' => true, 'textonly' => 0];
+  try { $tl->insert(-1, 'ad_header', $tpl, 'vbulletin', false, '', false, $opts); }
+  catch (vB_Exception_Api $e) { $tl->update($tl->getTemplateID('ad_header', -1), 'ad_header', $tpl, 'vbulletin', false, false, '', false, $opts); }
+  $dijo('foro en vivo: agregado (modulo de HTML de cabecera)');
 }
 
 // Que el foro vuelva a leer todo (como Mantenimiento -> Borrar la cache del sistema)

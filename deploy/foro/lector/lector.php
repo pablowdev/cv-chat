@@ -11,6 +11,7 @@
 //  GET /buscar?q=<texto>                     temas que lo mencionan
 //  GET /canal?ruta=<forum/...>               un foro (o la portada, con ruta vacia): nombre, cuentas y el ultimo tema
 //  GET /miembro?id=<userid>                  nombre, foto, mensajes y desde cuando (lo que se ve al lado de cada mensaje)
+//  GET /vivo                                 el ultimo tema o respuesta publico (el foro se actualiza solo cuando cambia)
 //
 // Pide la cabecera X-Lector-Clave (LECTOR_CLAVE).
 
@@ -85,6 +86,11 @@ $ruta = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 if ($ruta === '/ultimo') {
 	salir(['ultimo' => (int) $db->query('SELECT MAX(nodeid) FROM node')->fetchColumn()]);
+}
+
+if ($ruta === '/vivo') {
+	salir(['ultimo' => (int) $db->query('SELECT MAX(n.nodeid) FROM node n JOIN closure f ON f.child = n.nodeid AND f.parent = ' . FORO . '
+		WHERE n.contenttypeid IN (' . TIPOS . ') AND n.protected = 0 AND n.showpublished = 1 AND n.approved = 1')->fetchColumn()]);
 }
 
 if ($ruta === '/novedades') {
