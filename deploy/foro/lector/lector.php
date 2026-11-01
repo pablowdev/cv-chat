@@ -1,13 +1,16 @@
 <?php
 // Lector del foro para CV Chat (tools/puente/foro-lector.js): solo lee, y solo lo publico del foro
 // (lo que ve un visitante sin cuenta, dentro de "Foro"). Corre en su propio contenedor, con un usuario
-// de la base que solo puede leer las tablas de los temas (no los emails ni las contraseñas). CV Chat le
+// de la base que solo puede leer las tablas de los temas, las direcciones de los foros y el nombre, los
+// mensajes y la fecha de alta de cada usuario (no los emails ni las contraseñas). CV Chat le
 // llega por la red foro-lector; el foro no tiene como llegar a CV Chat.
 //
 //  GET /novedades?desde=<nodeid>&limite=<n>  temas y respuestas nuevos
 //  GET /ultimo                               el ultimo nodeid (para empezar sin publicar lo viejo)
 //  GET /tema?id=<nodeid>                     un tema o respuesta (para la vista previa de un enlace)
 //  GET /buscar?q=<texto>                     temas que lo mencionan
+//  GET /canal?ruta=<forum/...>               un foro (o la portada, con ruta vacia): nombre, cuentas y el ultimo tema
+//  GET /miembro?id=<userid>                  nombre, foto, mensajes y desde cuando (lo que se ve al lado de cada mensaje)
 //
 // Pide la cabecera X-Lector-Clave (LECTOR_CLAVE).
 
@@ -126,6 +129,43 @@ if ($ruta === '/buscar') {
 		if (count($out) >= 12) break;
 	}
 	salir(['resultados' => $out]);
+}
+
+if ($ruta === '/canal') {
+	// La portada ("" o "forum") es el canal Foro entero; si no, el foro de esa direccion
+	$r = trim((string) ($_GET['ruta'] ?? ''), '/');
+	if ($r === '' || $r === 'forum') $id = FORO;
+	else {
+		$q = $db->prepare("SELECT contentid FROM routenew WHERE prefix = ? AND class = 'vB5_Route_Channel' LIMIT 1");
+		$q->execute([$r]);
+		$id = (int) $q->fetchColumn();
+	}
+	$q = $db->prepare('SELECT n.nodeid, n.title, n.description, n.textcount, n.totalcount, n.lastcontentid FROM node n JOIN closure f ON f.child = n.nodeid AND f.parent = ' . FORO . ' WHERE n.nodeid = ?');
+	$q->execute([$id]);
+	$c = $q->fetch();
+	if (!$c || !publico((int) $c['nodeid'])) { http_response_code(404); salir(['error' => 'no esta']); }
+	// Los temas y mensajes de todo lo que tiene adentro (las cuentas del canal son solo de su primer nivel)
+	$t = $db->prepare('SELECT COUNT(*) AS temas, COALESCE(SUM(n.textcount), 0) AS respuestas FROM node n JOIN closure f ON f.child = n.nodeid AND f.parent = ?
+		WHERE n.contenttypeid IN (' . TIPOS . ') AND n.starter = n.nodeid AND n.protected = 0 AND n.showpublished = 1 AND n.showapproved = 1');
+	$t->execute([(int) $c['nodeid']]);
+	$k = $t->fetch();
+	$ult = null;
+	$u = $db->prepare($sql . ' AND n.nodeid = n.starter AND n.nodeid IN (SELECT f.child FROM closure f WHERE f.parent = ?) ORDER BY n.lastcontent DESC LIMIT 1');
+	$u->execute([(int) $c['nodeid']]);
+	if (($x = $u->fetch()) && publico((int) $x['canal'])) $ult = $armar($x);
+	salir(['canal' => [
+		'id' => (int) $c['nodeid'], 'portada' => (int) $c['nodeid'] === FORO, 'nombre' => $texto($c['title']), 'descripcion' => resumen($c['description'], 200),
+		'temas' => (int) $k['temas'], 'mensajes' => (int) $k['temas'] + (int) $k['respuestas'], 'ultimo' => $ult,
+	]]);
+}
+
+if ($ruta === '/miembro') {
+	$q = $db->prepare('SELECT userid, username, posts, joindate FROM user WHERE userid = ?');
+	$q->execute([(int) ($_GET['id'] ?? 0)]);
+	$m = $q->fetch();
+	if (!$m) { http_response_code(404); salir(['error' => 'no esta']); }
+	salir(['miembro' => ['id' => (int) $m['userid'], 'nombre' => $texto($m['username']), 'foto' => foto($m['userid']),
+		'mensajes' => (int) $m['posts'], 'desde' => (int) $m['joindate'] * 1000]]);
 }
 
 http_response_code(404);

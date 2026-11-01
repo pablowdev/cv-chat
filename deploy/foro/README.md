@@ -38,8 +38,26 @@ La barra de arriba de Círculo Vicioso (la de la web, `tools/puente/web/barra.*`
 página del foro (`imagen/apache-foro.conf`, con `mod_substitute`), menos a los paneles de control: no hace
 falta tocar las plantillas de vBulletin.
 
-En el Caddy de CV Chat: el servicio `caddy` también en la red `foro-frente` (externa) y un bloque
-`foro.ejemplo.com { reverse_proxy foro-web:80 }`.
+En el Caddy de CV Chat: el servicio `caddy` también en la red `foro-frente` (externa) y un bloque para el
+foro que además corta las direcciones de los ataques conocidos a vBulletin 5 (el foro ya trae el arreglo; es una
+traba más):
+
+```
+foro.ejemplo.com {
+	@ataque expression {uri}.matches("(?i)replaceAdTemplate|widget_php")
+	respond @ataque 403
+	reverse_proxy foro-web:80
+}
+```
+
+El lector (`lector/`, para CV Chat) entra a la base con un usuario que solo puede leer lo que necesita:
+
+```
+GRANT SELECT ON foro.node TO lector; GRANT SELECT ON foro.closure TO lector; GRANT SELECT ON foro.text TO lector;
+GRANT SELECT ON foro.permission TO lector; GRANT SELECT (visible, userid, dateline) ON foro.customavatar TO lector;
+GRANT SELECT (routeid, prefix, contentid, class, redirect301) ON foro.routenew TO lector;
+GRANT SELECT (userid, username, posts, joindate) ON foro.user TO lector;
+```
 
 El sitio principal (`../sitio`) son páginas fijas servidas por un Caddy chico de solo lectura en la misma
 red `foro-frente`.

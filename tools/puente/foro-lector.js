@@ -111,29 +111,61 @@ async function vuelta() {
   } finally { andando = false; }
 }
 
-// ── Vista previa de un enlace al foro (/node/123 o /forum/.../123-titulo) ──
+// ── Vista previa de un enlace al foro ──
+// Que es el enlace: un tema o una respuesta (/node/123, /forum/.../123-titulo, con ?p=456 o #post456 la
+// respuesta), un perfil (/member/12-nombre), o la portada o un foro (/, /forum, /forum/tech/hardware)
 function nodoDe(enlace) {
   try {
     const u = new URL(enlace);
     if (!foroUrl || u.origin !== new URL(foroUrl).origin) return null;
-    const m = u.pathname.match(/^\/node\/(\d+)/) || u.pathname.match(/\/(\d+)-[^/]*\/?$/);
-    return m ? Number(m[1]) : null;
+    const p = u.pathname.replace(/\/+$/, '');
+    const post = Number(u.searchParams.get('p')) || Number((u.hash.match(/^#post(\d+)$/) || [])[1]) || 0;
+    let m = p.match(/^\/member\/(\d+)(?:-[^/]*)?$/);
+    if (m) return { tipo: 'miembro', id: Number(m[1]) };
+    if ((m = p.match(/^\/node\/(\d+)$/) || p.match(/^\/forum\/.*\/(\d+)-[^/]*$/))) return { tipo: 'tema', id: post || Number(m[1]) };
+    if (p === '' || p === '/forum' || /^\/forum\/[^.]+$/.test(p)) return { tipo: 'canal', ruta: decodeURIComponent(p.slice(1)) };
+    return null;
   } catch { return null; }
+}
+const SITIO = 'Foro de Círculo Vicioso', ROSA = '#ee2d6f';
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+// La tarjeta: el titulo arriba (en azul, como las de los sitios) y abajo de quien es, donde y el texto.
+// Un perfil va con la foto y el nombre, como las de las redes
+async function tarjeta(d) {
+  if (d.tipo === 'tema') {
+    const t = ((await lector(`/tema?id=${d.id}`)) || {}).tema;
+    if (!t) return null;
+    const linea = `${t.es_tema ? 'Tema de' : 'Respuesta de'} ${t.autor} en ${t.canal}${t.respuestas != null ? ' · ' + plural(t.respuestas, 'respuesta', 'respuestas') : ''}`;
+    return { siteName: SITIO, accentColor: ROSA, title: t.tema, description: `${linea}${t.texto ? '\n\n' + t.texto : ''}` };
+  }
+  if (d.tipo === 'canal') {
+    const c = ((await lector(`/canal?ruta=${encodeURIComponent(d.ruta)}`)) || {}).canal;
+    if (!c) return null;
+    const u = c.ultimo;
+    const lineas = [c.portada ? 'Los temas del club, en el foro de siempre.' : c.descripcion,
+      `${plural(c.temas, 'tema', 'temas')} · ${plural(c.mensajes, 'mensaje', 'mensajes')}`,
+      u ? `Último tema: «${u.tema}», de ${u.autor}` : ''].filter(Boolean);
+    return { siteName: SITIO, accentColor: ROSA, title: c.portada ? SITIO : c.nombre, description: lineas.join('\n') };
+  }
+  if (d.tipo === 'miembro') {
+    const m = ((await lector(`/miembro?id=${d.id}`)) || {}).miembro;
+    if (!m) return null;
+    const desde = new Date(m.desde);
+    return { siteName: SITIO, accentColor: ROSA, author: m.nombre, handle: 'en el foro', avatar: m.foto || undefined,
+      description: `${plural(m.mensajes, 'mensaje', 'mensajes')} · en el foro desde ${MESES[desde.getUTCMonth()]} de ${desde.getUTCFullYear()}` };
+  }
+  return null;
 }
 const cache = new Map();
 async function vistaPrevia(enlace) {
-  const id = nodoDe(enlace);
-  if (!id || !on()) return null;
-  const c = cache.get(id);
+  const d = nodoDe(enlace);
+  if (!d || !on()) return null;
+  const k = JSON.stringify(d);
+  const c = cache.get(k);
   if (c && Date.now() - c.at < 10 * 60 * 1000) return c.data;
-  const r = await lector(`/tema?id=${id}`);
-  const t = r && r.tema;
-  const data = t ? {
-    siteName: 'Foro de Círculo Vicioso', accentColor: '#ee2d6f', title: t.tema,
-    description: `${t.es_tema ? '' : 'Respuesta de '}${t.autor} en ${t.canal}${t.texto ? ': ' + t.texto : ''}`.slice(0, 300),
-    author: t.autor, avatar: t.foto, image: null,
-  } : null;
-  cache.set(id, { at: Date.now(), data });
+  const data = await tarjeta(d);
+  cache.set(k, { at: Date.now(), data });
   if (cache.size > 1000) cache.delete(cache.keys().next().value);
   return data;
 }

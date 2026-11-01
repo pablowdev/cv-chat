@@ -10,6 +10,9 @@
 //     (Constructor del sitio -> Editar pagina)
 //  5. Los foros con menos movimiento juntos adentro de "Varios" (panel: Foros -> Administrador de foros)
 //  6. Textos que estaban en ingles, en castellano (panel: Idiomas y frases -> Buscar frases)
+//  7. El codigo [tweet], seguro (tweet.html): el enlace va en un atributo y no adentro del codigo, y solo
+//     se arma el tweet si es un enlace de twitter.com o x.com (panel: Codigos BB -> Codigos BB propios)
+//  8. Las direcciones de los foros sin tildes ni simbolos; las viejas siguen andando (Constructor del sitio)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -172,6 +175,41 @@ foreach ($frases as $campo => $lista) foreach ($lista as $var => $texto) {
 }
 if ($n) build_language(2);
 $dijo("textos: $n traducidos");
+
+// 7. [tweet] seguro: como lo guarda el panel ({param} -> %1$s y los % dobles)
+$tw = $db->getRow('bbcode', ['bbcodetag' => 'tweet', 'twoparams' => 0]);
+$html = trim((string)@file_get_contents(__DIR__ . '/tweet.html'));
+if ($tw && $html !== '') {
+  $nuevo = str_replace('{param}', '%1$s', str_replace('%', '%%', $html));
+  if ($tw['bbcodereplacement'] !== $nuevo) {
+    $db->update('bbcode', ['bbcodereplacement' => $nuevo, 'bbcodeexplanation' => 'Pegá el enlace de un tweet (de twitter.com o x.com) y se ve el tweet.',
+      'bbcodeexample' => '[tweet]https://x.com/circulovicioso8/status/1611737917529153536[/tweet]'], ['bbcodeid' => $tw['bbcodeid']]);
+    build_bbcode_cache();
+    $dijo('[tweet]: reemplazado por la version segura');
+  }
+}
+
+// 8. Direcciones sin tildes ni simbolos (forum/tech/programación -> forum/tech/programacion): asi los
+//    enlaces se pegan enteros en el chat y en cualquier lado. Igual que cambiar la direccion en el
+//    Constructor del sitio: la vieja queda redirigiendo a la nueva, con los temas adentro
+$q = $vbulletin->db->query_read("SELECT routeid, prefix, contentid FROM " . TABLE_PREFIX . "routenew WHERE redirect301 IS NULL AND class = 'vB5_Route_Channel' AND prefix REGEXP '[^ -~]'");
+$rutas = [];
+while ($r = $vbulletin->db->fetch_array($q)) $rutas[] = $r;
+$sinTilde = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n', 'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u', 'ç' => 'c',
+  'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u', 'Ñ' => 'n'];
+// La base compara sin fijarse en las tildes: "musica" ya es "música". Ocupada es si la usa otro canal
+$ocupada = function ($prefijo, $canal) use ($vbulletin) {
+  $r = $vbulletin->db->query_first("SELECT contentid FROM " . TABLE_PREFIX . "routenew WHERE redirect301 IS NULL AND prefix = '" . $vbulletin->db->escape_string($prefijo) . "' AND contentid <> " . (int)$canal);
+  return !empty($r);
+};
+foreach ($rutas as $r) {
+  $limpia = strtolower(strtr($r['prefix'], $sinTilde));
+  $limpia = trim(preg_replace(['#[^a-z0-9/-]+#', '#-{2,}#', '#-*/-*#'], ['-', '-', '/'], $limpia), '-/');
+  if ($limpia === '' || $limpia === $r['prefix']) continue;
+  for ($n = 2, $cand = $limpia; $ocupada($cand, $r['contentid']); $n++) $cand = "$limpia-$n";
+  vB5_Route::updateRoute((int)$r['routeid'], ['prefix' => $cand]);
+  $dijo("direccion: {$r['prefix']} -> $cand");
+}
 
 // Que el foro vuelva a leer todo (como Mantenimiento -> Borrar la cache del sistema)
 vB::getDatastore()->build_options();
