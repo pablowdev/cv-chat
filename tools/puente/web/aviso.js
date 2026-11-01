@@ -8752,7 +8752,7 @@ document.addEventListener('pointerdown', (ev) => {
   };
   const BTN = {
     truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido',
-    flor: '¡Flor!', quiero: '¡Quiero!', noquiero: 'No quiero', mazo: 'Al mazo',
+    flor: '¡Flor!', quiero: '¡Quiero!', noquiero: 'No quiero', mazo: 'Al mazo', ver: '¡Las quiero ver en mesa!',
   };
   const CANTO = { truco: '¡Truco!', retruco: '¡Quiero retruco!', vale4: '¡Quiero vale cuatro!', envido: 'Envido', real: 'Real envido', falta: 'Falta envido' };
   const app = () => window.app;
@@ -9218,15 +9218,29 @@ document.addEventListener('pointerdown', (ev) => {
       felt.appendChild(pila);
     });
     b.appendChild(felt);
+    // El tanto que se mostro: unos segundos sobre el paño (o hasta tocar Seguir)
+    if (s.muestra && mesa.muestraT !== s.muestra.t) { mesa.muestraT = s.muestra.t; mesa.muestraFin = Date.now() + 5500; setTimeout(() => page && page.querySelector('.jg-muestra:not(.fija)')?.remove(), 5600); }
+    if (s.muestra && s.muestra.t === mesa.muestraT && Date.now() < mesa.muestraFin) {
+      const m = muestraTanto(s);
+      const seguir = el('button', 'jg-btn', 'Seguir'); seguir.type = 'button';
+      seguir.addEventListener('click', () => { mesa.muestraFin = 0; m.remove(); });
+      m.appendChild(seguir); felt.appendChild(m);
+    }
     // Que pasa ahora
     const st = el('div', 'jg-status');
-    if (s.pendiente) {
+    if (s.tanto) {
+      // Cantando el tanto: lo que ya dijo cada uno
+      if (s.tanto.rival != null) st.appendChild(el('div', 'jg-canto rival', `${s.rival.nombre}: Tengo ${s.tanto.rival}`));
+      if (s.tanto.yo != null) st.appendChild(el('div', 'jg-canto', `Vos: Tengo ${s.tanto.yo}`));
+      st.appendChild(el('div', 'jg-turno', s.tanto.turno === 'yo' ? 'Cantá tu tanto' : `Esperando que ${s.rival.nombre} cante el tanto…`));
+    } else if (s.pendiente) {
       const who = s.pendiente.de === 'yo' ? 'Cantaste' : `${s.rival.nombre} cantó`;
       st.appendChild(el('div', 'jg-canto' + (s.pendiente.de === 'yo' ? '' : ' rival'), `${who}: ${CANTO[s.pendiente.canto] || s.pendiente.canto}`));
       if (s.pendiente.de === 'yo') st.appendChild(el('div', 'jg-turno', `Esperando que ${s.rival.nombre} conteste…`));
     } else st.appendChild(el('div', 'jg-turno', s.turno === 'yo' ? 'Te toca' : `Juega ${s.rival.nombre}…`));
     const last = (s.log || []).slice(-1)[0];
-    if (last) st.appendChild(el('div', 'jg-ultimo', last));
+    if (last && !s.tanto) st.appendChild(el('div', 'jg-ultimo', last));
+    if (s.tantoVer) st.appendChild(el('div', 'jg-ultimo', 'Pidieron ver el tanto: las cartas se muestran al final de la mano.'));
     if (s.deadline) { const r = el('div', 'jg-reloj' + ((s.turno === 'yo' && !(s.pendiente && s.pendiente.de === 'yo')) ? ' mio' : '')); r.appendChild(el('span')); r.appendChild(el('span', 'jg-reloj-t')); st.appendChild(r); }
     b.appendChild(st);
     if (s.grito && s.grito.mio) b.appendChild(el('div', 'jg-globo mio', s.grito.text));
@@ -9244,10 +9258,27 @@ document.addEventListener('pointerdown', (ev) => {
     else if (s.mano) b.appendChild(el('div', 'jg-envido', 'Sos mano'));
     // Los cantos de ahora
     const acts = el('div', 'jg-cantos');
-    const order = ['quiero', 'noquiero', 'truco', 'retruco', 'vale4', 'envido', 'real', 'falta', 'flor', 'mazo'];
+    if ((s.acciones || []).includes('tanto')) {
+      const real = s.miEnvido, contra = s.tanto && s.tanto.rival, contesto = contra != null;
+      const btn = (txt, cls, a) => { const x = el('button', 'jg-btn ' + cls, txt); x.type = 'button'; x.addEventListener('click', () => play(s, a)); acts.appendChild(x); };
+      if (!contesto) btn(`Tengo ${real}`, 'jg-primario', { tipo: 'tanto', valor: real });
+      else if (real > contra) btn(`${real} son mejores`, 'jg-primario', { tipo: 'tanto', valor: real });
+      if (contesto) btn('Son buenas', real > contra ? 'jg-suave' : 'jg-primario', { tipo: 'buenas' });
+      // Otro numero (se puede mentir, como en la mesa)
+      const otros = [0, 1, 2, 3, 4, 5, 6, 7, ...Array.from({ length: 14 }, (_, k) => 20 + k)].filter(v => v !== real && (!contesto || v > contra));
+      if (otros.length) {
+        const sel = el('select', 'jg-tanto-sel'); sel.setAttribute('aria-label', 'Cantar otro número');
+        sel.appendChild(el('option', '', 'Cantar otro…')); sel.options[0].value = '';
+        otros.forEach(v => { const o = el('option', '', contesto ? `${v} son mejores` : `Tengo ${v}`); o.value = String(v); sel.appendChild(o); });
+        sel.addEventListener('change', () => { if (sel.value !== '') play(s, { tipo: 'tanto', valor: Number(sel.value) }); });
+        acts.appendChild(sel);
+      }
+    }
+    const order = ['quiero', 'noquiero', 'truco', 'retruco', 'vale4', 'envido', 'real', 'falta', 'flor', 'ver', 'mazo'];
+    const jugables = (s.acciones || []).filter(a => a !== 'ver');
     for (const a of order) {
       if (!(s.acciones || []).includes(a)) continue;
-      if (a === 'mazo' && !(s.acciones.length > 1 || s.turno === 'yo')) continue;
+      if (a === 'mazo' && !(jugables.length > 1 || s.turno === 'yo')) continue;
       const x = el('button', 'jg-btn ' + (a === 'quiero' || a === 'truco' || a === 'retruco' || a === 'vale4' ? 'jg-primario' : a === 'mazo' || a === 'noquiero' ? 'jg-suave' : 'jg-envido-btn'), BTN[a]);
       x.type = 'button';
       x.addEventListener('click', () => play(s, { tipo: a }));
@@ -9363,11 +9394,24 @@ document.addEventListener('pointerdown', (ev) => {
     const r = await emit('truco:accion', { id: s.id, ...a });
     if (r.error) toast(r.error, 'error');
   }
+  // Las cartas del tanto que se mostraron al final de la mano (si las pidieron)
+  function muestraTanto(s, cls) {
+    const m = s.muestra, quien = m.de === 'yo' ? 'Vos' : s.rival.nombre;
+    const w = el('div', 'jg-muestra' + (cls ? ' ' + cls : '') + (m.mintio ? ' mintio' : ''));
+    w.appendChild(el('div', 'jg-muestra-t', `${quien} ${m.de === 'yo' ? 'cantaste' : 'cantó'} ${m.dijo} de tanto`));
+    const cs = el('div', 'jg-muestra-cartas'); m.cartas.forEach(c => cs.appendChild(card(c, 'jugada'))); w.appendChild(cs);
+    const tenia = m.de === 'yo' ? 'Tenías' : 'Tenía';
+    w.appendChild(el('div', 'jg-muestra-r', !m.mintio ? `${tenia} ${m.tenia} ✔`
+      : m.de === 'yo' ? `${tenia} ${m.tenia}: ¡te pescaron! Los ${m.pts} puntos son para ${s.rival.nombre}.`
+        : `¡Mintió! ${tenia} ${m.tenia}. Los ${m.pts} puntos son para vos.`));
+    return w;
+  }
   function end(b, s) {
     const w = el('div', 'jg-fin');
     const won = s.ganador === 'yo';
     w.append(el('div', 'jg-hero-cartas', won ? '🏆' : '🃏'), el('div', 'jg-hero-t', won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`),
       el('div', 'jg-hero-s', `${s.yo.puntos} a ${s.rival.puntos}${s.motivo === 'abandono' ? (won ? ' · tu rival abandonó' : ' · por abandono') : ''}`));
+    if (s.muestra) w.appendChild(muestraTanto(s, 'fija'));
     const acts = el('div', 'jg-acciones');
     if (s.soyJugador && !s.siguiente) {
       const r = el('button', 'jg-btn jg-primario', s.revancha && s.revancha.yo ? 'Esperando revancha…' : s.revancha && s.revancha.rival ? `${s.rival.nombre} quiere la revancha: ¡Dale!` : 'Revancha');

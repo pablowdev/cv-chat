@@ -2955,6 +2955,16 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-fosforos.jg-fosforos-c { width: auto; height: 1.625rem; max-width: 48%; }
 @media (max-width: 999px) { .puente-jg .jg-lateral .jg-tanteador { display: none; } }
 @media (min-width: 1000px) { .puente-jg .jg-marcador-fos { display: none; } }
+/* El tanto que se muestra al final de la mano (si lo pidieron ver), sobre el paño o al terminar */
+.puente-jg .jg-pano.jg-pano2 { position: relative; }
+.puente-jg .jg-muestra { position: absolute; left: 0; right: 0; top: 0; min-height: 100%; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem; border-radius: inherit; background: rgba(14, 40, 27, 0.95); text-align: center; animation: puente-fade 0.2s ease-out; }
+.puente-jg .jg-muestra.fija { position: static; min-height: 0; margin-top: 1rem; border-radius: 0.875rem; background: rgba(0, 0, 0, 0.22); }
+.puente-jg .jg-muestra-t { font-size: 1rem; font-weight: 800; color: #fff; }
+.puente-jg .jg-muestra-cartas { display: flex; gap: 0.5rem; justify-content: center; }
+.puente-jg .jg-muestra .jg-carta.jugada { width: calc(var(--jg-jugada) * 0.85); height: calc(var(--jg-jugada) * 0.85 * 1.47); }
+.puente-jg .jg-muestra-r { font-weight: 700; color: #c9e6d4; }
+.puente-jg .jg-muestra.mintio .jg-muestra-r { color: #f0b232; }
+.puente-jg .jg-tanto-sel { min-height: 2.5rem; padding: 0 0.75rem; border-radius: 0.625rem; border: 1px solid #4e5058; background: #2b2a30; color: #f2f3f5; font: inherit; font-size: 0.9375rem; }
 .puente-jg .jg-palito { stroke: #f1dfb4; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45)); }
 .puente-jg .jg-cabeza { fill: #c8281e; stroke: #7a1208; stroke-width: 0.6; }
 .puente-jg .jg-malas { stroke: rgba(255,255,255,0.45); stroke-width: 1; stroke-dasharray: 3 2; }

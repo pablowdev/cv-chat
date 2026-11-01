@@ -10,7 +10,11 @@
 //   truco:crear  { puntos, flor, modo: 'abierta'|'compu'|'desafio', rival }
 //   truco:unirse { id }   truco:cancelar { id }   truco:ver { id }
 //   truco:accion { id, tipo, carta?, grito? }   (jugar, truco, retruco, vale4,
-//       envido, real, falta, flor, quiero, noquiero, mazo, grito, abandonar, revancha)
+//       envido, real, falta, flor, quiero, noquiero, mazo, grito, abandonar, revancha,
+//       tanto { valor }, buenas, ver)
+// El envido querido se canta como en la mesa: el mano dice su tanto, el otro contesta "son
+// buenas" o "X son mejores", y se puede mentir. El que pierde puede pedir "las quiero ver en
+// mesa": al final de la mano se muestran las cartas y, si el ganador mintio, pierde esos puntos.
 // Y el servidor avisa:
 //   truco:estado (la partida, como la ve cada uno)   truco:cambio (algo cambio en la sala)
 //
@@ -93,6 +97,16 @@ function envido(cards) {
   }
   return best || Math.max(...cards.map(envVal));
 }
+// Las cartas con las que se hace el tanto (las dos del mismo palo, o la mas alta)
+function envidoCartas(cards) {
+  let best = null, bv = -1;
+  for (const p of PALOS) {
+    const cs = cards.filter(c => c.p === p).sort((a, b) => envVal(b) - envVal(a));
+    if (cs.length >= 2 && 20 + envVal(cs[0]) + envVal(cs[1]) > bv) { bv = 20 + envVal(cs[0]) + envVal(cs[1]); best = cs.slice(0, 2); }
+  }
+  return best || [cards.slice().sort((a, b) => envVal(b) - envVal(a))[0]];
+}
+const tantoValido = v => Number.isInteger(v) && ((v >= 0 && v <= 7) || (v >= 20 && v <= 33));
 const hasFlor = cards => cards.length === 3 && cards.every(c => c.p === cards[0].p);
 const florVal = cards => 20 + cards.reduce((s, c) => s + envVal(c), 0);
 function deal() {
@@ -173,6 +187,7 @@ function start(g) {
 }
 
 function newHand(g, first) {
+  if (!first && cerrarTanto(g)) return; // al mostrar el tanto, el que mintio pudo perder la partida
   if (!first) g.manoDe = other(g.manoDe);
   g.manos++;
   const cartas = deal();
@@ -192,8 +207,52 @@ function note(g, text) { g.log.push({ t: Date.now(), text }); if (g.log.length >
 function addPoints(g, i, n, why) {
   g.puntaje[i] += n;
   note(g, `${nameOf(g.jugadores[i]).nombre} suma ${n} ${n === 1 ? 'punto' : 'puntos'} (${why}).`);
+  // Si con esto termina la partida, antes se muestra el tanto que pidieron ver
+  if (g.puntaje[i] >= g.puntos && cerrarTanto(g)) return true;
   if (g.puntaje[i] >= g.puntos) { g.puntaje[i] = Math.min(g.puntaje[i], g.puntos); finish(g, i, 'puntos'); return true; }
   return false;
+}
+
+// El envido querido ya cantado: gana w con lo que dijo. Si con esos puntos gana la partida, las
+// cartas se muestran en el momento; si no, quedan para el final de la mano (si las piden)
+function resolverTanto(g, w) {
+  const h = g.h, e = h.env, o = other(w);
+  e.canta.turno = null;
+  e.ganador = w; e.dijo = e.canta.dicho[w];
+  const cards = h.cartas[w].concat(h.bazas[0][w] ? [h.bazas[0][w]] : []);
+  e.real = envido(cards); e.cartas = envidoCartas(cards);
+  if (g.puntaje[w] + e.pts >= g.puntos) {
+    e.ver = true; e.cerrado = true; mostrarTanto(g);
+    return e.real >= e.dijo ? addPoints(g, w, e.pts, 'envido') : addPoints(g, o, e.pts, 'tanto mentido');
+  }
+  const fin = addPoints(g, w, e.pts, 'envido');
+  // La compu, cuando pierde, a veces las quiere ver (mas cuanto mas alto le cantaron)
+  const b = seat(g, BOT);
+  if (!fin && b === o) {
+    const p = e.dijo >= 31 ? 0.65 : e.dijo >= 28 ? 0.4 : e.dijo >= 25 ? 0.25 : 0.1;
+    if (Math.random() < p) setTimeout(() => { if (g.estado === 'jugando' && g.h === h && allowed(g, b).includes('ver')) doAct(g, b, { tipo: 'ver' }); }, 1200 + crypto.randomInt(800));
+  }
+  return fin;
+}
+function mostrarTanto(g) {
+  const e = g.h.env, w = e.ganador, name = nameOf(g.jugadores[w]).nombre;
+  g.muestra = { de: w, dijo: e.dijo, tenia: e.real, cartas: e.cartas, mintio: e.real < e.dijo, pts: e.pts, t: Date.now() };
+  g.pausa = Date.now() + 5000;
+  note(g, e.real >= e.dijo ? `${name} mostró las cartas: tenía ${e.real}.` : `¡${name} mintió! Cantó ${e.dijo} y tenía ${e.real}.`);
+}
+// Al final de la mano: si pidieron ver el tanto, se muestra; si el ganador mintio, los puntos
+// del envido pasan al otro. Devuelve true si con eso termino la partida
+function cerrarTanto(g) {
+  const e = g.h && g.h.env;
+  if (!e || e.ganador == null || e.cerrado) return false;
+  e.cerrado = true;
+  if (!e.ver) return false;
+  mostrarTanto(g);
+  if (e.real >= e.dijo) return false;
+  const w = e.ganador;
+  g.puntaje[w] = Math.max(0, g.puntaje[w] - e.pts);
+  note(g, `${nameOf(g.jugadores[w]).nombre} pierde los ${e.pts} del envido.`);
+  return addPoints(g, other(w), e.pts, 'tanto mentido');
 }
 
 function finish(g, winner, motivo) {
@@ -211,6 +270,7 @@ function finish(g, winner, motivo) {
 // Quien tiene que actuar ahora (contestar un canto, o jugar)
 function actor(g) {
   const h = g.h;
+  if (h.env.canta && h.env.canta.turno != null) return h.env.canta.turno;
   if (h.env.pend) return h.env.pend.para;
   if (h.truco.pend) return h.truco.pend.para;
   return h.turno;
@@ -237,9 +297,16 @@ function envRaises(cantos) {
   return e >= 2 ? ['real', 'falta'] : ['envido', 'real', 'falta'];
 }
 
-// Lo que puede hacer el jugador i en este momento
+// Lo que puede hacer el jugador i en este momento (y el que perdio el envido, pedir verlas)
 function allowed(g, i) {
   if (g.estado !== 'jugando') return g.estado === 'terminada' && !g.siguiente ? ['revancha'] : [];
+  const e = g.h.env;
+  if (e.canta && e.canta.turno != null) return e.canta.turno !== i ? [] : i === g.manoDe ? ['tanto'] : ['tanto', 'buenas'];
+  const out = jugadas(g, i);
+  if (e.ganador != null && e.ganador !== i && !e.ver && !e.cerrado) out.push('ver');
+  return out;
+}
+function jugadas(g, i) {
   const h = g.h, out = [];
   if (h.env.pend) {
     if (h.env.pend.para !== i) return ['mazo'];
@@ -344,6 +411,28 @@ function doAct(g, i, d) {
     note(g, `${name}: ${NOMBRE[tipo]}`);
     tick(g); return null;
   }
+  if (tipo === 'tanto' || tipo === 'buenas') {
+    const c = h.env.canta, mano = g.manoDe;
+    if (tipo === 'buenas') {
+      note(g, `${name}: Son buenas.`);
+      if (resolverTanto(g, mano)) { push(g, true); return null; }
+      tick(g); return null;
+    }
+    const v = Number(d.valor);
+    if (!tantoValido(v)) return { error: 'Ese tanto no existe.' };
+    if (i === mano) { c.dicho[i] = v; c.turno = o; note(g, `${name}: Tengo ${v}.`); tick(g); return null; }
+    if (v <= c.dicho[mano]) return { error: `Para ganar tenés que cantar más de ${c.dicho[mano]}.` };
+    c.dicho[i] = v;
+    note(g, `${name}: ${v} son mejores.`);
+    if (resolverTanto(g, i)) { push(g, true); return null; }
+    tick(g); return null;
+  }
+  if (tipo === 'ver') {
+    h.env.ver = true;
+    note(g, `${name}: ¡Las quiero ver en mesa!`);
+    g.grito = { de: i, text: '¡Las quiero ver en mesa!', t: Date.now() };
+    push(g, false); return null;
+  }
   if (tipo === 'flor') {
     h.flor.cantada[i] = true; h.flor.hecho = true;
     h.env.pend = null; h.env.hecho = true; // la flor tapa el envido
@@ -368,13 +457,10 @@ function doAct(g, i, d) {
         note(g, `${name}: No quiero.`);
         if (addPoints(g, caller, Math.max(1, prev), 'envido no querido')) { push(g, true); return null; }
       } else {
-        const pts = cantos.includes('falta') ? faltaPoints(g) : cantos.reduce((s, c) => s + ENV_VAL[c], 0);
-        const a = envido(h.cartas[0].concat(h.bazas[0][0] ? [h.bazas[0][0]] : []));
-        const b = envido(h.cartas[1].concat(h.bazas[0][1] ? [h.bazas[0][1]] : []));
-        const w = a > b ? 0 : b > a ? 1 : g.manoDe;
-        note(g, `${name}: ¡Quiero! ${nameOf(g.jugadores[0]).nombre} tiene ${a}, ${nameOf(g.jugadores[1]).nombre} tiene ${b}.`);
-        h.env.mostrar = [a, b];
-        if (addPoints(g, w, pts, 'envido')) { push(g, true); return null; }
+        // Querido: ahora se canta el tanto, empezando por el mano
+        h.env.pts = cantos.includes('falta') ? faltaPoints(g) : cantos.reduce((s, c) => s + ENV_VAL[c], 0);
+        h.env.canta = { turno: g.manoDe, dicho: [null, null] };
+        note(g, `${name}: ¡Quiero!`);
       }
       tick(g); return null;
     }
@@ -454,7 +540,7 @@ function arm(g) {
   clearTimeout(timers.get(g.id));
   if (g.estado !== 'jugando') return;
   const who = actor(g);
-  if (g.jugadores[who] === BOT) { timers.set(g.id, setTimeout(() => botMove(g), 900 + crypto.randomInt(900))); return; }
+  if (g.jugadores[who] === BOT) { timers.set(g.id, setTimeout(() => botMove(g), 900 + crypto.randomInt(900) + Math.max(0, (g.pausa || 0) - Date.now()))); return; }
   timers.set(g.id, setTimeout(() => timeout(g), Math.max(1000, (g.deadline || Date.now()) - Date.now())));
 }
 
@@ -468,7 +554,9 @@ function timeout(g) {
   if (g.timeouts[i] >= 3) { finish(g, other(i), 'abandono'); push(g, true); return; }
   const n = g.timeouts[i];
   const a = allowed(g, i);
-  doAct(g, i, { tipo: a.includes('noquiero') ? 'noquiero' : 'mazo' });
+  // Cantando el tanto: el mano dice el suyo de verdad; el otro, son buenas
+  const h = g.h, real = envido(h.cartas[i].concat(h.bazas[0][i] ? [h.bazas[0][i]] : []));
+  doAct(g, i, a.includes('buenas') ? { tipo: 'buenas' } : a.includes('tanto') ? { tipo: 'tanto', valor: real } : { tipo: a.includes('noquiero') ? 'noquiero' : 'mazo' });
   g.timeouts[i] = n; // la jugada automatica no cuenta como que volvio
   save(g);
 }
@@ -484,7 +572,19 @@ function botMove(g) {
   const ev = envido(all), top = Math.max(...mine.map(rank), 0);
   const strong = mine.filter(c => rank(c) >= 10).length;
   // Si por algo la jugada no vale, al mazo (para que nunca se trabe)
-  const pick = (t, extra) => { const r = doAct(g, i, { tipo: t, ...extra }); if (r && r.error && t !== 'mazo') doAct(g, i, { tipo: allowed(g, i).includes('noquiero') ? 'noquiero' : 'mazo' }); return r; };
+  const pick = (t, extra) => {
+    const r = doAct(g, i, { tipo: t, ...extra });
+    if (r && r.error && t !== 'mazo') { const al = allowed(g, i); doAct(g, i, al.includes('buenas') ? { tipo: 'buenas' } : al.includes('tanto') ? { tipo: 'tanto', valor: ev } : { tipo: al.includes('noquiero') ? 'noquiero' : 'mazo' }); }
+    return r;
+  };
+  // Cantar el tanto: casi siempre la verdad; a veces miente para arriba
+  if (h.env.canta && h.env.canta.turno === i) {
+    if (i === g.manoDe) return pick('tanto', { valor: ev < 26 && Math.random() < 0.22 ? 26 + crypto.randomInt(6) : ev });
+    const dm = h.env.canta.dicho[g.manoDe];
+    if (ev > dm) return pick('tanto', { valor: ev });
+    if (dm < 31 && Math.random() < 0.15) return pick('tanto', { valor: dm < 20 ? 21 + crypto.randomInt(6) : dm + 1 + crypto.randomInt(Math.min(3, 33 - dm)) });
+    return pick('buenas');
+  }
   if (a.includes('flor')) return pick('flor');
   if (h.env.pend) {
     if (ev >= 30 && a.includes('falta') && Math.random() < 0.3) return pick('falta');
@@ -542,9 +642,14 @@ function view(g, me) {
     out.truco = h.truco.nivel;
     out.pendiente = h.env.pend ? { tipo: 'envido', canto: h.env.cantos[h.env.cantos.length - 1], cantos: h.env.cantos, de: h.env.pend.de === pov ? 'yo' : 'rival' }
       : h.truco.pend ? { tipo: 'truco', canto: h.truco.pend.canto, de: h.truco.pend.de === pov ? 'yo' : 'rival' } : null;
+    const c = h.env.canta;
+    if (c && c.turno != null) out.tanto = { turno: c.turno === pov ? 'yo' : 'rival', yo: c.dicho[pov], rival: c.dicho[o] };
+    out.tantoVer = !!h.env.ver && !h.env.cerrado;
     out.miEnvido = i >= 0 ? envido(h.cartas[pov].concat(h.bazas[0][pov] ? [h.bazas[0][pov]] : [])) : null;
     out.deadline = g.deadline;
   }
+  // Las cartas del tanto que se mostraron (un rato despues de mostrarlas)
+  if (g.muestra && Date.now() - g.muestra.t < 20000) out.muestra = { ...g.muestra, de: g.muestra.de === pov ? 'yo' : 'rival' };
   return out;
 }
 
