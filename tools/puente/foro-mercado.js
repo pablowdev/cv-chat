@@ -1,3 +1,5 @@
+// APAGADO: tejemanejes quedo de archivo en el foro y el Marketplace es el unico lugar (MERCADO_FORO=1 lo vuelve
+// a prender). Lo de abajo es como andaba:
 // El Marketplace (mercado.js) y la compra/venta del foro ("tejemanejes"), en los dos sentidos, con el
 // servicio del foro (foro-servicio.js):
 //  - Los temas de tejemanejes estan en el Marketplace con su fecha, sus fotos, el precio (si se lee en el
@@ -21,6 +23,7 @@ function setup(ctx) {
   mercado = require('./mercado.js');
   servicio = require('./foro-servicio.js');
   if (!servicio.on()) return;
+  if (process.env.MERCADO_FORO !== '1') { log('foro: tejemanejes de archivo, el Marketplace va solo en CV Chat'); return; }
   log('foro: marketplace y tejemanejes juntos');
   setTimeout(vuelta, 45000);
   setInterval(vuelta, CADA_MS);

@@ -209,6 +209,8 @@ function hookHttp() {
       if (url === '/app' || url.startsWith('/app?')) injectScript(req, res, '/puente/aviso.js');
       else if (url === '/' || url.startsWith('/?')) injectScript(req, res, '/puente/login.js');
       else if (url.startsWith('/api/link-preview?')) {
+        // Un enlace a una publicacion del Marketplace (/app?mercado=<id> o la web): su tarjeta (mercado.js)
+        if (mercadoPreview(req, res)) return true;
         // Un enlace a un mensaje (de CV Chat o de Discord) se ve como "#canal › mensaje"
         // (web/aviso.js): sin tarjeta de vista previa
         if (isMessageLink(url)) { json(res, 400, { error: 'enlace a un mensaje' }); return true; }
@@ -248,6 +250,19 @@ function twitterProxyToX(reqUrl) {
 const TWEET_RE = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com)\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
 const tweetCache = new Map(); // id del tuit -> { at, data }
 const TWEET_TTL_MS = 30 * 60 * 1000;
+function mercadoPreview(req, res) {
+  let target, own;
+  try { target = new URL(new URL(req.url, 'http://x').searchParams.get('url') || ''); own = publicUrl ? new URL(publicUrl).host : null; } catch { return false; }
+  const mercado = require('./mercado.js');
+  const id = mercado.idDeEnlace(target.href, own);
+  if (!id) return false;
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ') || !verifyToken || !verifyToken(auth.slice(7))) return false;
+  const data = mercado.vistaPrevia(id);
+  if (data) send(res, 200, 'application/json', JSON.stringify({ ...data, url: target.href }));
+  else json(res, 404, { error: 'no esta' });
+  return true;
+}
 function foroPreview(req, res) {
   let target;
   try { target = new URL(req.url, 'http://x').searchParams.get('url') || ''; } catch { return false; }
@@ -1161,7 +1176,7 @@ async function handle(req, res) {
     if (r !== false) return;
   }
   if (p.startsWith('/puente/api/mercado/')) {
-    const r = await require('./mercado.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    const r = await require('./mercado.js').handle(req, res, p, u, { sessionUser, json, readJson, webUser: cuenta.userFromCookie, allowedOrigin: cuenta.allowedOrigin });
     if (r !== false) return;
   }
   if (p === '/puente/api/campana' || p === '/puente/api/campana/leer') {

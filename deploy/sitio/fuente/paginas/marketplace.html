@@ -1,0 +1,67 @@
+<div class="mk" id="mk" hidden>
+  <section class="caja mk__cab">
+    <div class="caja__cuerpo">
+      <p class="rotulo">compra, venta y servicios del club</p>
+      <h1 class="titulo">Marketplace</h1>
+      <p class="chico">Lo que publican los miembros en CV Chat. La compra, el pago y la entrega quedan entre ustedes: se arregla por mensaje en el chat.</p>
+      <div class="mk__acciones">
+        <a class="btn btn--degrade" id="mk-publicar" href="https://chat.circulovicioso.club/app?mercado">Publicar en CV Chat</a>
+        <a class="btn" id="mk-mias" href="?ver=mias">Mis publicaciones</a>
+      </div>
+    </div>
+  </section>
+
+  <form class="mk__filtros" id="mk-filtros" role="search">
+    <input class="input" id="mk-q" type="search" placeholder="Buscar: auriculares, remera, zona…" aria-label="Buscar" maxlength="80">
+    <select class="input" id="mk-tipo" aria-label="Qué">
+      <option value="">Todo</option>
+      <option value="producto">Productos</option>
+      <option value="servicio">Servicios</option>
+    </select>
+    <select class="input" id="mk-orden" aria-label="Orden">
+      <option value="">Lo más nuevo</option>
+      <option value="barato">Más barato</option>
+      <option value="caro">Más caro</option>
+    </select>
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+
+  <p class="chico mk__estado" id="mk-estado"></p>
+  <ul class="lista-limpia mk__grilla" id="mk-grilla"></ul>
+  <div class="mk__mas"><button class="btn" id="mk-mas" type="button" hidden>Ver más</button></div>
+</div>
+
+<section class="caja mk-item" id="mk-item" hidden>
+  <div class="caja__cab"><a class="rotulo" id="mk-volver" href="/marketplace">← Marketplace</a><span class="rotulo" id="mk-i-tipo"></span></div>
+  <div class="mk-item__cuerpo">
+    <div class="mk-item__fotos">
+      <img id="mk-i-foto" alt="">
+      <div class="mk-item__miniaturas" id="mk-i-minis"></div>
+    </div>
+    <div class="mk-item__datos">
+      <h1 class="titulo-2" id="mk-i-titulo"></h1>
+      <p class="mk-item__precio" id="mk-i-precio"></p>
+      <p class="chico" id="mk-i-linea"></p>
+      <div class="mk-item__texto" id="mk-i-texto"></div>
+      <div class="mk-item__vendedor" id="mk-i-vendedor"></div>
+      <div class="mk__acciones">
+        <a class="btn btn--degrade" id="mk-i-escribir" href="#">Escribirle en CV Chat</a>
+        <a class="btn" id="mk-i-abrir" href="#">Ver en CV Chat</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="caja no-esta" id="sin-sesion" hidden>
+  <div class="caja__cuerpo">
+    <p class="rotulo">marketplace</p>
+    <h1 class="titulo">Solo para miembros</h1>
+    <p>La compra y venta del club es para los que tienen cuenta. Entrá con tu cuenta de CV Chat (la misma del foro) para verlo.</p>
+    <div class="no-esta__acciones">
+      <a class="btn btn--degrade" id="s-entrar" href="https://chat.circulovicioso.club/">Iniciar sesión</a>
+      <a class="btn" id="s-registro" href="https://chat.circulovicioso.club/?registro=1">Crear una cuenta</a>
+    </div>
+  </div>
+  <img src="/images/rabbit.png" alt="" width="300" height="270" loading="lazy">
+</section>
+<p class="chico" id="cargando">Cargando…</p>

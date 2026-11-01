@@ -31,6 +31,7 @@
     ['Inicio', WEB + '/', !enForo && ruta === '/'],
     ['Wiki', WEB + '/wiki', !enForo && /^\/wiki/.test(ruta)],
     ['Full Fat Search', WEB + '/full-fat-search', !enForo && ruta.startsWith('/full-fat-search')],
+    ['Marketplace', WEB + '/marketplace', !enForo && ruta.startsWith('/marketplace')],
     ['Foro', FORO + '/', enForo],
     ['Chat', CHAT + '/app', false],
   ];

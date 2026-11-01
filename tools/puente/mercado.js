@@ -17,10 +17,11 @@
 //
 // Las fotos se guardan achicadas (hasta 1280 px, WebP) en /data/uploads/puente-mercado.
 //
-// Con la compra/venta del foro ("tejemanejes", foro-mercado.js): los avisos del foro estan aca con su
-// fecha (origen 'foro'; no vencen a los 30 dias) y lo que se publica aca sale tambien en el foro. Si quien
-// lo publico en el foro no tiene cuenta unida, es del usuario discord-historial y se muestra con su
-// nombre del foro (foro_autor) y "Ver en el foro" en vez de escribirle.
+// La compra/venta del foro ("tejemanejes") quedo de archivo en el foro: el Marketplace es el unico lugar.
+// Los avisos que se habian traido de ahi (origen 'foro', foro-mercado.js) siguen guardados pero no salen
+// en la lista. Cada publicacion nueva se avisa en #que-paso (MERCADO_CANAL, o el canal del foro).
+// La pagina del sitio (circulovicioso.club/marketplace, solo para miembros) usa /web/lista y /web/item,
+// con la cuenta del sitio (cuenta.js), y para publicar o escribirle abre la app.
 //
 //  GET  /puente/api/mercado/lista?q&tipo&estado&moneda&min&max&zona&orden&ver=mias|guardados&desde
 //  GET  /puente/api/mercado/item?id
@@ -53,6 +54,21 @@ const MAX_ACTIVAS = 20, MAX_POR_DIA = 15;
 const MONEDAS = new Set(['ARS', 'USD', 'USDT']);
 const PAGE = 30;
 const ADMIN_CHANNEL = () => process.env.AVISO_CANAL || 'admilinks';
+const NEWS_CHANNEL = () => String(process.env.MERCADO_CANAL || process.env.FORO_CANAL || 'que-paso').trim().toLowerCase();
+const appLink = id => (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + '/app?mercado=' + id;
+// El enlace de la pagina de la web: Haven solo arma tarjetas de enlaces a otro sitio, y en la app se abre
+// adentro igual (web/aviso.js). Sin la cuenta unica (cuenta.js), el de la app
+const DOMINIO = () => { try { const c = require('./cuenta.js'); return c.on() ? c.dominio() : ''; } catch { return ''; } };
+const webLink = id => (DOMINIO() ? `https://${DOMINIO()}/marketplace?id=${id}` : appLink(id));
+// Un enlace a una publicacion (de la app o de la web) -> su numero, o null
+function idDeEnlace(enlace, chatHost) {
+  try {
+    const t = new URL(enlace);
+    if (t.host === chatHost && /^\/app(?:\.html)?$/.test(t.pathname)) return /^\d+$/.test(t.searchParams.get('mercado') || '') ? t.searchParams.get('mercado') : null;
+    if (DOMINIO() && (t.hostname === DOMINIO() || t.hostname === 'www.' + DOMINIO()) && /^\/marketplace\/?$/.test(t.pathname)) return /^\d+$/.test(t.searchParams.get('id') || '') ? t.searchParams.get('id') : null;
+  } catch { /* no es una direccion */ }
+  return null;
+}
 
 let db, io, log, warn, sharp = null;
 
@@ -161,7 +177,7 @@ function card(r, me) {
     foto: f[0] ? URL_DIR + f[0] : null, creado: r.creado, renovado: r.renovado, vence: vence(r),
     estado: r.estado, oculta: !!r.oculta, vencida: r.origen !== 'foro' && vence(r) < now(), mia: r.user_id === me,
     vendedor: delForoSinCuenta(r) ? { id: null, nombre: r.foro_autor, avatar: null } : s ? { id: s.id, nombre: s.nombre, avatar: s.avatar } : null,
-    foro: foroDe(r),
+    foro: r.origen === 'foro' ? foroDe(r) : null, // los temas que habia hecho en el foro quedaron de archivo
   };
 }
 
@@ -222,15 +238,16 @@ function pending(me) {
   return { confirmar, opinar, total: confirmar.length + opinar.length };
 }
 
-function adminNotice(text) {
+function adminNotice(text) { notice(ADMIN_CHANNEL(), text); }
+function notice(channel, text) {
   try {
-    const ch = db.prepare('SELECT id, code FROM channels WHERE name = ? AND is_dm = 0').get(ADMIN_CHANNEL());
+    const ch = db.prepare('SELECT id, code FROM channels WHERE LOWER(name) = ? AND is_dm = 0 ORDER BY id LIMIT 1').get(String(channel).toLowerCase());
     if (!ch) return;
     const r = db.prepare('INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, NULL, ?, 1, ?)').run(ch.id, text, 'Marketplace');
     io.to(`channel:${ch.code}`).emit('new-message', { channelCode: ch.code, message: {
       id: r.lastInsertRowid, content: text, created_at: new Date().toISOString(), username: 'Marketplace', user_id: null,
       is_webhook: 1, webhook_username: 'Marketplace', reactions: [], reply_to: null, replyContext: null, edited_at: null, thread: null } });
-  } catch (err) { warn('mercado: aviso a admins:', err.message); }
+  } catch (err) { warn(`mercado: aviso en #${channel}:`, err.message); }
 }
 
 function validate(body, me, existing) {
@@ -255,9 +272,90 @@ function validate(body, me, existing) {
   return { fields: { tipo, titulo, descripcion, precio, moneda, condicion, zona, fotos } };
 }
 
+// Cada publicacion nueva, en #que-paso: quien y que, con el enlace (se ve con su tarjeta, vistaPrevia)
+function newsNotice(r, user) {
+  const quien = String(user.display_name || user.username).replace(/[*_~`|]/g, '');
+  notice(NEWS_CHANNEL(), `🛒 **${quien}** publicó algo nuevo en el Marketplace: [${r.titulo.replace(/[\[\]]/g, '')}](${webLink(r.id)})`);
+}
+
+// La tarjeta de un enlace a una publicacion (vincular.js, la vista previa de los enlaces)
+const PRECIO = { ARS: '$', USD: 'US$', USDT: 'USDT ' };
+const precioTexto = r => (r.precio == null ? 'A convenir' : PRECIO[r.moneda || 'ARS'] + Number(r.precio).toLocaleString('es-AR'));
+function vistaPrevia(id) {
+  const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada' AND oculta = 0").get(Number(id) || 0);
+  if (!r) return null;
+  const f = fotosOf(r)[0];
+  const linea = [r.estado === 'vendida' ? 'Vendido' : precioTexto(r), r.zona, r.tipo === 'servicio' ? 'servicio' : r.condicion].filter(Boolean).join(' · ');
+  return { siteName: 'Marketplace · CV Chat', accentColor: '#ee2d6f', title: r.titulo,
+    description: linea + (r.descripcion ? '\n\n' + (r.descripcion.length > 200 ? r.descripcion.slice(0, 199).trimEnd() + '…' : r.descripcion) : ''),
+    image: f ? (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + URL_DIR + f : undefined };
+}
+
+function lista(q, me) {
+  const ver = q.get('ver');
+  const cond = [], params = [];
+  if (ver === 'mias') { cond.push("m.user_id = ? AND m.estado != 'borrada'"); params.push(me); }
+  else {
+    cond.push("m.estado = 'activa' AND m.renovado >= ? AND m.origen != 'foro'"); params.push(now() - DURA);
+    if (!isAdmin(me)) { cond.push('(m.oculta = 0 OR m.user_id = ?)'); params.push(me); }
+    if (ver === 'guardados') { cond.push('m.id IN (SELECT item_id FROM puente_mercado_guardados WHERE user_id = ?)'); params.push(me); }
+  }
+  const vendedor = Number(q.get('u'));
+  if (vendedor > 0) { cond.push('m.user_id = ?'); params.push(vendedor); }
+  const text = clean(q.get('q'), 80);
+  if (text) for (const w of text.split(/\s+/).slice(0, 6)) {
+    const like = '%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%';
+    cond.push("(m.titulo LIKE ? ESCAPE '\\' OR m.descripcion LIKE ? ESCAPE '\\' OR m.zona LIKE ? ESCAPE '\\')"); params.push(like, like, like);
+  }
+  if (['producto', 'servicio'].includes(q.get('tipo'))) { cond.push('m.tipo = ?'); params.push(q.get('tipo')); }
+  if (['nuevo', 'usado'].includes(q.get('condicion'))) { cond.push('m.condicion = ?'); params.push(q.get('condicion')); }
+  const zona = clean(q.get('zona'), 60);
+  if (zona) { cond.push("m.zona LIKE ? ESCAPE '\\'"); params.push('%' + zona.replace(/[\\%_]/g, c => '\\' + c) + '%'); }
+  if (MONEDAS.has(q.get('moneda'))) {
+    cond.push('m.moneda = ?'); params.push(q.get('moneda'));
+    const min = Number(q.get('min')), max = Number(q.get('max'));
+    if (q.get('min') && Number.isFinite(min)) { cond.push('m.precio >= ?'); params.push(min); }
+    if (q.get('max') && Number.isFinite(max)) { cond.push('m.precio <= ?'); params.push(max); }
+  }
+  const order = q.get('orden') === 'barato' ? 'm.precio IS NULL, m.precio ASC' : q.get('orden') === 'caro' ? 'm.precio IS NULL, m.precio DESC' : 'm.renovado DESC';
+  const desde = Math.max(0, Number(q.get('desde')) || 0);
+  const rows = db.prepare(`SELECT m.* FROM puente_mercado m WHERE ${cond.join(' AND ')} ORDER BY ${order}, m.id DESC LIMIT ${PAGE + 1} OFFSET ?`).all(...params, desde);
+  return { items: rows.slice(0, PAGE).map(r => card(r, me)), mas: rows.length > PAGE };
+}
+
+// La pagina del sitio (circulovicioso.club/marketplace): solo mirar, con la cuenta del sitio (la cookie,
+// desde las paginas propias). Las fotos con la direccion entera, porque la pagina esta en otro lado
+async function handleWeb(req, res, p, u, h) {
+  const o = req.headers.origin;
+  if (o && !h.allowedOrigin(o)) return h.json(res, 403, { error: 'origen' });
+  if (o) { res.setHeader('Access-Control-Allow-Origin', o); res.setHeader('Access-Control-Allow-Credentials', 'true'); res.setHeader('Vary', 'Origin'); }
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'GET') return h.json(res, 405, { error: 'solo GET' });
+  const user = h.webUser(req);
+  if (!user) return h.json(res, 401, { error: 'sin sesion' });
+  const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+  const abs = s => (s && s.startsWith('/') ? base + s : s);
+  const fix = c => { c.foto = abs(c.foto); if (c.fotos) c.fotos = c.fotos.map(abs); for (const k of ['vendedor']) if (c[k] && c[k].avatar) c[k].avatar = abs(c[k].avatar); return c; };
+  if (p === '/puente/api/mercado/web/lista') {
+    const q = new URLSearchParams(u.searchParams);
+    if (q.get('ver') !== 'mias') q.delete('ver'); // los guardados, en la app
+    const l = lista(q, user.id);
+    return h.json(res, 200, { items: l.items.map(fix), mas: l.mas, chat: base });
+  }
+  if (p === '/puente/api/mercado/web/item') {
+    const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada'").get(Number(u.searchParams.get('id')) || 0);
+    if (!r || (r.oculta && r.user_id !== user.id && !isAdmin(user.id))) return h.json(res, 404, { error: 'Esa publicación ya no está.' });
+    const c = fix(full(r, user.id));
+    delete c.denuncias; delete c.denunciada;
+    return h.json(res, 200, { item: c, chat: base });
+  }
+  return h.json(res, 404, { error: 'no existe' });
+}
+
 // ── Pedidos ──
 async function handle(req, res, p, u, h) {
   if (!p.startsWith('/puente/api/mercado/')) return false;
+  if (p.startsWith('/puente/api/mercado/web/')) return handleWeb(req, res, p, u, h);
   const user = h.sessionUser(req);
   if (!user) return h.json(res, 401, { error: 'sin sesion' });
   const me = user.id;
@@ -266,36 +364,7 @@ async function handle(req, res, p, u, h) {
   const ownItem = id => { const r = item(id); return r && r.user_id === me ? r : null; };
 
   if (p === '/puente/api/mercado/lista' && req.method === 'GET') {
-    const q = u.searchParams;
-    const ver = q.get('ver');
-    const cond = [], params = [];
-    if (ver === 'mias') { cond.push("m.user_id = ? AND m.estado != 'borrada'"); params.push(me); }
-    else {
-      cond.push("m.estado = 'activa' AND (m.renovado >= ? OR m.origen = 'foro')"); params.push(now() - DURA);
-      if (!isAdmin(me)) { cond.push('(m.oculta = 0 OR m.user_id = ?)'); params.push(me); }
-      if (ver === 'guardados') { cond.push('m.id IN (SELECT item_id FROM puente_mercado_guardados WHERE user_id = ?)'); params.push(me); }
-    }
-    const vendedor = Number(q.get('u'));
-    if (vendedor > 0) { cond.push('m.user_id = ?'); params.push(vendedor); }
-    const text = clean(q.get('q'), 80);
-    if (text) for (const w of text.split(/\s+/).slice(0, 6)) {
-      const like = '%' + w.replace(/[\\%_]/g, c => '\\' + c) + '%';
-      cond.push("(m.titulo LIKE ? ESCAPE '\\' OR m.descripcion LIKE ? ESCAPE '\\' OR m.zona LIKE ? ESCAPE '\\')"); params.push(like, like, like);
-    }
-    if (['producto', 'servicio'].includes(q.get('tipo'))) { cond.push('m.tipo = ?'); params.push(q.get('tipo')); }
-    if (['nuevo', 'usado'].includes(q.get('condicion'))) { cond.push('m.condicion = ?'); params.push(q.get('condicion')); }
-    const zona = clean(q.get('zona'), 60);
-    if (zona) { cond.push("m.zona LIKE ? ESCAPE '\\'"); params.push('%' + zona.replace(/[\\%_]/g, c => '\\' + c) + '%'); }
-    if (MONEDAS.has(q.get('moneda'))) {
-      cond.push('m.moneda = ?'); params.push(q.get('moneda'));
-      const min = Number(q.get('min')), max = Number(q.get('max'));
-      if (q.get('min') && Number.isFinite(min)) { cond.push('m.precio >= ?'); params.push(min); }
-      if (q.get('max') && Number.isFinite(max)) { cond.push('m.precio <= ?'); params.push(max); }
-    }
-    const order = q.get('orden') === 'barato' ? 'm.precio IS NULL, m.precio ASC' : q.get('orden') === 'caro' ? 'm.precio IS NULL, m.precio DESC' : 'm.renovado DESC';
-    const desde = Math.max(0, Number(q.get('desde')) || 0);
-    const rows = db.prepare(`SELECT m.* FROM puente_mercado m WHERE ${cond.join(' AND ')} ORDER BY ${order}, m.id DESC LIMIT ${PAGE + 1} OFFSET ?`).all(...params, desde);
-    return h.json(res, 200, { items: rows.slice(0, PAGE).map(r => card(r, me)), mas: rows.length > PAGE, pendientes: pending(me).total, puedePublicar: canPublish(me) });
+    return h.json(res, 200, { ...lista(u.searchParams, me), pendientes: pending(me).total, puedePublicar: canPublish(me) });
   }
 
   if (p === '/puente/api/mercado/item' && req.method === 'GET') {
@@ -350,6 +419,7 @@ async function handle(req, res, p, u, h) {
     const r = db.prepare('INSERT INTO puente_mercado (user_id, tipo, condicion, titulo, descripcion, precio, moneda, zona, fotos, creado, renovado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(me, f.tipo, f.condicion, f.titulo, f.descripcion, f.precio, f.moneda, f.zona, JSON.stringify(f.fotos), t, t);
     log(`mercado: ${user.username} publicó "${f.titulo}"`);
+    newsNotice({ id: r.lastInsertRowid, titulo: f.titulo }, user);
     return h.json(res, 200, { ok: true, id: r.lastInsertRowid });
   }
 
@@ -490,4 +560,4 @@ function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso };
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace };

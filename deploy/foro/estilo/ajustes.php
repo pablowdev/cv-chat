@@ -15,6 +15,7 @@
 //  8. Las direcciones de los foros y de los temas sin tildes ni simbolos; las viejas siguen andando (Constructor
 //     del sitio y Opciones -> Configuracion de URL)
 //  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
+// 10. tejemanejes de archivo: la compra/venta va en el Marketplace (panel: Foros -> Permisos del canal)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -252,6 +253,30 @@ if (!$db->getRow('ad', ['title' => $vivoTitulo])) {
   try { $tl->insert(-1, 'ad_header', $tpl, 'vbulletin', false, '', false, $opts); }
   catch (vB_Exception_Api $e) { $tl->update($tl->getTemplateID('ad_header', -1), 'ad_header', $tpl, 'vbulletin', false, false, '', false, $opts); }
   $dijo('foro en vivo: agregado (modulo de HTML de cabecera)');
+}
+
+// 10. tejemanejes, de archivo: la compra/venta se mudo al Marketplace de CV Chat. Los temas viejos se siguen
+//     leyendo, pero no se abren temas ni se responde (panel: Foros -> Permisos del canal; administradores y
+//     super moderadores quedan como estaban). Se vuelve a abrir desde ahi, borrando esos permisos del canal
+$teje = $db->getRow('vBForum:node', ['parentid' => $foroRaiz, 'urlident' => 'tejemanejes']);
+if ($teje) {
+  $tid = (int)$teje['nodeid'];
+  $aviso = 'Archivo. La compra/venta se mudó al Marketplace: https://circulovicioso.club/marketplace';
+  if ($teje['description'] !== $aviso) {
+    $r = $canales->update($tid, ['description' => $aviso]);
+    if (is_array($r) && isset($r['errors'])) { fwrite(STDERR, 'no se pudo cambiar tejemanejes: ' . json_encode($r['errors']) . "\n"); exit(1); }
+    $dijo('tejemanejes: descripcion de archivo');
+  }
+  $cp = vB_ChannelPermission::instance();
+  $sinPublicar = 16 | 32 | 16384; // canpostnew, canreply, canpostpoll
+  foreach ($db->assertQuery('vBForum:permission', ['nodeid' => 1]) as $raiz) {
+    $g = (int)$raiz['groupid'];
+    if (in_array($g, [5, 6], true) || $db->getRow('vBForum:permission', ['nodeid' => $tid, 'groupid' => $g])) continue;
+    $p = $raiz; unset($p['permissionid'], $p['nodeid'], $p['groupid']);
+    $p['forumpermissions'] = (int)$p['forumpermissions'] & ~$sinPublicar;
+    $cp->setPermissions($tid, $g, $p);
+    $dijo("tejemanejes: grupo $g sin abrir temas ni responder");
+  }
 }
 
 // Que el foro vuelva a leer todo (como Mantenimiento -> Borrar la cache del sistema)

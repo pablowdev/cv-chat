@@ -8707,13 +8707,15 @@ document.addEventListener('pointerdown', (ev) => {
     document.addEventListener('click', (e) => {
       if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server')) close();
     }, true);
-    // Enlaces a una publicacion (/app?mercado=<id>) o a la vidriera (/app?mercado): se abren aca mismo
+    // Enlaces a una publicacion (/app?mercado=<id>) o a la vidriera (/app?mercado): se abren aca mismo.
+    // Tambien los de la pagina de la web (circulovicioso.club/marketplace?id=<id>, como los avisos de #que-paso)
     document.addEventListener('click', (e) => {
       const a = e.target instanceof Element && e.target.closest('a[href]');
       if (!a || e.ctrlKey || e.metaKey) return;
       let u; try { u = new URL(a.href, location.href); } catch { return; }
-      if (u.origin !== location.origin || !/^\/app/.test(u.pathname) || !u.searchParams.has('mercado')) return;
-      const id = u.searchParams.get('mercado');
+      const web = /^(?:www\.)?circulovicioso\.club$/.test(u.hostname) && /^\/marketplace\/?$/.test(u.pathname) && !u.searchParams.has('ver');
+      if (!web && (u.origin !== location.origin || !/^\/app/.test(u.pathname) || !u.searchParams.has('mercado'))) return;
+      const id = web ? u.searchParams.get('id') : u.searchParams.get('mercado');
       if (id && !/^\d+$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; if (id) go('item', id); else go('lista');

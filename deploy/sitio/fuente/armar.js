@@ -6,6 +6,7 @@ const out = process.argv[2] || path.join(__dirname, 'listo');
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', 'Full Fat Search', '/full-fat-search'],
+  ['marketplace', 'Marketplace', '/marketplace'],
   ['foro', 'Foro', FORO + '/', true], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice }) {

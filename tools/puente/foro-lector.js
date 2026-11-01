@@ -87,7 +87,8 @@ async function vuelta() {
       let id;
       if (!respuestas) {
         // Solo el aviso de cada tema nuevo
-        if (n.es_tema) {
+        // Los de tejemanejes no (quedo de archivo: la compra/venta se avisa desde el Marketplace, mercado.js)
+        if (n.es_tema && !/\/tejemanejes\//.test(n.url)) {
           await publicar(w, { username: nombre(n.autor), avatar_url: n.foto || undefined,
             content: `📝 **Tema nuevo en el foro: ${n.tema}**\n${n.texto ? '> ' + corto(n.texto, 280).replace(/\n+/g, '\n> ') + '\n' : ''}[Leelo en el foro](${n.url}) · ${n.canal}` });
         }
