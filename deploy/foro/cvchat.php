@@ -12,6 +12,10 @@
 //    los dos lados) o se pregunta: entrar con la que ya tiene (las une) o crear una
 //    nueva con el mismo usuario. Cada pedido sirve una sola vez.
 // 3. Salir (?salir=1&volver=&t=&firma=): cierra la sesion del foro y vuelve.
+// 4. Panel (?panel=&s=): CV Chat ya pidio la contraseña y el codigo de CV Chat
+//    (/puente/foro/panel): se entra al foro con la cuenta unida y se abre el panel de
+//    administracion (la sesion del panel de vBulletin), si esa cuenta es administradora.
+//    El pedido vence a los 2 minutos y sirve una sola vez.
 //
 // La clave (CV_PUENTE_SECRETO) y la direccion de CV Chat (CV_CHAT_URL) llegan
 // como variables de entorno del contenedor (puente.env); las vueltas son siempre
@@ -116,6 +120,18 @@ else if (isset($_REQUEST['sso']))
 	}
 	$modo = 'sso';
 }
+else if (isset($_REQUEST['panel']))
+{
+	$d = (string) $_REQUEST['panel'];
+	$pedido = hash_equals(cv_firmar($d), (string) ($_REQUEST['s'] ?? '')) ? json_decode(base64_decode(strtr($d, '-_', '+/')), true) : null;
+	if (!is_array($pedido) || ($pedido['accion'] ?? '') !== 'panel' || empty($pedido['foro']) || abs(time() - (int) ($pedido['t'] ?? 0)) > 120
+		|| !preg_match('/^[0-9a-f]{24}$/', (string) ($pedido['n'] ?? '')))
+	{
+		cv_pagina('Enlace vencido', '<h1>Se venció el paso</h1><p>Volvé a entrar al panel desde CV Chat.</p>'
+			. '<a class="btn" href="' . cv_e($chat) . '/puente/foro/panel">Entrar al panel</a>');
+	}
+	$modo = 'panel';
+}
 else
 {
 	$estado = (string) ($_REQUEST['estado'] ?? '');
@@ -185,6 +201,25 @@ function cv_usar_pedido($n)
 	$f = $dir . '/' . $n;
 	if (file_exists($f)) return false;
 	return @touch($f);
+}
+
+// ── 4. Panel ──
+if ($modo === 'panel')
+{
+	$id = (int) $pedido['foro'];
+	$row = vB::getDbAssertor()->getRow('user', ['userid' => $id]);
+	if (!$row || (int) $row['usergroupid'] === 8 || !cv_usar_pedido($pedido['n'])) cv_ir($base . '/');
+	// Como el inicio de sesion del panel de vBulletin (login.php, "cplogin"): la sesion del foro y la del panel
+	$recordar = vB_Library::instance('login')->generateRememberMeToken($row['token'], vB_Request_Web::$COOKIE_SALT);
+	$sesion = vB::getRequest()->createSessionForUser($id);
+	$info = $sesion->fetch_userinfo();
+	$res = vB_User::processNewLogin(['userid' => $id, 'password' => $recordar, 'lastvisit' => $info['lastvisit'], 'lastactivity' => $info['lastactivity']], 'cplogin');
+	if (empty($res['cpsession']))
+	{
+		cv_pagina('Sin permiso', '<h1>Sin permiso</h1><p>Tu cuenta del foro no es administradora: no tiene panel.</p><a class="btn" href="' . cv_e($base) . '/">Ir al foro</a>');
+	}
+	vB5_Auth::setLoginCookies($res, 'cplogin', true);
+	cv_ir($base . '/admincp/');
 }
 
 // ── 3. Salir ──

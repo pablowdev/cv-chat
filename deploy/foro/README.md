@@ -34,6 +34,12 @@ CV_CHAT_URL=https://chat.ejemplo.com
 
 Al actualizar vBulletin, `cvchat.php` queda (no viene en el paquete).
 
+Una cuenta del foro unida a una de CV Chat con verificación en dos pasos es la misma cuenta para todo: el
+inicio de sesión del foro y el de los paneles de control pasan por `cvpuerta.php` (ver `htaccess-puerta.txt`) y
+no aceptan la contraseña del foro. Al panel de administración se entra desde CV Chat
+(`https://chat.ejemplo.com/puente/foro/panel`), con la contraseña y el código de CV Chat; si están bien,
+`cvchat.php?panel=` abre la sesión del panel de vBulletin (si la cuenta del foro es administradora).
+
 La barra de arriba de Círculo Vicioso (la de la web, `tools/puente/web/barra.*`) la agrega Apache a cada
 página del foro (`imagen/apache-foro.conf`, con `mod_substitute`), menos a los paneles de control: no hace
 falta tocar las plantillas de vBulletin.

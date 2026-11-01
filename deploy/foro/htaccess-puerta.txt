@@ -1,8 +1,8 @@
 # Lo que se agrega al .htaccess del foro (/opt/foro/codigo/.htaccess), dentro de <IfModule mod_rewrite.c>,
 # justo antes de la ultima regla (la que manda todo a index.php?routestring=...): iniciar sesion y
 # recuperar la contraseña pasan por cvpuerta.php (las cuentas unidas a CV Chat entran solo por CV Chat)
-	# CV: iniciar sesion y recuperar la contraseña, por la cuenta unica (cvpuerta.php)
-	RewriteRule ^(auth/(?:ajax-login|login-external|login-and-associate|lostpw|reset-password))/?$ cvpuerta.php?routestring=$1 [L,QSA]
+	# CV: iniciar sesion, recuperar la contraseña y entrar a los paneles, por la cuenta unica (cvpuerta.php)
+	RewriteRule ^(auth/(?:ajax-login|login-external|login-and-associate|lostpw|reset-password)|(?:(?:admincp|modcp)/)?login\.php)/?$ cvpuerta.php?routestring=$1 [L,QSA]
 
 # Y al final del .htaccess: el foro se puede mostrar adentro de CV Chat (el boton del foro), menos los paneles
 # de control (que siguen solo dentro del foro). vBulletin manda "frame-ancestors 'self'" y X-Frame-Options.

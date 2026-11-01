@@ -4,6 +4,8 @@
 // sistema: si tiene la verificacion en dos pasos, entra solo por CV Chat (cvchat.php), que pide el codigo; la
 // contraseña del foro ya no le sirve para entrar, ni se recupera aca. Las demas siguen como siempre (y asi
 // se pueden unir). La lista la deja el servicio del foro (servicio.php, /unidas).
+// El inicio de sesion de los paneles de control (login.php, el del formulario del panel) tambien pasa por
+// aca: esas cuentas entran al panel desde CV Chat (/puente/foro/panel), con la contraseña y el codigo de CV Chat.
 // Lo demas sigue de largo al foro (index.php), igual que antes.
 
 $cv_ruta = trim((string) ($_GET['routestring'] ?? ''), '/');
@@ -19,7 +21,7 @@ function cv_es_unida($d)
 	$claves = array_flip((array) ($d['claves'] ?? []));
 	$id = (int) ($_POST['userid'] ?? $_GET['userid'] ?? 0);
 	if ($id && isset($ids[$id])) return true;
-	foreach (['username', 'email'] as $campo)
+	foreach (['username', 'email', 'vb_login_username'] as $campo)
 	{
 		$x = trim((string) ($_POST[$campo] ?? ''));
 		if ($x === '') continue;
@@ -33,7 +35,10 @@ $cv_d = cv_unidas();
 if ($cv_d && cv_es_unida($cv_d))
 {
 	$chat = rtrim((string) getenv('CV_CHAT_URL'), '/');
-	$msg = 'Esta cuenta del foro está unida a tu cuenta de Círculo Vicioso, que tiene la verificación en dos pasos: se entra por CV Chat (te pide el código) y la contraseña se recupera desde ahí.';
+	$panel = (bool) preg_match('#^((admincp|modcp)/)?login\.php$#', $cv_ruta);
+	$msg = $panel
+		? 'Esta cuenta del foro está unida a tu cuenta de Círculo Vicioso, que tiene la verificación en dos pasos: al panel del foro se entra desde CV Chat, con tu contraseña y tu código de CV Chat.'
+		: 'Esta cuenta del foro está unida a tu cuenta de Círculo Vicioso, que tiene la verificación en dos pasos: se entra por CV Chat (te pide el código) y la contraseña se recupera desde ahí.';
 	header('Cache-Control: no-store');
 	if ($cv_ruta === 'auth/ajax-login' || $cv_ruta === 'auth/login-external' || $cv_ruta === 'auth/login-and-associate')
 	{
@@ -42,12 +47,13 @@ if ($cv_d && cv_es_unida($cv_d))
 		echo json_encode(['errors' => [[$msg]], 'cvchat' => $chat . '/'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 		exit;
 	}
+	$boton = $panel ? ['/puente/foro/panel', 'Entrar al panel con CV Chat'] : ['/', 'Ir a CV Chat'];
 	http_response_code(403);
 	header('Content-Type: text/html; charset=utf-8');
 	echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Círculo Vicioso</title>'
 		. '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1f1f;color:#c9c7c6;font:15px/1.5 Arial,Helvetica,sans-serif;padding:16px}'
 		. '.c{max-width:440px;background:#2b2d2c;border:1px solid #3a3c3b;border-radius:10px;padding:24px}a{display:inline-block;margin-top:12px;padding:9px 16px;border-radius:6px;background:#ee2d6f;color:#fff;font-weight:700;text-decoration:none}</style></head>'
-		. '<body><div class="c"><p>' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</p><a href="' . htmlspecialchars($chat . '/', ENT_QUOTES, 'UTF-8') . '">Ir a CV Chat</a></div></body></html>';
+		. '<body><div class="c"><p>' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</p><a href="' . htmlspecialchars($chat . $boton[0], ENT_QUOTES, 'UTF-8') . '">' . $boton[1] . '</a></div></body></html>';
 	exit;
 }
 

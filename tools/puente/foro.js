@@ -11,6 +11,7 @@
 //  GET  /puente/foro/sso              cuenta unica (cuenta.js): entra al foro con la cuenta de CV Chat
 //  GET  /puente/foro/sso-vuelta       el foro avisa con que cuenta del foro quedo (la une)
 //  GET  /puente/foro/auto             quien entro solo al foro: entra tambien a CV Chat, sin preguntar
+//  GET/POST /puente/foro/panel        entrar al panel de administracion del foro con la cuenta de CV Chat
 //
 // El foro no se conecta con CV Chat (estan en redes separadas): todo pasa por el
 // navegador. CV Chat manda a <FORO_URL>/cvchat.php (deploy/foro/cvchat.php) con un
@@ -48,6 +49,7 @@ const AVATAR_DIR = path.join(path.dirname(process.env.PUENTE_ADJUNTOS_DIR || '/d
 
 const states = new Map();   // estado -> { para, userId, exp }
 const signups = new Map();  // codigo -> { f, exp }
+const intentosPanel = new Map(); // haven user id -> { n, exp } (entrar al panel del foro)
 
 let db, log, warn, h, cuenta, foroUrl = '', secret = '';
 
@@ -196,6 +198,34 @@ function login(f) {
   h.handoff(code, user.id);
   log(`entro con el foro: ${user.username} (Haven #${user.id}) <- foro #${f.id}`);
   return { listo: code };
+}
+
+// La pagina para entrar al panel del foro (en CV Chat): contraseña y codigo de CV Chat
+function paginaPanel(user, l, clave) {
+  const e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const u = db.prepare('SELECT password_hash, totp_enabled FROM users WHERE id = ?').get(user.id) || {};
+  const conClave = typeof u.password_hash === 'string' && u.password_hash.startsWith('$2');
+  const cuerpo = !l
+    ? '<h1>Panel del foro</h1><p>Tu cuenta de CV Chat <b>' + e(user.username) + '</b> no está unida a una cuenta del foro.</p>'
+    : '<h1>Panel del foro</h1><p>Vas a entrar al panel de administración del foro como <b>' + e(l.foro_username) + '</b>, con tu cuenta de CV Chat <b>' + e(user.username) + '</b>.</p>'
+      + '<div class="error" id="error" hidden></div><form id="f">'
+      + (conClave ? '<label>Tu contraseña de CV Chat<input name="password" type="password" autocomplete="current-password" required autofocus></label>' : '')
+      + (u.totp_enabled ? '<label>Código de verificación<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>' : '')
+      + '<input type="hidden" name="clave" value="' + e(clave) + '"><button type="submit">Entrar al panel</button></form>'
+      + (u.totp_enabled ? '' : '<p class="chico">Para más seguridad, prendé la verificación en dos pasos en tu cuenta de CV Chat: después te la pide también acá.</p>')
+      + '<script>(function(){var f=document.getElementById("f"),er=document.getElementById("error");f.addEventListener("submit",function(ev){ev.preventDefault();'
+      + 'var b=f.querySelector("button");b.disabled=true;er.hidden=true;var d={};new FormData(f).forEach(function(v,k){d[k]=v});'
+      + 'fetch("/puente/foro/panel",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)})'
+      + '.then(function(r){return r.json()}).then(function(x){if(x&&x.url){location.href=x.url;return}b.disabled=false;er.textContent=(x&&x.error)||"No se pudo entrar.";er.hidden=false;'
+      + 'if(f.code)f.code.value="";}).catch(function(){b.disabled=false;er.textContent="No se pudo entrar. Probá de nuevo.";er.hidden=false;});});})();</script>';
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">'
+    + '<title>Panel del foro · CV Chat</title><style>:root{color-scheme:dark}*{box-sizing:border-box}[hidden]{display:none!important}'
+    + 'body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:#121214;color:#f2f3f5;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
+    + 'main{width:100%;max-width:420px;background:#1e1f22;border:1px solid #2e3035;border-radius:14px;padding:28px 24px}h1{font-size:1.3rem;margin:0 0 6px}p{margin:0 0 16px;color:#b5bac1}'
+    + '.chico{font-size:.875rem;color:#949ba4}label{display:block;font-size:.8rem;font-weight:700;text-transform:uppercase;color:#b5bac1;margin:0 0 12px}'
+    + 'input{display:block;width:100%;margin-top:6px;padding:11px 12px;border-radius:8px;border:1px solid #3f4147;background:#121214;color:#f2f3f5;font:inherit}'
+    + 'button{display:block;width:100%;border:0;border-radius:8px;padding:12px 16px;font:inherit;font-weight:600;cursor:pointer;background:#ee2d6f;color:#fff;margin:4px 0 14px}button:disabled{opacity:.6;cursor:wait}'
+    + '.error{background:#3a1a1e;color:#ffaab1;padding:10px 12px;border-radius:8px;margin:0 0 14px}</style></head><body><main>' + cuerpo + '</main></body></html>';
 }
 
 async function handle(req, res, p, u) {
@@ -348,6 +378,44 @@ async function handle(req, res, p, u) {
     states.set(estado, { para: 'entrar', auto: true, volver, exp: Date.now() + 2 * 60 * 1000 });
     const q = new URLSearchParams({ estado, para: 'entrar', cuenta: '', auto: '1', firma: sign(`${estado}|entrar||auto`) });
     return send(res, 302, 'text/plain', '', { Location: `${foroUrl}/cvchat.php?${q}` });
+  }
+
+  // ── El panel de administracion del foro, con la cuenta de CV Chat ──
+  // El panel del foro no acepta la contraseña del foro de una cuenta unida con verificacion en dos pasos
+  // (cvpuerta.php): se entra desde aca, con la contraseña y el codigo de CV Chat (los mismos que pide CV Chat
+  // para sus copias de seguridad, adminReauth de Haven). Si estan bien, el foro abre el panel (cvchat.php,
+  // ?panel=, firmado, 2 minutos, una sola vez); el foro decide si esa cuenta es administradora.
+  if (p === '/puente/foro/panel') {
+    const user = on() ? cuenta.userFromCookie(req) : null;
+    const l = user && db.prepare('SELECT foro_user_id, foro_username FROM puente_foro WHERE haven_user_id = ?').get(user.id);
+    const minuto = Math.floor(Date.now() / 60000);
+    const clave = (m) => sign(`panel|${user ? user.id : 0}|${m}`);
+    if (req.method === 'GET') {
+      if (!on()) return send(res, 503, 'text/plain; charset=utf-8', 'El foro todavía no está conectado.');
+      if (!user) return send(res, 302, 'text/plain', '', { Location: `/?volver=${encodeURIComponent(String(process.env.PUBLIC_URL || ('https://' + req.headers.host)).replace(/\/+$/, '') + '/puente/foro/panel')}` });
+      return send(res, 200, 'text/html; charset=utf-8', paginaPanel(user, l, clave(minuto)), { 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'" });
+    }
+    if (req.method !== 'POST') return json(res, 405, { error: 'metodo' });
+    if (!user) return json(res, 401, { error: 'Tu sesión de CV Chat se cerró. Volvé a entrar.' });
+    const body = await readJson(req) || {};
+    if (![clave(minuto), clave(minuto - 1), clave(minuto - 2), clave(minuto - 3)].includes(String(body.clave || ''))) return json(res, 403, { error: 'Se venció la página. Recargala y probá de nuevo.' });
+    if (!l) return json(res, 409, { error: 'Tu cuenta de CV Chat no está unida a una cuenta del foro.' });
+    clean([intentosPanel]);
+    const it = intentosPanel.get(user.id) || { n: 0, exp: Date.now() + 15 * 60 * 1000 };
+    if (it.n >= 6) return json(res, 429, { error: 'Hubo demasiados intentos. Esperá 15 minutos y probá de nuevo.' });
+    const problema = await require('/app/src/adminReauth').checkAdminReauth(db, user.id, { password: String(body.password || ''), code: String(body.code || '') });
+    if (problema) {
+      it.n++; intentosPanel.set(user.id, it);
+      const es = { 'Enter your password': 'Escribí tu contraseña de CV Chat.', 'Incorrect password': 'La contraseña no es correcta.',
+        'Enter your two-factor code': 'Escribí el código de verificación.', 'Incorrect two-factor code': 'El código de verificación no es correcto.',
+        'Too many wrong codes. Wait a few minutes and try again.': 'Hubo demasiados códigos equivocados. Esperá unos minutos y probá de nuevo.' }[problema]
+        || 'Tu cuenta de CV Chat necesita una contraseña propia para entrar al panel del foro.';
+      return json(res, 403, { error: es });
+    }
+    intentosPanel.delete(user.id);
+    const d = b64({ accion: 'panel', haven: user.id, foro: l.foro_user_id, t: Math.floor(Date.now() / 1000), n: crypto.randomBytes(12).toString('hex') });
+    log(`panel del foro: Haven #${user.id} -> foro #${l.foro_user_id}`);
+    return json(res, 200, { url: `${foroUrl}/cvchat.php?${new URLSearchParams({ panel: d, s: sign(d) })}` });
   }
 
   if (p === '/puente/api/foro/estado' && req.method === 'GET') {
