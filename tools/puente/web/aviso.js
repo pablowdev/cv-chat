@@ -9161,6 +9161,7 @@ document.addEventListener('pointerdown', (ev) => {
     const vieja = b0.querySelector('.jg-juego'); if (vieja) vieja.remove();
     b0.querySelector('.jg-estado')?.remove();
     const b = el('div', 'jg-juego'); b0.prepend(b);
+    const ptsPrev = mesa.pts && mesa.ptsId === s.id ? mesa.pts : null;
     if (s.estado === 'esperando') b0.querySelector('.jg-lateral')?.remove(); else lateral(b0, s, prev);
     // Esperando rival
     if (s.estado === 'esperando') {
@@ -9178,6 +9179,10 @@ document.addEventListener('pointerdown', (ev) => {
     const score = el('div', 'jg-marcador');
     const side = (p, mine) => { const x = el('div', 'jg-lado' + (mine ? ' mio' : '')); x.append(avatar(p), el('div', 'jg-lnombre', mine ? 'Vos' : p.nombre), el('div', 'jg-lpuntos', String(p.puntos))); return x; };
     score.append(side(s.rival, false), el('div', 'jg-meta', `de ${s.puntos}`), side(s.yo, true));
+    // En tablet y celu el tanteador del costado queda abajo: los fosforos van tambien aca, en fila
+    const fos = el('div', 'jg-marcador-fos');
+    fos.append(fosforos(s.rival.puntos, s.puntos, ptsPrev ? ptsPrev[1] : s.rival.puntos, true), fosforos(s.yo.puntos, s.puntos, ptsPrev ? ptsPrev[0] : s.yo.puntos, true));
+    score.appendChild(fos);
     b.appendChild(score);
     if (s.estado === 'terminada') return end(b, s);
 
@@ -9273,28 +9278,30 @@ document.addEventListener('pointerdown', (ev) => {
   }
   // Los fosforos del tanteador: de a cinco, los cuatro lados de un cuadrado y uno cruzado.
   // A 30, una raya separa las malas de las buenas
-  function fosforos(n, max, nuevosDesde) {
+  function fosforos(n, max, nuevosDesde, chico) {
     const grupos = Math.ceil(max / 5), G = 30, gap = 6, sep = max > 15 ? 10 : 0;
-    const H = grupos * (G + gap) + sep;
+    // chico: todos los grupos en fila, de izquierda a derecha
+    const H = chico ? G + 4 : grupos * (G + gap) + sep, W = chico ? grupos * (G + gap) - gap + 4 + sep : G + 4;
     const NS = 'http://www.w3.org/2000/svg';
-    const svgEl = document.createElementNS(NS, 'svg'); svgEl.setAttribute('viewBox', `0 0 ${G + 4} ${H}`); svgEl.setAttribute('class', 'jg-fosforos');
+    const svgEl = document.createElementNS(NS, 'svg'); svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`); svgEl.setAttribute('class', 'jg-fosforos' + (chico ? ' jg-fosforos-c' : ''));
     const lados = [[3, 3, 27, 3], [27, 3, 27, 27], [27, 27, 3, 27], [3, 27, 3, 3], [3, 3, 27, 27]];
     let k = 0;
     for (let gI = 0; gI < grupos; gI++) {
-      const y = gI * (G + gap) + (sep && gI >= 3 ? sep : 0);
+      const corre = gI * (G + gap) + (sep && gI >= 3 ? sep : 0), y = chico ? 0 : corre, x = chico ? corre : 0;
       for (let l = 0; l < 5; l++, k++) {
         if (k >= n) break;
         const [x1, y1, x2, y2] = lados[l];
         const gEl = document.createElementNS(NS, 'g');
         if (k >= nuevosDesde) gEl.setAttribute('class', 'jg-fosforo-nuevo');
         const pal = document.createElementNS(NS, 'line');
-        for (const [a, b] of [['x1', x1 + 2], ['y1', y1 + y], ['x2', x2 + 2], ['y2', y2 + y]]) pal.setAttribute(a, b);
+        for (const [a, b] of [['x1', x1 + 2 + x], ['y1', y1 + y], ['x2', x2 + 2 + x], ['y2', y2 + y]]) pal.setAttribute(a, b);
         pal.setAttribute('class', 'jg-palito');
         const cab = document.createElementNS(NS, 'circle');
-        cab.setAttribute('cx', x2 + 2); cab.setAttribute('cy', y2 + y); cab.setAttribute('r', 2.4); cab.setAttribute('class', 'jg-cabeza');
+        cab.setAttribute('cx', x2 + 2 + x); cab.setAttribute('cy', y2 + y); cab.setAttribute('r', 2.4); cab.setAttribute('class', 'jg-cabeza');
         gEl.append(pal, cab); svgEl.appendChild(gEl);
       }
-      if (sep && gI === 2) { const ln = document.createElementNS(NS, 'line'); ln.setAttribute('x1', 0); ln.setAttribute('x2', G + 4); ln.setAttribute('y1', y + G + gap / 2 + sep / 2); ln.setAttribute('y2', y + G + gap / 2 + sep / 2); ln.setAttribute('class', 'jg-malas'); svgEl.appendChild(ln); }
+      if (sep && gI === 2 && chico) { const ln = document.createElementNS(NS, 'line'); const m = x + G + gap / 2 + sep / 2; ln.setAttribute('x1', m); ln.setAttribute('x2', m); ln.setAttribute('y1', 0); ln.setAttribute('y2', H); ln.setAttribute('class', 'jg-malas'); svgEl.appendChild(ln); }
+      else if (sep && gI === 2) { const ln = document.createElementNS(NS, 'line'); ln.setAttribute('x1', 0); ln.setAttribute('x2', G + 4); ln.setAttribute('y1', y + G + gap / 2 + sep / 2); ln.setAttribute('y2', y + G + gap / 2 + sep / 2); ln.setAttribute('class', 'jg-malas'); svgEl.appendChild(ln); }
     }
     return svgEl;
   }

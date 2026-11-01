@@ -2949,6 +2949,12 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-tnombre { max-width: 100%; font-size: 0.8125rem; font-weight: 800; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .puente-jg .jg-tnum { font-size: 1.125rem; font-weight: 800; color: #fff; }
 .puente-jg .jg-fosforos { width: 2.5rem; height: auto; overflow: visible; }
+/* Los fosforos del marcador: en tablet y celular, donde el tanteador del costado queda abajo */
+.puente-jg .jg-marcador { flex-wrap: wrap; row-gap: 0.25rem; }
+.puente-jg .jg-marcador-fos { flex: 1 0 100%; display: flex; justify-content: space-between; gap: 1rem; }
+.puente-jg .jg-fosforos.jg-fosforos-c { width: auto; height: 1.625rem; max-width: 48%; }
+@media (max-width: 999px) { .puente-jg .jg-lateral .jg-tanteador { display: none; } }
+@media (min-width: 1000px) { .puente-jg .jg-marcador-fos { display: none; } }
 .puente-jg .jg-palito { stroke: #f1dfb4; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45)); }
 .puente-jg .jg-cabeza { fill: #c8281e; stroke: #7a1208; stroke-width: 0.6; }
 .puente-jg .jg-malas { stroke: rgba(255,255,255,0.45); stroke-width: 1; stroke-dasharray: 3 2; }
