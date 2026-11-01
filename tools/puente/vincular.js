@@ -130,6 +130,8 @@ function setup(ctx) {
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
   // Las vistas previas de los enlaces (la imagen con un pedacito del chat, del foro o de la web)
   require('./vistas.js').setup({ db, log, warn, publicUrl });
+  // De donde llega la gente que se crea la cuenta (la pestaña "Origen" de la pagina "Miembros")
+  require('./origenes.js').setup({ db, log, warn });
   // El equipo sin verificacion en dos pasos queda como miembro comun hasta que la prende
   require('./equipo.js').setup({ db, io, log, warn });
   // Las apps de Haven no se conectan (appHaven): el mensaje les llega como error de conexion
@@ -333,7 +335,8 @@ function injectScript(req, res, src) {
   const etagCliente = String(req.headers['if-none-match'] || '');
   delete req.headers['if-none-match'];
   delete req.headers['if-modified-since'];
-  const tag = `<script src="${src}" defer></script>`;
+  // y origen.js: de donde llego la gente (origenes.js)
+  const tag = `<script src="${src}" defer></script><script src="/puente/origen.js" defer></script>`;
   const chunks = [];
   const isHtml = () => String(res.getHeader('Content-Type') || '').includes('text/html');
   const toBuf = (c, enc) => (Buffer.isBuffer(c) ? c : Buffer.from(c, typeof enc === 'string' ? enc : 'utf8'));
@@ -620,7 +623,7 @@ async function handle(req, res) {
     if (r !== false) return;
   }
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js')) {
     const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     // Los .js y .css se guardan ya armados (aviso.js pesa 1 MB) y van con una huella (ETag): el
@@ -1210,6 +1213,10 @@ async function handle(req, res) {
     const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p.startsWith('/puente/api/origen/')) {
+    const r = await require('./origenes.js').handle(req, res, p, u, { sessionUser, json, allowedOrigin: cuenta.allowedOrigin });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/presencia') {
     const r = await require('./presencia.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
@@ -1361,6 +1368,8 @@ function members() {
   try { for (const so of io.of('/').sockets.values()) if (so.user && so.user.id) online.add(so.user.id); } catch { /* sin conexiones */ }
   // Ultima vez conectado y desde donde entra (presencia.js)
   let presencia = new Map();
+  // De donde llego (origenes.js)
+  const origenes = require('./origenes.js').deCadaUno();
   try { presencia = require('./presencia.js').todas(); } catch { /* sin presencia */ }
   // Mensajes de Discord de cada cuenta (el historial que paso a su cuenta al vincular y lo que escribio
   // en Discord despues; el autor de Discord queda en puente_autores). Casi no cambian: cada 30 minutos
@@ -1385,7 +1394,7 @@ function members() {
       email: emails.get(u.id) || null, correo: correos.get(u.id) || null, enLinea: online.has(u.id),
       visto: online.has(u.id) ? new Date().toISOString() : ((presencia.get(u.id) || {}).visto || null),
       entraDesde: (presencia.get(u.id) || {}).desde || null, usa: (presencia.get(u.id) || {}).usadas || [],
-      recuperados: historialCache.map.get(u.id) || 0, denuncias: denuncias.get(u.id) || 0,
+      recuperados: historialCache.map.get(u.id) || 0, denuncias: denuncias.get(u.id) || 0, origen: origenes.get(u.id) || null,
     };
   });
   membersCache = { at: Date.now(), list };

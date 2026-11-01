@@ -38,7 +38,7 @@ ${js.map(j => `<script src="${j}" defer></script>`).join('\n')}
 <div class="envoltura">
   <header class="cab">
     <div class="cab__marca">
-      <a class="cab__logo" href="/" aria-label="Círculo Vicioso, inicio"><img src="/images/wordmark_cv.svg" alt="Círculo Vicioso" width="528" height="64"></a>
+      <a class="cab__logo" href="/" aria-label="Círculo Vicioso, inicio"><img class="cab__club" src="/images/logo-club.png" alt="" width="146" height="146"><img class="cab__letras" src="/images/wordmark_cv.svg" alt="Círculo Vicioso" width="528" height="64"></a>
       <div class="cab__degrade" aria-hidden="true"></div>
     </div>
     <nav class="nav" aria-label="Secciones">

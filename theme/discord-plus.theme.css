@@ -1980,6 +1980,19 @@ html body #right-sidebar #online-users .user-group-label.offline-label { margin-
 /* Con cuatro pestañas en el celular: se corren de costado */
 .pm-celular .pm-pestanas { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .pm-celular .pm-pestana { flex: 0 0 auto; }
+/* Pestaña "Origen" (aviso.js, origenes.js): de donde llega la gente */
+.po-nota { grid-column: 1 / -1; margin-top: 0; }
+.po-leyenda { flex-wrap: wrap; gap: 0.5rem 1rem; }
+.po-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 0.25rem 1rem; }
+.po-item { display: flex; align-items: center; gap: 0.625rem; min-width: 0; padding: 0.375rem 0.5rem; border-radius: 0.375rem; cursor: pointer; }
+.po-item:hover { background: #26252b; }
+.po-item .pm-avatar { flex: none; }
+.po-info { min-width: 0; }
+.po-info .pm-n1, .po-info .pm-n2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-arma { display: flex; flex-direction: column; gap: 0.625rem; }
+.po-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; }
+.po-fila .po-etiqueta { flex: 1 1 16rem; min-width: 0; }
+.po-sale { flex: 1 1 16rem; min-width: 0; padding: 0.5rem 0.75rem; border-radius: 0.375rem; background: #121214; color: #dbdee1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.875rem; overflow-wrap: anywhere; }
 /* Pestaña "Marketplace" (aviso.js, mercado.js /admin) */
 .pk-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
 .pk-vista[hidden] { display: none !important; }

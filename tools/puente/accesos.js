@@ -54,6 +54,8 @@ function setup(ctx) {
       flags INTEGER NOT NULL,
       PRIMARY KEY (haven_user_id, channel_id)
     );
+    CREATE TABLE IF NOT EXISTS puente_canales_cerrados (channel_id INTEGER PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS puente_canales_cerrados_estado (clave TEXT PRIMARY KEY, valor TEXT);
   `);
   if (!enabled) { log('accesos: modo abierto (PUENTE_ACCESO no es "vinculados")'); return; }
   const n = db.prepare('UPDATE channels SET is_private = 1 WHERE discord_channel_id IS NOT NULL AND is_private = 0').run().changes;
@@ -343,25 +345,56 @@ function onDispatch(t, d) {
 
 // Canales "cerrados", con candadito en la lista como en Discord: los de Discord
 // que @everyone no puede ver, y los privados propios de Haven. Se calcula con
-// los mismos permisos de Discord que el resto del modulo.
+// los mismos permisos de Discord que el resto del modulo. Lo que sale con Discord se
+// guarda en CV Chat (puente_canales_cerrados): sin Discord (al arrancar, o cuando ya
+// no este) los canales que vinieron de alla siguen como quedaron la ultima vez.
 let lockedCache = null;
+let fotoCerrados; // Set guardado, o null si nunca se guardo (undefined: sin leer)
+function guardados() {
+  if (fotoCerrados === undefined) {
+    try {
+      const filas = db.prepare('SELECT channel_id FROM puente_canales_cerrados').all();
+      const hay = db.prepare("SELECT 1 FROM puente_canales_cerrados_estado WHERE clave = 'guardado'").get();
+      fotoCerrados = hay ? new Set(filas.map(r => r.channel_id)) : null;
+    } catch { fotoCerrados = null; }
+  }
+  return fotoCerrados;
+}
+function guardar(ids) {
+  const antes = guardados();
+  const deDiscord = new Set(db.prepare('SELECT id FROM channels WHERE is_dm = 0 AND discord_channel_id IS NOT NULL').all().map(r => r.id));
+  const nuevos = new Set([...ids].filter(id => deDiscord.has(id)));
+  if (antes && antes.size === nuevos.size && [...nuevos].every(id => antes.has(id))) return;
+  db.transaction(() => {
+    db.prepare('DELETE FROM puente_canales_cerrados').run();
+    const ins = db.prepare('INSERT INTO puente_canales_cerrados (channel_id) VALUES (?)');
+    for (const id of nuevos) ins.run(id);
+    db.prepare("INSERT INTO puente_canales_cerrados_estado (clave, valor) VALUES ('guardado', ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor").run(String(Date.now()));
+  })();
+  fotoCerrados = nuevos;
+}
+const conDiscord = () => { const g = getGuildId ? getGuildId() : null; return !!(g && roles.has(g)); };
 function lockedChannelIds() {
   if (lockedCache && Date.now() - lockedCache.at < 60 * 1000) return lockedCache.ids;
   const ids = new Set();
-  const guildId = getGuildId ? getGuildId() : null;
+  const listo = conDiscord();
+  const foto = listo ? null : guardados();
   const everyone = { user: { id: '0' }, roles: [] };
   for (const c of db.prepare('SELECT id, discord_channel_id, is_private FROM channels WHERE is_dm = 0').all()) {
     if (!c.discord_channel_id) { if (c.is_private) ids.add(c.id); continue; }
-    if (!guildId || !roles.has(guildId)) continue; // todavia sin los roles de Discord
+    if (!listo) { if (foto && foto.has(c.id)) ids.add(c.id); continue; } // sin Discord: lo guardado
     const info = channelInfo && channelInfo(c.discord_channel_id);
     if (!info || THREAD_TYPES.has(info.type)) continue;
     if (!(permissions(everyone, info) & VIEW)) ids.add(c.id);
   }
+  if (listo) { try { guardar(ids); } catch (err) { warn('accesos: no se pudieron guardar los canales con candadito:', err.message); } }
   if (!lockedCache || lockedCache.ids.size !== ids.size) log(`accesos: ${ids.size} canales con candadito`);
   lockedCache = { at: Date.now(), ids };
   return ids;
 }
+// Los canales con candadito, o null si todavia no se sabe (sin Discord y sin nada guardado)
+function canalesCerrados() {
+  return conDiscord() || guardados() ? lockedChannelIds() : null;
+}
 
-module.exports = { setup, onDispatch, recomputeUser, recomputeUnlinked, revokeAll, channelPermissions, lockedChannelIds, isEnabled: () => enabled, openToUnlinked: () => OPEN_UNLINKED,
-  // Ya estan los roles de Discord (hasta entonces lockedChannelIds no sabe cuales de Discord van con candadito)
-  listo: () => { const g = getGuildId ? getGuildId() : null; return !!(g && roles.has(g)); } };
+module.exports = { setup, onDispatch, recomputeUser, recomputeUnlinked, revokeAll, channelPermissions, lockedChannelIds, canalesCerrados, isEnabled: () => enabled, openToUnlinked: () => OPEN_UNLINKED };

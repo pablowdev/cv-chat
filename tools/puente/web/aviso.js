@@ -2250,7 +2250,9 @@ function leido(sc) {
         mail.appendChild(dir);
         if (m.email === 'pendiente') mail.appendChild(el('div', 'pm-n2 pm-aviso-txt', 'sin confirmar'));
       } else mail.appendChild(el('span', 'pm-vacio', '—'));
-      const since = el('div', 'pm-c', ago(m.desde)); since.title = fecha(m.desde);
+      const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
+      // y de donde llego (origenes.js)
+      if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente)); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
       // Discord: el @usuario y la antiguedad de esa cuenta
       const dc = el('div', 'pm-c pm-dos');
       if (m.discord) {
@@ -2302,6 +2304,7 @@ function leido(sc) {
       if (m.ultimo) bits.push('último ' + ago(m.ultimo));
       bits.push(m.enLinea ? 'en línea' : m.visto ? 'conectado ' + ago(m.visto) : 'sin conexiones registradas');
       if (m.entraDesde) bits.push(m.entraDesde);
+      if (m.origen) bits.push('llegó desde ' + m.origen.fuente);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
       const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo + (m.email === 'pendiente' ? ' (sin confirmar)' : '')) : null;
       const chips = el('div', 'pm-roles');
@@ -2457,10 +2460,15 @@ function leido(sc) {
     page.querySelectorAll('.pm-pestana').forEach(b => b.classList.toggle('actual', b.dataset.v === v));
     page.querySelector('.pm-card').hidden = v !== 'miembros';
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
+    const po = page.querySelector('.po-vista'); if (po) po.hidden = v !== 'origen';
     const mz = page.querySelector('.pmz-vista'); if (mz) mz.hidden = v !== 'mudanza';
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     if (v === 'mudanza') cargarMudanza();
     if (v === 'marketplace') cargarMarketplace();
+    if (v === 'origen') {
+      if (!page.querySelector('.po-cuerpo').childNodes.length) cargarOrigen();
+      else page.querySelectorAll('.po-vista .pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoOrigen));
+    }
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
   // Pestaña "Mudanza" (mudanza-plan.js): el cronograma que el servidor cumple solo, como va, y los
@@ -2548,6 +2556,111 @@ function leido(sc) {
 
   // Pestaña "Marketplace" (mercado.js, /admin): numeros, ventas con lo que opinaron, las publicaciones de
   // cada uno, denuncias y reputacion. Tocar una publicacion la abre en el Marketplace
+  // ── Pestaña "Origen" (origenes.js): de donde llega la gente que se crea la cuenta ──
+  let rangoOrigen = '30d';
+  const COLORES_ORIGEN = ['#5865f2', '#3ba55d', '#f0b232', '#ee2d6f', '#9b84ec', '#80848e', '#4e5058'];
+  function armarVistaOrigen() {
+    const v = el('div', 'pe-vista po-vista'); v.hidden = true;
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'De dónde llega la gente'));
+    const rangos = el('div', 'pe-rangos');
+    for (const [k, label, t] of [['30d', '30D', 'Últimos 30 días'], ['90d', '3M', 'Últimos 3 meses'], ['1a', '1A', 'Último año'], ['todo', 'Todo', 'Desde que se anota']]) {
+      const b = el('button', 'pe-rango', label); b.type = 'button'; b.dataset.r = k; b.title = t;
+      b.addEventListener('click', () => { rangoOrigen = k; cargarOrigen(); });
+      rangos.appendChild(b);
+    }
+    barra.appendChild(rangos);
+    v.append(barra, el('div', 'pe-cuerpo po-cuerpo'));
+    return v;
+  }
+  function cargarOrigen() {
+    const box = page && page.querySelector('.po-cuerpo');
+    if (!box) return;
+    page.querySelectorAll('.po-vista .pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoOrigen));
+    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
+    fetch('/puente/api/origen/admin?rango=' + rangoOrigen, { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarOrigen(box, d); })
+      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar de dónde llega la gente.')); } });
+  }
+  function pintarOrigen(box, d) {
+    box.textContent = '';
+    if (!d.medidoDesde) box.appendChild(el('div', 'pe-aviso', 'Se empieza a anotar ahora: las cuentas de antes salen como "Sin dato". Los números aparecen a medida que llega gente nueva.'));
+    else box.appendChild(el('div', 'pe-nota po-nota', 'Se anota desde el ' + new Date(d.medidoDesde).toLocaleDateString('es-AR') + ': las cuentas de antes salen como "Sin dato".'));
+    const totales = el('div', 'pe-totales');
+    const conv = d.visitasTotal ? Math.round((d.conDato / d.visitasTotal) * 1000) / 10 + '%' : '—';
+    for (const [n, label] of [[fmt(d.cuentas), 'Cuentas nuevas'], [fmt(d.conDato), 'Con origen anotado'], [fmt(d.visitasTotal), 'Visitas que llegaron'], [conv, 'Se crearon la cuenta']]) {
+      const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', label));
+      const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', n)); c.appendChild(f); totales.appendChild(c);
+    }
+    box.appendChild(totales);
+    // Cuentas nuevas por fuente, en el tiempo
+    const colorDe = new Map(d.serie.map((s, i) => [s.fuente, s.fuente === 'Sin dato' ? '#3a3940' : COLORES_ORIGEN[i % COLORES_ORIGEN.length]]));
+    const g = el('div');
+    const ley = el('div', 'pe-leyenda po-leyenda');
+    for (const s of d.serie) { const sp = el('span'); const i = el('i'); i.style.background = colorDe.get(s.fuente); sp.append(i, s.fuente); ley.appendChild(sp); }
+    const graf = el('div'); graf.innerHTML = barras(d.serie.map(s => s.v), d.etiquetas, d.paso, d.serie.map(s => colorDe.get(s.fuente)));
+    g.append(ley, graf);
+    box.appendChild(tarjeta('Cuentas nuevas, según de dónde llegaron', g, 'pe-ancha'));
+    // Cada fuente: cuentas, visitas y cuantos de los que llegaron se crearon la cuenta
+    const lista = el('div');
+    const maxF = Math.max(1, ...d.fuentes.map(f => f.cuentas));
+    for (const f of d.fuentes) {
+      const pct = f.visitas ? ' · ' + Math.round((f.cuentas / f.visitas) * 100) + '% de ' + fmt(f.visitas) + (f.visitas === 1 ? ' visita' : ' visitas') : '';
+      lista.appendChild(filaBarra(f.fuente, f.cuentas, maxF, fmt(f.cuentas) + (f.cuentas === 1 ? ' cuenta' : ' cuentas') + pct));
+    }
+    if (!d.fuentes.length) lista.appendChild(el('div', 'pe-nota', 'Todavía no hay datos en este período.'));
+    box.appendChild(tarjeta('De dónde llegan', lista));
+    const vis = el('div'); vis.innerHTML = barras([d.visitasSerie], d.etiquetas, d.paso, ['#f0b232']);
+    vis.appendChild(el('div', 'pe-nota', 'Navegadores que llegaron a la web, el foro o el chat desde algún lado (sin contar a los miembros que ya tenían la sesión abierta).'));
+    box.appendChild(tarjeta(d.paso === 'dia' ? 'Visitas por día' : d.paso === 'semana' ? 'Visitas por semana' : 'Visitas por mes', vis));
+    // Los sitios y las campañas
+    if (d.detalles.length) {
+      const det = el('div');
+      const maxD = Math.max(1, ...d.detalles.map(x => x.cuentas));
+      for (const x of d.detalles) det.appendChild(filaBarra(x.detalle, x.cuentas, maxD, fmt(x.cuentas)));
+      box.appendChild(tarjeta('Sitios y enlaces', det));
+    }
+    // Las ultimas cuentas, una por una
+    const rec = el('div', 'po-lista');
+    for (const r of d.recientes) {
+      const f = el('div', 'po-item');
+      const av = el('div', 'pm-avatar');
+      if (r.avatar) { const im = el('img'); im.src = r.avatar; im.alt = ''; im.loading = 'lazy'; av.appendChild(im); } else av.textContent = String(r.nombre).charAt(0).toUpperCase();
+      const info = el('div', 'po-info');
+      info.append(el('div', 'pm-n1', r.nombre + ' · ' + r.fuente), el('div', 'pm-n2', [r.detalle, r.campania, r.dispositivo, r.aterrizaje ? 'entró por ' + r.aterrizaje : '', ago(r.desde)].filter(Boolean).join(' · ')));
+      f.append(av, info);
+      f.title = fecha(r.desde);
+      f.addEventListener('click', () => { const app = window.app; if (!app || !app.socket) return; app._isHoverPopup = false; app._hoverTarget = null; app._profilePopupAnchor = av; app.socket.emit('get-user-profile', { userId: r.id }); });
+      rec.appendChild(f);
+    }
+    if (!d.recientes.length) rec.appendChild(el('div', 'pe-nota', 'Todavía no hay cuentas nuevas con el origen anotado.'));
+    box.appendChild(tarjeta('Las últimas cuentas', rec, 'pe-ancha'));
+    // Enlaces con etiqueta: para saber cuantos llegan por WhatsApp, Telegram o una publicacion
+    const arma = el('div', 'po-arma');
+    const nombre = el('input', 'pm-buscar po-etiqueta'); nombre.type = 'text'; nombre.placeholder = 'Etiqueta: whatsapp, x, instagram, video-220…'; nombre.maxLength = 40;
+    const dest = el('select', 'pm-orden po-destino');
+    const dom = d.dominio || 'circulovicioso.club';
+    for (const [v, label] of [['https://' + dom + '/', 'La página de inicio'], ['https://chat.' + dom + '/?registro=1&', 'Crear una cuenta en CV Chat'], ['https://foro.' + dom + '/', 'El foro']]) {
+      const o = el('option', null, label); o.value = v; dest.appendChild(o);
+    }
+    const sale = el('div', 'po-sale');
+    const copiar = el('button', 'pe-rango', 'Copiar'); copiar.type = 'button';
+    const armar = () => {
+      const tag = nombre.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const base = dest.value;
+      sale.textContent = tag ? base + (base.endsWith('&') ? '' : '?') + 'de=' + tag : 'Escribí una etiqueta';
+      copiar.disabled = !tag;
+    };
+    nombre.addEventListener('input', armar); dest.addEventListener('change', armar);
+    copiar.addEventListener('click', () => { const t = sale.textContent; if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => { if (window.app && window.app._showToast) window.app._showToast('Enlace copiado', 'success'); }); });
+    const filaB = el('div', 'po-fila'); filaB.append(nombre, dest);
+    const filaS = el('div', 'po-fila'); filaS.append(sale, copiar);
+    arma.append(filaB, filaS, el('div', 'pe-nota', 'WhatsApp y Telegram no dicen de dónde viene la gente: con un enlace así, todo el que entre por ahí queda anotado con esa etiqueta.'));
+    armar();
+    box.appendChild(tarjeta('Armá un enlace con etiqueta', arma, 'pe-ancha'));
+  }
+
   function armarVistaMarketplace() {
     const v = el('div', 'pk-vista'); v.hidden = true;
     const barra = el('div', 'pe-barra');
@@ -2682,7 +2795,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['origen', 'Origen'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -2747,7 +2860,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaMarketplace(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaOrigen(), armarVistaMarketplace(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);

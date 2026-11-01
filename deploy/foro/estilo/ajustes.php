@@ -17,6 +17,7 @@
 //  9. El foro que se actualiza solo: un anuncio en el modulo de HTML de cabecera (Constructor del sitio)
 // 10. tejemanejes oculto: la compra/venta va en el Marketplace (panel: Foros -> Permisos del canal)
 // 11. La vista previa de los enlaces a los temas: una imagen con un pedacito (panel: Productos y ganchos -> Ganchos)
+// 12. La cabecera de la web tambien en el foro, y en la portada sin el titulo (Constructor del sitio)
 //
 // Uso: php ajustes.php
 chdir('/var/www/html/core');
@@ -299,6 +300,13 @@ if ($teje) {
     $cp->setPermissions($tid, $g, $p);
     $dijo("tejemanejes: oculto para el grupo $g");
   }
+  // Y fuera de la lista de foros (los superadministradores se saltean los permisos): "Orden" 0 es no
+  // mostrarlo (panel: Foros -> Administrador de foros)
+  if ((int)$teje['displayorder'] !== 0) {
+    $r = $canales->update($tid, ['displayorder' => 0]);
+    if (is_array($r) && isset($r['errors'])) { fwrite(STDERR, 'no se pudo sacar tejemanejes de la lista: ' . json_encode($r['errors']) . "\n"); exit(1); }
+    $dijo('tejemanejes: fuera de la lista de foros');
+  }
 }
 
 // 11. La vista previa de los enlaces al foro (WhatsApp, Telegram, X, CV Chat...): en los temas y los foros, una
@@ -332,6 +340,34 @@ if (!$db->getRow('hook', ['title' => $vpTitulo])) {
   vB::getDatastore()->build('hooks', serialize($db->getRows('getHookProductList')), 1);
   $opcion('facebookfeedimageurl', '');
   $dijo('vista previa de los enlaces: gancho agregado');
+}
+
+// 12. La cabecera de la web tambien en el foro (cabecera.html: el logo, "Circulo Vicioso" y el menu de la web),
+//     asi el foro se siente parte de la pagina. Va en el "modulo de HTML de cabecera 2" (Constructor del sitio, o
+//     Publicidad: "CV: cabecera de la web"); el logo, el buscador y la pestaña "Foros" de vBulletin se esconden
+//     desde el estilo (css_additional.css) y el buscador pasa abajo, al renglon de "Nuevos temas". Si cambia
+//     cabecera.html, este paso la actualiza. En la portada, sin el titulo "Circulo Vicioso" (ya esta arriba)
+$cabTitulo = 'CV: cabecera de la web';
+$cab = trim((string)@file_get_contents(__DIR__ . '/cabecera.html'));
+if ($cab !== '') {
+  $ya = $db->getRow('ad', ['title' => $cabTitulo]);
+  if (!$ya && $db->getRow('ad', ['adlocation' => 'header2', 'active' => 1])) { fwrite(STDERR, "ya hay otro anuncio en la cabecera 2: revisar a mano\n"); exit(1); }
+  if (!$ya || $ya['snippet'] !== $cab || !(int)$ya['active']) {
+    if ($ya) { $adid = (int)$ya['adid']; $db->update('ad', ['snippet' => $cab, 'active' => 1], ['adid' => $adid]); }
+    else { $adid = $db->insert('ad', ['title' => $cabTitulo, 'adlocation' => 'header2', 'displayorder' => 1, 'active' => 1, 'snippet' => $cab]); if (is_array($adid)) $adid = array_pop($adid); }
+    // la plantilla ad_header2 como la arma vBulletin para un anuncio sin condiciones (igual que el paso 9)
+    $tpl = '<div class="ad_header2_inner"><vb:literal>' . $cab . '</vb:literal><vb:if condition="$' . 'adsshown[] = ' . (int)$adid . '"></vb:if></div>';
+    $tl = vB_Library::instance('template');
+    $opts = ['forcenotextonly' => true, 'textonly' => 0];
+    try { $tl->insert(-1, 'ad_header2', $tpl, 'vbulletin', false, '', false, $opts); }
+    catch (vB_Exception_Api $e) { $tl->update($tl->getTemplateID('ad_header2', -1), 'ad_header2', $tpl, 'vbulletin', false, false, '', false, $opts); }
+    $dijo('cabecera de la web: ' . ($ya ? 'actualizada' : 'agregada'));
+  }
+}
+$titulo = $db->getRow('widgetinstance', ['pagetemplateid' => 1, 'widgetid' => 56]);
+if ($titulo) {
+  vB_Library::instance('widget')->deleteWidgetInstances([(int)$titulo['widgetinstanceid']]);
+  $dijo('portada: sin el titulo "Circulo Vicioso"');
 }
 
 // Que el foro vuelva a leer todo (como Mantenimiento -> Borrar la cache del sistema)

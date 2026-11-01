@@ -1,18 +1,48 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
 
-<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793563575">
+<style name="Circulo Vicioso" vbversion="5.7.5" product="vbulletin" type="custom" dateline="1793576610">
 	<templategroup name="Css">
-		<template name="css_additional.css" templatetype="template" date="1793563575" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
+		<template name="css_additional.css" templatetype="template" date="1793576610" username="Circulo Vicioso" version="5.7.5"><![CDATA[@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;600;700&display=swap");
 <vb:comment>/* Circulo Vicioso: lo que las variables de estilo no alcanzan. Los colores salen de la paleta
    (Variables de estilo -> global_palette_*), asi que se cambian desde el panel */</vb:comment>
 
-<vb:comment>/* Cabecera y menu: recuadros con borde fino, como la web */</vb:comment>
-#header { border: 1px solid {vb:stylevar global_palette_text_01.color}; border-bottom: 0; }
-#channel-tabbar { border: 1px solid {vb:stylevar global_palette_text_01.color}; }
-#channel-tabbar li { border-right: 1px solid {vb:stylevar global_palette_text_01.color}; }
-#channel-tabbar li a { font-style: italic; font-weight: 700; letter-spacing: .04em; }
-#channel-subtabbar { border: 1px solid rgba(243, 247, 226, .18); border-top: 0; }
+<vb:comment>/* La cabecera de la web (cabecera.html, en el modulo de HTML de cabecera 2): la misma que en
+   circulovicioso.club, con sus medidas (deploy/sitio/fuente/css/cv.css). La de vBulletin (logo,
+   buscador y la solapa "Foros") no se muestra; el buscador pasa al renglon de "Nuevos temas" */</vb:comment>
+<vb:comment>/* (con dos modulos de cabecera vBulletin los pone mitad y mitad: aca van uno abajo del otro; el
+   primero es solo el foro en vivo, sin nada a la vista) */</vb:comment>
+#header-axd.axdnum_2 .axd-container, #header-axd .axd-container { width: 100%; float: none; }
+#header-axd.axdnum_1 .axd-container_header2, #header-axd .axd-container_header2 { display: block; }
+#header-axd .axd { display: block; width: 100%; float: none; }
+.cv-cabecera { width: 100%; margin: 20px 0 0; font: 400 15px/1.6 "Space Mono", ui-monospace, monospace; color: {vb:stylevar global_palette_text_01.color}; }
+.cv-cabecera *, .cv-cabecera *::before, .cv-cabecera *::after { box-sizing: border-box; }
+.cv-cabecera .cab__marca { display: grid; grid-template-columns: auto 1fr; border: 1px solid rgba(243, 247, 226, .9); }
+.cv-cabecera .cab__logo { display: flex; align-items: center; gap: 18px; padding: 18px 22px; text-decoration: none; }
+.cv-cabecera .cab__logo img { display: block; max-width: 100%; height: auto; }
+.cv-cabecera .cab__club { width: clamp(44px, 6vw, 76px); flex: none; }
+.cv-cabecera .cab__letras { width: clamp(180px, 34vw, 528px); }
+.cv-cabecera .cab__degrade { background: url("https://circulovicioso.club/images/svg-gradient_cv.svg") center / cover no-repeat; margin: 6px 6px 6px 0; }
+.cv-cabecera .nav { display: flex; flex-wrap: wrap; border: 1px solid rgba(243, 247, 226, .9); border-top: 0; }
+.cv-cabecera .nav a { position: relative; display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-right: 1px solid rgba(243, 247, 226, .9);
+  font: italic 400 13px/1.2 "Space Mono", ui-monospace, monospace; text-transform: uppercase; letter-spacing: .02em; text-decoration: none; white-space: nowrap; color: {vb:stylevar global_palette_text_01.color}; }
+.cv-cabecera .nav a:hover, .cv-cabecera .nav a[aria-current="page"] { background: {vb:stylevar global_palette_text_01.color}; color: #211c1f; }
+.cv-cabecera .nav a .ext { font-style: normal; opacity: .6; }
+.b-top-background__header-mainnav { display: none; }
+#channel-subtabbar { display: flex !important; flex-wrap: wrap; align-items: center; border: 1px solid rgba(243, 247, 226, .18); border-top: 0; }
 #channel-subtabbar a:hover { color: {vb:stylevar global_palette_accent_02.color}; }
+#channel-subtabbar .cv-buscar { margin-left: auto; padding: 6px 10px; width: 320px; }
+#channel-subtabbar .cv-buscar #searchForm, #channel-subtabbar .cv-buscar #searchForm > .h-left, #channel-subtabbar .cv-buscar .search-box { float: none; display: flex; align-items: center; width: 100%; }
+#channel-subtabbar .cv-buscar .search-term-container { float: none; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
+#channel-subtabbar .cv-buscar .search-term { flex: 1 1 auto; min-width: 0; width: auto; }
+#channel-subtabbar .cv-buscar .search-btn { float: none; flex: none; }
+@media (max-width: 720px) {
+  .cv-cabecera { margin-top: 12px; }
+  .cv-cabecera .cab__logo { padding: 12px 14px; gap: 12px; }
+  .cv-cabecera .cab__marca { grid-template-columns: 1fr; }
+  .cv-cabecera .cab__degrade { height: 18px; margin: 0 6px 6px; }
+  .cv-cabecera .nav a { flex: 1 1 auto; justify-content: center; padding: 10px 12px; border-bottom: 1px solid rgba(243, 247, 226, .9); margin-bottom: -1px; }
+  #channel-subtabbar .cv-buscar { margin-left: 0; width: 100%; }
+}
 
 <vb:comment>/* Titulos: la serif grande de la web; los de cada recuadro, chicos y en rosa */</vb:comment>
 .main-title, h1.main-title, .b-post__title, .widget-header .main-title { letter-spacing: .01em; }
@@ -47,13 +77,10 @@ body .profile_sidebar_content .b-button.b-button--primary { background: {vb:styl
 <vb:comment>/* Los avisos de error: el rosa claro de vBulletin no se leia con letra clara */</vb:comment>
 .error { background: {vb:stylevar global_palette_fill_02.color}; border: 1px solid {vb:stylevar global_palette_accent_02.color}; border-radius: 0; color: {vb:stylevar global_palette_text_01.color}; }
 
-<vb:comment>/* La cabecera mas baja: el logo mas chico, como en la web */</vb:comment>
-#header .site-logo img { max-height: 84px; width: auto; }
-
 <vb:comment>/* Lo de abajo, del mismo ancho que la cabecera: vBulletin le deja 20px de cada lado al contenido */</vb:comment>
 @media (min-width: 768px) { #content { padding-left: 0; padding-right: 0; } }
 ]]></template>
-		<template name="css_fonts.css" templatetype="template" date="1793563575" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
+		<template name="css_fonts.css" templatetype="template" date="1793576610" username="Circulo Vicioso" version="5.7.5"><![CDATA[<vb:comment>/* Las letras de Circulo Vicioso: la serif de la web (desde circulovicioso.club) */</vb:comment>
 @font-face {
 	font-family: "Redaction 35";
 	src: url("https://circulovicioso.club/fonts/Redaction35-Regular.otf") format("opentype");

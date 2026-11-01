@@ -137,9 +137,11 @@ function canalPublico(code) {
   if (!/^[a-f0-9]{8}$/i.test(String(code || ''))) return null;
   const ch = db.prepare('SELECT * FROM channels WHERE code = ?').get(code);
   if (!ch || ch.is_dm || ch.is_group || ch.is_self_dm || ch.is_nsfw || ch.text_enabled === 0) return null;
-  let a = null; try { a = require('./accesos.js'); } catch { /* sin accesos */ }
-  if (a && a.isEnabled()) { if (!a.listo() || a.lockedChannelIds().has(ch.id)) return null; }
-  else if (ch.is_private) return null;
+  // Los candaditos los guarda CV Chat (accesos.js): no hace falta Discord. Si todavia no se sabe
+  // (nada guardado), solo los canales propios de CV Chat que no son privados
+  let cerrados = null; try { cerrados = require('./accesos.js').canalesCerrados(); } catch { /* sin accesos */ }
+  if (cerrados) { if (cerrados.has(ch.id)) return null; }
+  else if (ch.is_private || ch.discord_channel_id) return null;
   return ch;
 }
 const autorDe = r => (r.webhook_username || r.persona_username || r.display_name || r.username || 'alguien');

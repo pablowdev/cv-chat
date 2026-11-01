@@ -17,7 +17,7 @@
   --mono: "Space Mono", ui-monospace, monospace;
   --display: "Redaction 50", Georgia, serif;
   --display-2: "Redaction 35", Georgia, serif;
-  --gutter: 32px;
+  --gutter: 20px; /* el mismo margen que el foro, asi la cabecera queda igual en los dos */
   --max: 1240px;
 }
 * { box-sizing: border-box; }
@@ -39,8 +39,10 @@ a:hover { color: var(--accent); }
 /* ── Cabecera: el logo, el degrade y el menu ── */
 .cab { margin: 20px auto 0; }
 .cab__marca { display: grid; grid-template-columns: auto 1fr; border: 1px solid var(--line); }
-.cab__logo { display: block; padding: 18px 22px; }
-.cab__logo img { width: clamp(180px, 34vw, 528px); height: auto; }
+.cab__logo { display: flex; align-items: center; gap: 18px; padding: 18px 22px; text-decoration: none; }
+/* el logo del club y "Circulo Vicioso" (la misma cabecera esta en el foro: deploy/foro/estilo/cabecera.html) */
+.cab__club { width: clamp(44px, 6vw, 76px); height: auto; flex: none; }
+.cab__letras { width: clamp(180px, 34vw, 528px); height: auto; }
 .cab__degrade { background: url("/images/svg-gradient_cv.svg") center / cover no-repeat; margin: 6px 6px 6px 0; }
 .nav { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-top: 0; }
 .nav a { position: relative; display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-right: 1px solid var(--line);
@@ -94,7 +96,7 @@ a:hover { color: var(--accent); }
   :root { --gutter: 16px; }
   body { font-size: 14px; }
   .cab { margin-top: 12px; }
-  .cab__logo { padding: 12px 14px; }
+  .cab__logo { padding: 12px 14px; gap: 12px; }
   .cab__marca { grid-template-columns: 1fr; }
   .cab__degrade { height: 18px; margin: 0 6px 6px; }
   /* El menu en dos renglones, todo a la vista */

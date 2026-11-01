@@ -20,6 +20,8 @@
   const aca = location.href;
   // El foro adentro de CV Chat (el boton del foro): sin la barra (ya esta la de CV Chat)
   const enChat = enForo && window.name === 'cv-foro' && window.top !== window;
+  // De donde llego la gente (origenes.js): la web y el foro tambien lo anotan
+  if (!enChat) { const s = document.createElement('script'); s.src = CHAT + '/puente/origen.js'; s.async = true; document.head.appendChild(s); }
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
   const registrarse = CHAT + '/?registro=1&volver=' + encodeURIComponent(aca);
   const salir = CHAT + '/puente/cuenta/salir?volver=' + encodeURIComponent(enForo ? FORO + '/' : aca);
