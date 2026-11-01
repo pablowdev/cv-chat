@@ -28,6 +28,11 @@
 
   <p class="chico mk__estado" id="mk-estado"></p>
   <ul class="lista-limpia mk__grilla" id="mk-grilla"></ul>
+  <section class="mk__vencidas" id="mk-vencidas" hidden>
+    <p class="rotulo">ya vencidas</p>
+    <p class="chico">No se renovaron en 30 días: puede que ya no estén disponibles.</p>
+    <ul class="lista-limpia mk__grilla" id="mk-vgrilla"></ul>
+  </section>
   <div class="mk__mas"><button class="btn" id="mk-mas" type="button" hidden>Ver más</button></div>
 </div>
 
@@ -42,6 +47,7 @@
       <h1 class="titulo-2" id="mk-i-titulo"></h1>
       <p class="mk-item__precio" id="mk-i-precio"></p>
       <p class="chico" id="mk-i-linea"></p>
+      <p class="aviso mk-item__aviso" id="mk-i-aviso" hidden></p>
       <div class="mk-item__texto" id="mk-i-texto"></div>
       <div class="mk-item__vendedor" id="mk-i-vendedor"></div>
       <div class="mk__acciones">

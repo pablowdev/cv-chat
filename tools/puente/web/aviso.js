@@ -8176,7 +8176,7 @@ document.addEventListener('pointerdown', (ev) => {
   const money = (p, m) => (p == null ? 'A convenir' : `${MONEDA[m] || '$'} ${Number(p).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`);
   function ago(ms) {
     const s = Math.max(0, (Date.now() - ms) / 1000);
-    for (const [sec, one, many] of [[86400 * 30, 'mes', 'meses'], [86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) {
+    for (const [sec, one, many] of [[86400 * 365, 'año', 'años'], [86400 * 30, 'mes', 'meses'], [86400, 'día', 'días'], [3600, 'hora', 'horas'], [60, 'minuto', 'minutos']]) {
       if (s >= sec) { const n = Math.floor(s / sec); return `hace ${n} ${n === 1 ? one : many}`; }
     }
     return 'recién';
@@ -8310,17 +8310,24 @@ document.addEventListener('pointerdown', (ev) => {
     b.appendChild(fx);
     b.appendChild(el('div', 'mk-pend-lugar'));
     const grid = el('div', 'mk-grilla'); b.appendChild(grid);
+    // Abajo, aparte: las que no se renovaron en 30 dias (y los avisos viejos del foro), apagadas
+    const sinActivas = el('div', 'mk-estado', ''); b.appendChild(sinActivas);
+    const vsec = el('div', 'mk-vencidas'); vsec.hidden = true;
+    const vgrid = el('div', 'mk-grilla');
+    vsec.append(el('div', 'mk-vtitulo', 'Ya vencidas'), el('div', 'mk-nota', 'No se renovaron en 30 días: puede que ya no estén disponibles.'), vgrid);
+    b.appendChild(vsec);
     const status = el('div', 'mk-estado', 'Cargando…'); b.appendChild(status);
 
-    let desde = 0, loading = false, more = true, seq = 0;
+    let desde = 0, loading = false, more = true, seq = 0, fase = 'activas';
     async function load(reset) {
-      if (reset) { desde = 0; more = true; grid.textContent = ''; status.textContent = 'Cargando…'; }
+      if (reset) { desde = 0; more = true; fase = 'activas'; grid.textContent = ''; vgrid.textContent = ''; vsec.hidden = true; sinActivas.textContent = ''; status.textContent = 'Cargando…'; }
       if (loading && !reset) return;
       if (!more) return;
       loading = true;
       const my = ++seq;
       const qs = new URLSearchParams();
       for (const k of Object.keys(filters)) if (filters[k]) qs.set(k, filters[k]);
+      if (fase === 'vencidas') qs.set('ver', 'vencidas');
       qs.set('desde', String(desde));
       const d = await api('lista?' + qs);
       if (my !== seq || !page || !grid.isConnected) return;
@@ -8329,9 +8336,15 @@ document.addEventListener('pointerdown', (ev) => {
       state = { puedePublicar: d.puedePublicar };
       setBadge(d.pendientes);
       pend(b.querySelector('.mk-pend-lugar'), d.pendientes);
-      for (const it of d.items) grid.appendChild(tile(it));
+      for (const it of d.items) (fase === 'vencidas' ? vgrid : grid).appendChild(tile(it));
       desde += d.items.length; more = !!d.mas;
-      status.textContent = grid.children.length ? (more ? 'Cargando…' : '') :
+      if (fase === 'vencidas' && vgrid.children.length) {
+        vsec.hidden = false;
+        if (!grid.children.length) sinActivas.textContent = (filters.q || filters.zona || filters.condicion || filters.moneda) ? 'No hay publicaciones activas con esa búsqueda.' : 'No hay publicaciones activas ahora.';
+      }
+      // Terminadas las activas (en "Todo", "Productos" o "Servicios"), siguen las vencidas
+      if (!more && fase === 'activas' && !filters.ver) { fase = 'vencidas'; desde = 0; more = true; status.textContent = 'Cargando…'; return load(false); }
+      status.textContent = grid.children.length || vgrid.children.length ? (more ? 'Cargando…' : '') :
         filters.ver === 'mias' ? 'Todavía no publicaste nada. Tocá "Publicar" para vender algo.' :
         filters.ver === 'guardados' ? 'Todavía no guardaste publicaciones. Tocá ♡ en una para tenerla acá.' :
         (filters.q || filters.zona || filters.condicion || filters.moneda) ? 'No hay publicaciones con esa búsqueda.' : 'Todavía no hay publicaciones. ¡Sé el primero en publicar!';
@@ -8351,7 +8364,7 @@ document.addEventListener('pointerdown', (ev) => {
   }
 
   function tile(it) {
-    const c = el('button', 'mk-tarjeta'); c.type = 'button';
+    const c = el('button', 'mk-tarjeta' + (it.vencida && it.estado === 'activa' ? ' mk-vencida' : '')); c.type = 'button';
     const ph = el('div', 'mk-tfoto');
     if (it.foto) { const i = el('img'); i.src = it.foto; i.alt = ''; i.loading = 'lazy'; ph.appendChild(i); }
     else ph.innerHTML = svg(it.tipo === 'servicio' ? I.tienda : I.foto, 34);
@@ -8359,7 +8372,7 @@ document.addEventListener('pointerdown', (ev) => {
     else if (it.vencida) ph.appendChild(el('span', 'mk-sello gris', 'Vencida'));
     else if (it.oculta) ph.appendChild(el('span', 'mk-sello rojo', 'Oculta'));
     c.append(ph, el('div', 'mk-tprecio', money(it.precio, it.moneda)), el('div', 'mk-ttitulo', it.titulo));
-    const meta = [it.tipo === 'servicio' ? 'Servicio' : it.condicion === 'nuevo' ? 'Nuevo' : it.condicion === 'usado' ? 'Usado' : '', it.zona || ''].filter(Boolean).join(' · ');
+    const meta = [it.vencida ? ago(it.renovado) : it.tipo === 'servicio' ? 'Servicio' : it.condicion === 'nuevo' ? 'Nuevo' : it.condicion === 'usado' ? 'Usado' : '', it.zona || ''].filter(Boolean).join(' · ');
     if (meta) c.appendChild(el('div', 'mk-tmeta', meta));
     c.addEventListener('click', () => go('item', it.id));
     return c;
@@ -8402,6 +8415,13 @@ document.addEventListener('pointerdown', (ev) => {
     if (it.mia) when += it.vencida ? ' · venció' : ` · vence en ${Math.max(1, Math.round((it.vence - Date.now()) / 864e5))} días`;
     info.appendChild(el('div', 'mk-cuando', when));
     if (it.estado === 'vendida') info.appendChild(el('div', 'mk-aviso', '✅ Vendido'));
+    // Vencida: sigue a la vista, pero se avisa. La de alguien del foro sin cuenta ya no se puede consultar
+    const sinCuenta = !!(it.foro && it.foro.sinCuenta);
+    if (it.vencida && it.estado === 'activa') {
+      info.appendChild(el('div', 'mk-aviso gris', it.mia ? '⏳ Venció: ya no aparece entre las activas. Republicala con un toque y vuelve arriba de todo, como nueva.'
+        : sinCuenta ? `⏳ Publicado en el foro en ${new Date(it.creado).getFullYear()}: ya no está disponible.`
+          : '⏳ Vencida: no se renovó en 30 días, así que puede que ya no esté disponible. Preguntale a quien la publicó.'));
+    }
     if (it.oculta) info.appendChild(el('div', 'mk-aviso rojo', '🙈 Oculta por un administrador: no la ve nadie más.'));
     if (it.venta && it.mia && it.venta.estado === 'pendiente' && it.venta.comprador) info.appendChild(el('div', 'mk-aviso', `Esperando que ${it.venta.comprador.nombre} confirme la compra.`));
     if (it.descripcion) info.appendChild(el('div', 'mk-desc', it.descripcion));
@@ -8418,18 +8438,11 @@ document.addEventListener('pointerdown', (ev) => {
       else { s.disabled = true; s.querySelector('svg')?.remove(); }
       b.appendChild(s);
     }
-    // Tambien en la compra/venta del foro
-    if (it.foro && it.foro.url) {
-      const fo = el('a', 'mk-foro', it.foro.sinCuenta ? 'Publicado en el foro: escribile por ahí ↗' : 'También está en el foro ↗');
-      fo.href = it.foro.url; fo.target = '_blank'; fo.rel = 'noopener';
-      b.appendChild(fo);
-    }
 
     const acts = el('div', 'mk-acciones');
     const btn = (label, cls, fn, icon) => { const x = el('button', 'mk-btn ' + (cls || '')); x.type = 'button'; if (icon) x.innerHTML = svg(icon, 18); x.appendChild(el('span', '', label)); x.addEventListener('click', fn); acts.appendChild(x); return x; };
     if (!it.mia) {
-      if (it.estado === 'activa' && it.foro && it.foro.sinCuenta) btn('Ver en el foro', 'mk-primario', () => window.open(it.foro.url, '_blank', 'noopener'), I.msj);
-      else if (it.estado === 'activa') btn('Escribir al vendedor', 'mk-primario', () => writeTo(it), I.msj);
+      if (it.estado === 'activa' && !sinCuenta) btn('Escribir al vendedor', it.vencida ? '' : 'mk-primario', () => writeTo(it), I.msj);
       const g = btn(it.guardada ? 'Guardado' : 'Guardar', it.guardada ? 'on' : '', async () => {
         const si = !g.classList.contains('on');
         const r = await api('guardar', { id: it.id, si });
@@ -8438,11 +8451,16 @@ document.addEventListener('pointerdown', (ev) => {
       }, I.corazon);
     }
     btn('Compartir', '', () => share(it));
+    if (it.mia && it.estado === 'activa' && it.vencida) btn('Republicar', 'mk-primario', async () => {
+      const r = await api('renovar', { id: it.id });
+      if (r.error) return toast(r.error, 'error');
+      toast('¡Listo! Volvió a estar publicada, arriba de todo', 'success'); show('item', it.id);
+    });
     if (it.mia) {
       btn('Editar', '', () => go('publicar', it));
       if (it.estado === 'activa') btn(it.tipo === 'servicio' ? 'Registrar una venta' : 'Marcar como vendido', 'mk-primario', () => go('vendido', it));
       if (it.estado === 'vendida') btn('Volver a publicar', '', async () => { const r = await api('reactivar', { id: it.id }); if (r.error) return toast(r.error, 'error'); show('item', it.id); });
-      if (it.estado === 'activa' && (it.vencida || it.vence - Date.now() < 7 * 864e5)) btn('Renovar 30 días', '', async () => { const r = await api('renovar', { id: it.id }); if (r.error) return toast(r.error, 'error'); toast('Publicación renovada', 'success'); show('item', it.id); });
+      if (it.estado === 'activa' && !it.vencida && it.vence - Date.now() < 7 * 864e5) btn('Renovar 30 días', '', async () => { const r = await api('renovar', { id: it.id }); if (r.error) return toast(r.error, 'error'); toast('Publicación renovada', 'success'); show('item', it.id); });
     }
     if (it.mia || d.admin) btn('Borrar', 'mk-peligro', async () => {
       if (!confirm('¿Borrar esta publicación? No se puede deshacer.')) return;

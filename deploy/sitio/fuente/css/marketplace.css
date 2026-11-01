@@ -25,6 +25,17 @@
 .mk-card.is-vendida .mk-card__foto img { opacity: .45; }
 .mk-card.is-vendida .mk-card__precio { color: var(--accent); }
 .mk__mas { display: flex; justify-content: center; margin-top: 20px; }
+/* Las vencidas: aparte, abajo y apagadas */
+.mk__vencidas { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.mk__vencidas > .chico { margin: 4px 0 0; }
+.mk-card { position: relative; }
+.mk-card__sello { position: absolute; top: 8px; left: 8px; padding: 2px 8px; background: var(--bg); border: 1px solid var(--line-soft); color: var(--fg-2); font: italic 400 11px/1.4 var(--mono); text-transform: uppercase; }
+.mk-card.is-vencida .mk-card__foto img { filter: grayscale(1) brightness(.55); }
+.mk-card.is-vencida a { border-color: var(--line-soft); }
+.mk-card.is-vencida .mk-card__precio, .mk-card.is-vencida .mk-card__titulo { color: var(--fg-3); }
+.mk-card.is-vencida a:hover .mk-card__foto img { filter: grayscale(.5) brightness(.8); }
+.mk-item__aviso { margin: 14px 0 0; color: var(--fg-2); border-color: var(--line-soft); }
+.mk-item.is-vencida .mk-item__fotos > img { filter: grayscale(1) brightness(.7); }
 
 .mk-item { margin-top: 16px; }
 .mk-item__cuerpo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }

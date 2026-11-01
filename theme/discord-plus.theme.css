@@ -2723,6 +2723,15 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-mk .mk-cuando { font-size: 0.8125rem; color: #949ba4; margin-bottom: 0.75rem; }
 .puente-mk .mk-aviso { margin-bottom: 0.75rem; padding: 0.625rem 0.875rem; border-radius: 0.625rem; background: #1c3324; color: #57d38c; font-size: 0.9375rem; font-weight: 600; }
 .puente-mk .mk-aviso.rojo { background: #3a1d1f; color: #f2777a; }
+.puente-mk .mk-aviso.gris { background: #2b2d31; color: #b5bac1; font-weight: 500; }
+/* Las vencidas, aparte y apagadas: se ven, pero se nota que no estan al dia */
+.puente-mk .mk-vencidas { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid #2e2d32; }
+.puente-mk .mk-vencidas[hidden] { display: none; }
+.puente-mk .mk-vtitulo { font-size: 1.0625rem; font-weight: 700; color: #b5bac1; }
+.puente-mk .mk-vencidas > .mk-nota { margin: 0.125rem 0 0.875rem; }
+.puente-mk .mk-tarjeta.mk-vencida .mk-tfoto img { filter: grayscale(1) brightness(0.6); }
+.puente-mk .mk-tarjeta.mk-vencida .mk-tprecio, .puente-mk .mk-tarjeta.mk-vencida .mk-ttitulo { color: #80848e; }
+.puente-mk .mk-tarjeta.mk-vencida:hover .mk-tfoto img { filter: grayscale(0.6) brightness(0.8); }
 .puente-mk .mk-desc { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: 1rem; color: #dbdee1; margin-bottom: 1rem; }
 .puente-mk .mk-vendedor, .puente-mk .mk-fila {
   display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem 1rem; margin-bottom: 0.75rem; border: 0; border-radius: 0.875rem;

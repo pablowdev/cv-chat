@@ -18,16 +18,17 @@
 // Las fotos se guardan achicadas (hasta 1280 px, WebP) en /data/uploads/puente-mercado.
 //
 // La compra/venta del foro ("tejemanejes") quedo de archivo en el foro: el Marketplace es el unico lugar.
-// Los avisos que se habian traido de ahi (origen 'foro', foro-mercado.js) siguen guardados pero no salen
-// en la lista. Cada publicacion nueva se avisa en #que-paso (MERCADO_CANAL, o el canal del foro).
+// Los avisos que se habian traido de ahi (origen 'foro', foro-mercado.js) salen como los vencidos.
+// A los 30 dias sin renovar, una publicacion vence: sigue a la vista pero aparte, abajo (ver=vencidas), y
+// quien la publico la republica con un toque. Tres dias antes se le avisa (recordar). Cada publicacion nueva se avisa en #que-paso (MERCADO_CANAL, o el canal del foro).
 // La pagina del sitio (circulovicioso.club/marketplace, solo para miembros) usa /web/lista y /web/item,
 // con la cuenta del sitio (cuenta.js), y para publicar o escribirle abre la app.
 //
-//  GET  /puente/api/mercado/lista?q&tipo&estado&moneda&min&max&zona&orden&ver=mias|guardados&desde
+//  GET  /puente/api/mercado/lista?q&tipo&estado&moneda&min&max&zona&orden&ver=mias|guardados|vencidas&desde
 //  GET  /puente/api/mercado/item?id
 //  POST /puente/api/mercado/foto        { imagen: data:image/...;base64 }  -> { foto }
 //  POST /puente/api/mercado/publicar    { id?, tipo, estado, titulo, descripcion, precio, moneda, zona, fotos[] }
-//  POST /puente/api/mercado/renovar     { id }
+//  POST /puente/api/mercado/renovar     { id }   (si ya habia vencido, vuelve como nueva: arriba y con aviso)
 //  POST /puente/api/mercado/borrar      { id }
 //  POST /puente/api/mercado/vendido     { id, comprador (id de cuenta) | fuera: true }
 //  POST /puente/api/mercado/reactivar   { id }
@@ -134,7 +135,7 @@ function setup(ctx) {
   `);
   // Con el foro (foro-mercado.js)
   const cols = new Set(db.prepare('PRAGMA table_info(puente_mercado)').all().map(c => c.name));
-  for (const [c, t] of [['origen', "TEXT NOT NULL DEFAULT 'cv'"], ['foro_nodo', 'INTEGER'], ['foro_url', 'TEXT'], ['foro_autor', 'TEXT'], ['foro_hash', 'TEXT'], ['foro_editado', 'INTEGER'], ['vendida_en', 'INTEGER']]) {
+  for (const [c, t] of [['origen', "TEXT NOT NULL DEFAULT 'cv'"], ['foro_nodo', 'INTEGER'], ['foro_url', 'TEXT'], ['foro_autor', 'TEXT'], ['foro_hash', 'TEXT'], ['foro_editado', 'INTEGER'], ['vendida_en', 'INTEGER'], ['avisado_vence', 'INTEGER']]) {
     if (!cols.has(c)) db.exec(`ALTER TABLE puente_mercado ADD COLUMN ${c} ${t}`);
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_puente_mercado_foro ON puente_mercado(foro_nodo) WHERE foro_nodo IS NOT NULL');
@@ -142,6 +143,8 @@ function setup(ctx) {
   // Fotos subidas que nunca se publicaron: afuera al dia
   setInterval(cleanup, 6 * 3600e3).unref();
   setTimeout(cleanup, 60e3).unref();
+  setInterval(recordar, 3600e3).unref();
+  setTimeout(recordar, 120e3).unref();
 }
 
 // ── Ayudas ──
@@ -176,7 +179,7 @@ function card(r, me) {
   return {
     id: r.id, tipo: r.tipo, condicion: r.condicion, titulo: r.titulo, precio: r.precio, moneda: r.moneda, zona: r.zona,
     foto: f[0] ? URL_DIR + f[0] : null, creado: r.creado, renovado: r.renovado, vence: vence(r),
-    estado: r.estado, oculta: !!r.oculta, vencida: r.origen !== 'foro' && vence(r) < now(), mia: r.user_id === me,
+    estado: r.estado, oculta: !!r.oculta, vencida: r.estado === 'activa' && vence(r) < now(), mia: r.user_id === me,
     vendedor: delForoSinCuenta(r) ? { id: null, nombre: r.foro_autor, avatar: null } : s ? { id: s.id, nombre: s.nombre, avatar: s.avatar } : null,
     foro: r.origen === 'foro' ? foroDe(r) : null, // los temas que habia hecho en el foro quedaron de archivo
   };
@@ -211,6 +214,40 @@ function removeFiles(names) {
     fs.promises.unlink(path.join(DIR, n)).catch(() => {});
     db.prepare('DELETE FROM puente_mercado_fotos WHERE nombre = ?').run(n);
   }
+}
+
+// Tres dias antes de que venza una publicacion, se le avisa a quien la publico (notificacion, campanita
+// y mail si lo tiene confirmado), una sola vez por cada vez que se publica o renueva (avisado_vence)
+const AVISO_ANTES = 3 * DAY;
+function recordar() {
+  try {
+    const t = now();
+    const rows = db.prepare(`SELECT m.* FROM puente_mercado m JOIN users u ON u.id = m.user_id
+      WHERE m.estado = 'activa' AND m.oculta = 0 AND m.renovado + ? BETWEEN ? AND ? AND (m.avisado_vence IS NULL OR m.avisado_vence != m.renovado)
+        AND u.username != 'discord-historial'`).all(DURA, t, t + AVISO_ANTES);
+    for (const r of rows) {
+      db.prepare('UPDATE puente_mercado SET avisado_vence = ? WHERE id = ?').run(r.renovado, r.id);
+      const dias = Math.max(1, Math.round((vence(r) - t) / DAY));
+      const cuando = dias === 1 ? 'mañana' : `en ${dias} días`;
+      const fecha = new Date(vence(r)).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' });
+      const url = appLink(r.id);
+      const titulo = `Tu publicación "${r.titulo}" vence ${cuando}`;
+      const texto = 'Renovala con un toque y sigue en el Marketplace 30 días más.';
+      try { require('./avisos.js').avisarUsuario(r.user_id, { title: titulo, body: texto, url, tag: 'puente-mercado-vence-' + r.id }); } catch (err) { warn('mercado: aviso de vencimiento:', err.message); }
+      try { require('./campana.js').registrar(r.user_id, { origen: 'chat', titulo, texto, url, clave: `mercado-vence-${r.id}-${r.renovado}` }); } catch (err) { warn('mercado: campanita:', err.message); }
+      try {
+        const email = require('./email.js'), em = email.status(r.user_id);
+        if (em.email && em.confirmado) {
+          email.sendMail(em.email, titulo, 'Tu publicación está por vencer',
+            [`"${r.titulo}" vence ${cuando}, el ${fecha}. Después sigue a la vista pero como vencida, más abajo y apagada.`,
+              'Si todavía lo tenés, renovala con un toque desde el Marketplace y sigue 30 días más, sin volver a escribir nada. Si ya lo vendiste, marcalo como vendido.'],
+            ['Renovar mi publicación', url], 'Te llega este aviso porque publicaste algo en el Marketplace de CV Chat.')
+            .catch(err => warn('mercado: mail de vencimiento:', err.message));
+        }
+      } catch (err) { warn('mercado: mail de vencimiento:', err.message); }
+      log(`mercado: aviso de vencimiento de "${r.titulo}" (#${r.id})`);
+    }
+  } catch (err) { warn('mercado: avisos de vencimiento:', err.message); }
 }
 
 function cleanup() {
@@ -286,7 +323,7 @@ function vistaPrevia(id) {
   const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada' AND oculta = 0").get(Number(id) || 0);
   if (!r) return null;
   const f = fotosOf(r)[0];
-  const linea = [r.estado === 'vendida' ? 'Vendido' : precioTexto(r), r.zona, r.tipo === 'servicio' ? 'servicio' : r.condicion].filter(Boolean).join(' · ');
+  const linea = [r.estado === 'vendida' ? 'Vendido' : precioTexto(r), r.estado === 'activa' && vence(r) < now() ? 'vencida' : '', r.zona, r.tipo === 'servicio' ? 'servicio' : r.condicion].filter(Boolean).join(' · ');
   return { siteName: 'Marketplace · CV Chat', accentColor: '#ee2d6f', title: r.titulo,
     description: linea + (r.descripcion ? '\n\n' + (r.descripcion.length > 200 ? r.descripcion.slice(0, 199).trimEnd() + '…' : r.descripcion) : ''),
     image: f ? (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + URL_DIR + f : undefined };
@@ -297,7 +334,9 @@ function lista(q, me) {
   const cond = [], params = [];
   if (ver === 'mias') { cond.push("m.user_id = ? AND m.estado != 'borrada'"); params.push(me); }
   else {
-    cond.push("m.estado = 'activa' AND m.renovado >= ? AND m.origen != 'foro'"); params.push(now() - DURA);
+    // las vencidas, aparte: abajo de las activas, de la mas nueva a la mas vieja
+    if (ver === 'vencidas') { cond.push("m.estado = 'activa' AND m.renovado < ?"); params.push(now() - DURA); }
+    else { cond.push("m.estado = 'activa' AND m.renovado >= ?"); params.push(now() - DURA); }
     if (!isAdmin(me)) { cond.push('(m.oculta = 0 OR m.user_id = ?)'); params.push(me); }
     if (ver === 'guardados') { cond.push('m.id IN (SELECT item_id FROM puente_mercado_guardados WHERE user_id = ?)'); params.push(me); }
   }
@@ -339,7 +378,7 @@ async function handleWeb(req, res, p, u, h) {
   const fix = c => { c.foto = abs(c.foto); if (c.fotos) c.fotos = c.fotos.map(abs); for (const k of ['vendedor']) if (c[k] && c[k].avatar) c[k].avatar = abs(c[k].avatar); return c; };
   if (p === '/puente/api/mercado/web/lista') {
     const q = new URLSearchParams(u.searchParams);
-    if (q.get('ver') !== 'mias') q.delete('ver'); // los guardados, en la app
+    if (!['mias', 'vencidas'].includes(q.get('ver'))) q.delete('ver'); // los guardados, en la app
     const l = lista(q, user.id);
     return h.json(res, 200, { items: l.items.map(fix), mas: l.mas, chat: base });
   }
@@ -427,8 +466,15 @@ async function handle(req, res, p, u, h) {
   if (p === '/puente/api/mercado/renovar' && req.method === 'POST') {
     const r = ownItem(body.id);
     if (!r) return h.json(res, 404, { error: 'Esa publicación no es tuya o ya no está.' });
+    const vencida = r.estado === 'activa' && vence(r) < now();
+    if (vencida && !isAdmin(me)) {
+      const act = db.prepare("SELECT COUNT(*) n FROM puente_mercado WHERE user_id = ? AND estado = 'activa' AND renovado >= ?").get(me, now() - DURA).n;
+      if (act >= MAX_ACTIVAS) return h.json(res, 429, { error: `Podés tener hasta ${MAX_ACTIVAS} publicaciones activas.` });
+    }
     db.prepare("UPDATE puente_mercado SET renovado = ?, estado = CASE WHEN estado = 'vendida' THEN estado ELSE 'activa' END WHERE id = ?").run(now(), r.id);
-    return h.json(res, 200, { ok: true });
+    // Republicada despues de vencer: como nueva, con su aviso en #que-paso
+    if (vencida) { newsNotice(r, user); log(`mercado: ${user.username} republicó "${r.titulo}"`); }
+    return h.json(res, 200, { ok: true, republicada: vencida });
   }
 
   if (p === '/puente/api/mercado/borrar' && req.method === 'POST') {

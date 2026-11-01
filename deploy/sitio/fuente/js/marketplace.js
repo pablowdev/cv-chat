@@ -5,7 +5,7 @@
   var CHAT = 'https://chat.circulovicioso.club';
   var $ = function (id) { return document.getElementById(id); };
   var PRECIO = { ARS: '$', USD: 'US$', USDT: 'USDT ' };
-  var desde = 0;
+  var desde = 0, fase = 'activas';
 
   function api(p) {
     return fetch(CHAT + p, { credentials: 'include', cache: 'no-store' }).then(function (r) {
@@ -16,6 +16,8 @@
   function precio(it) { return it.estado === 'vendida' ? 'Vendido' : it.precio == null ? 'A convenir' : PRECIO[it.moneda || 'ARS'] + Number(it.precio).toLocaleString('es-AR'); }
   function hace(ms) {
     var d = Math.floor((Date.now() - ms) / 864e5);
+    if (d >= 365) { var a = Math.floor(d / 365); return 'hace ' + a + (a === 1 ? ' año' : ' años'); }
+    if (d >= 60) return 'hace ' + Math.floor(d / 30) + ' meses';
     return d < 1 ? 'hoy' : d === 1 ? 'ayer' : 'hace ' + d + ' días';
   }
   var app = function (id) { return CHAT + '/app?mercado=' + (id || ''); };
@@ -35,12 +37,13 @@
 
   // ── La lista ──
   function tarjeta(it) {
-    var li = el('li', 'mk-card' + (it.estado === 'vendida' ? ' is-vendida' : ''));
+    var li = el('li', 'mk-card' + (it.estado === 'vendida' ? ' is-vendida' : it.vencida ? ' is-vencida' : ''));
     var a = el('a'); a.href = '/marketplace?id=' + it.id;
     a.addEventListener('click', function (ev) { if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return; ev.preventDefault(); history.pushState(null, '', a.href); ver(); });
     var f = el('div', 'mk-card__foto');
     if (it.foto) { var i = el('img'); i.src = it.foto; i.alt = ''; i.loading = 'lazy'; f.appendChild(i); }
     else f.appendChild(el('span', '', it.tipo === 'servicio' ? 'servicio' : 'sin foto'));
+    if (it.vencida && it.estado === 'activa') f.appendChild(el('span', 'mk-card__sello', 'vencida'));
     a.appendChild(f);
     var b = el('div', 'mk-card__datos');
     b.appendChild(el('p', 'mk-card__precio', precio(it)));
@@ -52,20 +55,26 @@
   }
   function pedirLista(mas) {
     var q = new URLSearchParams(location.search), p = new URLSearchParams();
+    var mias = q.get('ver') === 'mias';
     ['q', 'tipo', 'orden', 'ver'].forEach(function (k) { if (q.get(k)) p.set(k, q.get(k)); });
-    if (!mas) desde = 0;
+    if (!mas) { desde = 0; fase = 'activas'; }
+    if (fase === 'vencidas') p.set('ver', 'vencidas');
     p.set('desde', String(desde));
     return api('/puente/api/mercado/web/lista?' + p).then(function (d) {
       $('cargando').hidden = true; $('mk').hidden = false; $('mk-item').hidden = true;
-      var g = $('mk-grilla');
-      if (!mas) g.textContent = '';
-      d.items.forEach(function (it) { g.appendChild(tarjeta(it)); });
+      var g = $('mk-grilla'), vg = $('mk-vgrilla');
+      if (!mas) { g.textContent = ''; vg.textContent = ''; $('mk-vencidas').hidden = true; }
+      d.items.forEach(function (it) { (fase === 'vencidas' ? vg : g).appendChild(tarjeta(it)); });
       desde += d.items.length;
+      if (fase === 'vencidas' && vg.children.length) $('mk-vencidas').hidden = false;
+      // Terminadas las activas, siguen las vencidas (no en "Mis publicaciones", que ya las muestra)
+      if (!d.mas && fase === 'activas' && !mias) { fase = 'vencidas'; desde = 0; return pedirLista(true); }
       $('mk-mas').hidden = !d.mas;
-      var mias = q.get('ver') === 'mias';
       $('mk-mias').textContent = mias ? 'Ver todo' : 'Mis publicaciones';
       $('mk-mias').href = mias ? '/marketplace' : '?ver=mias';
-      $('mk-estado').textContent = desde ? '' : mias ? 'Todavía no publicaste nada. Se publica desde CV Chat.' : q.get('q') || q.get('tipo') ? 'No hay nada con eso.' : 'Todavía no hay publicaciones.';
+      var activas = g.children.length;
+      $('mk-estado').textContent = activas ? '' : mias ? 'Todavía no publicaste nada. Se publica desde CV Chat.'
+        : q.get('q') || q.get('tipo') ? 'No hay publicaciones activas con eso.' : vg.children.length ? 'No hay publicaciones activas ahora.' : 'Todavía no hay publicaciones.';
       document.title = (mias ? 'Mis publicaciones · ' : '') + 'Marketplace - Círculo Vicioso Club';
     });
   }
@@ -79,7 +88,14 @@
       $('mk-i-tipo').textContent = it.tipo === 'servicio' ? 'servicio' : it.condicion || 'producto';
       $('mk-i-titulo').textContent = it.titulo;
       $('mk-i-precio').textContent = precio(it);
-      $('mk-i-linea').textContent = [it.zona, 'publicado ' + hace(it.creado)].filter(Boolean).join(' · ');
+      $('mk-i-linea').textContent = [it.zona, 'publicado ' + hace(it.renovado)].filter(Boolean).join(' · ');
+      // Vencida: sigue a la vista, con su aviso. La de alguien del foro sin cuenta ya no se puede consultar
+      var vencida = it.vencida && it.estado === 'activa', sinCuenta = !!(it.foro && it.foro.sinCuenta);
+      $('mk-i-aviso').hidden = !vencida;
+      $('mk-i-aviso').textContent = !vencida ? '' : it.mia ? 'Venció: ya no aparece entre las activas. Republicala con un toque desde CV Chat y vuelve arriba de todo.'
+        : sinCuenta ? 'Publicado en el foro en ' + new Date(it.creado).getFullYear() + ': ya no está disponible.'
+          : 'Vencida: no se renovó en 30 días, así que puede que ya no esté disponible. Preguntale a quien la publicó.';
+      document.querySelector('.mk-item').classList.toggle('is-vencida', vencida);
       var t = $('mk-i-texto'); t.textContent = '';
       (it.descripcion || '').split(/\n{2,}/).forEach(function (par) { if (par.trim()) t.appendChild(el('p', '', par)); });
       var foto = $('mk-i-foto'), minis = $('mk-i-minis'); minis.textContent = '';
@@ -103,10 +119,11 @@
         info.appendChild(el('p', 'chico', !r ? '' : r.porcentaje == null ? 'Sin opiniones todavía' : r.porcentaje + '% positivas · ' + r.positivas + ' 👍 · ' + r.negativas + ' 👎' + (r.ventas ? ' · ' + r.ventas + (r.ventas === 1 ? ' venta' : ' ventas') : '')));
         v.appendChild(info);
       }
-      $('mk-i-escribir').hidden = it.mia || it.estado !== 'activa';
+      $('mk-i-escribir').hidden = it.mia || it.estado !== 'activa' || sinCuenta;
       $('mk-i-escribir').href = app(it.id);
       $('mk-i-abrir').href = app(it.id);
-      $('mk-i-abrir').textContent = it.mia ? 'Editar en CV Chat' : 'Ver en CV Chat';
+      $('mk-i-abrir').textContent = it.mia ? (vencida ? 'Republicar en CV Chat' : 'Editar en CV Chat') : 'Ver en CV Chat';
+      $('mk-i-abrir').className = 'btn' + (it.mia && vencida ? ' btn--degrade' : '');
       window.scrollTo(0, 0);
     });
   }
