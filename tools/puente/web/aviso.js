@@ -2196,15 +2196,23 @@ function leido(sc) {
   ];
   const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? String((m.discord && m.discord.usuario) || '').toLowerCase() :
     k === 'correo' ? String(m.correo || '').toLowerCase() : k === 'senales' ? signals(m).length : (m[k] ?? '');
+  // Cada tipo de etiqueta tiene su color de fondo (Discord, email, admin...); cuando falta, el texto va
+  // en rojo sobre ese mismo fondo (" falta")
   function signals(m) {
     const out = [];
     if (m.admin) out.push(['Admin', 'admin']);
     if (m.invitado) out.push(['Invitado', 'gris']);
     // ("En línea" ya va en la columna "Última vez")
-    if (!m.discord && !m.invitado) out.push(['Sin Discord', 'aviso']);
+    if (!m.discord && !m.invitado) out.push(['Sin Discord', 'discord falta']);
     if (m.denuncias) out.push([m.denuncias + (m.denuncias === 1 ? ' denuncia' : ' denuncias'), 'mal']);
-    if (m.dosPasos) out.push(['2 pasos', 'ok']);
+    if (m.dosPasos) out.push(['2 pasos', 'dospasos']);
     return out;
+  }
+  // El email: confirmado, sin confirmar o sin email (los invitados no tienen)
+  function emailSenal(m, corto) {
+    if (m.invitado) return null;
+    if (!m.correo) return ['Sin email', 'email falta'];
+    return m.email === 'confirmado' ? [corto ? 'Confirmado' : 'Email confirmado', 'email'] : [corto ? 'Sin confirmar' : 'Email sin confirmar', 'email falta'];
   }
 
   let pushed = false;
@@ -2271,13 +2279,12 @@ function leido(sc) {
       if (m.invitacion) n2.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
       names.append(el('div', 'pm-n1', m.nombre), n2);
       who.append(av, names);
-      // Email: la direccion y, si no lo confirmo, "sin confirmar"
+      // Email: la direccion y la etiqueta (confirmado o no)
       const mail = el('div', 'pm-c pm-dos');
-      if (m.correo) {
-        const dir = el('div', 'pm-n1 pm-correo', m.correo); dir.title = m.correo;
-        mail.appendChild(dir);
-        if (m.email === 'pendiente') mail.appendChild(el('div', 'pm-n2 pm-aviso-txt', 'sin confirmar'));
-      } else mail.appendChild(el('span', 'pm-vacio', '—'));
+      if (m.correo) { const dir = el('div', 'pm-n1 pm-correo', m.correo); dir.title = m.correo; mail.appendChild(dir); }
+      const es = emailSenal(m, true);
+      if (es) mail.appendChild(el('span', 'pm-senal ' + es[1], es[0]));
+      else mail.appendChild(el('span', 'pm-vacio', '—'));
       const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
       // y de donde llego (origenes.js)
       if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente + (m.origen.estimado ? ' (estimado)' : ''))); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
@@ -2336,9 +2343,11 @@ function leido(sc) {
       if (m.minutos7) bits.push('usó ' + duracion(m.minutos7) + ' en 7 días');
       if (m.origen) bits.push('llegó desde ' + m.origen.fuente);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
-      const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo + (m.email === 'pendiente' ? ' (sin confirmar)' : '')) : null;
+      const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo) : null;
       const chips = el('div', 'pm-roles');
-      if (m.discord) chips.appendChild(el('span', 'pm-chip', '@' + m.discord.usuario));
+      if (m.discord) chips.appendChild(el('span', 'pm-senal discord', '@' + m.discord.usuario));
+      const es = emailSenal(m);
+      if (es) chips.appendChild(el('span', 'pm-senal ' + es[1], es[0]));
       if (m.invitacion) chips.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
       for (const [label, kind] of signals(m)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
       info.append(names, meta);
