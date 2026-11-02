@@ -616,6 +616,9 @@ const STATIC = path.join(__dirname, 'web');
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
+  // Las imagenes propias tambien contestan a HEAD (X y otros lectores de vistas previas preguntan asi
+  // primero; con un error dejan la tarjeta vacia). Se atiende como GET: Node no manda el cuerpo de un HEAD
+  if (req.method === 'HEAD' && !p.startsWith('/puente/api/') && /\.(png|jpe?g|webp|gif|ico)$/i.test(p)) req.method = 'GET';
   if (p.startsWith('/puente/vista/')) {
     const r = await require('./vistas.js').handle(req, res, p, u, { send });
     if (r !== false) return;
