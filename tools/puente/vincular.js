@@ -1322,10 +1322,23 @@ function shareTags(html, url) {
     }
   }
   if (publicUrl) image = publicUrl + image;
+  // El Marketplace (/app?mercado): la imagen con las ultimas publicaciones, como la de la web; una
+  // publicacion (/app?mercado=<id>): su titulo, precio y foto (mercado.js)
+  let medidas = grande;
+  if (chq && chq.has('mercado')) {
+    let v = null;
+    try { const mk = require('./mercado.js'); v = /^\d+$/.test(chq.get('mercado') || '') ? mk.vistaPrevia(chq.get('mercado')) : mk.vistaPortada(); } catch (err) { warn('vistas: mercado:', err.message); }
+    if (v) {
+      const id = /^\d+$/.test(chq.get('mercado') || '') ? chq.get('mercado') : '';
+      title = `${v.title} · ${appName()}`; desc = String(v.description || '').replace(/\s+/g, ' ').trim();
+      if (v.image) { image = v.image; grande = true; medidas = !id; }
+      enlace = id ? `/app?mercado=${id}` : '/app?mercado';
+    }
+  }
   const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +
     `<meta property="og:site_name" content="${esc(server || title)}"><meta property="og:description" content="${esc(desc)}">` +
     `<meta name="description" content="${esc(desc)}"><meta property="og:image" content="${esc(image)}">` +
-    (grande ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '') +
+    (medidas ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '') +
     (publicUrl ? `<meta property="og:url" content="${esc(publicUrl + enlace)}">` : '') +
     `<meta name="twitter:card" content="${grande ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">`;
   return html.replace(/<title[^>]*>[^<]*<\/title>/i, `<title>${esc(title)}</title>`).replace('</head>', tags + '</head>');
