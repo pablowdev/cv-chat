@@ -4632,6 +4632,8 @@ document.addEventListener('pointerdown', (ev) => {
     const box = el('div', 'pe-video');
     const ratio = (e.video.w && e.video.h) ? e.video.h / e.video.w : (thumb && thumb.w && thumb.h ? thumb.h / thumb.w : 9 / 16);
     box.style.aspectRatio = String(1 / ratio);
+    // Los verticales, como en Discord: hasta 20rem de alto (mas angostos, con la misma proporcion)
+    if (ratio > 1) box.style.width = 'min(25rem, 100%, ' + (20 / ratio).toFixed(2) + 'rem)';
     if (thumb) { const t = el('img', 'pe-video-thumb'); t.src = sized(thumb.url, thumb.w, thumb.h, 400, 300); t.alt = ''; t.loading = 'lazy'; box.appendChild(t); }
     const play = el('button', 'pe-play'); play.type = 'button'; play.title = 'Reproducir';
     play.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l10.5-6.5z"/></svg>';
