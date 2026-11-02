@@ -17,7 +17,9 @@
 //    pasos.
 //
 // PUENTE_EMAIL_DE es el remitente, por ejemplo "CV Chat <no-responder@tudominio>",
-// con un dominio verificado en Resend. Los emails quedan solo en la base de datos
+// con un dominio verificado en Resend. Con PUENTE_BREVO_KEY (una clave de API de https://brevo.com,
+// con el mismo dominio verificado ahi) Brevo es el respaldo: si Resend llego a su tope del dia o
+// falla, el mail sale por Brevo. Los emails quedan solo en la base de datos
 // (tabla puente_emails); los enlaces se guardan como hash.
 //
 //  GET  /puente/api/email/estado        { email, confirmado, pendiente, discord }   (sesion)
@@ -34,18 +36,20 @@ const crypto = require('crypto');
 const VERIFY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 const DAILY_CAP = 95; // el plan gratis de Resend manda hasta 100 por dia
+const BREVO_CAP = 290; // y el de Brevo, hasta 300
 // Los envios masivos (invitaciones, la mudanza) paran antes: lo que queda es para los mails que la
 // gente espera en el momento (confirmar el email, recuperar la contraseña, los codigos para entrar)
-const CUPO_MASIVO = 65;
+const CUPO_MASIVO = 65, CUPO_MASIVO_BREVO = 240;
 const EMAIL_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
 
 let db, log, warn, publicUrl, appName, setPassword;
-let key = '', from = '';
+let key = '', from = '', brevo = '';
 
 function setup(ctx) {
   ({ db, log, warn, publicUrl, appName, setPassword } = ctx);
   key = String(process.env.PUENTE_RESEND_KEY || '').trim();
   from = String(process.env.PUENTE_EMAIL_DE || '').trim();
+  brevo = String(process.env.PUENTE_BREVO_KEY || '').trim();
   if (!key) return;
   if (!from) { warn('falta PUENTE_EMAIL_DE (el remitente de los mails): el email queda apagado'); key = ''; return; }
   db.exec(`
@@ -70,8 +74,13 @@ function setup(ctx) {
       clave TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_puente_email_envios ON puente_email_envios(enviado);
+    CREATE TABLE IF NOT EXISTS puente_email_salidos (
+      enviado INTEGER NOT NULL,
+      via TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_puente_email_salidos ON puente_email_salidos(enviado);
   `);
-  log('email de recuperacion encendido');
+  log('email de recuperacion encendido' + (brevo ? ' (con Brevo de respaldo)' : ''));
 }
 
 const on = () => !!key;
@@ -105,12 +114,48 @@ function note(tipo, clave) {
   db.prepare('DELETE FROM puente_email_envios WHERE enviado < ?').run(Date.now() - 2 * 24 * 60 * 60 * 1000);
 }
 
-const enElDia = () => db.prepare('SELECT COUNT(*) n FROM puente_email_envios WHERE enviado > ?').get(Date.now() - 24 * 60 * 60 * 1000).n;
+const DIA_MS = 24 * 60 * 60 * 1000;
+const enElDia = () => db.prepare('SELECT COUNT(*) n FROM puente_email_envios WHERE enviado > ?').get(Date.now() - DIA_MS).n;
+// Los que salieron de verdad por cada servicio en las ultimas 24 horas (todos, tambien los codigos y
+// los avisos que no se anotan en puente_email_envios). Para Resend vale la cuenta mas alta de las dos
+const salidos = (via) => db.prepare('SELECT COUNT(*) n FROM puente_email_salidos WHERE via = ? AND enviado > ?').get(via, Date.now() - DIA_MS).n;
+const lugarResend = () => Math.max(salidos('resend'), enElDia()) < DAILY_CAP;
+const lugarBrevo = () => !!brevo && salidos('brevo') < BREVO_CAP;
 // Si un envio masivo puede mandar uno mas sin comerse la reserva de los mails importantes
-const hayLugarMasivo = () => enElDia() < CUPO_MASIVO;
+const hayLugarMasivo = () => enElDia() < CUPO_MASIVO + (brevo ? CUPO_MASIVO_BREVO : 0);
+
+async function porResend(to, subject, html, text) {
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) { warn('email: Resend respondio', r.status, (await r.text().catch(() => '')).slice(0, 200)); return false; }
+    return true;
+  } catch (err) { warn('email: no pude mandar el mail:', err.message); return false; }
+}
+// El remitente "Nombre <direccion>" como lo pide Brevo
+function remitente() {
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+  return m ? { name: m[1] || appName(), email: m[2].trim() } : { name: appName(), email: from };
+}
+async function porBrevo(to, subject, html, text) {
+  try {
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': brevo, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ sender: remitente(), to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) { warn('email: Brevo respondio', r.status, (await r.text().catch(() => '')).slice(0, 200)); return false; }
+    return true;
+  } catch (err) { warn('email: no pude mandar el mail por Brevo:', err.message); return false; }
+}
 
 async function sendMail(to, subject, title, paragraphs, button, footer) {
-  if (enElDia() >= DAILY_CAP) {
+  if (!lugarResend() && !lugarBrevo()) {
     warn('email: se llego al limite de mails del dia; no se manda');
     return false;
   }
@@ -128,16 +173,14 @@ ${paragraphs.map(p => `<tr><td style="font-size:15px;line-height:1.5;padding-bot
 <div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#80848e;padding-top:12px">${esc(name)}</div>
 </td></tr></table></body></html>`;
   const text = `${title}\n\n${paragraphs.join('\n\n')}\n\n${button[0]}: ${button[1]}\n\n${footer}\n\n${name}`;
-  try {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html, text }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!r.ok) { warn('email: Resend respondio', r.status, (await r.text().catch(() => '')).slice(0, 200)); return false; }
-    return true;
-  } catch (err) { warn('email: no pude mandar el mail:', err.message); return false; }
+  // Primero Resend; si no tiene lugar o falla, Brevo
+  let via = null;
+  if (lugarResend() && await porResend(to, subject, html, text)) via = 'resend';
+  else if (lugarBrevo() && await porBrevo(to, subject, html, text)) via = 'brevo';
+  if (!via) return false;
+  db.prepare('INSERT INTO puente_email_salidos (enviado, via) VALUES (?, ?)').run(Date.now(), via);
+  db.prepare('DELETE FROM puente_email_salidos WHERE enviado < ?').run(Date.now() - 2 * DIA_MS);
+  return true;
 }
 
 // Guarda el email (sin confirmar) y manda el enlace para confirmarlo
