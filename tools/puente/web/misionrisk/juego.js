@@ -16,16 +16,19 @@
   const accion = async (d) => { const r = await A.emit('mr:accion', { id: M && M.id, ...d }); if (r.error) A.toast(r.error, 'error'); return r; };
 
   // ── El arte ──
-  const arte = { mapa: new Image(), hoja: new Image(), alfa: null, ancho: 0, tintes: new Map() };
+  // Todo del original (tools/misionrisk/armar-arte.js): el mapa, las mascaras de relieve de los
+  // paises (1 gris clara, 2 gris oscura, 3 azul) y los dados; las cartas van por CSS (juego.css)
+  const arte = { mapa: new Image(), 1: new Image(), 2: new Image(), 3: new Image(), dados: new Image(), alfa: null, ancho: 0, tintes: new Map() };
   let arteListo = null;
+  let ding = null;
   function cargarArte() {
     if (arteListo) return arteListo;
-    arteListo = Promise.all([['mapa', 'mapa.jpg'], ['hoja', 'paises.png']].map(([k, f]) => new Promise((ok, mal) => {
+    arteListo = Promise.all([['mapa', 'mapa.jpg'], [1, 'paises-1.png'], [2, 'paises-2.png'], [3, 'paises-3.png'], ['dados', 'dados.png']].map(([k, f]) => new Promise((ok, mal) => {
       arte[k].onload = ok; arte[k].onerror = mal; arte[k].src = ARTE + f;
     }))).then(() => {
       // La transparencia de cada silueta, para saber que pais se toco
-      const c = document.createElement('canvas'); c.width = arte.hoja.width; c.height = arte.hoja.height;
-      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(arte.hoja, 0, 0);
+      const c = document.createElement('canvas'); c.width = arte[1].width; c.height = arte[1].height;
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(arte[1], 0, 0);
       const d = x.getImageData(0, 0, c.width, c.height).data;
       arte.ancho = c.width; arte.alfa = new Uint8Array(c.width * c.height);
       for (let i = 0; i < arte.alfa.length; i++) arte.alfa[i] = d[i * 4 + 3];
@@ -43,37 +46,42 @@
     for (let id = 1; id <= 42; id++) { const dx = P[id].nx - x, dy = P[id].ny - y, d = dx * dx + dy * dy; if (d < dm) { dm = d; mejor = id; } }
     return mejor;
   }
-  // Cada pais con el color de su ejercito: el color con la textura del original encima
-  function tinte(id, color, modo) {
-    const k = id + color + modo;
+  // Cada pais como lo pinta el original (ColorCountry): la mascara de relieve del ejercito
+  // combinada con su color (el AND de BitBlt; con colores puros es lo mismo que multiplicar)
+  function tinte(id, e, modo) {
+    const k = id + ':' + e + modo;
     let c = arte.tintes.get(k);
     if (c) return c;
-    const p = P[id];
+    const p = P[id], E = EJ[e], hoja = arte[E.mascara];
     c = document.createElement('canvas'); c.width = p.w; c.height = p.h;
     const x = c.getContext('2d');
-    x.fillStyle = color; x.fillRect(0, 0, p.w, p.h);
-    x.globalCompositeOperation = 'soft-light'; x.drawImage(arte.hoja, p.sx, p.sy, p.w, p.h, 0, 0, p.w, p.h);
+    x.drawImage(hoja, p.sx, p.sy, p.w, p.h, 0, 0, p.w, p.h);
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = E.pintura; x.fillRect(0, 0, p.w, p.h);
     if (modo === 'luz') { x.globalCompositeOperation = 'lighter'; x.fillStyle = 'rgba(255,255,255,0.32)'; x.fillRect(0, 0, p.w, p.h); }
-    x.globalCompositeOperation = 'destination-in'; x.drawImage(arte.hoja, p.sx, p.sy, p.w, p.h, 0, 0, p.w, p.h);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(hoja, p.sx, p.sy, p.w, p.h, 0, 0, p.w, p.h);
     arte.tintes.set(k, c);
     return c;
   }
+  // El sonido del original, cuando te toca
+  function sonarDing() {
+    try { ding = ding || new Audio(ARTE + 'ding.wav'); ding.currentTime = 0; ding.play().catch(() => {}); } catch { /* sin sonido */ }
+  }
 
-  // ── Las cartas (dibujos propios) ──
+  // ── Las cartas (las del original: cartas.png, 60x85; abajo, las mismas elegidas) ──
   const CARTA = { 1: 'Artillería', 2: 'Infantería', 3: 'Caballería', 4: 'Comodín' };
-  const CARTA_SVG = {
-    1: '<circle cx="15" cy="33" r="7" fill="none" stroke="#5b3a1a" stroke-width="2.4"/><circle cx="15" cy="33" r="1.8" fill="#5b3a1a"/><path d="M12 29 L34 16 L36 20 L15 32Z" fill="#3b3b3b"/><circle cx="37" cy="36" r="2.6" fill="#3b3b3b"/><circle cx="31" cy="38" r="2.6" fill="#3b3b3b"/><circle cx="34" cy="31.5" r="2.6" fill="#3b3b3b"/>',
-    2: '<circle cx="24" cy="12" r="4.5" fill="#e9c4a0" stroke="#5b3a1a" stroke-width="1"/><path d="M19 9 Q24 3 29 9Z" fill="#2d4f8f"/><path d="M18 18 h12 l2 14 h-4 l-1 9 h-3 l-1-9 h-1 l-1 9 h-3 l-1-9 h-4Z" fill="#b8241e"/><path d="M31 6 L33 40" stroke="#5b3a1a" stroke-width="1.8"/>',
-    3: '<path d="M9 30 Q10 20 20 19 L28 13 Q31 9 34 11 L37 15 L33 17 L32 22 Q38 26 38 33 L35 33 L34 28 L31 33 L28 33 L29 27 L19 28 L17 34 L14 34 L15 29 L12 34 L9 34Z" fill="#7a4a22"/><circle cx="24" cy="10" r="3" fill="#e9c4a0"/><path d="M21 13 h6 l1 7 h-8Z" fill="#2d4f8f"/>',
-    4: '<path d="M24 6 L28.5 18 L41 18 L31 26 L35 39 L24 31 L13 39 L17 26 L7 18 L19.5 18Z" fill="#f2b705" stroke="#8a6500" stroke-width="1.4" stroke-linejoin="round"/>',
-  };
   function carta(tipo, sel, fn) {
-    const c = el(fn ? 'button' : 'div', 'mr-carta' + (sel ? ' sel' : '') + (tipo === 4 ? ' comodin' : ''));
+    const c = el(fn ? 'button' : 'div', 'mr-carta' + (sel ? ' sel' : ''));
     if (fn) { c.type = 'button'; c.addEventListener('click', fn); }
-    c.title = CARTA[tipo];
-    c.innerHTML = `<svg viewBox="0 0 48 46" aria-hidden="true">${CARTA_SVG[tipo] || ''}</svg>`;
-    c.appendChild(el('span', 'mr-carta-n', CARTA[tipo]));
+    c.title = CARTA[tipo]; c.setAttribute('aria-label', CARTA[tipo] + (sel ? ' (elegida)' : ''));
+    c.style.backgroundPosition = `${-60 * tipo}px ${sel ? -85 : 0}px`;
     return c;
+  }
+  // Las cartas de los demas, boca abajo y chiquitas (cartitas.png)
+  function dorsos(n) {
+    const w = el('span', 'mr-dorsos'); w.title = `${n} ${n === 1 ? 'carta' : 'cartas'}`;
+    for (let i = 0; i < n; i++) w.appendChild(el('span', 'mr-dorso'));
+    if (!n) w.textContent = 'sin cartas';
+    return w;
   }
   const valorCartas = (c) => {
     if (c.length !== 3) return 0;
@@ -318,8 +326,7 @@
     if (!antes || antes.turno !== s.turno) M.sel = [];
     if (M.origen && (s.fase !== 'mover' || !s.teToca || s.tropas[M.origen] <= 1 || s.dueno[M.origen] !== s.miEj)) M.origen = 0;
     if (antes && antes.turno !== s.turno) M.cant = { poner: 1, juntar: 0, mover: 0 };
-    if (s.teToca && (!antes || !antes.teToca)) A.beep(660, 120);
-    if (s.dados && antes && JSON.stringify(antes.dados) !== JSON.stringify(s.dados)) { M.sacudir = Date.now(); A.beep(300 + 40 * s.dados.a[0], 50); }
+    if (s.teToca && (!antes || !antes.teToca)) sonarDing();
     // La mision, la primera vez que se entra a la guerra
     if (s.estado === 'jugando' && s.soyJugador && s.miMision) {
       const k = 'mr-mision-' + s.id;
@@ -360,27 +367,29 @@
       // el pais atacado brilla en rojo; de donde salen las tropas, un poco mas claro
       if (A2 && A2.objetivo === id) {
         x.save(); x.shadowColor = '#ff3b30'; x.shadowBlur = 14 * dpr;
-        x.drawImage(tinte(id, EJ[d].color, 'luz'), p.x, p.y); x.drawImage(tinte(id, EJ[d].color, 'luz'), p.x, p.y);
+        x.drawImage(tinte(id, d, 'luz'), p.x, p.y); x.drawImage(tinte(id, d, 'luz'), p.x, p.y);
         x.restore();
       } else if ((A2 && A2.origenes[id]) || M.origen === id) {
         x.save(); x.shadowColor = 'rgba(255,255,255,0.9)'; x.shadowBlur = 8 * dpr;
-        x.drawImage(tinte(id, EJ[d].color, 'luz'), p.x, p.y);
+        x.drawImage(tinte(id, d, 'luz'), p.x, p.y);
         x.restore();
-      } else x.drawImage(tinte(id, EJ[d].color, ''), p.x, p.y);
+      } else x.drawImage(tinte(id, d, ''), p.x, p.y);
     }
-    // Los numeros de tropas, como en el original (centrados, a la izquierda o a la derecha). Con el
-    // mapa chico (el celular) van mas grandes, para que se lean
+    // Los numeros de tropas, como en el original (PrintAllScores): centrados, a la izquierda o a la
+    // derecha, con el color de texto del ejercito (o claro si van en el mar) y, si es claro, con una
+    // sombra negra corrida un pixel. Con el mapa chico (el celular) van mas grandes, para que se lean
     const kCss = cssW / MAPA.ANCHO;
-    M.letra = Math.max(15, Math.min(23, 11 / kCss));
+    M.letra = Math.max(14, Math.min(23, 11 / kCss));
     x.font = `bold ${Math.round(M.letra)}px Arial, Helvetica, sans-serif`;
     x.textBaseline = 'middle';
-    x.lineJoin = 'round';
+    const sombra = Math.max(1, M.letra / 13);
     for (let id = 1; id <= 42; id++) {
       const p = P[id];
       const n = String(s.tropas[id]);
+      const color = p.regla.includes('W') ? '#dfdfdf' : EJ[s.dueno[id]].texto;
       x.textAlign = p.regla.includes('L') ? 'left' : p.regla.includes('R') ? 'right' : 'center';
-      x.lineWidth = 3.5; x.strokeStyle = 'rgba(0,0,0,0.8)'; x.strokeText(n, p.nx, p.ny);
-      x.fillStyle = '#fff'; x.fillText(n, p.nx, p.ny);
+      if (color !== '#000000') { x.fillStyle = '#000'; x.fillText(n, p.nx + sombra, p.ny + sombra); }
+      x.fillStyle = color; x.fillText(n, p.nx, p.ny);
     }
     // Las tropas juntadas para el ataque, arriba del pais atacado
     if (A2 && A2.juntadas) {
@@ -397,34 +406,19 @@
     x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, cx, cy + 0.5);
   }
   function redondo(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
-  // Los dados, en el mar de arriba como en el original: los del ataque rojos, los de la defensa blancos
-  const PUNTOS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
+  // Los dados del original (DisplayDiceOnBoard): en el mar de arriba, los rojos del ataque arriba y
+  // los blancos de la defensa abajo, en los mismos lugares. En la hoja hay dos dibujos de cada uno
+  // (el original elegia al azar: aca, segun el lugar). Con el mapa chico van mas grandes
   function dados(x, D) {
-    const L = Math.round(M.letra * 2), G = Math.round(L / 4), X0 = 450, Y0 = 62;
-    const caja = (n) => n * L + (n - 1) * G;
-    const ancho = Math.max(caja(D.a.length), caja(D.d.length)) + 24;
-    const sac = M.sacudir && Date.now() - M.sacudir < 260;
-    const f = Math.round(M.letra * 0.8);
-    x.fillStyle = 'rgba(8,20,48,0.72)'; redondo(x, X0 - ancho / 2, Y0 - 8, ancho, 2 * L + G + 16 + f * 1.6, 10); x.fill();
-    const fila = (vals, y, fondo, punto, perdio) => {
-      const w = caja(vals.length);
-      vals.forEach((v, i) => {
-        const cx = X0 - w / 2 + i * (L + G) + (sac ? (Math.random() * 4 - 2) : 0), cy = y + (sac ? (Math.random() * 4 - 2) : 0);
-        x.fillStyle = fondo; redondo(x, cx, cy, L, L, 6); x.fill();
-        x.strokeStyle = 'rgba(0,0,0,0.45)'; x.lineWidth = 1; x.stroke();
-        x.fillStyle = punto;
-        for (const [px, py] of PUNTOS[v]) { x.beginPath(); x.arc(cx + L / 2 + px * L * 0.27, cy + L / 2 + py * L * 0.27, L * 0.1, 0, Math.PI * 2); x.fill(); }
-        if (perdio(i)) { x.fillStyle = 'rgba(0,0,0,0.35)'; redondo(x, cx, cy, L, L, 6); x.fill(); }
-      });
+    const Dd = MAPA.dados, L = Dd.lado;
+    const esc = Math.max(1, M.letra / 15), cx = Dd.x + 221 / 2, cy = Dd.y;
+    const uno = (v, fila, pos, i) => {
+      const sy = fila === 'ataque' ? L * 2 + (i % 2) * L + 1 : (i % 2) * (L + 1);
+      const X = cx + (Dd.x + pos[0] - cx) * esc, Y = cy + (Dd.y + pos[1] - cy) * esc;
+      x.drawImage(arte.dados, L * (v - 1), sy, L, L, X, Y, L * esc, L * esc);
     };
-    // en cada par, el dado que perdio queda oscuro
-    const pares = Math.min(D.a.length, D.d.length);
-    fila(D.a, Y0, '#d4231c', '#fff', i => i < pares && D.a[i] <= D.d[i]);
-    fila(D.d, Y0 + L + G, '#f4f1ea', '#111', i => i < pares && D.a[i] > D.d[i]);
-    x.font = `bold ${f}px Arial, Helvetica, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.fillStyle = '#fff';
-    x.fillText(D.conquista ? `¡${P[D.objetivo].nombre} conquistado!` : `Ataque −${D.pa} · Defensa −${D.pd}`, X0, Y0 + 2 * L + G + 4 + f);
-    if (sac) requestAnimationFrame(() => dibujar());
+    D.a.forEach((v, i) => uno(v, 'ataque', Dd.ataque[D.a.length][i], i));
+    D.d.forEach((v, i) => uno(v, 'defensa', Dd.defensa[D.d.length][i], i + 1));
   }
 
   // ── Tocar el mapa ──
@@ -647,8 +641,9 @@
       const punto = el('span', 'mr-punto'); punto.style.background = a.color;
       const nom = el('div', 'mr-ej-n');
       nom.append(el('b', null, a.yo ? 'Vos' : a.nombre || '?'), el('span', null, a.ejercito + (a.compu ? ` · compu ${(a.nivel || '').toLowerCase()}` : '') + (a.abandono ? ' · abandonó' : a.ausente ? ' · la compu juega por él' : '')));
-      const nums = el('div', 'mr-ej-d', a.vivo === false ? '💀' : `${a.paises} países · ${a.tropas} tropas · ${a.cartas} 🂠`);
+      const nums = el('div', 'mr-ej-d', a.vivo === false ? '💀' : `${a.paises} países · ${a.tropas} tropas`);
       r.append(punto, nom, nums);
+      if (a.vivo !== false) { const c = el('div', 'mr-ej-c'); c.appendChild(dorsos(a.cartas)); r.appendChild(c); }
       if (s.estado === 'terminada' && a.mision) r.appendChild(el('div', 'mr-ej-m', 'Misión: ' + a.mision));
       ej.appendChild(r);
     }

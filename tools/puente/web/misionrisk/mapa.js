@@ -64,16 +64,26 @@
     { id: 6, nombre: 'Australia', de: 39, a: 42, extra: 2, puertas: [39] },
   ];
   const continenteDe = (p) => continentes.find(c => p >= c.de && p <= c.a);
-  // Los ejercitos, con los colores del original (lngColor de Default War.mrk)
+  // Los ejercitos, como en el original (Default War.mrk): cada pais se pinta con la mascara de
+  // relieve del ejercito (1 gris clara, 2 gris oscura, 3 azul; paises-<n>.png) combinada con su
+  // color (lngColor: el AND de BitBlt, que con colores puros es multiplicar); el numero de tropas
+  // va con su color de texto (txtColor) y el resto de la pantalla usa su color de fondo (bkgndColor)
   const ejercitos = [null,
-    { id: 1, nombre: 'Ejército Rojo', corto: 'Rojo', color: '#e01b1b' },
-    { id: 2, nombre: 'Ejército Verde', corto: 'Verde', color: '#18a018' },
-    { id: 3, nombre: 'Ejército Azul', corto: 'Azul', color: '#2d5be3' },
-    { id: 4, nombre: 'Ejército Amarillo', corto: 'Amarillo', color: '#f2d21b' },
-    { id: 5, nombre: 'Ejército Violeta', corto: 'Violeta', color: '#b02cc8' },
-    { id: 6, nombre: 'Ejército Gris', corto: 'Gris', color: '#9a9a9a' },
+    { id: 1, nombre: 'Ejército Rojo', corto: 'Rojo', pintura: '#ff0000', mascara: 1, texto: '#dfdfdf', color: '#ff2020' },
+    { id: 2, nombre: 'Ejército Verde', corto: 'Verde', pintura: '#00ff00', mascara: 1, texto: '#000000', color: '#58f858' },
+    { id: 3, nombre: 'Ejército Azul', corto: 'Azul', pintura: '#ffffff', mascara: 3, texto: '#dfdfdf', color: '#00d1ff' },
+    { id: 4, nombre: 'Ejército Amarillo', corto: 'Amarillo', pintura: '#ffff00', mascara: 1, texto: '#000000', color: '#faf200' },
+    { id: 5, nombre: 'Ejército Violeta', corto: 'Violeta', pintura: '#ff00ff', mascara: 1, texto: '#000000', color: '#ff18ff' },
+    { id: 6, nombre: 'Ejército Gris', corto: 'Gris', pintura: '#ffffff', mascara: 2, texto: '#dfdfdf', color: '#a0a0a0' },
   ];
-  const M = { ANCHO: 944, ALTO: 650, paises, continentes, continenteDe, ejercitos };
+  // Los dados (LoadPictureConstants): la caja en el mar de arriba y donde va cada dado segun
+  // cuantos se tiran, para el ataque y la defensa (en la hoja dados.png: 39x39, de a 39 en x)
+  const dados = {
+    x: 340, y: 62, lado: 39,
+    ataque: [null, [[90, 0]], [[66, 0], [110, 0]], [[44, 12], [88, 0], [132, 12]], [[22, 12], [66, 0], [110, 0], [154, 12]], [[0, 12], [44, 6], [88, 0], [132, 6], [176, 12]]],
+    defensa: [null, [[90, 66]], [[66, 66], [110, 66]], [[44, 54], [88, 66], [132, 54]], [[22, 54], [66, 66], [110, 66], [154, 54]], [[0, 54], [44, 60], [88, 66], [132, 60], [176, 54]]],
+  };
+  const M = { ANCHO: 944, ALTO: 650, paises, continentes, continenteDe, ejercitos, dados };
   if (typeof module !== 'undefined' && module.exports) module.exports = M;
   else root.MRMapa = M;
 })(typeof window !== 'undefined' ? window : this);

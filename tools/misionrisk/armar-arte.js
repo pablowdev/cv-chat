@@ -3,18 +3,21 @@
 //
 //   node armar-arte.js <carpeta source del original> <salida> [--prueba]
 //
-// Saca de Mask4.frx (el formulario de VB6 que guarda los dibujos) el mapa (Map1, 944x650) y
-// dos de las mascaras de los paises: la 0 (las siluetas en blanco) y la 4 (la textura gris).
-// Deja en <salida>:
-//   mapa.jpg    el mapa tal cual
-//   paises.png  la hoja de los 42 paises (690x650, el mismo orden que la mascara original):
-//               la textura gris con la silueta como transparencia. La pagina pinta cada pais
-//               con el color de su ejercito (mapa.js dice donde esta cada uno en la hoja).
-//   tapa.jpg    la tapa de la biblioteca de Juegos: el mapa con los paises pintados
-//   enlace.jpg  la vista previa de los enlaces (1200x630): en el servidor va como
-//               tools/puente/web/tapas/globalsiege.jpg
+// Saca de Mask4.frx (el formulario de VB6 que guarda los dibujos) todo tal cual:
+//   mapa.jpg        el mapa (Map1, 944x650)
+//   paises-1.png    las mascaras de relieve de los paises (pctMaskArray 1, 2 y 3: gris clara,
+//   paises-2.png    gris oscura y azul), recortadas con la silueta de la mascara 0 como
+//   paises-3.png    transparencia. La pagina pinta cada pais como el original (ColorCountry):
+//                   la mascara del ejercito combinada con su color (mapa.js)
+//   cartas.png      las cartas (pctCardSource: 5 de 60x85, abajo las elegidas)
+//   cartitas.png    las cartas chicas (pctLittleCrdSource: 5 de 30x41)
+//   dados.png       los dados (pctDice: 6 de 39x39; los blancos de la defensa y los rojos del ataque)
+//   ding.wav        el sonido del original (cuando te toca)
+//   tapa.jpg        la tapa de la biblioteca de Juegos: el mapa pintado
+//   enlace.jpg      la vista previa de los enlaces (1200x630): en el servidor va como
+//                   tools/puente/web/tapas/globalsiege.jpg
 // Con --prueba, ademas prueba.png: el mapa pintado en tamaño original.
-// Los tres primeros van en tools/puente/web/misionrisk/.
+// Todo menos enlace.jpg va en tools/puente/web/misionrisk/.
 // Necesita jpeg-js y pngjs (npm install jpeg-js pngjs, en cualquier carpeta del NODE_PATH).
 'use strict';
 const fs = require('fs');
@@ -45,55 +48,74 @@ for (const linea of frm.split(/\r?\n/)) {
   if (frx.toString('latin1', p + 4, p + 6) === 'lt') { largo = frx.readUInt32LE(p + 8); p += 12; } else p += 4;
   fotos[control] = frx.subarray(p, p + largo);
 }
-for (const k of ['Map1', 'pctMaskArray_0', 'pctMaskArray_4']) if (!fotos[k]) { console.error('No encontre', k, 'en Mask4.frx'); process.exit(1); }
+const hacen = ['Map1', 'pctMaskArray_0', 'pctMaskArray_1', 'pctMaskArray_2', 'pctMaskArray_3', 'pctCardSource', 'pctLittleCrdSource', 'pctDice'];
+for (const k of hacen) if (!fotos[k]) { console.error('No encontre', k, 'en Mask4.frx'); process.exit(1); }
 
-fs.writeFileSync(path.join(out, 'mapa.jpg'), fotos.Map1);
-const siluetas = jpeg.decode(fotos.pctMaskArray_0, { useTArray: true });
-const textura = jpeg.decode(fotos.pctMaskArray_4, { useTArray: true });
-console.log('mapa', fotos.Map1.length, 'bytes; mascaras', siluetas.width + 'x' + siluetas.height, textura.width + 'x' + textura.height);
-
-// La hoja: solo los rectangulos de cada pais. La silueta es un JPEG (con ruido en los bordes):
-// negro es afuera, blanco adentro y lo del medio queda semitransparente (borde suave).
-const hoja = new PNG({ width: siluetas.width, height: siluetas.height });
-hoja.data.fill(0);
-for (let id = 1; id <= 42; id++) {
-  const P = MAPA.paises[id];
-  for (let y = 0; y < P.h; y++) {
-    for (let x = 0; x < P.w; x++) {
-      const sx = P.sx + x, sy = P.sy + y;
-      if (sx >= siluetas.width || sy >= siluetas.height) continue;
-      const i = (sy * siluetas.width + sx) * 4;
-      const v = (siluetas.data[i] + siluetas.data[i + 1] + siluetas.data[i + 2]) / 3;
-      const a = Math.max(0, Math.min(255, Math.round((v - 50) * 255 / 150)));
-      if (!a) continue;
-      const t = (sy * textura.width + sx) * 4; // la textura mide 692 de ancho y la silueta 690
-      const g = (textura.data[t] + textura.data[t + 1] + textura.data[t + 2]) / 3;
-      hoja.data[i] = hoja.data[i + 1] = hoja.data[i + 2] = Math.round(g);
-      hoja.data[i + 3] = a;
+// Un BMP de 24 bits (de abajo hacia arriba, filas de a 4 bytes) a PNG
+function bmpAPng(b) {
+  const off = b.readUInt32LE(10), w = b.readInt32LE(18), h = b.readInt32LE(22), bpp = b.readUInt16LE(28);
+  if (bpp !== 24) throw new Error('BMP de ' + bpp + ' bits');
+  const fila = Math.ceil(w * 3 / 4) * 4;
+  const png = new PNG({ width: w, height: Math.abs(h) });
+  for (let y = 0; y < png.height; y++) {
+    const sy = h > 0 ? png.height - 1 - y : y;
+    for (let x = 0; x < w; x++) {
+      const i = off + sy * fila + x * 3, o = (y * w + x) * 4;
+      png.data[o] = b[i + 2]; png.data[o + 1] = b[i + 1]; png.data[o + 2] = b[i]; png.data[o + 3] = 255;
     }
   }
+  return PNG.sync.write(png, { colorType: 2 });
 }
-fs.writeFileSync(path.join(out, 'paises.png'), PNG.sync.write(hoja, { colorType: 4 })); // gris con transparencia
-console.log('paises.png', fs.statSync(path.join(out, 'paises.png')).size, 'bytes');
+for (const [k, f] of [['pctCardSource', 'cartas.png'], ['pctLittleCrdSource', 'cartitas.png'], ['pctDice', 'dados.png']]) {
+  fs.writeFileSync(path.join(out, f), bmpAPng(fotos[k]));
+  console.log(f, fs.statSync(path.join(out, f)).size, 'bytes');
+}
+fs.copyFileSync(path.join(src, 'ding.wav'), path.join(out, 'ding.wav'));
+fs.writeFileSync(path.join(out, 'mapa.jpg'), fotos.Map1);
 
-// El mapa con cada pais pintado de un color (la textura multiplicada por el color del ejercito,
-// un poco aclarada para que no quede oscura): para la tapa de la biblioteca de Juegos (tapa.jpg,
-// 600x413) y la vista previa de los enlaces (enlace.jpg, 1200x630, va en web/tapas/globalsiege.jpg)
+// Las mascaras: la 0 es la silueta (blanca adentro; es un JPEG, con ruido en los bordes: lo del
+// medio queda semitransparente) y la 1, 2 y 3 el relieve de cada color
+const silueta = jpeg.decode(fotos.pctMaskArray_0, { useTArray: true });
+const alfa = (sx, sy) => {
+  if (sx >= silueta.width || sy >= silueta.height) return 0;
+  const i = (sy * silueta.width + sx) * 4;
+  return Math.max(0, Math.min(255, Math.round(((silueta.data[i] + silueta.data[i + 1] + silueta.data[i + 2]) / 3 - 50) * 255 / 150)));
+};
+const hojas = {};
+for (const k of [1, 2, 3]) {
+  const m = jpeg.decode(fotos['pctMaskArray_' + k], { useTArray: true });
+  const hoja = new PNG({ width: silueta.width, height: silueta.height });
+  hoja.data.fill(0);
+  for (let id = 1; id <= 42; id++) {
+    const P = MAPA.paises[id];
+    for (let y = 0; y < P.h; y++) for (let x = 0; x < P.w; x++) {
+      const sx = P.sx + x, sy = P.sy + y, a = alfa(sx, sy);
+      if (!a || sx >= m.width || sy >= m.height) continue;
+      const i = (sy * m.width + sx) * 4, o = (sy * hoja.width + sx) * 4;
+      hoja.data[o] = m.data[i]; hoja.data[o + 1] = m.data[i + 1]; hoja.data[o + 2] = m.data[i + 2]; hoja.data[o + 3] = a;
+    }
+  }
+  hojas[k] = hoja;
+  // las grises van en gris con transparencia (mas livianas), la azul en color
+  fs.writeFileSync(path.join(out, `paises-${k}.png`), PNG.sync.write(hoja, { colorType: k === 3 ? 6 : 4 }));
+  console.log(`paises-${k}.png`, fs.statSync(path.join(out, `paises-${k}.png`)).size, 'bytes');
+}
+
+// El mapa con los paises pintados como en el original (cada uno de un ejercito): para la tapa de la
+// biblioteca (tapa.jpg, 600x413) y la vista previa de los enlaces (enlace.jpg, 1200x630)
 {
   const mapa = jpeg.decode(fotos.Map1, { useTArray: true });
   const hex = (c) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
   for (let id = 1; id <= 42; id++) {
     const P = MAPA.paises[id];
-    const col = hex(MAPA.ejercitos[1 + (id % 6)].color);
-    for (let y = 0; y < P.h; y++) {
-      for (let x = 0; x < P.w; x++) {
-        const i = ((P.sy + y) * hoja.width + P.sx + x) * 4;
-        const a = hoja.data[i + 3] / 255;
-        if (!a) continue;
-        const j = ((P.y + y) * mapa.width + P.x + x) * 4;
-        const g = hoja.data[i] / 255;
-        for (let k = 0; k < 3; k++) mapa.data[j + k] = Math.round(mapa.data[j + k] * (1 - a) + Math.min(255, col[k] * (0.35 + g * 0.85)) * a);
-      }
+    const E = MAPA.ejercitos[1 + (id % 6)];
+    const col = hex(E.pintura), hoja = hojas[E.mascara];
+    for (let y = 0; y < P.h; y++) for (let x = 0; x < P.w; x++) {
+      const i = ((P.sy + y) * hoja.width + P.sx + x) * 4;
+      const a = hoja.data[i + 3] / 255;
+      if (!a) continue;
+      const j = ((P.y + y) * mapa.width + P.x + x) * 4;
+      for (let k = 0; k < 3; k++) mapa.data[j + k] = Math.round(mapa.data[j + k] * (1 - a) + (hoja.data[i + k] * col[k] / 255) * a);
     }
   }
   // Achicar (o agrandar) con interpolacion bilineal sobre un fondo del azul del mar
