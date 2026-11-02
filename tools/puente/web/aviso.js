@@ -2152,6 +2152,8 @@ function leido(sc) {
     return 'recién';
   }
   const fecha = iso => (iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+  // minutos -> "45 min", "3 h 20 min"
+  const duracion = (min) => { min = Math.round(min || 0); const h = Math.floor(min / 60), r = min % 60; return h ? h + ' h' + (r ? ' ' + r + ' min' : '') : min + ' min'; };
 
   let page = null, data = [], sortKey = 'desde', sortDir = -1, term = '', filtro = 'todos';
   const inicioHoy = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
@@ -2269,6 +2271,7 @@ function leido(sc) {
       const seen = el('div', 'pm-c pm-dos');
       seen.appendChild(el('div', 'pm-n1 pm-correo' + (m.enLinea ? ' pm-ok-txt' : ''), m.enLinea ? 'En línea' : m.visto ? ago(m.visto) : '—'));
       if (m.entraDesde) seen.appendChild(el('div', 'pm-n2', m.entraDesde));
+      if (m.minutos7) seen.appendChild(el('div', 'pm-n2', 'Usó ' + duracion(m.minutos7) + ' en 7 días'));
       seen.title = (m.visto && !m.enLinea ? fecha(m.visto) : '') + (m.usa && m.usa.length ? (m.visto && !m.enLinea ? ' · ' : '') + 'Usó: ' + m.usa.join(', ') : '');
       const sig = el('div', 'pm-c pm-roles');
       for (const [label, kind] of signals(m)) sig.appendChild(el('span', 'pm-senal ' + kind, label));
@@ -2304,6 +2307,7 @@ function leido(sc) {
       if (m.ultimo) bits.push('último ' + ago(m.ultimo));
       bits.push(m.enLinea ? 'en línea' : m.visto ? 'conectado ' + ago(m.visto) : 'sin conexiones registradas');
       if (m.entraDesde) bits.push(m.entraDesde);
+      if (m.minutos7) bits.push('usó ' + duracion(m.minutos7) + ' en 7 días');
       if (m.origen) bits.push('llegó desde ' + m.origen.fuente);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
       const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo + (m.email === 'pendiente' ? ' (sin confirmar)' : '')) : null;
@@ -2378,9 +2382,118 @@ function leido(sc) {
     const fondo = el('div', 'pe-fila-fondo'); const llena = el('div', 'pe-fila-llena'); llena.style.width = (total ? Math.max(1, (valor / total) * 100) : 0) + '%';
     fondo.appendChild(llena); f.append(top, fondo); return f;
   }
+  // ── El resumen escrito, arriba de todo: lo principal del periodo en pocas frases (con reglas fijas) ──
+  const PERIODO = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año' };
+  // una frase con partes en negrita: ['texto ', ['b', 'numero'], ' mas texto']
+  function frase(partes) {
+    const li = el('li');
+    for (const p of partes) { if (Array.isArray(p)) li.appendChild(el('b', '', p[1])); else li.appendChild(document.createTextNode(p)); }
+    return li;
+  }
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const cambio = (act, ant) => { if (!ant) return ''; const p = Math.round(((act - ant) / ant) * 100); return p > 4 ? ' (' + p + '% más que en el período anterior)' : p < -4 ? ' (' + Math.abs(p) + '% menos que en el período anterior)' : ' (casi igual que en el período anterior)'; };
+  function resumenEscrito(d, o) {
+    const T = d.totales, out = [];
+    const per = PERIODO[d.rango] || 'este período';
+    // Llegadas y de donde
+    const [nv, nvAnt] = T.nuevos;
+    const p1 = ['En ' + per + ' llegaron ', ['b', fmt(nv)], nv === 1 ? ' persona nueva' : ' personas nuevas', cambio(nv, nvAnt)];
+    if (o && o.fuentes) {
+      const top = o.fuentes.filter(f => f.fuente !== 'Sin dato' && f.cuentas > 0).slice(0, 2);
+      if (top.length) { p1.push('; la mayoría desde ', ['b', top[0].fuente], ' (' + fmt(top[0].cuentas) + ')'); if (top[1]) p1.push(' y después ', ['b', top[1].fuente], ' (' + fmt(top[1].cuentas) + ')'); }
+    }
+    out.push(frase(p1.concat('.')));
+    // Embudo
+    const E = Object.fromEntries(d.embudo || []);
+    const base = E['Se registraron'] || 0;
+    if (base) out.push(frase(['De ellas, el ', ['b', pct(E['Escribieron en CV Chat'], base) + '%'], ' escribió en CV Chat y el ', ['b', pct(E['Volvieron otro día'], base) + '%'], ' volvió otro día.']));
+    // Activos y tiempo
+    const t = d.tiempo;
+    const p3 = ['Entraron ', ['b', fmt(T.activos[0])], ' personas'];
+    if (t && t.minutos[0]) {
+      p3.push('; cada una pasó en promedio ', ['b', duracion(t.porDia[0])], ' por día que entró');
+      if (t.porDia[1]) { const c = Math.round(((t.porDia[0] - t.porDia[1]) / t.porDia[1]) * 100); if (Math.abs(c) > 4) p3.push(' (' + (c > 0 ? c + '% más' : Math.abs(c) + '% menos') + ' que antes)'); }
+      const sec = (t.secciones || []).slice(0, 3).map(s => s.nombre);
+      if (sec.length) p3.push(', sobre todo en ', ['b', sec.join(', ').replace(/, ([^,]*)$/, ' y $1')]);
+    }
+    out.push(frase(p3.concat('.')));
+    // Mensajes y la mudanza
+    const cv = T.cv[0], dc = T.dc[0];
+    if (cv + dc) out.push(frase(['Se escribieron ', ['b', fmt(cv + dc)], ' mensajes en los canales', cambio(cv + dc, T.cv[1] + T.dc[1]), '; el ', ['b', pct(cv, cv + dc) + '%'], ' desde CV Chat. Mensajes privados: ' + fmt(T.dm[0]) + '.']));
+    // Canales: el mas activo, y lo que mas subio y bajo (con algo de movimiento)
+    if (d.canales && d.canales.length) {
+      const p5 = ['El canal más activo fue ', ['b', '#' + d.canales[0].nombre], ' (' + fmt(d.canales[0].n) + ' mensajes)'];
+      const mov = d.canales.filter(c => c.ant >= 20).map(c => ({ c, v: Math.round(((c.n - c.ant) / c.ant) * 100) }));
+      const sube = mov.filter(x => x.v >= 20).sort((a, b) => b.v - a.v)[0], baja = mov.filter(x => x.v <= -20).sort((a, b) => a.v - b.v)[0];
+      if (sube) p5.push('; el que más creció, ', ['b', '#' + sube.c.nombre], ' (+' + sube.v + '%)');
+      if (baja) p5.push('; el que más bajó, ', ['b', '#' + baja.c.nombre], ' (' + baja.v + '%)');
+      out.push(frase(p5.concat('.')));
+    }
+    // El momento de mas actividad
+    let mx = 0, dia = 0, hora = 0;
+    (d.calor || []).forEach((f, i) => f.forEach((v, h) => { if (v > mx) { mx = v; dia = i; hora = h; } }));
+    if (mx) out.push(frase(['El momento de más actividad: los ', ['b', ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'][dia] + ' a las ' + hora + ' h'], '.']));
+    // Juegos y Marketplace
+    out.push(frase(['Se jugaron ', ['b', fmt(T.partidas[0])], ' partidas', cambio(T.partidas[0], T.partidas[1]), ' y se publicaron ', ['b', fmt(T.publicaciones[0])], ' cosas en el Marketplace.']));
+    // Retencion: el grupo mas reciente que ya tiene su semana siguiente
+    const ret = (d.retencion || []).filter(r => r.semanas.length).slice(-1)[0];
+    if (ret) out.push(frase(['De los que llegaron la semana del ' + etiqueta(ret.semana, 'dia') + ', el ', ['b', ret.semanas[0] + '%'], ' volvió a entrar la semana siguiente.']));
+    // Dispositivo
+    const dis = Object.entries(d.dispositivos || {}).sort((a, b) => b[1] - a[1])[0];
+    if (dis && d.personasDispositivo) out.push(frase(['El dispositivo más usado: ', ['b', dis[0]], ' (' + pct(dis[1], d.personasDispositivo) + '% de quienes entraron).']));
+    const ul = el('ul', 'pe-resumen');
+    out.forEach(li => ul.appendChild(li));
+    const c = tarjeta('Resumen', ul, 'pe-ancha pe-resumen-caja');
+    if (t && t.desde && t.desde > d.desde) c.appendChild(el('div', 'pe-nota', 'El tiempo de uso se mide desde el ' + etiqueta(t.desde, 'dia') + '.'));
+    return c;
+  }
+  // ── Tiempo de uso (uso.js) ──
+  function tarjetaTiempo(d) {
+    const t = d.tiempo, box = el('div');
+    if (!t || !t.minutos[0]) { box.appendChild(el('div', 'pe-nota', 'Todavía no hay datos: se empezó a medir hace poco. Cuenta solo el tiempo con CV Chat a la vista y en uso.')); return tarjeta('Tiempo de uso', box); }
+    const datos = el('div', 'pe-totales');
+    const dato = (l, v, act, ant) => {
+      const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', l));
+      const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', v));
+      if (ant) { const [txt, cls] = variacion(act, ant); if (txt) f.appendChild(el('span', 'pe-var ' + cls, txt)); }
+      c.appendChild(f); datos.appendChild(c);
+    };
+    dato('En total', duracion(t.minutos[0]), t.minutos[0], t.minutos[1]);
+    dato('Por persona, por día', duracion(t.porDia[0]), t.porDia[0], t.porDia[1]);
+    dato('Visitas', fmt(t.visitas[0]), t.visitas[0], t.visitas[1]);
+    dato('Cada visita, en promedio', duracion(t.porVisita[0]), t.porVisita[0], t.porVisita[1]);
+    box.appendChild(datos);
+    const maxS = Math.max(1, ...t.secciones.map(s => s.minutos));
+    for (const s of t.secciones.slice(0, 10)) box.appendChild(filaBarra(s.nombre, s.minutos, maxS, duracion(s.minutos) + ' · ' + pct(s.minutos, t.minutos[0]) + '%'));
+    box.appendChild(el('div', 'pe-nota', 'Solo el tiempo con CV Chat a la vista y en uso (sin tocar nada por 2 minutos, deja de contar). Una visita nueva es volver después de 30 minutos.'));
+    return tarjeta('Tiempo de uso', box, 'pe-ancha');
+  }
+  // ── Retencion: de cada semana de llegada, que parte volvio en las semanas siguientes ──
+  function tarjetaRetencion(d) {
+    const box = el('div', 'pe-ret');
+    const filas = d.retencion || [];
+    if (!filas.length) { box.appendChild(el('div', 'pe-nota', 'Todavía no hay semanas completas para medir.')); return tarjeta('¿Vuelven?', box); }
+    const cab = el('div', 'pe-ret-fila pe-ret-cab');
+    for (const t of ['Llegaron la semana del', 'Personas', '1.ª semana', '2.ª', '3.ª', '4.ª']) cab.appendChild(el('span', '', t));
+    box.appendChild(cab);
+    for (const r of filas) {
+      const f = el('div', 'pe-ret-fila');
+      f.append(el('span', '', etiqueta(r.semana, 'dia') + (r.aprox ? ' ≈' : '')), el('span', '', fmt(r.personas)));
+      for (let k = 0; k < 4; k++) {
+        const v = r.semanas[k];
+        const c = el('span', 'pe-ret-c', v == null ? '' : v + '%');
+        if (v != null) c.style.background = 'rgba(88, 101, 242, ' + (0.12 + 0.75 * (v / 100)).toFixed(2) + ')';
+        f.appendChild(c);
+      }
+      box.appendChild(f);
+    }
+    box.appendChild(el('div', 'pe-nota', 'Qué parte de los que llegaron cada semana volvió a entrar en cada una de las semanas siguientes.' + (filas.some(r => r.aprox) ? ' ≈: aproximado; antes del ' + etiqueta(d.activosDesde, 'dia') + ' solo cuenta a quien escribió (no a quien entró a leer).' : '')));
+    return tarjeta('¿Vuelven?', box, 'pe-ancha');
+  }
   function pintarEstadisticas(box, d, o) {
     box.textContent = '';
     if (!d.resumenListo) box.appendChild(el('div', 'pe-aviso', 'Armando el resumen de mensajes por primera vez: los números de mensajes pueden estar incompletos unos minutos.'));
+    try { box.appendChild(resumenEscrito(d, o)); } catch (err) { console.warn('resumen:', err); }
     // Totales con su variacion respecto del periodo anterior
     const T = d.totales;
     const totales = el('div', 'pe-totales');
@@ -2449,6 +2562,8 @@ function leido(sc) {
     if (!lista.length) dis.appendChild(el('div', 'pe-nota', 'Todavía no hay datos: se empezó a anotar hace poco.'));
     else if (d.personasDispositivo) dis.appendChild(el('div', 'pe-nota', 'De las ' + fmt(d.personasDispositivo) + ' personas que entraron en este período. Quien usa más de uno cuenta en cada uno.'));
     box.appendChild(tarjeta('Dispositivo', dis));
+    box.appendChild(tarjetaTiempo(d));
+    box.appendChild(tarjetaRetencion(d));
   }
   function cargarEstadisticas() {
     const box = page && page.querySelector('.pe-cuerpo');
@@ -9128,7 +9243,9 @@ document.addEventListener('pointerdown', (ev) => {
     if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); }
     else close();
   }
-  window.puenteJuegos = { abierto: () => !!page, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
+  // (juego: en cual se esta, para el tiempo de uso)
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
@@ -15032,4 +15149,50 @@ var puenteSinUbicacion = (function () {
       });
     }
   })();
+})();
+// Tiempo de uso (uso.js): cada 5 segundos, si la pestaña esta a la vista y la persona la uso en los
+// ultimos 2 minutos, se suma a lo que tiene abierto (un canal, los privados, un juego, el Marketplace,
+// el foro...). Cada minuto se manda el total; nada de lo que se escribe o se lee. Una visita nueva es
+// volver despues de 30 minutos sin usarlo.
+(function () {
+  'use strict';
+  if (window.__puenteUso) return;
+  window.__puenteUso = true;
+  const TICK = 5000, QUIETO = 120000, PAUSA = 30 * 60000;
+  let ultimoInput = Date.now(), suma = {}, visitas = 0;
+  const marcar = () => { ultimoInput = Date.now(); };
+  for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll']) window.addEventListener(ev, marcar, { passive: true, capture: true });
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  function seccion() {
+    try {
+      if (window.name === 'cv-ventana') return 'dm';
+      if (window.puenteForo && window.puenteForo.abierto()) return 'foro';
+      if (window.puenteMercado && window.puenteMercado.abierto()) return 'mercado';
+      if (window.puenteJuegos && window.puenteJuegos.abierto()) return 'j:' + (window.puenteJuegos.juego ? window.puenteJuegos.juego() : 'juegos');
+      if (document.getElementById('puente-miembros')) return 'miembros';
+      const app = window.app;
+      const ch = app && app.currentChannel && (app.channels || []).find(c => c && c.code === app.currentChannel);
+      if (ch) return ch.is_dm || ch.is_group || ch.is_self_dm ? 'dm' : 'c:' + ch.id;
+    } catch { /* sigue */ }
+    return 'otros';
+  }
+  function tick() {
+    if (document.visibilityState !== 'visible' || Date.now() - ultimoInput > QUIETO || !token()) return;
+    let ult = 0;
+    try { ult = Number(localStorage.getItem('puente_uso_ult')) || 0; localStorage.setItem('puente_uso_ult', String(Date.now())); } catch { /* sin almacenamiento */ }
+    if (Date.now() - ult > PAUSA) visitas++;
+    const s = seccion();
+    suma[s] = (suma[s] || 0) + TICK / 1000;
+  }
+  function mandar() {
+    const tk = token();
+    if (!tk || (!Object.keys(suma).length && !visitas)) return;
+    const body = JSON.stringify({ s: suma, v: visitas });
+    suma = {}; visitas = 0;
+    try { fetch('/puente/api/uso', { method: 'POST', keepalive: true, headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body }).catch(() => {}); } catch { /* la proxima */ }
+  }
+  setInterval(tick, TICK);
+  setInterval(mandar, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') mandar(); });
+  window.addEventListener('pagehide', mandar);
 })();

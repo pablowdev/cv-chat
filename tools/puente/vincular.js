@@ -1227,6 +1227,10 @@ async function handle(req, res) {
     const r = await require('./mudanza-plan.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p === '/puente/api/uso') {
+    const r = await require('./uso.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/estadisticas') {
     const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
@@ -1389,6 +1393,9 @@ function members() {
   let presencia = new Map();
   // De donde llego (origenes.js)
   const origenes = require('./origenes.js').deCadaUno();
+  // Cuanto uso CV Chat en la ultima semana (uso.js)
+  let minutos7 = new Map();
+  try { minutos7 = require('./uso.js').minutos7(); } catch { /* sin medir */ }
   try { presencia = require('./presencia.js').todas(); } catch { /* sin presencia */ }
   // Mensajes de Discord de cada cuenta (el historial que paso a su cuenta al vincular y lo que escribio
   // en Discord despues; el autor de Discord queda en puente_autores). Casi no cambian: cada 30 minutos
@@ -1414,6 +1421,7 @@ function members() {
       visto: online.has(u.id) ? new Date().toISOString() : ((presencia.get(u.id) || {}).visto || null),
       entraDesde: (presencia.get(u.id) || {}).desde || null, usa: (presencia.get(u.id) || {}).usadas || [],
       recuperados: historialCache.map.get(u.id) || 0, denuncias: denuncias.get(u.id) || 0, origen: origenes.get(u.id) || null,
+      minutos7: minutos7.get(u.id) || 0,
     };
   });
   membersCache = { at: Date.now(), list };

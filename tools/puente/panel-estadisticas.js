@@ -222,8 +222,67 @@ function calcular(rango) {
     for (const [k] of usados) dispositivos[k] = (dispositivos[k] || 0) + 1;
   }
 
+  // Tiempo de uso (uso.js): cuanto, en que y cuanto por persona, contra el periodo anterior
+  let tiempo = null;
+  try {
+    const U = require('./uso.js');
+    const a = U.entre(ini, fin), b = U.entre(iniAnt, finAnt);
+    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege' };
+    const nombreSec = (k) => k.startsWith('c:') ? (nombres.has(Number(k.slice(2))) ? '#' + nombres.get(Number(k.slice(2))).name : 'Otro canal')
+      : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? 'Juegos · ' + (juegos[k.slice(2)] || k.slice(2)) : k === 'mercado' ? 'Marketplace'
+        : k === 'foro' ? 'Foro' : k === 'miembros' ? 'Panel de administradores' : 'Otras pantallas';
+    const secciones = new Map();
+    for (const [k, s] of a.porSeccion) { const n = nombreSec(k); secciones.set(n, (secciones.get(n) || 0) + s); }
+    const minutos = s => Math.round(s / 60);
+    tiempo = {
+      desde: U.medidoDesde(),
+      minutos: [minutos(a.seg), minutos(b.seg)],
+      personas: [a.porPersona.size, b.porPersona.size],
+      // por persona y por dia en que la uso
+      porDia: [a.personaDias ? Math.round(a.seg / a.personaDias / 60 * 10) / 10 : 0, b.personaDias ? Math.round(b.seg / b.personaDias / 60 * 10) / 10 : 0],
+      visitas: [a.visitas, b.visitas],
+      porVisita: [a.visitas ? Math.round(a.seg / a.visitas / 60 * 10) / 10 : 0, b.visitas ? Math.round(b.seg / b.visitas / 60 * 10) / 10 : 0],
+      secciones: [...secciones].map(([nombre, s]) => ({ nombre, minutos: minutos(s) })).filter(x => x.minutos > 0).sort((x, y) => y.minutos - x.minutos).slice(0, 15),
+    };
+  } catch (err) { warn('estadisticas (tiempo):', err.message); }
+
+  // Retencion: de los que llegaron cada semana, cuantos volvieron a entrar en las semanas siguientes.
+  // Volver: conectarse (puente_activos) o, para los dias de antes de que se anotara, escribir en CV Chat
+  // (esas semanas quedan como aproximadas: no cuentan a quien solo leyo)
+  const retencion = [];
+  try {
+    const hoyMs = Date.parse(hoyAR() + 'T00:00:00Z');
+    const lunesHoy = hoyMs - ((new Date(hoyMs).getUTCDay() + 6) % 7) * 864e5;
+    const desdeAct = desdeActivos ? Date.parse(desdeActivos + 'T00:00:00Z') : hoyMs;
+    const diasDe = new Map();
+    const anotar = (uid, ms) => { if (!diasDe.has(uid)) diasDe.set(uid, []); diasDe.get(uid).push(ms); };
+    for (const a of db.prepare('SELECT dia, user_id FROM puente_activos').all()) anotar(a.user_id, Date.parse(a.dia + 'T00:00:00Z'));
+    for (const m of db.prepare(`SELECT m.user_id, m.created_at FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id
+                                WHERE m.created_at >= ? AND m.user_id IS NOT NULL AND m.imported_from IS NULL AND COALESCE(m.is_webhook, 0) = 0 AND pa.message_id IS NULL
+                                GROUP BY m.user_id, substr(m.created_at, 1, 13)`).all(new Date(lunesHoy - 9 * 7 * 864e5).toISOString().slice(0, 10))) {
+      const dh = diaHora(m.created_at); if (dh) anotar(m.user_id, Date.parse(dh.dia + 'T00:00:00Z'));
+    }
+    const altas = db.prepare("SELECT id, created_at FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0 AND created_at >= ?")
+      .all(new Date(lunesHoy - 8 * 7 * 864e5).toISOString().slice(0, 10) + ' 00:00:00');
+    for (let w = 8; w >= 1; w--) {
+      const ini = lunesHoy - w * 7 * 864e5;
+      const grupo = altas.map(u => ({ id: u.id, dh: diaHora(u.created_at) })).filter(u => u.dh)
+        .map(u => ({ id: u.id, ms: Date.parse(u.dh.dia + 'T00:00:00Z') })).filter(u => u.ms >= ini && u.ms < ini + 7 * 864e5);
+      if (!grupo.length) continue;
+      // semana k despues de la de su alta: dias [alta + 7k - 6, alta + 7k] (k = 1..4), si ya paso
+      const semanas = [];
+      for (let k = 1; k <= 4; k++) {
+        if (ini + (k + 1) * 7 * 864e5 > hoyMs + 864e5) break;
+        const vuelven = grupo.filter(u => (diasDe.get(u.id) || []).some(d => d > u.ms + (7 * (k - 1)) * 864e5 && d <= u.ms + 7 * k * 864e5)).length;
+        semanas.push(Math.round((vuelven / grupo.length) * 100));
+      }
+      // aproximada si alguna de sus semanas cae antes de que se anotaran las conexiones
+      retencion.push({ semana: new Date(ini).toISOString().slice(0, 10), personas: grupo.length, semanas, aprox: ini + 7 * 864e5 < desdeAct });
+    }
+  } catch (err) { warn('estadisticas (retencion):', err.message); }
+
   return {
-    rango, desde: ini, hasta: fin, paso: r.paso,
+    rango, desde: ini, hasta: fin, paso: r.paso, tiempo, retencion,
     etiquetas: ps.map(p => p.etiqueta),
     serie: { nuevos, cv: serie.cv, dc: serie.dc, dm: serie.dm, activos },
     totales: {
