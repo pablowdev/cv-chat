@@ -13,6 +13,21 @@ Electron con instalador NSIS (`CV-Chat-Windows.exe`). Cerrar la ventana la deja 
 1. Poner el ícono de 512×512 en `windows/build/icon.png`.
 2. `npm install` y `npm run armar`. El instalador queda en `windows/dist/`.
 
+### Microsoft Store (sin el cartel de "Windows protegió su PC")
+
+El `.exe` no está firmado y Windows lo avisa al instalarlo. La versión de la Microsoft Store la firma
+Microsoft, así que no sale ningún aviso, y se actualiza desde la Store (`process.windowsStore`: sin el
+actualizador propio).
+
+1. Cuenta de desarrollador en Partner Center (para personas es gratis), y "Reservar nombre": CV Chat.
+2. En la app, "Administración del producto → Identidad del producto": copiar `Package/Identity/Name`
+   a `build.appx.identityName` y `Package/Identity/Publisher` (`CN=...`) a `build.appx.publisher` en
+   `windows/package.json`.
+3. `npm run tienda`: queda `windows/dist/CV-Chat-Store.appx`. Subirlo en "Paquetes" de un envío nuevo,
+   con la descripción, capturas, clasificación por edad (mayores de 18) y la política de privacidad
+   (https://circulovicioso.club/legal).
+4. Cada versión nueva: subir `version` en `package.json`, `npm run tienda` y un envío nuevo.
+
 ## Android (`android/`)
 
 Trusted Web Activity (androidbrowserhelper): la página a pantalla completa, con sus notificaciones.

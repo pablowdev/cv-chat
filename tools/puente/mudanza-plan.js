@@ -52,6 +52,8 @@ const T = {
     '',
     '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**. Y arranca la **Copa Mudanza**: quien más partidas de truco gane hasta el 24/11 se lleva la de **Campeón**.',
     '',
+    '📱 ¿Usás Android? La app de CV Chat ya está en Google Play, en prueba: sumate como tester en https://circulovicioso.club/descargar#play',
+    '',
     '👉 Entrá acá: {enlace}',
   ].join('\n'),
   recordatorio: [

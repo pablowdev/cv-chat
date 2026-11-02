@@ -62,5 +62,6 @@
 .descargar__app ol { padding-left: 1.2em; margin: 12px 0 0; }
 .descargar__app li, .descargar__app p { color: var(--fg-2); }
 .descargar__app li + li { margin-top: 6px; }
+.descargar__sub { margin: 22px 0 8px; font: 400 18px/1.2 var(--display); text-transform: uppercase; scroll-margin-top: 60px; }
 .descargar__app.es-el-tuyo { grid-column: 1 / -1; border-color: var(--accent); }
 @media (max-width: 720px) { .descargar { grid-template-columns: 1fr; gap: 12px; margin-top: 12px; } .descargar .caja__cuerpo { padding: 18px; } .descargar__app .btn { width: 100%; } }

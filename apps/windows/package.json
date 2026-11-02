@@ -8,7 +8,8 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "armar": "electron-builder --win nsis --x64"
+    "armar": "electron-builder --win nsis --x64",
+    "tienda": "electron-builder --win appx --x64"
   },
   "build": {
     "appId": "club.circulovicioso.chat",
@@ -39,7 +40,21 @@
         "provider": "generic",
         "url": "https://chat.circulovicioso.club/puente/descargas/"
       }
-    ]
+    ],
+    "appx": {
+      "identityName": "COMPLETAR-con-Partner-Center",
+      "publisher": "CN=COMPLETAR-con-Partner-Center",
+      "publisherDisplayName": "Circulo Vicioso",
+      "applicationId": "CVChat",
+      "displayName": "CV Chat",
+      "backgroundColor": "#211c1f",
+      "languages": [
+        "es-AR",
+        "es-ES",
+        "en-US"
+      ],
+      "artifactName": "CV-Chat-Store.appx"
+    }
   },
   "devDependencies": {
     "electron": "^37.2.0",

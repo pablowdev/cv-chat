@@ -121,6 +121,8 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((wc, permiso) => permiso !== 'notifications');
   session.defaultSession.setSpellCheckerLanguages(['es-ES', 'en-US']);
   if (!app.isPackaged) { abrirApp(); return; } // probando sin instalar: no hay de donde actualizar
+  // La de la Microsoft Store se actualiza desde la Store (y firmada por Microsoft): sin el actualizador propio
+  if (process.windowsStore) { abrirApp(); return; }
   ventanita();
   plazo(10000);
   autoUpdater.checkForUpdates().catch(abrirApp);
@@ -164,4 +166,4 @@ autoUpdater.on('update-downloaded', async (info) => {
   const r = win && win.isVisible() ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
   if (r.response === 0) { saliendo = true; autoUpdater.quitAndInstall(true, true); }
 });
-app.whenReady().then(() => { if (!unica) return; setTimeout(buscarActualizacion, 60000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
+app.whenReady().then(() => { if (!unica || process.windowsStore) return; setTimeout(buscarActualizacion, 60000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
