@@ -64,8 +64,11 @@ function clasificar(t, ua) {
   const etiqueta = corto(t.d, 40);
   if (t.i) return { fuente: 'Invitación', detalle: '@' + corto(t.i, 40) };
   if (etiqueta) {
-    const e = ETIQUETAS.find(([re]) => re.test(etiqueta));
-    return { fuente: e ? e[1] : etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1), detalle: [corto(t.m, 30), corto(t.c, 40)].filter(Boolean).join(' · ') || null };
+    // Con un numero al final (?de=x2: el mismo enlace, publicado otra vez) cuenta para la misma fuente
+    const base = etiqueta.replace(/[-_ ]?\d+$/, '') || etiqueta;
+    const e = ETIQUETAS.find(([re]) => re.test(base));
+    const otra = e && base !== etiqueta ? 'enlace "' + etiqueta + '"' : null;
+    return { fuente: e ? e[1] : etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1), detalle: [otra, corto(t.m, 30), corto(t.c, 40)].filter(Boolean).join(' · ') || null };
   }
   let host = '';
   try { host = new URL(t.r).hostname.replace(/^www\./, '').toLowerCase(); } catch { /* sin sitio anterior */ }
