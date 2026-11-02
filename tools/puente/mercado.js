@@ -467,7 +467,8 @@ async function handle(req, res, p, u, h) {
   if (!p.startsWith('/puente/api/mercado/')) return false;
   if (p.startsWith('/puente/api/mercado/web/')) return handleWeb(req, res, p, u, h);
   // La imagen de la portada, sin sesion: la piden la tarjeta del chat y los que leen el og:image de la web
-  if (p === '/puente/api/mercado/portada.jpg' && req.method === 'GET') {
+  // (HEAD tambien: X y otros lectores de vistas previas preguntan primero; Node no manda el cuerpo)
+  if (p === '/puente/api/mercado/portada.jpg' && (req.method === 'GET' || req.method === 'HEAD')) {
     if (!sharp) { res.writeHead(302, { Location: '/puente/icono-512.png' }); return res.end(); }
     const buf = await portadaJpg();
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=900', 'X-Content-Type-Options': 'nosniff' });
