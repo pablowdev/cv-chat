@@ -305,12 +305,19 @@
     fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' })
       .then(r => r.json()).catch(() => null)
       .then(yo => { if (!enChat) webBar(yo); if (enForo) foroBar(yo); });
-    // Adentro de CV Chat: lo que lleva al chat se abre en el chat (no un chat adentro del chat)
+    // Adentro de CV Chat: lo que lleva al chat se abre en el chat (no un chat adentro del chat). La web
+    // no se deja mostrar adentro de otra pagina (quedaba la hoja rota y sin volver): el Marketplace abre
+    // el de CV Chat, y lo demas de la web (Inicio, la Wiki, Full Fat Search) se abre en el navegador
     if (enChat) {
       document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
         let u; try { u = new URL(a.href, location.href); } catch { return; }
+        if (u.origin === WEB || u.origin === 'https://www.' + DOM) {
+          if (/^\/marketplace\/?$/.test(u.pathname)) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'marketplace' }, CHAT); return; }
+          a.target = '_blank'; a.rel = 'noopener';
+          return;
+        }
         if (u.origin !== CHAT) return;
         e.preventDefault(); e.stopImmediatePropagation();
         window.top.location.href = u.href;

@@ -14657,9 +14657,16 @@ var puenteSinUbicacion = (function () {
     }, true);
     const a = window.app;
     if (a && typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function () { cerrar(); return sw.apply(this, arguments); }; }
-    // El foro pide abrir los mensajes directos (su "Mensajes")
+    // El foro pide abrir los mensajes directos (su "Mensajes") o el Marketplace (el de aca)
     window.addEventListener('message', (e) => {
-      if (e.origin !== FORO || !e.data || e.data.cv !== 'mensajes') return;
+      if (e.origin !== FORO || !e.data) return;
+      if (e.data.cv === 'marketplace') {
+        cerrar();
+        try { if (window.puenteMercado) { window.puenteMercado.abrir(); return; } } catch { /* sigue */ }
+        const b = document.querySelector('.puente-mk-btn'); if (b) b.click();
+        return;
+      }
+      if (e.data.cv !== 'mensajes') return;
       cerrar();
       const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click();
     });
