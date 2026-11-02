@@ -8,6 +8,7 @@
 //  GET /novedades?desde=<nodeid>&limite=<n>  temas y respuestas nuevos
 //  GET /ultimo                               el ultimo nodeid (para empezar sin publicar lo viejo)
 //  GET /tema?id=<nodeid>                     un tema o respuesta (para la vista previa de un enlace)
+//  GET /contexto?id=<nodeid>                 el tema o respuesta con su conversacion (debajo de un enlace al foro en CV Chat)
 //  GET /buscar?q=<texto>                     temas que lo mencionan
 //  GET /canal?ruta=<forum/...>               un foro (o la portada, con ruta vacia): nombre, cuentas y el ultimo tema
 //  GET /miembro?id=<userid>                  nombre, foto, mensajes y desde cuando (lo que se ve al lado de cada mensaje)
@@ -113,6 +114,38 @@ if ($ruta === '/tema') {
 		$s = $db->prepare('SELECT textcount FROM node WHERE nodeid = ?'); $s->execute([$x['tema_id']]); $x['respuestas'] = (int) $s->fetchColumn();
 	}
 	salir(['tema' => $x]);
+}
+
+// El tema (o la respuesta) con su conversacion, como se ve en CV Chat debajo de un enlace al foro: el
+// primer mensaje y las ultimas respuestas, o la respuesta del enlace con la anterior y la siguiente
+if ($ruta === '/contexto') {
+	$q = $db->prepare($sql . ' AND n.nodeid = ?');
+	$q->execute([(int) ($_GET['id'] ?? 0)]);
+	$r = $q->fetch();
+	if (!$r || !publico((int) $r['canal'])) { http_response_code(404); salir(['error' => 'no esta']); }
+	$x = $armar($r);
+	$tema = (int) $x['tema_id'];
+	$s = $db->prepare('SELECT textcount FROM node WHERE nodeid = ?'); $s->execute([$tema]); $x['respuestas'] = (int) $s->fetchColumn();
+	$filas = [];
+	if (!$x['es_tema']) {
+		$q->execute([$tema]);
+		if ($p = $q->fetch()) $filas[] = $armar($p);
+	}
+	$resp = $sql . ' AND n.starter = ? AND n.nodeid <> n.starter';
+	if ($x['es_tema']) {
+		$filas[] = $x;
+		$u = $db->prepare($resp . ' ORDER BY n.publishdate DESC, n.nodeid DESC LIMIT 3'); $u->execute([$tema]);
+		foreach (array_reverse($u->fetchAll()) as $y) $filas[] = $armar($y);
+	} else {
+		$a = $db->prepare($resp . ' AND (n.publishdate < ? OR (n.publishdate = ? AND n.nodeid < ?)) ORDER BY n.publishdate DESC, n.nodeid DESC LIMIT 1');
+		$a->execute([$tema, (int) $r['publishdate'], (int) $r['publishdate'], (int) $r['nodeid']]);
+		foreach ($a->fetchAll() as $y) $filas[] = $armar($y);
+		$x['marcado'] = true; $filas[] = $x;
+		$d = $db->prepare($resp . ' AND (n.publishdate > ? OR (n.publishdate = ? AND n.nodeid > ?)) ORDER BY n.publishdate, n.nodeid LIMIT 1');
+		$d->execute([$tema, (int) $r['publishdate'], (int) $r['publishdate'], (int) $r['nodeid']]);
+		foreach ($d->fetchAll() as $y) $filas[] = $armar($y);
+	}
+	salir(['tema' => $x, 'filas' => $filas]);
 }
 
 if ($ruta === '/buscar') {

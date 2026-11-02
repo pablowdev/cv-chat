@@ -1274,7 +1274,7 @@ async function handle(req, res) {
     const r = await foroServicio.handle(req, res, p, u);
     if (r !== false) return;
   }
-  if (p === '/puente/api/foro/buscar' || p === '/puente/api/foro/vivo') {
+  if (p === '/puente/api/foro/buscar' || p === '/puente/api/foro/vivo' || p === '/puente/api/foro/vista') {
     const r = await foroLector.handle(req, res, p, u);
     if (r !== false) return;
   }

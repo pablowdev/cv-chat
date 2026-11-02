@@ -183,6 +183,24 @@ async function vistaPrevia(enlace) {
   return data;
 }
 
+// Debajo de un enlace a un tema o una respuesta (web/aviso.js): el tema y su conversacion (el primer mensaje
+// y las ultimas respuestas, o la respuesta con la anterior y la siguiente), guardado 2 minutos
+const charlas = new Map();
+async function contexto(enlace) {
+  const d = nodoDe(enlace);
+  if (!d || d.tipo !== 'tema' || !on()) return null;
+  const c = charlas.get(d.id);
+  if (c && Date.now() - c.at < 2 * 60 * 1000) return c.data;
+  const r = await lector(`/contexto?id=${d.id}`);
+  const data = r && r.tema ? {
+    tema: r.tema.tema, canal: r.tema.canal, respuestas: r.tema.respuestas,
+    filas: (r.filas || []).slice(0, 5).map(f => ({ autor: f.autor, foto: f.foto || null, texto: f.texto, fecha: f.fecha, tema: !!f.es_tema, marcado: !!f.marcado })),
+  } : null;
+  charlas.set(d.id, { at: Date.now(), data });
+  if (charlas.size > 500) charlas.delete(charlas.keys().next().value);
+  return data;
+}
+
 // El foro que se actualiza solo (web/foro-vivo.js, en cada pagina del foro): pregunta cada tanto cual es
 // el ultimo tema o respuesta y, si cambio, trae la parte de la pagina que cambio. Es un numero publico,
 // sin sesion, guardado unos segundos para que muchas pestañas abiertas no lleguen a la base
@@ -201,6 +219,14 @@ async function handle(req, res, p, u) {
     res.setHeader('Cache-Control', 'no-store');
     if (!on()) return json(res, 503, { error: 'no' });
     try { return json(res, 200, { u: await ultimoPublico() }); } catch { return json(res, 503, { error: 'no' }); }
+  }
+  if (p === '/puente/api/foro/vista' && req.method === 'GET') {
+    const { json, sessionUser } = h;
+    if (!sessionUser(req)) return json(res, 401, { error: 'sin sesion' });
+    try {
+      const d = await contexto(String(u.searchParams.get('url') || '').trim().slice(0, 500));
+      return d ? json(res, 200, d) : json(res, 404, { error: 'no esta' });
+    } catch (err) { warn('foro: vista:', err.message); return json(res, 503, { error: 'no' }); }
   }
   if (p !== '/puente/api/foro/buscar' || req.method !== 'GET') return false;
   const { json, sessionUser } = h;

@@ -4936,8 +4936,84 @@ document.addEventListener('pointerdown', (ev) => {
       if (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(u)) return false;
       if (/^https:\/\/(media\d*\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\//i.test(u)) return false;
       if (/^https?:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/channels\//i.test(u)) return false; // enlace a un mensaje
+      if (a.dataset.embedDeferred === 'foro') return false; // un tema del foro: su conversacion (abajo)
       return true;
     });
+  }
+
+  // Un enlace a un tema o una respuesta del foro: en lugar de la vista previa (la de Discord repetia el
+  // texto, escrito y en la imagen), el tema con su conversacion, como el pedacito de un canal: el primer
+  // mensaje y las ultimas respuestas (foro-lector.js). Uno por mensaje, en el chat y en los hilos. Si no
+  // se puede (un tema que no es publico, el foro que no contesta), queda la vista previa de siempre
+  const FORO_TEMA = /^https?:\/\/foro\.[^/]+\/(?:node\/\d+|forum\/.+\/\d+-[^/?#]*)\/?(?:[?#].*)?$/i;
+  const sinHash = u => String(u || '').split('#')[0].replace(/\/+$/, '');
+  const foroDatos = new Map(); // enlace -> promesa con la conversacion (null si no hay)
+  function foroEnlace(msgEl) {
+    if (msgEl.dataset.foroSin === '1' || !msgEl.closest('#messages, #thread-panel')) return null;
+    return [...msgEl.querySelectorAll('.message-content a[href], .thread-msg-content a[href]')].find(a => !a.closest('.puente-embeds, .puente-vista-chat') && FORO_TEMA.test(a.href)) || null;
+  }
+  const deForo = (msgEl, e) => !!(msgEl.dataset.foroUrl && e && e.url && sinHash(e.url) === msgEl.dataset.foroUrl);
+  const cuando = (ms) => {
+    const d = new Date(ms); if (isNaN(d)) return '';
+    const hoy = new Date(), ayer = new Date(Date.now() - 864e5);
+    const hm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === hoy.toDateString()) return 'hoy ' + hm;
+    if (d.toDateString() === ayer.toDateString()) return 'ayer ' + hm;
+    return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  };
+  // Marca el enlace (Haven no busca su vista previa) y dibuja la conversacion; devuelve true si lo tomo
+  function foroVista(app, msgEl) {
+    const a = foroEnlace(msgEl);
+    if (!a) return false;
+    const url = sinHash(a.href);
+    msgEl.dataset.foroUrl = url;
+    a.dataset.embedDeferred = 'foro';
+    const cont = a.closest('.message-content, .thread-msg-content');
+    if (!cont || (cont.nextElementSibling && cont.nextElementSibling.classList.contains('puente-vista-foro'))) return true;
+    const tk = token();
+    if (!foroDatos.has(url)) {
+      foroDatos.set(url, !tk ? Promise.resolve(null) : fetch('/puente/api/foro/vista?url=' + encodeURIComponent(a.href), { headers: { Authorization: 'Bearer ' + tk } })
+        .then(r => (r.ok ? r.json() : r.status === 404 ? { no: true } : null)).catch(() => null)
+        .then(d => { if (!d) foroDatos.delete(url); return d && !d.no && Array.isArray(d.filas) && d.filas.length ? d : null; }));
+    }
+    foroDatos.get(url).then(d => {
+      if (!msgEl.isConnected) return;
+      if (!d) {
+        // Sin la conversacion: la vista previa de siempre
+        msgEl.dataset.foroSin = '1'; delete msgEl.dataset.foroUrl;
+        if (a.dataset.embedDeferred === 'foro') delete a.dataset.embedDeferred;
+        const list = known.get(msgEl.dataset.msgId);
+        if (list) { defer(msgEl, true); render(app, msgEl, list); } else try { app._fetchLinkPreviews(msgEl); } catch { /* sin vista previa */ }
+        return;
+      }
+      if (cont.nextElementSibling && cont.nextElementSibling.classList.contains('puente-vista-foro')) return;
+      const box = el('div', 'puente-vista-chat puente-vista-foro');
+      box.setAttribute('role', 'link'); box.tabIndex = 0; box.title = 'Abrir el tema';
+      box.append(el('div', 'puente-vista-cab', 'Foro · ' + d.canal), el('div', 'puente-vista-tema', d.tema));
+      for (const m of d.filas) {
+        const fila = el('div', 'puente-vista-fila' + (m.marcado ? ' marcado' : ''));
+        if (okUrl(m.foto)) { const i = el('img', 'puente-vista-foto'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; fila.append(i); }
+        else fila.append(el('span', 'puente-vista-foto', (m.autor || '?').trim().charAt(0).toUpperCase()));
+        const der = el('div', 'puente-vista-der');
+        const cab = el('div', 'puente-vista-quien');
+        cab.append(el('b', '', m.autor), el('span', '', ' ' + cuando(m.fecha)));
+        der.append(cab);
+        if (m.texto) der.append(el('div', 'puente-vista-texto', m.texto));
+        fila.append(der);
+        box.append(fila);
+      }
+      if (d.respuestas) box.append(el('div', 'puente-vista-pie', d.respuestas + (d.respuestas === 1 ? ' respuesta' : ' respuestas') + ' · Ver el tema'));
+      // Tocarlo abre el tema adentro de CV Chat (como el boton del foro); si no se puede, como el enlace
+      const ir = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (window.puenteForo) { try { const u = new URL(a.href); window.puenteForo.abrir(u.pathname + u.search + u.hash); return; } catch { /* como el enlace */ } }
+        a.click();
+      };
+      box.addEventListener('click', ir);
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter') ir(e); });
+      cont.after(box);
+    });
+    return true;
   }
   const msgsIn = (root) => {
     const list = root.matches && root.matches('[data-msg-id]') ? [root] : [...root.querySelectorAll('[data-msg-id]')];
@@ -5134,6 +5210,7 @@ document.addEventListener('pointerdown', (ev) => {
     const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (!content) return;
     content.querySelectorAll(':scope .link-preview, :scope > .puente-embeds').forEach(n => n.remove());
+    list = list.filter(e => !deForo(msgEl, e)); // (el tema del foro ya tiene su conversacion)
     if (!list.length) return;
     const box = el('div', 'puente-embeds');
     // Varias imagenes del mismo enlace (un tweet con 4 fotos): una tarjeta con la grilla, como Discord
@@ -5161,6 +5238,10 @@ document.addEventListener('pointerdown', (ev) => {
     app._fetchLinkPreviews = function (containerEl, ...rest) {
       const self = this;
       let msgs = [];
+      // Los enlaces a temas del foro: su conversacion, antes de que Haven elija sus vistas previas
+      try {
+        if (containerEl) for (const m of (containerEl.matches && containerEl.matches('[data-msg-id]') ? [containerEl] : containerEl.querySelectorAll('[data-msg-id]'))) foroVista(self, m);
+      } catch (err) { console.warn('[puente] foro:', err); }
       try { msgs = containerEl ? msgsIn(containerEl) : []; } catch { msgs = []; }
       if (!msgs.length) return orig.call(self, containerEl, ...rest);
       // Lo que ya se sabe (vino con el historial, o de antes) se dibuja ya, con el mensaje; solo se
