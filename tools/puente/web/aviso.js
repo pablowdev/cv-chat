@@ -15702,3 +15702,87 @@ var puenteSinUbicacion = (function () {
   enganchar();
   setInterval(enganchar, 1000);
 })();
+// Lo que se estaba escribiendo en cada canal (puente-borradores): al irse a otro canal y volver, sigue
+// en el cuadro, como en Discord. Se guarda en este navegador (tambien si se cierra la app), por cuenta;
+// se borra al mandarlo. Mientras se edita un mensaje, el cuadro tiene ese mensaje: no es un borrador
+(function () {
+  'use strict';
+  const MAX = 60, DIAS = 14;
+  const quien = () => { try { return String(JSON.parse(localStorage.getItem('haven_user') || '{}').id || ''); } catch { return ''; } };
+  const clave = () => 'puente_borradores_' + quien();
+  let todos = null;
+  function leer() {
+    if (todos) return todos;
+    try { todos = JSON.parse(localStorage.getItem(clave()) || '{}') || {}; } catch { todos = {}; }
+    const vence = Date.now() - DIAS * 864e5;
+    for (const k of Object.keys(todos)) if (!todos[k] || !todos[k].t || todos[k].at < vence) delete todos[k];
+    return todos;
+  }
+  function escribir() {
+    const b = leer(), ks = Object.keys(b);
+    if (ks.length > MAX) ks.sort((x, y) => b[x].at - b[y].at).slice(0, ks.length - MAX).forEach(k => delete b[k]);
+    try { localStorage.setItem(clave(), JSON.stringify(b)); } catch { /* sin lugar: queda en memoria */ }
+  }
+  const caja = () => document.getElementById('message-input');
+  const editando = () => !!document.querySelector('#messages .editing[data-msg-id], #messages [data-msg-id].editing');
+  function anotar(canal, texto) {
+    if (!canal || editando()) return;
+    const b = leer(), t = String(texto || '');
+    if (t.trim()) b[canal] = { t: t.slice(0, 4000), at: Date.now() };
+    else if (b[canal]) delete b[canal];
+    else return;
+    escribir();
+  }
+  const ahora = () => { const app = window.app, i = caja(); if (app && i) anotar(app.currentChannel, i.value); };
+  // Poner el texto en el cuadro sin avisar "escribiendo..." al canal
+  function poner(app, i, texto) {
+    if (i.value === texto) return;
+    app.lastTypingEmit = Date.now();
+    i.value = texto;
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+    try { i.setSelectionRange(texto.length, texto.length); } catch { /* nada */ }
+  }
+
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app.switchChannel !== 'function' || !caja() || !app.socket) { if (++tries < 120) setTimeout(wait, 500); return; }
+    let escrito = 0;
+    document.addEventListener('input', (e) => {
+      if (e.target !== caja() || !e.isTrusted) return;
+      escrito = Date.now();
+      anotar(app.currentChannel, e.target.value);
+    }, true);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') ahora(); });
+    addEventListener('pagehide', ahora);
+    // Lo mande: ya no es un borrador
+    app.socket.on('new-message', (d) => {
+      const i = caja(), m = d && d.message;
+      if (!i || !m || !app.user || m.user_id !== app.user.id || d.channelCode !== app.currentChannel) return;
+      anotar(d.channelCode, i.value);
+    });
+    const cambiar = app.switchChannel;
+    app.switchChannel = function (code) {
+      const antes = this.currentChannel, i = caja();
+      if (i && antes && antes !== code) anotar(antes, i.value);
+      const r = cambiar.apply(this, arguments);
+      if (!code || antes === code) return r;
+      const desde = Date.now();
+      // El del canal nuevo (o vacio), despues de lo que haga Haven al cambiar; si ya se empezo a escribir, no se pisa
+      const restaurar = () => {
+        const x = caja();
+        if (!x || this.currentChannel !== code || escrito > desde || editando()) return;
+        const b = leer()[code];
+        poner(this, x, b ? b.t : '');
+      };
+      setTimeout(restaurar, 0);
+      Promise.resolve(r).finally(() => setTimeout(restaurar, 50));
+      return r;
+    };
+    // Al abrir la app, el del canal que queda abierto
+    setTimeout(() => {
+      const i = caja(), b = app.currentChannel && leer()[app.currentChannel];
+      if (i && b && !i.value && escrito === 0) poner(app, i, b.t);
+    }, 1500);
+  })();
+})();
