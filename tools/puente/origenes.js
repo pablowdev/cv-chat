@@ -40,6 +40,14 @@ function setup(ctx) {
       n INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (dia, fuente)
     );
+    -- Las visitas que entraron por el enlace de un canal (/app?channel=<codigo>), de donde venian
+    CREATE TABLE IF NOT EXISTS puente_origen_canales (
+      dia TEXT NOT NULL,
+      canal TEXT NOT NULL,
+      fuente TEXT NOT NULL,
+      n INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (dia, canal, fuente)
+    );
   `);
 }
 
@@ -130,6 +138,8 @@ async function handle(req, res, p, u, h) {
     if (/bot|crawl|spider|preview|facebookexternalhit|WhatsApp\/|Discordbot|TelegramBot|Twitterbot|Slackbot/i.test(ua) || demasiadas(ip)) return h.json(res, 200, { ok: true });
     const { fuente } = clasificar(t, ua);
     db.prepare('INSERT INTO puente_origen_visitas (dia, fuente, n) VALUES (?, ?, 1) ON CONFLICT(dia, fuente) DO UPDATE SET n = n + 1').run(diaAR(Date.now()), fuente);
+    const canal = codigoCanal(t.l);
+    if (canal) db.prepare('INSERT INTO puente_origen_canales (dia, canal, fuente, n) VALUES (?, ?, ?, 1) ON CONFLICT(dia, canal, fuente) DO UPDATE SET n = n + 1').run(diaAR(Date.now()), canal, fuente);
     return h.json(res, 200, { ok: true });
   }
 
@@ -184,6 +194,13 @@ function estimados() {
   estCache = { at: Date.now(), map: out };
   return out;
 }
+
+// El canal de un aterrizaje (chat.../app?channel=<codigo>), y como se muestra: "#nombre"
+const codigoCanal = (l) => { const m = /\/app\?channel=([a-f0-9]{8})$/i.exec(String(l || '')); return m ? m[1].toLowerCase() : null; };
+function nombreCanal(code) {
+  try { const c = db.prepare('SELECT name, is_dm FROM channels WHERE code = ?').get(code); return c && !c.is_dm ? '#' + c.name : 'un canal que ya no está'; } catch { return code; }
+}
+const aterrizajeLindo = (l) => { const c = codigoCanal(l); return c ? 'el enlace de ' + nombreCanal(c) : l; };
 
 // ── Para los administradores ──
 const RANGOS = { '7d': 7, '4s': 28, '3m': 90, '1a': 365, '30d': 30, '90d': 90, todo: 3650 };
@@ -245,8 +262,9 @@ function resumen(rango) {
     recientes: cuentas.filter(c => origen.has(c.id)).sort((a, b) => b.ms - a.ms).slice(0, 40).map(c => {
       const o = origen.get(c.id);
       return { id: c.id, nombre: c.nombre, usuario: c.username, avatar: c.avatar || null, desde: new Date(c.ms).toISOString(),
-        fuente: o.fuente, detalle: o.detalle, aterrizaje: o.aterrizaje || null, campania: o.campania || null, dispositivo: o.dispositivo || null, estimado: !!o.estimado };
+        fuente: o.fuente, detalle: o.detalle, aterrizaje: o.aterrizaje ? aterrizajeLindo(o.aterrizaje) : null, campania: o.campania || null, dispositivo: o.dispositivo || null, estimado: !!o.estimado };
     }),
+    canales: enlacesCanales(desde, cuentas, anotado),
     dominio: dominio(),
   };
 }
@@ -257,6 +275,18 @@ function deCadaUno() {
   try { for (const [id, e] of estimados()) out.set(id, e); } catch { /* sin estimacion */ }
   try { for (const r of db.prepare('SELECT user_id, fuente, detalle FROM puente_origenes').all()) out.set(r.user_id, { fuente: r.fuente, detalle: r.detalle }); } catch { /* sin la tabla */ }
   return out;
+}
+
+// Los enlaces de canales: por canal, las visitas (y desde donde) y las cuentas que se crearon
+function enlacesCanales(desde, cuentas, anotado) {
+  const por = new Map();
+  const de = (code) => { if (!por.has(code)) por.set(code, { canal: nombreCanal(code), visitas: 0, cuentas: 0, fuentes: new Map() }); return por.get(code); };
+  let filas = [];
+  try { filas = db.prepare('SELECT canal, fuente, SUM(n) n FROM puente_origen_canales WHERE dia >= ? GROUP BY canal, fuente').all(diaAR(desde)); } catch { /* sin la tabla */ }
+  for (const r of filas) { const x = de(r.canal); x.visitas += r.n; x.fuentes.set(r.fuente, (x.fuentes.get(r.fuente) || 0) + r.n); }
+  for (const c of cuentas) { const o = anotado.get(c.id), code = o && codigoCanal(o.aterrizaje); if (code) de(code).cuentas++; }
+  return [...por.values()].sort((a, b) => b.visitas - a.visitas || b.cuentas - a.cuentas).slice(0, 20)
+    .map(x => ({ canal: x.canal, visitas: x.visitas, cuentas: x.cuentas, fuentes: [...x.fuentes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([f, n]) => f + ' ' + n).join(' · ') }));
 }
 
 module.exports = { setup, handle, deCadaUno, clasificar, resumen };

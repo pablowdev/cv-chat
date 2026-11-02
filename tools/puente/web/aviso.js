@@ -1,3 +1,28 @@
+// El enlace de un canal (o de un mensaje) abierto sin sesion: Haven manda a la pagina de entrar sin
+// el ?channel=, y al entrar o crearse la cuenta quedaba en el canal de inicio. Se guarda aca (en la
+// pestaña) y al volver a /app con la sesion abierta se lo vuelve a poner, antes de que Haven lo lea
+(function () {
+  'use strict';
+  try {
+    const q = new URLSearchParams(location.search);
+    const tk = localStorage.getItem('haven_token');
+    const ch = q.get('channel'), msg = q.get('message');
+    if (!tk) {
+      if (ch && /^[a-f0-9]{8}$/i.test(ch)) {
+        sessionStorage.setItem('haven_pending_channel', ch);
+        if (msg && /^\d+$/.test(msg)) sessionStorage.setItem('haven_pending_message', msg); else sessionStorage.removeItem('haven_pending_message');
+      }
+      return;
+    }
+    const guardado = sessionStorage.getItem('haven_pending_channel');
+    if (!guardado || ch || q.get('invite') || !/^[a-f0-9]{8}$/i.test(guardado)) return;
+    const m = sessionStorage.getItem('haven_pending_message');
+    q.set('channel', guardado);
+    if (m && /^\d+$/.test(m)) q.set('message', m);
+    history.replaceState(history.state, '', location.pathname + '?' + q.toString() + location.hash);
+  } catch { /* sin almacenamiento */ }
+})();
+
 // Vibracion cortita al abrir el perfil o el menu de una persona en el celular,
 // como en la app de Discord (Android; en iPhone el navegador no lo permite)
 function haptic() {
@@ -2874,6 +2899,17 @@ function leido(sc) {
       const maxD = Math.max(1, ...d.detalles.map(x => x.cuentas));
       for (const x of d.detalles) det.appendChild(filaBarra(x.detalle, x.cuentas, maxD, fmt(x.cuentas)));
       box.appendChild(tarjeta('Sitios y enlaces', det));
+    }
+    // Los enlaces de canales (el botón de la cadenita): cuántos entraron por cada uno y desde dónde
+    if (d.canales && d.canales.length) {
+      const can = el('div');
+      const maxC = Math.max(1, ...d.canales.map(x => x.visitas));
+      for (const x of d.canales) {
+        can.appendChild(filaBarra(x.canal, x.visitas, maxC, fmt(x.visitas) + (x.visitas === 1 ? ' visita' : ' visitas') + (x.cuentas ? ' · ' + fmt(x.cuentas) + (x.cuentas === 1 ? ' cuenta' : ' cuentas') : '')));
+        if (x.fuentes) can.appendChild(el('div', 'pe-nota', 'Desde: ' + x.fuentes));
+      }
+      can.appendChild(el('div', 'pe-nota', 'Para saber de qué publicación vino cada uno, agregale al enlace una etiqueta: &de=x, &de=whatsapp, &de=instagram...'));
+      box.appendChild(tarjeta('Enlaces a canales', can));
     }
     // Las ultimas cuentas, una por una
     const rec = el('div', 'po-lista');

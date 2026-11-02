@@ -28,7 +28,9 @@
   var deAfuera = !!etiqueta || !!invita || (!!refHost && !propio);
   var ya = leer();
   if (!ya || deAfuera) {
-    var t = { r: refHost ? ref.split('?')[0].split('#')[0].slice(0, 300) : '', l: (host + location.pathname).slice(0, 200), d: etiqueta.slice(0, 40),
+    // (el enlace de un canal dice cual: /app?channel=<codigo>)
+    var canal = /^\/app/.test(location.pathname) && /^[a-f0-9]{8}$/i.test(q.get('channel') || '') ? '?channel=' + q.get('channel') : '';
+    var t = { r: refHost ? ref.split('?')[0].split('#')[0].slice(0, 300) : '', l: (host + location.pathname + canal).slice(0, 200), d: etiqueta.slice(0, 40),
       c: (q.get('utm_campaign') || '').slice(0, 60), m: (q.get('utm_medium') || '').slice(0, 40), i: invita.slice(0, 40), a: android ? 'android' : '', t: Date.now() };
     try {
       document.cookie = 'cv_origen=' + encodeURIComponent(JSON.stringify(t)) + '; max-age=7776000; path=/; SameSite=Lax' +
