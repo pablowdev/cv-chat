@@ -1335,7 +1335,8 @@ function shareTags(html, url) {
       const id = /^\d+$/.test(chq.get('mercado') || '') ? chq.get('mercado') : '';
       title = `${v.title} · ${appName()}`; desc = String(v.description || '').replace(/\s+/g, ' ').trim();
       if (v.image) { image = v.image; grande = true; medidas = !id; }
-      enlace = id ? `/app?mercado=${id}` : '/app?mercado';
+      // la direccion tal cual se compartio (con su ?de=...): si no, X usa la tarjeta que ya tenia guardada de la otra
+      enlace = '/app?' + [...chq].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && x.length <= 60).map(([k, x]) => x ? `${k}=${encodeURIComponent(x)}` : k).join('&');
     }
   }
   const tags = `<meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}">` +
