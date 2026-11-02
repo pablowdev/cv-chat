@@ -2690,7 +2690,11 @@ function leido(sc) {
     const lista = el('div');
     const maxF = Math.max(1, ...d.fuentes.map(f => f.cuentas));
     for (const f of d.fuentes) {
-      const pct = f.visitas ? ' · ' + Math.round((f.cuentas / f.visitas) * 100) + '% de ' + fmt(f.visitas) + (f.visitas === 1 ? ' visita' : ' visitas') : '';
+      // Que parte de las visitas termino en una cuenta: solo con las cuentas anotadas (las estimadas son de
+      // antes de que se contaran las visitas) y si da algo con sentido; si no, solo cuantas visitas hubo
+      const medidas = f.cuentas - (f.estimadas || 0);
+      const nVis = fmt(f.visitas) + (f.visitas === 1 ? ' visita' : ' visitas');
+      const pct = !f.visitas ? '' : medidas > 0 && medidas <= f.visitas ? ' · ' + Math.round((medidas / f.visitas) * 100) + '% de ' + nVis : ' · ' + nVis;
       const est = f.estimadas ? ' (' + (f.estimadas === f.cuentas ? 'estimado' : fmt(f.estimadas) + ' estimadas') + ')' : '';
       lista.appendChild(filaBarra(f.fuente, f.cuentas, maxF, fmt(f.cuentas) + (f.cuentas === 1 ? ' cuenta' : ' cuentas') + est + pct));
     }
