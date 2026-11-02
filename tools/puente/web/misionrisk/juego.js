@@ -102,7 +102,13 @@
     const acc = el('div', 'jg-acciones');
     acc.append(
       btn('Crear partida', 'jg-primario', () => A.go('mrCrear')),
-      btn('Jugar con la compu', '', async () => { const r = await A.emit('mr:crear', { total: 4, modo: 'compu', nivel: 2, misiones: true }); if (r.error) return A.toast(r.error, 'error'); A.go('mrMesa', r.id); }),
+      btn('Jugar con la compu', '', async () => {
+        const misiones = await elegirModo();
+        if (misiones === null) return;
+        const r = await A.emit('mr:crear', { total: 4, modo: 'compu', nivel: 2, misiones });
+        if (r.error) return A.toast(r.error, 'error');
+        A.go('mrMesa', r.id);
+      }),
       btn('Cómo se juega', 'jg-suave', () => A.go('mrReglas')),
     );
     hero.appendChild(acc); b.appendChild(hero);
@@ -146,6 +152,21 @@
       rk.appendChild(l);
     }
     b.appendChild(credito());
+  }
+  // Con misiones secretas o a conquistar el mundo (como la casilla "Misión" del original).
+  // Devuelve true, false o null (si se cierra sin elegir)
+  function elegirModo() {
+    return new Promise((res) => {
+      const fondo = el('div', 'jg-aviso-fondo');
+      const box = el('div', 'jg-aviso'); box.setAttribute('role', 'dialog');
+      const acc = el('div', 'jg-aviso-acc mr-modos');
+      const fin = (v) => { fondo.remove(); res(v); };
+      acc.append(btn('Con misiones secretas', 'jg-primario', () => fin(true)), btn('Conquistar el mundo', 'jg-primario', () => fin(false)), btn('Cancelar', '', () => fin(null)));
+      box.append(el('div', 'jg-aviso-t', '¿Cómo querés jugar?'), el('div', 'jg-aviso-s', 'Con misiones, cada ejército recibe una secreta (aniquilar a otro, conquistar dos continentes u ocupar 18 países). Sin misiones, gana el que conquista el mundo.'), acc);
+      fondo.appendChild(box);
+      fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(null); });
+      A.page().appendChild(fondo);
+    });
   }
   function credito() {
     const c = el('div', 'mr-credito');

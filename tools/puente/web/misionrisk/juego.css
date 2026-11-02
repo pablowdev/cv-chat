@@ -63,3 +63,5 @@
 .puente-jg .mr-mision { text-align: center; }
 .puente-jg .mr-mision-sello { display: inline-block; margin-bottom: 0.5rem; padding: 0.125rem 0.625rem; border: 2px solid #f23f43; border-radius: 0.25rem; color: #f23f43; font-weight: 800; letter-spacing: 0.1em; transform: rotate(-4deg); }
 .puente-jg .mr-mision .jg-aviso-acc { justify-content: center; }
+.puente-jg .mr-modos { flex-wrap: wrap; }
+.puente-jg .mr-modos .jg-btn { flex: 1 1 auto; }
