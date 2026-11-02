@@ -428,6 +428,8 @@ function lista(q, me) {
   const order = q.get('orden') === 'barato' ? 'm.precio IS NULL, m.precio ASC' : q.get('orden') === 'caro' ? 'm.precio IS NULL, m.precio DESC' : 'm.renovado DESC';
   const desde = Math.max(0, Number(q.get('desde')) || 0);
   const rows = db.prepare(`SELECT m.* FROM puente_mercado m WHERE ${cond.join(' AND ')} ORDER BY ${order}, m.id DESC LIMIT ${PAGE + 1} OFFSET ?`).all(...params, desde);
+  // (las busquedas, para las estadisticas: medidas.js)
+  if (text && !desde) { try { require('./medidas.js').busqueda('mercado', text, rows.length); } catch { /* sin medir */ } }
   return { items: rows.slice(0, PAGE).map(r => card(r, me)), mas: rows.length > PAGE };
 }
 

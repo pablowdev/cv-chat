@@ -229,7 +229,7 @@ function calcular(rango) {
     const a = U.entre(ini, fin), b = U.entre(iniAnt, finAnt);
     const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege' };
     const nombreSec = (k) => k.startsWith('c:') ? (nombres.has(Number(k.slice(2))) ? '#' + nombres.get(Number(k.slice(2))).name : 'Otro canal')
-      : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? 'Juegos · ' + (juegos[k.slice(2)] || k.slice(2)) : k === 'mercado' ? 'Marketplace'
+      : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? (juegos[k.slice(2)] ? 'Juegos · ' + juegos[k.slice(2)] : 'Juegos (el menú)') : k === 'mercado' ? 'Marketplace'
         : k === 'foro' ? 'Foro' : k === 'miembros' ? 'Panel de administradores' : 'Otras pantallas';
     const secciones = new Map();
     for (const [k, s] of a.porSeccion) { const n = nombreSec(k); secciones.set(n, (secciones.get(n) || 0) + s); }
@@ -250,11 +250,11 @@ function calcular(rango) {
   // Volver: conectarse (puente_activos) o, para los dias de antes de que se anotara, escribir en CV Chat
   // (esas semanas quedan como aproximadas: no cuentan a quien solo leyo)
   const retencion = [];
+  const diasDe = new Map(); // persona -> dias (ms) en que se conecto o escribio en CV Chat
   try {
     const hoyMs = Date.parse(hoyAR() + 'T00:00:00Z');
     const lunesHoy = hoyMs - ((new Date(hoyMs).getUTCDay() + 6) % 7) * 864e5;
     const desdeAct = desdeActivos ? Date.parse(desdeActivos + 'T00:00:00Z') : hoyMs;
-    const diasDe = new Map();
     const anotar = (uid, ms) => { if (!diasDe.has(uid)) diasDe.set(uid, []); diasDe.get(uid).push(ms); };
     for (const a of db.prepare('SELECT dia, user_id FROM puente_activos').all()) anotar(a.user_id, Date.parse(a.dia + 'T00:00:00Z'));
     for (const m of db.prepare(`SELECT m.user_id, m.created_at FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id
@@ -281,8 +281,117 @@ function calcular(rango) {
     }
   } catch (err) { warn('estadisticas (retencion):', err.message); }
 
+  // ── Lo de mas: retencion segun de donde llegaron, quienes dejaron de venir, grupos, que tan pegada
+  // es la comunidad, quien trajo a quien, que tipo de mensajes se escriben y medidas.js ──
+  const extra = {};
+  const r1 = (x) => Math.round(x * 10) / 10;
+  try {
+    const DIA = 864e5, hoyMs = Date.parse(hoyAR() + 'T00:00:00Z');
+    const iniMs = Date.parse(ini + 'T00:00:00Z');
+    const desdeAct = desdeActivos ? Date.parse(desdeActivos + 'T00:00:00Z') : hoyMs;
+    const dias = (uid) => diasDe.get(uid) || [];
+    const usuarios = db.prepare("SELECT id, username, COALESCE(display_name, username) nombre, avatar, created_at FROM users WHERE username != 'discord-historial' AND COALESCE(is_guest, 0) = 0").all();
+    const creadoDe = new Map(usuarios.map(u => { const dh = diaHora(u.created_at); return [u.id, dh ? Date.parse(dh.dia + 'T00:00:00Z') : 0]; }));
+    let origenes = new Map();
+    try { origenes = require('./origenes.js').deCadaUno(); } catch { /* sin origenes */ }
+
+    // Si vuelven, segun de donde llegaron: los que llegaron hace entre 8 y 56 dias
+    const porFuente = new Map();
+    for (const u of usuarios) {
+      const c = creadoDe.get(u.id);
+      if (!c || c > hoyMs - 8 * DIA || c < hoyMs - 56 * DIA) continue;
+      const fu = (origenes.get(u.id) || {}).fuente || 'Sin dato';
+      const x = porFuente.get(fu) || { fuente: fu, personas: 0, semana1: 0, siguen: 0 };
+      x.personas++;
+      const d = dias(u.id);
+      if (d.some(t => t > c && t <= c + 7 * DIA)) x.semana1++;
+      if (d.some(t => t > hoyMs - 14 * DIA)) x.siguen++;
+      porFuente.set(fu, x);
+    }
+    extra.retencionOrigen = [...porFuente.values()].filter(x => x.personas >= 2)
+      .map(x => ({ fuente: x.fuente, personas: x.personas, semana1: Math.round((x.semana1 / x.personas) * 100), siguen: Math.round((x.siguen / x.personas) * 100) }))
+      .sort((a, b) => b.personas - a.personas);
+
+    // Dejaron de venir: entraron al menos 3 dias entre hace 15 y 56 dias, y ninguno en los ultimos 14
+    const riesgo = [];
+    for (const u of usuarios) {
+      const d = dias(u.id);
+      if (!d.length) continue;
+      const ult = Math.max(...d);
+      if (ult > hoyMs - 14 * DIA) continue;
+      const antes = new Set(d.filter(t => t > hoyMs - 56 * DIA)).size;
+      if (antes < 3) continue;
+      riesgo.push({ id: u.id, nombre: u.nombre, usuario: u.username, avatar: u.avatar || null, ultimo: new Date(ult).toISOString().slice(0, 10), dias: antes });
+    }
+    extra.enRiesgo = riesgo.sort((a, b) => b.dias - a.dias || (a.ultimo < b.ultimo ? 1 : -1)).slice(0, 40);
+    extra.enRiesgoTotal = riesgo.length;
+
+    // Grupos: los activos del periodo, por dispositivo, antiguedad y de donde llegaron
+    const activosP = new Map();
+    for (const [uid, d] of diasDe) { const n = new Set(d.filter(t => t >= iniMs && t <= hoyMs)).size; if (n && creadoDe.has(uid)) activosP.set(uid, n); }
+    let segDe = new Map();
+    try { segDe = require('./uso.js').entre(ini, fin).porPersona; } catch { /* sin medir */ }
+    const msjDe = new Map(db.prepare(`SELECT m.user_id, COUNT(*) n FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id LEFT JOIN channels c ON c.id = m.channel_id
+                                      WHERE m.created_at >= ? AND m.user_id IS NOT NULL AND m.imported_from IS NULL AND COALESCE(m.is_webhook, 0) = 0 AND pa.message_id IS NULL AND COALESCE(c.is_dm, 0) = 0
+                                      GROUP BY m.user_id`).all(ini + ' 03:00:00').map(x => [x.user_id, x.n]));
+    let pres = new Map();
+    try { pres = require('./presencia.js').todas(); } catch { /* sin presencia */ }
+    const grupos = new Map();
+    const sumar = (g, tipo, uid) => {
+      const x = grupos.get(g) || { grupo: g, tipo, personas: 0, dias: 0, seg: 0, msj: 0 };
+      x.personas++; x.dias += activosP.get(uid); x.seg += segDe.get(uid) || 0; x.msj += msjDe.get(uid) || 0;
+      grupos.set(g, x);
+    };
+    for (const uid of activosP.keys()) {
+      const p = pres.get(uid);
+      for (const [k, ms] of Object.entries((p && p.cuando) || {})) if (ms >= msIniDia) sumar(k, 'dispositivo', uid);
+      sumar(creadoDe.get(uid) > hoyMs - 30 * DIA ? 'Nuevos (menos de 30 días)' : 'Veteranos (más de 30 días)', 'antiguedad', uid);
+      const fu = (origenes.get(uid) || {}).fuente;
+      if (fu) sumar('Llegaron desde ' + fu, 'origen', uid);
+    }
+    const deOrigen = [...grupos.values()].filter(g => g.tipo === 'origen').sort((a, b) => b.personas - a.personas).slice(0, 4);
+    extra.grupos = [...grupos.values()].filter(g => g.tipo !== 'origen').concat(deOrigen).filter(g => g.personas >= 3)
+      .map(g => ({ grupo: g.grupo, tipo: g.tipo, personas: g.personas, dias: r1(g.dias / g.personas), minutos: g.dias ? r1(g.seg / 60 / g.dias) : 0, mensajes: r1(g.msj / g.personas) }));
+
+    // Que tan pegada es: promedio de activos por dia sobre los activos del mes (DAU/MAU), y cuantos dias
+    // de la ultima semana entro cada uno de los que entraron (con los dias desde que se anotan las conexiones)
+    const desdeP = Math.max(desdeAct, hoyMs - 29 * DIA);
+    const porDia = new Map(), mes = new Set();
+    for (const [uid, d] of diasDe) for (const t of new Set(d)) if (t >= desdeP && t <= hoyMs) { mes.add(uid); porDia.set(t, (porDia.get(t) || 0) + 1); }
+    const nDias = Math.max(1, Math.round((hoyMs - desdeP) / DIA) + 1);
+    const dau = [...porDia.values()].reduce((a, b) => a + b, 0) / nDias;
+    const semana = [0, 0, 0, 0, 0, 0, 0];
+    for (const [, d] of diasDe) { const n = new Set(d.filter(t => t > hoyMs - 7 * DIA && t <= hoyMs)).size; if (n) semana[Math.min(7, n) - 1]++; }
+    extra.pegada = { dau: r1(dau), mau: mes.size, pct: mes.size ? Math.round((dau / mes.size) * 100) : 0, dias: nDias, semana };
+
+    // Quien trajo a quien: las invitaciones y los enlaces ?invita=, y cuantos de esos siguen viniendo
+    const traidos = new Map();
+    const anotarInv = (quien, uid) => { if (!quien || !uid) return; if (!traidos.has(quien)) traidos.set(quien, new Set()); traidos.get(quien).add(uid); };
+    try { for (const x of db.prepare('SELECT invita_id, invitado_id FROM puente_invitaciones').all()) anotarInv(x.invita_id, x.invitado_id); } catch { /* sin la tabla */ }
+    const porUsuario = new Map(usuarios.map(u => [u.username.toLowerCase(), u.id]));
+    for (const [uid, o] of origenes) if (o && o.fuente === 'Invitación' && o.detalle) anotarInv(porUsuario.get(String(o.detalle).replace(/^@/, '').toLowerCase()), uid);
+    const nombreDe = new Map(usuarios.map(u => [u.id, u]));
+    extra.invitadores = [...traidos].filter(([id]) => nombreDe.has(id)).map(([id, set]) => ({
+      id, nombre: nombreDe.get(id).nombre, usuario: nombreDe.get(id).username, trajo: set.size,
+      siguen: [...set].filter(uid => dias(uid).some(t => t > hoyMs - 14 * DIA)).length,
+    })).sort((a, b) => b.siguen - a.siguen || b.trajo - a.trajo).slice(0, 20);
+
+    // Que tipo de mensajes se escriben en los canales desde CV Chat
+    const t = db.prepare(`SELECT COUNT(*) total, SUM(m.reply_to IS NOT NULL) respuestas, SUM(m.content LIKE '%/uploads/%') archivos, SUM(m.poll_data IS NOT NULL) encuestas,
+                                 SUM(m.content LIKE '%tenor.com%' OR m.content LIKE '%giphy.com%') gifs, SUM(m.content LIKE '%http%') enlaces
+                          FROM messages m LEFT JOIN puente_autores pa ON pa.message_id = m.id LEFT JOIN channels c ON c.id = m.channel_id
+                          WHERE m.created_at >= ? AND m.user_id IS NOT NULL AND m.imported_from IS NULL AND COALESCE(m.is_webhook, 0) = 0 AND pa.message_id IS NULL AND COALESCE(c.is_dm, 0) = 0`).get(ini + ' 03:00:00');
+    extra.tipos = t;
+
+    // Llegadas desde los mails y las notificaciones (las visitas con esa etiqueta)
+    const vis = (fu) => (db.prepare('SELECT COALESCE(SUM(n), 0) n FROM puente_origen_visitas WHERE fuente = ? AND dia >= ?').get(fu, ini) || {}).n || 0;
+    extra.desdeMail = vis('Email');
+    extra.desdeNotificacion = (db.prepare("SELECT COALESCE(SUM(n), 0) n FROM puente_contadores WHERE clave = 'notificacion' AND dia >= ?").get(ini) || {}).n || 0;
+  } catch (err) { warn('estadisticas (extra):', err.message); }
+  try { extra.medidas = require('./medidas.js').datos(ini, fin, iniAnt, finAnt); } catch (err) { warn('estadisticas (medidas):', err.message); }
+
   return {
-    rango, desde: ini, hasta: fin, paso: r.paso, tiempo, retencion,
+    rango, desde: ini, hasta: fin, paso: r.paso, tiempo, retencion, extra,
     etiquetas: ps.map(p => p.etiqueta),
     serie: { nuevos, cv: serie.cv, dc: serie.dc, dm: serie.dm, activos },
     totales: {
@@ -318,4 +427,13 @@ async function handle(req, res, p, u, h) {
   return h.json(res, 200, datos);
 }
 
-module.exports = { setup, handle };
+// Para el informe semanal y las alertas (informe.js): los mismos datos, con el mismo cache
+function datos(rango) {
+  const c = cache.get(rango);
+  if (c && Date.now() - c.at < 5 * 60 * 1000) return c.datos;
+  const d = calcular(rango);
+  cache.set(rango, { at: Date.now(), datos: d });
+  return d;
+}
+
+module.exports = { setup, handle, datos };

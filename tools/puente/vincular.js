@@ -1227,6 +1227,10 @@ async function handle(req, res) {
     const r = await require('./mudanza-plan.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p === '/puente/api/medir') {
+    const r = await require('./medidas.js').handle(req, res, p, u, { json, allowedOrigin: cuenta.allowedOrigin });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/uso') {
     const r = await require('./uso.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;

@@ -494,13 +494,14 @@ function memoryOf(m, years, n, channels = channelMap()) {
   if (!c) return null;
   const best = { years, n };
   const base = (publicUrl || '').replace(/\/+$/, '');
-  const media = mediaOf(m.content);
-  // Con las imagenes adjuntas, sin el 🖼️ que las reemplazaba en el texto
-  const texto = media.files.length || media.links.length
+  const fotos = mediaOf(m.content);
+  // Sin las imagenes en grande: el recorte del chat que arma el enlace ya las muestra en chico.
+  // Del texto se sacan (sin el 🖼️ que las reemplazaba)
+  const texto = fotos.files.length || fotos.links.length
     ? excerpt(String(m.content || '').replace(MEDIA_RE, ' ').replace(EXT_IMG_RE, ' '), 300) : excerpt(m.content, 300);
   return {
     id: m.id, years: best.years, n: best.n, canal: c, nombre: nameOf(m) || 'Alguien',
-    texto, media, fecha: m.created_at,
+    texto, media: { files: [], links: [] }, fecha: m.created_at,
     url: `${base}/app?channel=${encodeURIComponent(c.code)}&message=${m.id}`,
   };
 }

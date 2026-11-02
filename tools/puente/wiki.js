@@ -303,6 +303,7 @@ async function handle(req, res, p, u) {
         pedazo: i >= 0 ? (desde > 0 ? '…' : '') + plano.slice(desde, i + nt.length + 110) + (i + nt.length + 110 < plano.length ? '…' : '') : null });
     }
     out.sort((a, b) => b.puntaje - a.puntaje || a.titulo.localeCompare(b.titulo, 'es'));
+    try { require('./medidas.js').busqueda('wiki', t, out.length); } catch { /* sin medir */ }
     return json(res, 200, { resultados: out.slice(0, 50) });
   }
 

@@ -2118,6 +2118,7 @@ function leido(sc) {
     /^android-app:\/\/club\.circulovicioso\.chat/.test(document.referrer || '')) plataforma = 'android-app';
   else if (ios && instalada) plataforma = 'iphone-app';
   else plataforma = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || ios ? 'celular-web' : 'pc-web';
+  window.__puentePlataforma = plataforma; // (para los errores y la velocidad: mas abajo)
   let tries = 0;
   (function avisar() {
     let tk = null;
@@ -2413,7 +2414,7 @@ function leido(sc) {
     if (t && t.minutos[0]) {
       p3.push('; cada una pasó en promedio ', ['b', duracion(t.porDia[0])], ' por día que entró');
       if (t.porDia[1]) { const c = Math.round(((t.porDia[0] - t.porDia[1]) / t.porDia[1]) * 100); if (Math.abs(c) > 4) p3.push(' (' + (c > 0 ? c + '% más' : Math.abs(c) + '% menos') + ' que antes)'); }
-      const sec = (t.secciones || []).slice(0, 3).map(s => s.nombre);
+      const sec = (t.secciones || []).filter(s => s.nombre !== 'Panel de administradores').slice(0, 3).map(s => s.nombre);
       if (sec.length) p3.push(', sobre todo en ', ['b', sec.join(', ').replace(/, ([^,]*)$/, ' y $1')]);
     }
     out.push(frase(p3.concat('.')));
@@ -2490,10 +2491,173 @@ function leido(sc) {
     box.appendChild(el('div', 'pe-nota', 'Qué parte de los que llegaron cada semana volvió a entrar en cada una de las semanas siguientes.' + (filas.some(r => r.aprox) ? ' ≈: aproximado; antes del ' + etiqueta(d.activosDesde, 'dia') + ' solo cuenta a quien escribió (no a quien entró a leer).' : '')));
     return tarjeta('¿Vuelven?', box, 'pe-ancha');
   }
+  // ── Lo de mas (panel-estadisticas.js "extra" y medidas.js) ──
+  // Una tabla chica: cabecera y filas de celdas (texto); la primera columna, mas ancha
+  function tablaChica(cab, filas, nota) {
+    const box = el('div', 'pe-tabla');
+    const fila = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(8rem, 2fr) repeat(' + (cab.length - 1) + ', minmax(4.5rem, 1fr))'; celdas.forEach(c => f.appendChild(c instanceof Node ? c : el('span', '', c))); return f; };
+    box.appendChild(fila(cab, 'pe-tabla-cab'));
+    filas.forEach(c => box.appendChild(fila(c)));
+    if (nota) box.appendChild(el('div', 'pe-nota', nota));
+    return box;
+  }
+  const abrirPerfil = (id) => { const app = window.app; if (app && app.socket) { app._isHoverPopup = false; app._hoverTarget = null; app.socket.emit('get-user-profile', { userId: id }); } };
+  function tarjetasExtra(box, d) {
+    const x = d.extra || {}, m = x.medidas || {};
+    const desdeM = m.medidoDesde && m.medidoDesde > d.desde ? 'Se mide desde el ' + etiqueta(m.medidoDesde, 'dia') + '.' : '';
+    // Si vuelven, segun de donde llegaron
+    if (x.retencionOrigen) {
+      const filas = x.retencionOrigen.map(r => [r.fuente, fmt(r.personas), r.semana1 + '%', r.siguen + '%']);
+      box.appendChild(tarjeta('¿Vuelven? Según de dónde llegaron', filas.length ? tablaChica(['Llegaron desde', 'Personas', 'Volvieron la 1.ª semana', 'Siguen viniendo'], filas,
+        'Los que llegaron hace entre 1 y 8 semanas. "Siguen viniendo": entraron en las últimas 2 semanas.') : el('div', 'pe-nota', 'Todavía no hay datos.'), 'pe-ancha'));
+    }
+    // Quienes dejaron de venir
+    if (x.enRiesgo) {
+      const lista = el('div', 'pe-riesgo');
+      for (const p of x.enRiesgo) {
+        const f = el('button', 'pe-riesgo-fila'); f.type = 'button';
+        f.append(el('span', 'pe-riesgo-n', p.nombre), el('span', 'pe-riesgo-u', '@' + p.usuario), el('span', 'pe-riesgo-d', 'última vez: ' + etiqueta(p.ultimo, 'dia') + ' · ' + p.dias + ' días en las 8 semanas'));
+        f.addEventListener('click', () => abrirPerfil(p.id));
+        lista.appendChild(f);
+      }
+      if (!x.enRiesgo.length) lista.appendChild(el('div', 'pe-nota', 'Nadie: todos los que venían seguido siguen viniendo.'));
+      else lista.appendChild(el('div', 'pe-nota', (x.enRiesgoTotal > x.enRiesgo.length ? 'Los primeros ' + x.enRiesgo.length + ' de ' + fmt(x.enRiesgoTotal) + '. ' : '') + 'Entraron al menos 3 días en las últimas 8 semanas y ninguno en las últimas 2. Tocá a alguien para ver su perfil y escribirle.'));
+      box.appendChild(tarjeta('Dejaron de venir' + (x.enRiesgoTotal ? ' (' + fmt(x.enRiesgoTotal) + ')' : ''), lista));
+    }
+    // Que tan pegada es la comunidad
+    if (x.pegada && x.pegada.mau) {
+      const p = x.pegada, c = el('div');
+      const cab = el('div', 'pe-mudanza'); cab.append(el('span', 'pe-mudanza-n', p.pct + '%'), el('span', 'pe-mudanza-l', 'de los que entran en el mes entra cada día (' + fmt(p.dau) + ' de ' + fmt(p.mau) + ')'));
+      c.appendChild(cab);
+      const tot = p.semana.reduce((a, b) => a + b, 0), maxS = Math.max(1, ...p.semana);
+      p.semana.forEach((n, i) => c.appendChild(filaBarra((i + 1) + (i ? ' días' : ' día') + ' de 7', n, maxS, fmt(n) + ' · ' + pct(n, tot) + '%')));
+      c.appendChild(el('div', 'pe-nota', 'Arriba: el promedio de gente por día sobre la gente del mes (más es mejor; 20% ya es bueno). Abajo: cuántos días de la última semana entró cada uno de los que entraron.' + (p.dias < 30 ? ' Con ' + p.dias + ' días de datos.' : '')));
+      box.appendChild(tarjeta('¿Qué tan pegada es la comunidad?', c));
+    }
+    // Comparar grupos
+    if (x.grupos && x.grupos.length) {
+      const filas = x.grupos.map(g => [g.grupo, fmt(g.personas), String(g.dias).replace('.', ','), duracion(g.minutos), String(g.mensajes).replace('.', ',')]);
+      box.appendChild(tarjeta('Comparar grupos', tablaChica(['Grupo', 'Personas', 'Días que entró', 'Tiempo por día', 'Mensajes por persona'], filas,
+        'De los que entraron en este período. Alguien que usa celular y PC cuenta en los dos.'), 'pe-ancha'));
+    }
+    // Uso de funciones
+    if (m.funciones) {
+      const c = el('div');
+      const base = m.usuariosFn || Math.max(1, ...m.funciones.map(f => f.personas));
+      for (const f of m.funciones.slice(0, 20)) {
+        const [txt] = f.antes ? variacion(f.personas, f.antes) : [''];
+        c.appendChild(filaBarra(f.funcion, f.personas, base, fmt(f.personas) + (f.personas === 1 ? ' persona' : ' personas') + ' · ' + fmt(f.veces) + (f.veces === 1 ? ' vez' : ' veces') + (txt ? '  ' + txt : '')));
+      }
+      if (!m.funciones.length) c.appendChild(el('div', 'pe-nota', 'Todavía no hay datos.'));
+      if (m.nunca && m.nunca.length && m.funciones.length) c.appendChild(el('div', 'pe-nota', 'Nadie usó en este período: ' + m.nunca.join(', ') + '.'));
+      if (x.tipos && x.tipos.total) {
+        const t = x.tipos;
+        c.appendChild(el('div', 'pe-nota', 'De los ' + fmt(t.total) + ' mensajes escritos desde CV Chat en los canales: ' + pct(t.respuestas, t.total) + '% respuestas, ' + pct(t.archivos, t.total) + '% con fotos o archivos, ' +
+          pct(t.enlaces, t.total) + '% con enlaces, ' + fmt(t.gifs) + ' GIF y ' + fmt(t.encuestas) + ' encuestas.'));
+      }
+      if (desdeM) c.appendChild(el('div', 'pe-nota', desdeM));
+      box.appendChild(tarjeta('Uso de cada función', c, 'pe-ancha'));
+    }
+    // Errores y velocidad
+    if (m.cargas) {
+      const c = el('div');
+      if (m.cargas.length) c.appendChild(tablaChica(['Dispositivo', 'Aperturas', 'Tarda en abrir', 'Más de 8 s'], m.cargas.map(k => [k.dispositivo, fmt(k.veces), String(k.segundos).replace('.', ',') + ' s', fmt(k.lentas)])));
+      const e = el('div', 'pe-errores');
+      e.appendChild(el('div', 'pe-sub', m.erroresTotal ? fmt(m.erroresTotal) + (m.erroresTotal === 1 ? ' error' : ' errores') + ' en los dispositivos de la gente' : 'Sin errores anotados en este período.'));
+      for (const r of m.errores || []) {
+        const f = el('div', 'pe-error');
+        f.append(el('div', 'pe-error-m', r.mensaje), el('div', 'pe-error-d', fmt(r.n) + (r.n === 1 ? ' vez · ' : ' veces · ') + r.dispositivos.join(', ') + (r.donde ? ' · ' + r.donde : '') + ' · último: ' + etiqueta(r.ultimo, 'dia')));
+        e.appendChild(f);
+      }
+      c.appendChild(e);
+      if (desdeM) c.appendChild(el('div', 'pe-nota', desdeM));
+      box.appendChild(tarjeta('Errores y velocidad', c, 'pe-ancha'));
+    }
+    // Que se mira en la web, la wiki y el foro, y las busquedas
+    if (m.paginas) {
+      const c = el('div');
+      const lindo = (p) => p.replace(/^circulovicioso\.club/, 'web').replace(/^foro\.circulovicioso\.club/, 'foro').replace(/^chat\.circulovicioso\.club/, 'chat').replace(/^(web|foro|chat)$/, '$1 (portada)');
+      const maxV = Math.max(1, ...m.paginas.map(p => p.vistas));
+      for (const p of m.paginas.slice(0, 15)) c.appendChild(filaBarra(lindo(p.pagina), p.vistas, maxV, fmt(p.vistas) + (p.vistas === 1 ? ' vista · ' : ' vistas · ') + (p.seg >= 60 ? Math.round(p.seg / 60) + ' min' : p.seg + ' s') + ' · leída ' + p.lectura + '%'));
+      if (!m.paginas.length) c.appendChild(el('div', 'pe-nota', 'Todavía no hay datos.'));
+      else c.appendChild(el('div', 'pe-nota', 'Tiempo promedio a la vista y hasta dónde se bajó en la página, en promedio.' + (desdeM ? ' ' + desdeM : '')));
+      box.appendChild(tarjeta('Lo más visto en la web, la wiki y el foro', c));
+      const b = el('div');
+      const DONDE = { wiki: 'Wiki', ffs: 'Full Fat Search', mercado: 'Marketplace', chat: 'Chat' };
+      if (m.sinResultado && m.sinResultado.length) {
+        b.appendChild(el('div', 'pe-sub', 'No encontraron nada'));
+        for (const s of m.sinResultado.slice(0, 10)) b.appendChild(el('div', 'pe-busq pe-busq-sin', '“' + s.termino + '” · ' + (DONDE[s.donde] || s.donde) + ' · ' + fmt(s.sin) + (s.sin === 1 ? ' vez' : ' veces')));
+      }
+      if (m.busquedas && m.busquedas.length) {
+        b.appendChild(el('div', 'pe-sub', 'Lo más buscado'));
+        for (const s of m.busquedas.slice(0, 12)) b.appendChild(el('div', 'pe-busq', '“' + s.termino + '” · ' + (DONDE[s.donde] || s.donde) + ' · ' + fmt(s.veces) + (s.veces === 1 ? ' vez' : ' veces')));
+      } else b.appendChild(el('div', 'pe-nota', 'Todavía no hay búsquedas anotadas.'));
+      b.appendChild(el('div', 'pe-nota', 'En la wiki, Full Fat Search, el Marketplace y el buscador del chat.'));
+      box.appendChild(tarjeta('Búsquedas', b));
+    }
+    // Mails, notificaciones e invitaciones
+    const mi = el('div');
+    mi.appendChild(filaBarra('Llegaron desde un mail', x.desdeMail || 0, Math.max(1, x.desdeMail || 0, x.desdeNotificacion || 0), fmt(x.desdeMail || 0) + (x.desdeMail === 1 ? ' visita' : ' visitas')));
+    mi.appendChild(filaBarra('Tocaron una notificación', x.desdeNotificacion || 0, Math.max(1, x.desdeMail || 0, x.desdeNotificacion || 0), fmt(x.desdeNotificacion || 0) + (x.desdeNotificacion === 1 ? ' vez' : ' veces')));
+    mi.appendChild(el('div', 'pe-nota', 'Mails: los enlaces de los mails de CV Chat. Notificaciones: las tocadas con CV Chat abierto en la PC o el navegador (las de la app de Android no se ven). Cuántos mails se abren solo lo saben Resend y Brevo.'));
+    if (x.invitadores && x.invitadores.length) {
+      mi.appendChild(el('div', 'pe-sub', 'Quién trajo a quién'));
+      for (const i of x.invitadores) {
+        const f = el('button', 'pe-riesgo-fila'); f.type = 'button';
+        f.append(el('span', 'pe-riesgo-n', i.nombre), el('span', 'pe-riesgo-d', 'trajo ' + fmt(i.trajo) + ' · siguen viniendo ' + fmt(i.siguen)));
+        f.addEventListener('click', () => abrirPerfil(i.id));
+        mi.appendChild(f);
+      }
+    }
+    box.appendChild(tarjeta('Mails, notificaciones e invitaciones', mi));
+  }
+  // ── Bajar en planilla (CSV, con ; para que Excel en castellano lo abra bien) ──
+  function bajarCSV(nombre, filas) {
+    const celda = (v) => { const s = v == null ? '' : String(v); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const txt = '﻿' + filas.map(f => f.map(celda).join(';')).join('\r\n');
+    const a = el('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = nombre;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function csvEstadisticas(d) {
+    const f = [['Estadísticas de CV Chat', d.desde + ' a ' + d.hasta], []];
+    f.push(['Totales', 'Este período', 'Período anterior']);
+    for (const [k, l] of [['nuevos', 'Nuevos miembros'], ['activos', 'Activos'], ['cv', 'Mensajes desde CV Chat'], ['dc', 'Mensajes desde Discord'], ['dm', 'Mensajes privados'], ['reacciones', 'Reacciones'], ['partidas', 'Partidas'], ['publicaciones', 'Publicaciones del Marketplace']])
+      f.push([l].concat(d.totales[k] || []));
+    f.push([], ['Por período', 'Nuevos', 'Mensajes CV Chat', 'Mensajes Discord', 'Privados', 'Activos']);
+    d.etiquetas.forEach((e, i) => f.push([e, d.serie.nuevos[i], d.serie.cv[i], d.serie.dc[i], d.serie.dm[i], d.serie.activos[i]]));
+    f.push([], ['Canal', 'Mensajes', 'Período anterior']); for (const c of d.canales) f.push(['#' + c.nombre, c.n, c.ant]);
+    if (d.tiempo) { f.push([], ['Tiempo de uso', 'Minutos']); for (const s of d.tiempo.secciones) f.push([s.nombre, s.minutos]); }
+    const x = d.extra || {}, m = x.medidas || {};
+    if (m.funciones) { f.push([], ['Función', 'Personas', 'Veces']); for (const r of m.funciones) f.push([r.funcion, r.personas, r.veces]); }
+    if (x.grupos) { f.push([], ['Grupo', 'Personas', 'Días que entró', 'Minutos por día', 'Mensajes por persona']); for (const g of x.grupos) f.push([g.grupo, g.personas, g.dias, g.minutos, g.mensajes]); }
+    if (x.retencionOrigen) { f.push([], ['Llegaron desde', 'Personas', '% volvió la 1.ª semana', '% sigue viniendo']); for (const r of x.retencionOrigen) f.push([r.fuente, r.personas, r.semana1, r.siguen]); }
+    if (m.paginas) { f.push([], ['Página', 'Vistas', 'Segundos promedio', '% leído']); for (const p of m.paginas) f.push([p.pagina, p.vistas, p.seg, p.lectura]); }
+    if (m.busquedas) { f.push([], ['Búsqueda', 'Dónde', 'Veces', 'Sin resultado']); for (const b of m.busquedas) f.push([b.termino, b.donde, b.veces, b.sin]); }
+    if (x.enRiesgo) { f.push([], ['Dejaron de venir', 'Usuario', 'Última vez', 'Días en 8 semanas']); for (const p of x.enRiesgo) f.push([p.nombre, p.usuario, p.ultimo, p.dias]); }
+    bajarCSV('estadisticas-cv-chat-' + d.rango + '-' + d.hasta + '.csv', f);
+  }
+  function csvMiembros(lista) {
+    const f = [['Nombre', 'Usuario', 'Email', 'Email confirmado', 'Miembro desde', 'Discord', 'Mensajes en CV Chat', 'Mensajes de Discord', 'Último mensaje', 'Última vez', 'Entra desde', 'Usó en 7 días (min)', 'Llegó desde', 'Admin']];
+    for (const m of lista) f.push([m.nombre, m.usuario, m.correo || '', m.email === 'confirmado' ? 'sí' : 'no', (m.desde || '').slice(0, 10), m.discord ? m.discord.usuario : '', m.mensajes, m.recuperados || 0,
+      (m.ultimo || '').slice(0, 10), m.enLinea ? 'en línea' : (m.visto || '').slice(0, 10), m.entraDesde || '', m.minutos7 || 0, m.origen ? m.origen.fuente : '', m.admin ? 'sí' : '']);
+    bajarCSV('miembros-cv-chat-' + new Date().toISOString().slice(0, 10) + '.csv', f);
+  }
+  function botonesCSV(d) {
+    const c = el('div', 'pe-csv');
+    const b1 = el('button', 'pe-csv-btn', 'Bajar estas estadísticas (planilla)'); b1.type = 'button'; b1.addEventListener('click', () => csvEstadisticas(d));
+    const b2 = el('button', 'pe-csv-btn', 'Bajar la lista de miembros (planilla)'); b2.type = 'button';
+    b2.addEventListener('click', () => {
+      if (data && data.length) return csvMiembros(data);
+      fetch('/puente/api/miembros', { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).then(j => csvMiembros(j.miembros || [])).catch(() => {});
+    });
+    c.append(b1, b2);
+    return c;
+  }
   function pintarEstadisticas(box, d, o) {
     box.textContent = '';
     if (!d.resumenListo) box.appendChild(el('div', 'pe-aviso', 'Armando el resumen de mensajes por primera vez: los números de mensajes pueden estar incompletos unos minutos.'));
     try { box.appendChild(resumenEscrito(d, o)); } catch (err) { console.warn('resumen:', err); }
+    box.appendChild(botonesCSV(d));
     // Totales con su variacion respecto del periodo anterior
     const T = d.totales;
     const totales = el('div', 'pe-totales');
@@ -2564,6 +2728,7 @@ function leido(sc) {
     box.appendChild(tarjeta('Dispositivo', dis));
     box.appendChild(tarjetaTiempo(d));
     box.appendChild(tarjetaRetencion(d));
+    try { tarjetasExtra(box, d); } catch (err) { console.warn('estadisticas (extra):', err); }
   }
   function cargarEstadisticas() {
     const box = page && page.querySelector('.pe-cuerpo');
@@ -15199,4 +15364,38 @@ var puenteSinUbicacion = (function () {
   setInterval(mandar, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') mandar(); });
   window.addEventListener('pagehide', mandar);
+})();
+// Errores y velocidad (medidas.js): los errores de JavaScript que aparecen en CV Chat (como mucho 5 por
+// apertura, sin los de extensiones del navegador) y cuanto tarda en abrir hasta tener los canales, por
+// dispositivo. Y si se toco una notificacion con CV Chat abierto.
+(function () {
+  'use strict';
+  if (window.__puenteMedir || window.name === 'cv-ventana') return;
+  window.__puenteMedir = true;
+  const NOMBRES = { 'android-app': 'App de Android', 'pc-app': 'App de PC', 'iphone-app': 'App de iPhone', 'celular-web': 'Navegador del celular', 'pc-web': 'Navegador de PC' };
+  const dv = () => NOMBRES[window.__puentePlataforma] || (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 'Navegador del celular' : 'Navegador de PC');
+  const medir = (x) => { try { navigator.sendBeacon('/puente/api/medir', JSON.stringify(Object.assign({ dv: dv() }, x))); } catch { /* sin beacon */ } };
+  let errores = 0;
+  const ignorar = /ResizeObserver loop|^Script error\.?$|chrome-extension:|moz-extension:|safari-extension:/i;
+  function anotar(m, f, l) {
+    m = String(m || '').slice(0, 300);
+    if (!m || ignorar.test(m) || ignorar.test(String(f || '')) || ++errores > 5) return;
+    medir({ t: 'error', m, f: String(f || ''), l: l || 0 });
+  }
+  window.addEventListener('error', (e) => { if (e && e.message) anotar(e.message, e.filename, e.lineno); });
+  window.addEventListener('unhandledrejection', (e) => {
+    const r = e && e.reason;
+    anotar(r && r.message ? r.message : typeof r === 'string' ? r : '', r && r.stack ? (String(r.stack).match(/https?:\/\/[^\s)]+/) || [''])[0].replace(/:\d+:\d+$/, '') : '', 0);
+  });
+  // Cuanto tardo en abrir: desde que se pidio la pagina hasta que aparecen los canales
+  const t0 = Date.now();
+  (function esperar() {
+    const app = window.app;
+    if (app && app.channels && app.channels.length) {
+      if (document.visibilityState === 'visible') medir({ t: 'carga', ms: Math.round(performance.now()) });
+      return;
+    }
+    if (Date.now() - t0 < 60000) setTimeout(esperar, 250);
+  })();
+  try { if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.type === 'push-notification-click') medir({ t: 'notif' }); }); } catch { /* sin service worker */ }
 })();

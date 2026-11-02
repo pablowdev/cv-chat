@@ -68,6 +68,8 @@
         : todos.length >= 100 ? 'Hay 100 o más menciones de "' + consulta + '". Mostramos las primeras 100.'
         : todos.length === 1 ? 'Hay 1 mención de "' + consulta + '".' : 'Hay ' + todos.length + ' menciones de "' + consulta + '".';
       pintar();
+      // (para las estadisticas: que se busca y que no encuentra nada; origen.js)
+      if (window.cvMedirBusqueda) window.cvMedirBusqueda('ffs', consulta, todos.length);
     } catch (e) {
       estado.textContent = 'No se pudo buscar ahora. Probá de nuevo en un rato.';
     }

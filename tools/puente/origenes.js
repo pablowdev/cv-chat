@@ -256,4 +256,4 @@ function deCadaUno() {
   return out;
 }
 
-module.exports = { setup, handle, deCadaUno, clasificar };
+module.exports = { setup, handle, deCadaUno, clasificar, resumen };

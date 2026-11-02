@@ -148,6 +148,8 @@ function start(deps) {
   require('./presencia.js').setup({ db, io, log, warn });
   require('./panel-estadisticas.js').setup({ db, io, log, warn });
   require('./uso.js').setup({ db, log, warn }); // (despues: usa puente_activos)
+  require('./medidas.js').setup({ db, io, log, warn });
+  require('./informe.js').setup({ db, log, warn, publicUrl });
   require('./actividad.js').setup({ db, io, log, warn });
   require('./guardados.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });

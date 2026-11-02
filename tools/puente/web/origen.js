@@ -39,6 +39,32 @@
     try { miembro = location.origin === CHAT && !!localStorage.getItem('haven_token'); } catch (e) { /* nada */ }
     if (deAfuera || !miembro) try { navigator.sendBeacon(CHAT + '/puente/api/origen/visita', JSON.stringify(t)); } catch (e) { /* sin beacon */ }
   }
+  // Que se mira (medidas.js): cada pagina de la web, el foro y las del chat (no la app), cuanto tiempo
+  // estuvo a la vista y hasta donde se leyo; se manda al irse de la pagina
+  var medir = function (x) { try { navigator.sendBeacon(CHAT + '/puente/api/medir', JSON.stringify(x)); } catch (e) { /* sin beacon */ } };
+  window.cvMedirBusqueda = function (donde, q, n) { medir({ t: 'busqueda', d: donde, q: String(q || '').slice(0, 60), n: n }); };
+  if (!(location.origin === CHAT && /^\/app/.test(location.pathname)) && window.name !== 'cv-ventana') {
+    var visible = 0, desde = document.visibilityState === 'visible' ? Date.now() : 0, hondo = 0, mandada = false;
+    var leer = function () {
+      var alto = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+      var vio = (window.scrollY || 0) + window.innerHeight;
+      hondo = Math.max(hondo, alto ? Math.min(100, Math.round((vio / alto) * 100)) : 100);
+    };
+    window.addEventListener('scroll', leer, { passive: true });
+    setTimeout(leer, 1500);
+    var irse = function () {
+      if (desde) { visible += Date.now() - desde; desde = 0; }
+      if (mandada) return;
+      mandada = true;
+      leer();
+      medir({ t: 'pagina', p: location.hostname + location.pathname, s: Math.round(visible / 1000), sc: hondo });
+    };
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') { if (!desde) desde = Date.now(); }
+      else if (desde) { visible += Date.now() - desde; desde = 0; }
+    });
+    window.addEventListener('pagehide', irse);
+  }
   // En CV Chat: la cuenta nueva dice de donde llego (una sola vez por cuenta en este navegador)
   if (location.origin !== CHAT) return;
   var intentos = 0;
