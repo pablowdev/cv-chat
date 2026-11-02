@@ -4648,7 +4648,22 @@ document.addEventListener('pointerdown', (ev) => {
         box.appendChild(f);
       } else {
         const v = el('video'); v.src = okUrl(e.video.proxy) || okUrl(e.video.url); v.controls = true; v.autoplay = true; v.playsInline = true;
-        box.appendChild(v);
+        // Pantalla completa a mano (en un video angosto el navegador la esconde en los tres puntitos)
+        const grande = el('button', 'pe-grande'); grande.type = 'button'; grande.title = 'Pantalla completa';
+        grande.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 4h6v2H6v4H4V4Zm10 0h6v6h-2V6h-4V4ZM4 14h2v4h4v2H4v-6Zm14 0h2v6h-6v-2h4v-4Z"/></svg>';
+        // Donde no hay pantalla completa (la app de Android): el video ocupa toda la ventana, y el mismo boton lo cierra
+        const fijo = (si) => { box.classList.toggle('pe-fijo', si); grande.title = si ? 'Achicar' : 'Pantalla completa'; };
+        grande.addEventListener('click', (ev) => {
+          ev.preventDefault(); ev.stopPropagation();
+          if (box.classList.contains('pe-fijo')) { fijo(false); return; }
+          const sinNativa = () => (v.webkitEnterFullscreen ? v.webkitEnterFullscreen() : fijo(true));
+          try {
+            if (v.requestFullscreen && document.fullscreenEnabled !== false) v.requestFullscreen().catch(sinNativa);
+            else sinNativa();
+          } catch { fijo(true); }
+        });
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && box.classList.contains('pe-fijo')) fijo(false); });
+        box.append(v, grande);
       }
     }, { once: true });
     return box;
