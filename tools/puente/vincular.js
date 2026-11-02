@@ -708,7 +708,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg, propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|juegos)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|juegos)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -735,6 +735,21 @@ async function handle(req, res) {
     const file = path.join(STATIC, 'funball', 'sonidos', fbSon[1] + '.mp3');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin sonido');
     return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
+  // GlobalSiege (misionrisk.js): su pantalla (juego.js, juego.css y mapa.js) y el arte del juego
+  // original (mapa.jpg, paises.png y tapa.jpg, de tools/misionrisk/armar-arte.js), en web/misionrisk/.
+  // Van con huella, como aviso.js: el navegador pregunta siempre y si no cambio recibe un 304
+  const mrArch = req.method === 'GET' && /^\/puente\/misionrisk\/(juego\.js|juego\.css|mapa\.js|mapa\.jpg|paises\.png|tapa\.jpg)$/.exec(p);
+  if (mrArch) {
+    const file = path.join(STATIC, 'misionrisk', mrArch[1]);
+    let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
+    const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
+    if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg', png: 'image/png' }[mrArch[1].split('.').pop()];
+    let body = fs.readFileSync(file);
+    if (mrArch[1] === 'juego.js') body = body.toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
+    return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
   // Las apps para descargar (pagina /puente/descargar): web/descargas/CV-Chat-Android.apk y
@@ -1265,10 +1280,11 @@ async function handle(req, res) {
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
 // muestran la tapa del juego en vez del logo.
 const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball y Ajedrez para jugar con la gente del chat.' },
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez y GlobalSiege para jugar con la gente del chat.' },
   truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
+  globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
 };
 function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;

@@ -9023,7 +9023,8 @@ document.addEventListener('pointerdown', (ev) => {
 // tus cartas abajo (se tocan para jugar) y los cantos que se pueden hacer en
 // ese momento (los decide el servidor). Un enlace /app?truco=<id> abre la mesa, /app?juegos la
 // biblioteca y /app?juegos=truco la sala de ese juego (el boton del enlace, arriba a la derecha).
-// /app?ajedrez=<id> abre una mesa de ajedrez.
+// /app?ajedrez=<id> abre una mesa de ajedrez y /app?globalsiege=<id> una de GlobalSiege (su pantalla
+// esta en web/misionrisk/juego.js y se carga aparte, la primera vez que se abre).
 (function () {
   'use strict';
   const mobile = () => matchMedia('(max-width: 768px)').matches;
@@ -9164,8 +9165,33 @@ document.addEventListener('pointerdown', (ev) => {
     clearInterval(tickT); mesa = null;
     page.textContent = '';
     fbMesa = null; ajM = null;
+    if (window.puenteMR) window.puenteMR.salir();
+    if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
     if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
     try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+  }
+
+  // ── GlobalSiege (misionrisk.js) ──
+  // Su pantalla esta aparte (/puente/misionrisk/juego.js, con mapa.js y juego.css) y se baja
+  // recien la primera vez que se abre. Usa las mismas piezas que los otros juegos.
+  let mrCarga = null;
+  const mrVisto = new Map();
+  function mr(vista, arg) {
+    const top = stack[stack.length - 1];
+    if (!mrCarga) {
+      const script = (src) => new Promise((ok, mal) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = mal; document.head.appendChild(x); });
+      if (!document.querySelector('link[data-mr]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/misionrisk/juego.css'; css.dataset.mr = '1'; document.head.appendChild(css); }
+      mrCarga = (window.MRMapa ? Promise.resolve() : script('/puente/misionrisk/mapa.js'))
+        .then(() => window.puenteMR ? null : script('/puente/misionrisk/juego.js'))
+        .then(() => window.puenteMR.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, page: () => page, stack: () => stack }))
+        .catch((e) => { mrCarga = null; throw e; });
+    }
+    if (!page.firstChild) { page.appendChild(head('GlobalSiege')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
+    mrCarga.then(() => {
+      if (!page || stack[stack.length - 1] !== top) return;
+      page.textContent = '';
+      window.puenteMR[vista](arg);
+    }).catch(() => toast('No se pudo abrir GlobalSiege. Probá de nuevo.', 'error'));
   }
 
   // ── Sala ──
@@ -9175,6 +9201,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'truco', nombre: 'Truco', sub: 'Argentino, 1 contra 1', evento: 'truco:inicio', tapa: () => `/puente/cartas/banner.webp?v=${CARTAS_V}`, fondo: '#0d1410' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
+    { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/tapa.jpg', fondo: '#0a3f8f', mesa: 'mrMesa' },
   ];
   async function biblioteca() {
     page.appendChild(head('Juegos', botonEnlace('/app?juegos', 'Juegos · __PUENTE_APP__')));
@@ -9260,6 +9287,7 @@ document.addEventListener('pointerdown', (ev) => {
   async function inicio(which) {
     if (which === 'funball') return fbInicio();
     if (which === 'ajedrez') return ajInicio();
+    if (which === 'globalsiege') return mr('inicio');
     if (which !== 'truco') return biblioteca();
     page.appendChild(head('Truco', botonEnlace('/app?juegos=truco', 'Truco · __PUENTE_APP__')));
     const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
@@ -11632,8 +11660,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   function refreshBadge() {
     clearTimeout(badgeT);
     badgeT = setTimeout(async () => {
-      const [d, f, aj] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio')]);
-      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length);
+      const [d, f, aj, gs] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio')]);
+      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length) + (gs.error || !gs.mias ? 0 : gs.mias.filter(m => m.teToca).length);
       setBadge(n);
     }, 400);
   }
@@ -11668,9 +11696,16 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     a.socket.on('funball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'funball')) show('inicio', t[1]); });
     a.socket.on('ajedrez:estado', (s) => { if (page && ajM && ajM.id === s.id) ajRender(s); refreshBadge(); });
     a.socket.on('ajedrez:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'ajedrez')) show('inicio', t[1]); });
+    a.socket.on('mr:estado', (s) => {
+      if (page && window.puenteMR) window.puenteMR.estado(s);
+      const k = s.estado + ':' + !!s.teToca;
+      if (mrVisto.get(s.id) !== k) { mrVisto.set(s.id, k); refreshBadge(); }
+    });
+    a.socket.on('mr:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'globalsiege')) show('inicio', t[1]); });
     a.socket.on('connect', () => {
       if (page && fbMesa) emit('funball:ver', { id: fbMesa.id }).then(d => d.partida && fbRender(d.partida, true));
       else if (page && ajM) emit('ajedrez:ver', { id: ajM.id }).then(d => d.partida && ajRender(d.partida));
+      else if (page && window.puenteMR && window.puenteMR.abierta()) emit('mr:ver', { id: window.puenteMR.abierta() }).then(d => d.partida && window.puenteMR.estado(d.partida));
       else if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida));
     });
     if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
@@ -11692,6 +11727,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball'), aid = ok && u.searchParams.get('ajedrez');
       if (fid && /^[a-f0-9]{6,20}$/.test(fid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('fbMesa', fid); return; }
       if (aid && /^[a-f0-9]{6,20}$/.test(aid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('ajMesa', aid); return; }
+      const gid = ok && u.searchParams.get('globalsiege');
+      if (gid && /^[a-f0-9]{6,20}$/.test(gid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('mrMesa', gid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; go('mesa', id);
@@ -11704,6 +11741,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (fp && /^[a-f0-9]{6,20}$/.test(fp)) setTimeout(() => { stack = []; go('fbMesa', fp); }, 1500);
     const ap = new URLSearchParams(location.search).get('ajedrez');
     if (ap && /^[a-f0-9]{6,20}$/.test(ap)) setTimeout(() => { stack = []; go('ajMesa', ap); }, 1500);
+    const gp = new URLSearchParams(location.search).get('globalsiege');
+    if (gp && /^[a-f0-9]{6,20}$/.test(gp)) setTimeout(() => { stack = [['inicio']]; go('mrMesa', gp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();

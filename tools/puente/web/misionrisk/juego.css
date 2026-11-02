@@ -1,0 +1,63 @@
+/* GlobalSiege (juego.js), dentro de la seccion Juegos (.puente-jg, los estilos comunes .jg-* estan en el tema) */
+.puente-jg .mr-hero { background: linear-gradient(180deg, #0b4fa8, #08326c); }
+.puente-jg .mr-credito { margin: 1.5rem 0 0.5rem; font-size: 0.75rem; color: #949ba4; text-align: center; }
+.puente-jg .mr-credito a { color: #00a8fc; }
+.puente-jg .mr-reglas p { margin: 0 0 0.75rem; line-height: 1.5; color: #dbdee1; }
+.puente-jg .mr-invitados { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0.5rem 0; }
+.puente-jg .mr-inv { border: 0; cursor: pointer; font: inherit; font-size: 0.8125rem; font-weight: 700; }
+
+/* La mesa: el mapa (y abajo lo que pasa) a la izquierda, el panel a la derecha */
+.puente-jg .jg-cuerpo.mr-mesa { max-width: 84rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; padding-top: 0.75rem; }
+@media (min-width: 1000px) { .puente-jg .jg-cuerpo.mr-mesa { grid-template-columns: minmax(0, 1fr) 19rem; } }
+.puente-jg .mr-izq { min-width: 0; }
+.puente-jg .mr-mapa { position: relative; width: 100%; overflow: hidden; border-radius: 0.75rem; background: #0a3f8f; line-height: 0; }
+.puente-jg .mr-mapa.grande { overflow: auto; max-height: 75vh; overscroll-behavior: contain; }
+.puente-jg .mr-lienzo { display: block; cursor: pointer; touch-action: manipulation; }
+.puente-jg .mr-zoom { position: absolute; right: 0.5rem; bottom: 0.5rem; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 1rem; cursor: pointer; }
+.puente-jg .mr-mapa.grande .mr-zoom { position: sticky; float: right; margin: -2.75rem 0.5rem 0.5rem 0; }
+@media (min-width: 1000px) { .puente-jg .mr-zoom { display: none; } }
+
+.puente-jg .mr-barra { margin-top: 0.625rem; padding: 0.75rem; border-radius: 0.75rem; background: #232227; }
+.puente-jg .mr-quien { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.9375rem; }
+.puente-jg .mr-punto { flex: 0 0 auto; width: 0.875rem; height: 0.875rem; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,0.25); }
+.puente-jg .mr-ronda { color: #949ba4; font-size: 0.8125rem; }
+.puente-jg .mr-reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; color: #b5bac1; }
+.puente-jg .mr-reloj.poco { color: #f23f43; }
+.puente-jg .mr-texto { margin-top: 0.5rem; line-height: 1.4; color: #dbdee1; }
+.puente-jg .mr-acc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.625rem; align-items: center; }
+.puente-jg .mr-acc .jg-btn { min-height: 2.5rem; padding: 0 0.875rem; font-size: 0.9375rem; }
+.puente-jg .mr-aviso { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; padding: 0.625rem 0.75rem; border-radius: 0.5rem; background: #3c3a1e; color: #f0e6a8; }
+.puente-jg .mr-cant { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem; border-radius: 0.5rem; background: #1a191e; }
+.puente-jg .mr-cant-t { padding: 0 0.375rem; font-size: 0.8125rem; color: #949ba4; }
+.puente-jg .mr-cant-op { min-width: 2.5rem; min-height: 2rem; padding: 0 0.5rem; border: 0; border-radius: 0.375rem; background: transparent; color: #b5bac1; font: inherit; font-size: 0.875rem; font-weight: 700; cursor: pointer; }
+.puente-jg .mr-cant-op.on { background: #5865f2; color: #fff; }
+.puente-jg .mr-final { padding: 0.25rem 0; text-align: center; }
+.puente-jg .mr-final-t { font-size: 1.375rem; font-weight: 800; }
+.puente-jg .mr-final-s { margin-top: 0.25rem; color: #dbdee1; }
+.puente-jg .mr-final + .mr-acc { justify-content: center; }
+
+/* El panel */
+.puente-jg .mr-caja { margin-bottom: 0.75rem; padding: 0.75rem; border-radius: 0.75rem; background: #232227; }
+.puente-jg .mr-caja-t { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: #b5bac1; }
+.puente-jg .jg-btn.mr-chico { min-height: 1.875rem; padding: 0 0.625rem; font-size: 0.8125rem; text-transform: none; letter-spacing: 0; }
+.puente-jg .mr-cartas { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.puente-jg .mr-carta { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 3.5rem; height: 5rem; padding: 0.25rem 0.125rem; border: 2px solid #c9b88f; border-radius: 0.375rem; background: linear-gradient(180deg, #fbf6e9, #eadfc4); color: #3a2a12; font: inherit; cursor: default; }
+.puente-jg button.mr-carta { cursor: pointer; }
+.puente-jg .mr-carta svg { width: 2.75rem; height: 2.6rem; }
+.puente-jg .mr-carta.comodin { border-color: #d9a400; }
+.puente-jg .mr-carta.sel { border-color: #5865f2; box-shadow: 0 0 0 2px #5865f2; transform: translateY(-4px); }
+.puente-jg .mr-carta-n { font-size: 0.5625rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.02em; }
+.puente-jg .mr-nada { font-size: 0.8125rem; color: #949ba4; }
+.puente-jg .mr-ej { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 0.5rem; align-items: center; padding: 0.375rem 0.5rem; border-radius: 0.5rem; }
+.puente-jg .mr-ej.turno { background: #34333a; }
+.puente-jg .mr-ej.muerto { opacity: 0.5; }
+.puente-jg .mr-ej-n { display: flex; flex-direction: column; min-width: 0; }
+.puente-jg .mr-ej-n b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-jg .mr-ej-n span { font-size: 0.75rem; color: #949ba4; }
+.puente-jg .mr-ej-d { grid-column: 2; font-size: 0.8125rem; color: #dbdee1; }
+.puente-jg .mr-ej-m { grid-column: 2; margin-top: 0.125rem; font-size: 0.75rem; color: #f0e6a8; }
+.puente-jg .mr-log { max-height: 14rem; overflow-y: auto; font-size: 0.8125rem; line-height: 1.45; color: #dbdee1; }
+.puente-jg .mr-log div + div { margin-top: 0.25rem; }
+.puente-jg .mr-mision { text-align: center; }
+.puente-jg .mr-mision-sello { display: inline-block; margin-bottom: 0.5rem; padding: 0.125rem 0.625rem; border: 2px solid #f23f43; border-radius: 0.25rem; color: #f23f43; font-weight: 800; letter-spacing: 0.1em; transform: rotate(-4deg); }
+.puente-jg .mr-mision .jg-aviso-acc { justify-content: center; }
