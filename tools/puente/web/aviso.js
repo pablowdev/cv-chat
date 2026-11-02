@@ -15704,7 +15704,9 @@ var puenteSinUbicacion = (function () {
 })();
 // Lo que se estaba escribiendo en cada canal (puente-borradores): al irse a otro canal y volver, sigue
 // en el cuadro, como en Discord. Se guarda en este navegador (tambien si se cierra la app), por cuenta;
-// se borra al mandarlo. Mientras se edita un mensaje, el cuadro tiene ese mensaje: no es un borrador
+// se borra al mandarlo. Mientras se edita un mensaje, el cuadro tiene ese mensaje: no es un borrador.
+// Las fotos y archivos que se estaban por mandar (pegados o elegidos) tambien quedan en su canal: Haven
+// vaciaba la cola al cambiar de canal. Esos quedan mientras la app esta abierta (no se guardan en el navegador)
 (function () {
   'use strict';
   const MAX = 60, DIAS = 14;
@@ -15724,6 +15726,7 @@ var puenteSinUbicacion = (function () {
     try { localStorage.setItem(clave(), JSON.stringify(b)); } catch { /* sin lugar: queda en memoria */ }
   }
   const caja = () => document.getElementById('message-input');
+  const adjuntos = new Map(); // canal -> { imagenes, archivos } que quedaron sin mandar
   const editando = () => !!document.querySelector('#messages .editing[data-msg-id], #messages [data-msg-id].editing');
   function anotar(canal, texto) {
     if (!canal || editando()) return;
@@ -15765,8 +15768,19 @@ var puenteSinUbicacion = (function () {
     app.switchChannel = function (code) {
       const antes = this.currentChannel, i = caja();
       if (i && antes && antes !== code) anotar(antes, i.value);
+      const cola = antes && antes !== code ? { imagenes: [...(this._imageQueue || [])], archivos: [...(this._fileQueue || [])] } : null;
       const r = cambiar.apply(this, arguments);
       if (!code || antes === code) return r;
+      // (Haven vacia la de imagenes al empezar a cambiar, antes de esperar nada)
+      try {
+        if (cola) { if (cola.imagenes.length || cola.archivos.length) adjuntos.set(antes, cola); else adjuntos.delete(antes); }
+        const vuelve = adjuntos.get(code);
+        adjuntos.delete(code);
+        this._imageQueue = vuelve ? vuelve.imagenes : [];
+        this._fileQueue = vuelve ? vuelve.archivos : [];
+        this._activeAttachment = vuelve ? [...vuelve.imagenes, ...vuelve.archivos].pop() || null : null;
+        if (cola || vuelve) this._renderImageQueue();
+      } catch (err) { console.warn('[puente] adjuntos:', err); }
       const desde = Date.now();
       // El del canal nuevo (o vacio), despues de lo que haga Haven al cambiar; si ya se empezo a escribir, no se pisa
       const restaurar = () => {
