@@ -42,9 +42,9 @@
       }
     ],
     "appx": {
-      "identityName": "COMPLETAR-con-Partner-Center",
-      "publisher": "CN=COMPLETAR-con-Partner-Center",
-      "publisherDisplayName": "Circulo Vicioso",
+      "identityName": "PabloW.CVChat",
+      "publisher": "CN=1AEF1706-B939-451A-BF37-168EB86AA9A2",
+      "publisherDisplayName": "PabloW",
       "applicationId": "CVChat",
       "displayName": "CV Chat",
       "backgroundColor": "#211c1f",
@@ -53,7 +53,9 @@
         "es-ES",
         "en-US"
       ],
-      "artifactName": "CV-Chat-Store.appx"
+      "artifactName": "CV-Chat-Store.appx",
+      "minVersion": "10.0.17763.0",
+      "maxVersionTested": "10.0.26100.0"
     }
   },
   "devDependencies": {

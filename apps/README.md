@@ -23,8 +23,12 @@ actualizador propio).
 2. En la app, "Administración del producto → Identidad del producto": copiar `Package/Identity/Name`
    a `build.appx.identityName` y `Package/Identity/Publisher` (`CN=...`) a `build.appx.publisher` en
    `windows/package.json`.
-3. `npm run tienda`: queda `windows/dist/CV-Chat-Store.appx`. Subirlo en "Paquetes" de un envío nuevo,
-   con la descripción, capturas, clasificación por edad (mayores de 18) y la política de privacidad
+3. Los cuadraditos de la Store en `windows/build/appx/` (StoreLogo, Square44x44Logo, Square150x150Logo,
+   Wide310x150Logo, LargeTile, SmallTile: el logo sobre el fondo #211c1f). `npm run tienda`: queda
+   `windows/dist/CV-Chat-Store.appx`. Si el `makeappx` que trae electron-builder no arranca ("side-by-side"),
+   empaquetar con el del Windows SDK: `makeappx pack /o /f dist/__appx-x64/mapping.txt /p dist/CV-Chat-Store.appx`.
+   La carpeta tiene que tener una ruta corta (Windows no deja instalar las dependencias en rutas muy largas).
+   Subirlo en "Paquetes" de un envío nuevo, con la descripción, capturas, clasificación por edad (mayores de 18) y la política de privacidad
    (https://circulovicioso.club/legal).
 4. Cada versión nueva: subir `version` en `package.json`, `npm run tienda` y un envío nuevo.
 
