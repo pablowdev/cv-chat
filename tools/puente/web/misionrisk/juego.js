@@ -306,7 +306,9 @@
     M.zoomBtn.addEventListener('click', () => { M.zoom = !M.zoom; M.wrap.classList.toggle('grande', M.zoom); dibujar(); });
     M.wrap.appendChild(M.zoomBtn);
     M.barra = el('div', 'mr-barra');
-    izq.append(M.wrap, M.barra);
+    // el chat con los demas (aviso.js: chatPartida), fijo debajo de lo que pasa
+    M.chatBox = el('div', 'mr-chat');
+    izq.append(M.wrap, M.barra, M.chatBox);
     M.panel = der;
     M.cv.addEventListener('click', tocar);
     M.cv.addEventListener('mousemove', (e) => { const p = puntoDe(e); M.cv.title = p ? `${P[p].nombre}` : ''; });
@@ -357,6 +359,7 @@
     dibujar();
     barra();
     panel();
+    if (A.chat) A.chat(M.chatBox, s, (t) => A.emit('mr:accion', { id: s.id, tipo: 'chat', texto: t }));
   }
 
   // ── El mapa ──

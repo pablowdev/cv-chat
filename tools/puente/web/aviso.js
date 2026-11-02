@@ -9171,6 +9171,58 @@ document.addEventListener('pointerdown', (ev) => {
     try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
+  // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
+  // Para hablar con los rivales mientras se juega (el Truco tiene el suyo, al costado). La caja queda
+  // fija debajo de la mesa, fuera de lo que se vuelve a dibujar en cada jugada (asi no se pierde lo
+  // que se esta escribiendo), y solo cambia la lista. Es temporal: se borra cuando se cierra la mesa
+  function chatPartida(padre, s, enviar) {
+    let c = padre.querySelector(':scope > .jg-chat-partida');
+    if (!s || !s.chat) { if (c) c.remove(); return; }
+    if (!c || c.dataset.id !== String(s.id)) {
+      if (c) c.remove();
+      c = el('div', 'jg-chat jg-chat-partida'); c.dataset.id = String(s.id);
+      const lista = el('div', 'jg-chat-lista');
+      const form = el('form', 'jg-chat-form');
+      const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
+      inp.placeholder = 'Escribí un mensaje';
+      const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
+      form.append(inp, send);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const t = inp.value.trim();
+        if (!t) return;
+        inp.value = '';
+        enviar(t).then(r => { if (r && r.error) { toast(r.error, 'error'); if (!inp.value) inp.value = t; } });
+      });
+      const nota = el('div', 'jg-chat-nota', 'Es solo para esta partida: se borra cuando se cierra la mesa.');
+      nota.style.cssText = 'font-size: 0.75rem; color: #949ba4;';
+      c.append(el('div', 'jg-chat-t', 'Chat de la partida'), lista, form, nota);
+      // debajo de la mesa, del ancho de la columna
+      if (padre === page) c.style.cssText = 'box-sizing: border-box; width: calc(100% - 2rem); max-width: 40rem; margin: 0.25rem auto calc(1.5rem + env(safe-area-inset-bottom, 0px));';
+      lista.style.height = '10rem';
+      padre.appendChild(c);
+    }
+    const lista = c.querySelector('.jg-chat-lista');
+    const msgs = s.chat;
+    // (los colores cuentan: en GlobalSiege llegan cuando empieza la guerra)
+    const key = (msgs.length ? msgs.length + ':' + msgs[msgs.length - 1].t : '0') + msgs.map(m => m.color || '').join('');
+    if (lista.dataset.key === key) return;
+    const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 40;
+    const antes = Number((lista.dataset.key || '0').split(':')[0]);
+    lista.textContent = '';
+    if (!msgs.length) lista.appendChild(el('div', 'jg-chat-vacio', 'Todavía no hay mensajes. ¡Saludá!'));
+    for (const m of msgs) {
+      const x = el('div', 'jg-msg' + (m.mio ? ' mio' : ''));
+      const b = el('b', '', m.quien || '?');
+      if (m.color && !m.mio) b.style.color = m.color;
+      x.append(b, document.createTextNode(': ' + m.text));
+      lista.appendChild(x);
+    }
+    if (lista.dataset.key && msgs.length > antes && !msgs[msgs.length - 1].mio) beep(760, 60);
+    if (abajo || !lista.dataset.key || (msgs.length && msgs[msgs.length - 1].mio)) lista.scrollTop = lista.scrollHeight;
+    lista.dataset.key = key;
+  }
+
   // ── GlobalSiege (misionrisk.js) ──
   // Su pantalla esta aparte (/puente/misionrisk/juego.js, con mapa.js y juego.css) y se baja
   // recien la primera vez que se abre. Usa las mismas piezas que los otros juegos.
@@ -9183,7 +9235,7 @@ document.addEventListener('pointerdown', (ev) => {
       if (!document.querySelector('link[data-mr]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/misionrisk/juego.css'; css.dataset.mr = '1'; document.head.appendChild(css); }
       mrCarga = (window.MRMapa ? Promise.resolve() : script('/puente/misionrisk/mapa.js'))
         .then(() => window.puenteMR ? null : script('/puente/misionrisk/juego.js'))
-        .then(() => window.puenteMR.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, page: () => page, stack: () => stack }))
+        .then(() => window.puenteMR.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, chat: chatPartida, page: () => page, stack: () => stack }))
         .catch((e) => { mrCarga = null; throw e; });
     }
     if (!page.firstChild) { page.appendChild(head('GlobalSiege')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
@@ -10386,6 +10438,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const prev = fbMesa.s;
     fbMesa.s = s; mesa.s = s;
     botonSalir(fbMesa.menu, s);
+    chatPartida(page, s, (t) => emit('funball:accion', { id: s.id, tipo: 'chat', texto: t }));
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && fbMesa && fbMesa.id === s.id) { stack.pop(); go('fbMesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Funball · ${s.tablero}`;
@@ -11383,6 +11436,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const prev = ajM.s;
     ajM.s = s; mesa.s = s; ajM.recibido = performance.now();
     botonSalir(ajM.menu, s);
+    chatPartida(page, s, (t) => emit('ajedrez:accion', { id: s.id, tipo: 'chat', texto: t }));
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && ajM && ajM.id === s.id) { stack.pop(); go('ajMesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Ajedrez · ${s.ritmo}${s.compu ? ' · compu ' + s.nivel.toLowerCase() : ''}`;

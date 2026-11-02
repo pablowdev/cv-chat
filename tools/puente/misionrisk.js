@@ -16,6 +16,7 @@
 const crypto = require('crypto');
 const M = require('./misionrisk-motor.js');
 const MAPA = require('./web/misionrisk/mapa.js');
+const CP = require('./chat-partida.js');
 
 const NIVELES = ['Promedio', 'Sagaz'];
 const TURNO_MS = 4 * 60e3;
@@ -176,6 +177,14 @@ function act(me, d) {
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seatOf(g, me);
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // El chat entre las personas de la mesa (chat-partida.js): desde la espera hasta que se cierra la mesa
+  if (d.tipo === 'chat') {
+    if (humanos(g).length < 2) return { error: 'El chat es para cuando hay más personas en la mesa.' };
+    const err = CP.chatear(g, me, d.texto);
+    if (err) return { error: err };
+    push(g);
+    return { ok: true };
+  }
   if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
   const e = i + 1, S = g.S;
   if (d.tipo === 'abandonar') {
@@ -277,6 +286,11 @@ function view(g, me) {
     id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me,
     nivel: NIVELES[g.nivel - 1], opciones: g.opciones, miEj: i >= 0 ? e : null,
     invitados: g.invitados.map(nameOf),
+    // el chat, con el nombre y el color del ejercito de cada uno (en la espera todavia no tienen)
+    chat: i >= 0 && humanos(g).length > 1 ? CP.mensajes(g, me, (uid) => {
+      const k = seatOf(g, uid);
+      return { quien: uid === me ? 'Vos' : nameOf(uid).nombre, color: S && k >= 0 ? MAPA.ejercitos[k + 1].color : null };
+    }) : null,
     asientos: g.asientos.map((a, k) => {
       const p = a.uid ? nameOf(a.uid) : null;
       const x = { ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me };

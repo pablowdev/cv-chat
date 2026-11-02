@@ -14,6 +14,7 @@
 
 const crypto = require('crypto');
 const M = require('./ajedrez-motor.js');
+const CP = require('./chat-partida.js');
 
 const BOT = -1;
 const BOT_NAME = 'La Compu';
@@ -226,6 +227,14 @@ function act(me, d) {
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seat(g, me);
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // El chat con el rival (chat-partida.js): mientras dura la mesa, tambien despues de terminar
+  if (d.tipo === 'chat') {
+    if (g.compu) return { error: 'Contra la compu no hay chat.' };
+    const err = CP.chatear(g, i, d.texto);
+    if (err) return { error: err };
+    push(g, false);
+    return { ok: true };
+  }
   if (d.tipo === 'revancha') {
     if (g.estado !== 'terminada') return { error: 'La partida no terminó.' };
     if (g.siguiente) return { ok: true, id: g.siguiente };
@@ -336,6 +345,7 @@ function view(g, me) {
     yo: P[pov] ? { ...P[pov], color: g.estado === 'esperando' ? g.color : colorOf(g, pov) } : null,
     rival: P[o] ? { ...P[o], color: g.estado === 'esperando' ? null : colorOf(g, o) } : null,
     invitado: g.invitado ? nameOf(g.invitado) : null, soyJugador: i >= 0, soyCreador: g.jugadores[0] === me,
+    chat: i >= 0 && !g.compu ? CP.mensajes(g, i, (k) => ({ quien: k === i ? 'Vos' : (P[k] ? P[k].nombre : 'Rival') })) : null,
     log: g.log.slice(-6).map(x => x.text),
     ganador: g.estado === 'terminada' ? (g.ganador === null || g.ganador === undefined ? 'empate' : g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     motivoTexto: g.motivo ? RESULTADO[g.motivo] || '' : '',
