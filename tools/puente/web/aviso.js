@@ -4537,10 +4537,41 @@ document.addEventListener('pointerdown', (ev) => {
     setTimeout(() => el.classList.remove('highlight-flash'), 2000);
   }
 
+  // Cambiar de canal y esperar a que Haven dibuje sus mensajes. Antes se esperaba un tiempo fijo:
+  // si el canal tardaba mas en llegar (en el celular, seguido), se dibujaba despues del salto y
+  // dejaba todo abajo de todo, lejos del mensaje
+  function switchAndWait(app, code) {
+    return new Promise((done) => {
+      const s = app.socket;
+      let over = false, timer = null;
+      const finish = () => { if (over) return; over = true; clearTimeout(timer); if (s) s.off('message-history', onHistory); setTimeout(done, 150); };
+      const onHistory = (d) => { if (d && d.channelCode === code && !d.around) finish(); };
+      if (s) s.on('message-history', onHistory);
+      timer = setTimeout(finish, 8000);
+      app.switchChannel(code);
+    });
+  }
+  // Saltar al mensaje y fijarse que haya quedado a la vista: si no estaba dibujado, Haven trae los de
+  // alrededor y lo marca; si algo lo volvio a mandar abajo, se lo vuelve a buscar
+  async function jump(app, id) {
+    app._jumpToMessage(id);
+    let el = null;
+    for (let i = 0; i < 40 && !el; i++) { await sleep(150); el = document.querySelector('#messages [data-msg-id="' + id + '"]'); }
+    if (!el) return;
+    await sleep(500);
+    el = document.querySelector('#messages [data-msg-id="' + id + '"]');
+    const box = document.getElementById('messages');
+    if (!el || !box) return;
+    const a = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (a.bottom > b.top + 20 && a.top < b.bottom - 20) return;
+    app._coupledToBottom = false;
+    flash(el);
+  }
+
   // Ir al canal y al mensaje (o al hilo y a su mensaje)
   async function open(app, r) {
     if (!r || !r.codigo) return;
-    if (app.currentChannel !== r.codigo) { app.switchChannel(r.codigo); await sleep(650); }
+    if (app.currentChannel !== r.codigo) await switchAndWait(app, r.codigo);
     if (r.hilo) {
       app._jumpToMessage(r.hilo);
       if (typeof app._openThread === 'function') app._openThread(r.hilo);
@@ -4549,7 +4580,7 @@ document.addEventListener('pointerdown', (ev) => {
         if (el) { flash(el); return; }
         await sleep(100);
       }
-    } else if (r.mensaje) app._jumpToMessage(r.mensaje);
+    } else if (r.mensaje) await jump(app, r.mensaje);
   }
 
   function messageLink(app, msgEl) {
