@@ -18,8 +18,9 @@
   const WEB = 'https://' + DOM, FORO = 'https://foro.' + DOM;
   if (enForo && location.pathname.startsWith('/cvchat.php')) return;
   const aca = location.href;
-  // El foro adentro de CV Chat (el boton del foro): sin la barra (ya esta la de CV Chat)
-  const enChat = enForo && window.name === 'cv-foro' && window.top !== window;
+  // El foro adentro de CV Chat (el boton del foro), o la web en esa misma ventana (la wiki, Full Fat
+  // Search): sin la barra (ya esta la de CV Chat)
+  const enChat = window.name === 'cv-foro' && window.top !== window;
   // De donde llego la gente (origenes.js): la web y el foro tambien lo anotan
   if (!enChat) { const s = document.createElement('script'); s.src = CHAT + '/puente/origen.js'; s.async = true; document.head.appendChild(s); }
   const entrar = CHAT + '/?volver=' + encodeURIComponent(aca);
@@ -305,22 +306,30 @@
     fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' })
       .then(r => r.json()).catch(() => null)
       .then(yo => { if (!enChat) webBar(yo); if (enForo) foroBar(yo); });
-    // Adentro de CV Chat: lo que lleva al chat se abre en el chat (no un chat adentro del chat). La web
-    // no se deja mostrar adentro de otra pagina (quedaba la hoja rota y sin volver): el Marketplace abre
-    // el de CV Chat, y lo demas de la web (Inicio, la Wiki, Full Fat Search) se abre en el navegador
+    // Adentro de CV Chat: la web y el foro se abren ahi mismo, en la misma ventana (la web se deja mostrar
+    // adentro de CV Chat y de ninguna otra pagina: Caddyfile). El Marketplace abre el de CV Chat, y lo que
+    // lleva al chat lo abre CV Chat sin recargarse (un canal o un mensaje; si no, #circulo-vicioso)
     if (enChat) {
+      const donde = () => {
+        const p = location.pathname;
+        const t = enForo ? 'Foro' : /^\/wiki/.test(p) ? 'Wiki' : p.startsWith('/full-fat-search') ? 'Full Fat Search' : 'Círculo Vicioso';
+        try { window.parent.postMessage({ cv: 'donde', titulo: t, url: location.href }, CHAT); } catch { /* nada */ }
+      };
+      donde();
+      addEventListener('popstate', donde);
       document.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
         let u; try { u = new URL(a.href, location.href); } catch { return; }
-        if (u.origin === WEB || u.origin === 'https://www.' + DOM) {
-          if (/^\/marketplace\/?$/.test(u.pathname)) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'marketplace' }, CHAT); return; }
-          a.target = '_blank'; a.rel = 'noopener';
+        if (u.origin === WEB || u.origin === 'https://www.' + DOM || u.origin === FORO) {
+          if (u.origin !== FORO && /^\/marketplace\/?$/.test(u.pathname)) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'marketplace' }, CHAT); return; }
+          // (en una pestaña nueva no: aca mismo)
+          if (a.target && a.target !== '_self') { e.preventDefault(); e.stopImmediatePropagation(); location.href = u.href; }
           return;
         }
         if (u.origin !== CHAT) return;
         e.preventDefault(); e.stopImmediatePropagation();
-        window.top.location.href = u.href;
+        window.parent.postMessage({ cv: 'chat', url: u.href }, CHAT);
       }, true);
     }
   }

@@ -15063,12 +15063,18 @@ var puenteSinUbicacion = (function () {
 })();
 // El foro adentro de CV Chat: un boton debajo del Marketplace y los Juegos (en la columna de la izquierda)
 // lo abre aca mismo, como esas dos paginas. El foro se ve sin la barra de la web (barra.js lo reconoce por
-// el nombre "cv-foro"); "Mensajes" del foro abre los mensajes directos de aca.
+// el nombre "cv-foro"); "Mensajes" del foro abre los mensajes directos de aca. En la misma ventana se ven
+// la wiki, Full Fat Search y el resto de la web (los enlaces del foro, de la web y de los mensajes), y lo
+// que en esas paginas lleva al chat se abre aca sin recargar: un canal o un mensaje, o #circulo-vicioso.
 (function () {
   'use strict';
   const byId = (id) => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const FORO = 'https://foro.' + location.hostname.replace(/^chat\./, '');
+  const DOM = location.hostname.replace(/^chat\./, '');
+  const FORO = 'https://foro.' + DOM, WEB = 'https://' + DOM, WWW = 'https://www.' + DOM;
+  const nuestro = (o) => o === FORO || o === WEB || o === WWW;
+  // La wiki, Full Fat Search y el inicio de la web (los que se abren aca desde un mensaje)
+  const deLaWeb = (u) => (u.origin === WEB || u.origin === WWW) && /^\/(?:$|wiki(?:-categorias)?(?:\/|$)|full-fat-search(?:\/|$))/.test(u.pathname);
   const mobile = () => window.matchMedia('(max-width: 768px)').matches;
   const ICONO = '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M4 3h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3.5V14H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm15 5h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-1v3l-3.5-3H11a2 2 0 0 1-2-2v-1h6a4 4 0 0 0 4-4V8Z"/></svg>';
   const st = el('style');
@@ -15087,7 +15093,13 @@ var puenteSinUbicacion = (function () {
     if (page) page.hidden = true;
     document.querySelectorAll('.puente-fo-btn').forEach(b => b.classList.remove('active'));
   }
+  // ruta: del foro ("/node/123") o una direccion entera del foro o de la web
   function abrir(ruta) {
+    let dir = null;
+    if (ruta && /^https:\/\//.test(ruta)) { try { const u = new URL(ruta); if (nuestro(u.origin)) dir = u.href; } catch { /* no */ } if (!dir) return; }
+    else if (ruta) dir = FORO + ruta;
+    // (el boton del foro, con la web a la vista: el foro)
+    else if (page && page.dataset.web) dir = FORO + '/';
     // Una sola pagina de las de la izquierda a la vez
     try { if (window.puenteJuegos && window.puenteJuegos.abierto()) { let n = 0; while (window.puenteJuegos.abierto() && n++ < 20) window.puenteJuegos.atras(); } } catch { /* sigue */ }
     try { if (window.puenteMercado && window.puenteMercado.abierto()) { let n = 0; while (window.puenteMercado.abierto() && n++ < 20) window.puenteMercado.atras(); } } catch { /* sigue */ }
@@ -15099,14 +15111,37 @@ var puenteSinUbicacion = (function () {
       x.addEventListener('click', cerrar);
       const afuera = el('a', null, 'Abrir en el navegador ↗'); afuera.href = FORO + '/'; afuera.target = '_blank'; afuera.rel = 'noopener';
       head.append(x, el('div', 'jg-titulo', 'Foro'), afuera);
-      const marco = el('iframe'); marco.name = 'cv-foro'; marco.title = 'Foro'; marco.src = FORO + (ruta || '/');
+      const marco = el('iframe'); marco.name = 'cv-foro'; marco.title = 'Foro'; marco.src = dir || FORO + '/';
       page.append(head, marco);
       document.body.appendChild(page);
-    } else if (ruta) page.querySelector('iframe').src = FORO + ruta;
+    } else if (dir) page.querySelector('iframe').src = dir;
+    if (dir) titular(dir.startsWith(FORO) ? 'Foro' : 'Círculo Vicioso', dir);
     const bar = byId('server-bar');
     page.style.left = !mobile() && bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0';
     page.hidden = false;
     document.querySelectorAll('.puente-fo-btn').forEach(b => b.classList.add('active'));
+  }
+  // El titulo de arriba y "Abrir en el navegador": lo que se esta viendo (lo dice la pagina, barra.js)
+  function titular(t, url) {
+    if (!page) return;
+    const tt = page.querySelector('.jg-titulo'), a = page.querySelector('.jg-head a'), m = page.querySelector('iframe');
+    if (tt && t) tt.textContent = t;
+    if (m && t) m.title = t;
+    if (a && url) a.href = url;
+    if (url) page.dataset.web = url.startsWith(FORO) ? '' : '1';
+  }
+  // Lo que lleva al chat: un canal o un mensaje (los enlaces de siempre); si no, #círculo-vicioso
+  function alChat(url) {
+    cerrar();
+    const app = window.app;
+    if (!app) return;
+    let u = null; try { u = new URL(url); } catch { /* el canal de siempre */ }
+    if (u && u.origin === location.origin && /^\/app/.test(u.pathname) && (u.searchParams.get('channel') || u.searchParams.get('message'))) {
+      try { if (window.puenteEnlaces && window.puenteEnlaces.abrir(u.href)) return; } catch { /* abajo */ }
+    }
+    try { if (document.getElementById('app-body')?.classList.contains('mobile-sidebar-open')) app._closeMobilePanels?.(); } catch { /* sigue */ }
+    const ch = (app.channels || []).find(c => c && !c.is_dm && String(c.name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() === 'circulo-vicioso');
+    if (ch && app.currentChannel !== ch.code) app.switchChannel(ch.code);
   }
   window.puenteForo = { abierto, abrir, cerrar };
 
@@ -15136,9 +15171,12 @@ var puenteSinUbicacion = (function () {
     }, true);
     const a = window.app;
     if (a && typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function () { cerrar(); return sw.apply(this, arguments); }; }
-    // El foro pide abrir los mensajes directos (su "Mensajes") o el Marketplace (el de aca)
+    // El foro (o la web) pide abrir los mensajes directos (su "Mensajes"), el Marketplace (el de aca) o el
+    // chat, y dice que pagina se esta viendo
     window.addEventListener('message', (e) => {
-      if (e.origin !== FORO || !e.data) return;
+      if (!nuestro(e.origin) || !e.data || !page || e.source !== page.querySelector('iframe')?.contentWindow) return;
+      if (e.data.cv === 'donde') { titular(String(e.data.titulo || '').slice(0, 40), typeof e.data.url === 'string' && /^https:\/\//.test(e.data.url) ? e.data.url : null); return; }
+      if (e.data.cv === 'chat') { alChat(String(e.data.url || '')); return; }
       if (e.data.cv === 'marketplace') {
         cerrar();
         try { if (window.puenteMercado) { window.puenteMercado.abrir(); return; } } catch { /* sigue */ }
@@ -15149,6 +15187,16 @@ var puenteSinUbicacion = (function () {
       cerrar();
       const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click();
     });
+    // Un enlace a la wiki, a Full Fat Search o al inicio de la web, en un mensaje: aca mismo
+    document.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || !(e.target instanceof Element)) return;
+      const a = e.target.closest('a[href]');
+      if (!a || !a.closest('#messages, #thread-panel, #search-panel, #pinned-panel, .message-content')) return;
+      let u; try { u = new URL(a.href); } catch { return; }
+      if (!deLaWeb(u)) return;
+      e.preventDefault(); e.stopPropagation();
+      abrir(u.href);
+    }, true);
     // /app?foro (o ?foro=/node/123): abre el foro aca
     const q = new URLSearchParams(location.search);
     if (q.has('foro')) { const r = q.get('foro'); setTimeout(() => abrir(r && r.startsWith('/') ? r : '/'), 1500); }

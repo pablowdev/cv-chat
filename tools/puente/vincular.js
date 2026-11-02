@@ -355,9 +355,9 @@ function injectScript(req, res, src) {
     if (n === 'x-frame-options') return this;
     if (n === 'content-security-policy' && typeof value === 'string') {
       value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
-      // Y el foro adentro del chat (el boton del foro, aviso.js)
-      const foroOrigen = cuenta.origins().find(o => /^https:\/\/foro\./.test(o));
-      if (foroOrigen) value = value.replace("frame-src 'self'", "frame-src 'self' " + foroOrigen);
+      // Y el foro y la web adentro del chat (el boton del foro, aviso.js)
+      const propios = cuenta.origins();
+      if (propios.length) value = value.replace("frame-src 'self'", "frame-src 'self' " + propios.join(' '));
     }
     return origSetHeader.call(this, name, value);
   };
