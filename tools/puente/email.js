@@ -33,7 +33,10 @@ const crypto = require('crypto');
 
 const VERIFY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
-const DAILY_CAP = 90; // el plan gratis de Resend manda hasta 100 por dia
+const DAILY_CAP = 95; // el plan gratis de Resend manda hasta 100 por dia
+// Los envios masivos (invitaciones, la mudanza) paran antes: lo que queda es para los mails que la
+// gente espera en el momento (confirmar el email, recuperar la contraseña, los codigos para entrar)
+const CUPO_MASIVO = 65;
 const EMAIL_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
 
 let db, log, warn, publicUrl, appName, setPassword;
@@ -102,8 +105,12 @@ function note(tipo, clave) {
   db.prepare('DELETE FROM puente_email_envios WHERE enviado < ?').run(Date.now() - 2 * 24 * 60 * 60 * 1000);
 }
 
+const enElDia = () => db.prepare('SELECT COUNT(*) n FROM puente_email_envios WHERE enviado > ?').get(Date.now() - 24 * 60 * 60 * 1000).n;
+// Si un envio masivo puede mandar uno mas sin comerse la reserva de los mails importantes
+const hayLugarMasivo = () => enElDia() < CUPO_MASIVO;
+
 async function sendMail(to, subject, title, paragraphs, button, footer) {
-  if (db.prepare('SELECT COUNT(*) n FROM puente_email_envios WHERE enviado > ?').get(Date.now() - 24 * 60 * 60 * 1000).n >= DAILY_CAP) {
+  if (enElDia() >= DAILY_CAP) {
     warn('email: se llego al limite de mails del dia; no se manda');
     return false;
   }
@@ -287,4 +294,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, status, sendMail, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, status, sendMail, hayLugarMasivo, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };

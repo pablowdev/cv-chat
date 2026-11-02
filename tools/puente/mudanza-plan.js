@@ -351,8 +351,7 @@ async function emails(p) {
     const e = db.prepare('SELECT e.email, u.username, u.display_name FROM puente_emails e JOIN users u ON u.id = e.haven_user_id WHERE e.haven_user_id = ? AND e.confirmado = 1').get(x.h);
     if (!e) { sinEmail++; anotar.run(String(x.h), Date.now(), 0); continue; }
     // El limite diario de envios (lo comparten con los de confirmar email): si no da, se sigue mañana
-    const hoy = db.prepare('SELECT COUNT(*) n FROM puente_email_envios WHERE enviado > ?').get(Date.now() - DIA).n;
-    if (hoy >= 85) return { estado: 'pendiente', detalle: `${ok} mandados hoy; sigue mañana (límite diario)`, reintentar: 6 * HORA };
+    if (!ENSAYO && !email.hayLugarMasivo()) return { estado: 'pendiente', detalle: `${ok} mandados hoy; sigue mañana (límite diario)`, reintentar: 6 * HORA };
     const parrafos = completar(p.texto, { nombre: e.display_name || e.username }).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
     let bien = true;
     if (ENSAYO) log(`mudanza (ensayo): email a ${e.username}`);

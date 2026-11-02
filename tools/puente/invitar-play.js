@@ -2,7 +2,7 @@
 // Se corre a mano adentro del contenedor, una vez por dia hasta terminar:
 //   docker exec -w /app haven node /tools/puente/invitar-play.js ver      (cuantos faltan, no manda nada)
 //   docker exec -w /app haven node /tools/puente/invitar-play.js mandar   (hasta POR_DIA mas)
-// Usa el mismo envio de email.js (Resend) y cuenta para su limite diario. A cada cuenta le llega
+// Usa el mismo envio de email.js (Resend) y cuenta para su limite diario (para antes, en el cupo masivo). A cada cuenta le llega
 // una sola vez (puente_invitaciones_play), asi que se puede cortar y volver a correr.
 
 const Database = require(require.resolve('better-sqlite3', { paths: ['/app'] })); // la de Haven
@@ -51,6 +51,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   let enviadas = 0, fallas = 0;
   for (const p of faltan.slice(0, POR_DIA)) {
+    if (!email.hayLugarMasivo()) { console.log('se para aca: lo que queda del dia es para los mails de confirmar, recuperar y los codigos'); break; }
     const ok = await email.sendMail(p.email, ASUNTO, TITULO, PARRAFOS, BOTON, PIE);
     if (ok) {
       db.prepare('INSERT OR IGNORE INTO puente_invitaciones_play (haven_user_id, enviado) VALUES (?, ?)').run(p.id, Date.now());
