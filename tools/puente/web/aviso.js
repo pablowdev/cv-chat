@@ -4571,6 +4571,8 @@ document.addEventListener('pointerdown', (ev) => {
   // Ir al canal y al mensaje (o al hilo y a su mensaje)
   async function open(app, r) {
     if (!r || !r.codigo) return;
+    // En el celular, el panel de los canales tapa el chat (al tocar una notificacion o un enlace desde ahi)
+    try { if (document.getElementById('app-body')?.classList.contains('mobile-sidebar-open')) app._closeMobilePanels?.(); } catch { /* sigue */ }
     if (app.currentChannel !== r.codigo) await switchAndWait(app, r.codigo);
     if (r.hilo) {
       app._jumpToMessage(r.hilo);
@@ -4598,7 +4600,21 @@ document.addEventListener('pointerdown', (ev) => {
     else if (app._copyTextFallback) app._copyTextFallback(url, done);
   }
   // abrir(url): ir a un mensaje de la app sin recargar (lo usa la ventana de "Tu historia")
-  function openUrl(href) { const p = parse(href); if (!p) return false; resolve(p).then(res => { if (res.data && window.app) open(window.app, res.data); }); return true; }
+  // Si el mensaje ya no esta (lo borraron), se abre el canal igual y se avisa
+  function openUrl(href) {
+    const p = parse(href); if (!p) return false;
+    resolve(p).then(res => {
+      const app = window.app;
+      if (!app) return;
+      if (res.data) { open(app, res.data); return; }
+      let code = null;
+      try { code = new URL(href, location.href).searchParams.get('channel'); } catch { /* sin canal */ }
+      const known = code && (app.channels || []).some(c => c && c.code === code);
+      if (known) open(app, { codigo: code });
+      if (app._showToast) app._showToast(res.failed ? 'No se pudo abrir el mensaje. Probá de nuevo en un momento.' : 'Ese mensaje ya no está: lo borraron' + (known ? '' : ', o no tenés acceso a ese canal'), 'error');
+    });
+    return true;
+  }
   window.puenteEnlaces = { copiar: copyLink, abrir: openUrl };
 
   // El enlace pasa a ser el de CV Chat (asi tampoco lleva a Discord al abrirlo en
@@ -4855,6 +4871,12 @@ document.addEventListener('pointerdown', (ev) => {
   'use strict';
   const known = new Map(); // id del mensaje -> [embeds]  (sin entrada: lo maneja Haven)
   const asked = new Set();
+  const sinDiscord = new Set(); // mensajes que no estan en Discord: la vista previa de Haven, sin esperar
+  // Lo que viene con el historial (embeds.js), antes de que Haven lo dibuje (lo pone la parte de las previas)
+  window.puenteEmbedsDatos = (embeds, sin) => {
+    if (embeds && typeof embeds === 'object') for (const [id, list] of Object.entries(embeds)) if (Array.isArray(list)) known.set(String(id), list);
+    if (Array.isArray(sin)) for (const id of sin) { sinDiscord.add(String(id)); if (sinDiscord.size > 5000) sinDiscord.clear(); }
+  };
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const okUrl = u => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
@@ -5096,14 +5118,23 @@ document.addEventListener('pointerdown', (ev) => {
       let msgs = [];
       try { msgs = containerEl ? msgsIn(containerEl) : []; } catch { msgs = []; }
       if (!msgs.length) return orig.call(self, containerEl, ...rest);
-      msgs.forEach(m => defer(m, true));
-      load(msgs.map(m => m.dataset.msgId)).finally(() => {
-        for (const m of msgs) {
+      // Lo que ya se sabe (vino con el historial, o de antes) se dibuja ya, con el mensaje; solo se
+      // espera por los que faltan, y los demas no esperan por ellos
+      const pend = [];
+      for (const m of msgs) {
+        const id = m.dataset.msgId, list = known.get(id);
+        if (list) { defer(m, true); render(self, m, list); }
+        else if (sinDiscord.has(id)) defer(m, false); // sin embed de Discord: la vista previa de Haven
+        else { defer(m, true); pend.push(m); }
+      }
+      orig.call(self, containerEl, ...rest);
+      if (!pend.length) return;
+      load(pend.map(m => m.dataset.msgId)).finally(() => {
+        for (const m of pend) {
           const list = known.get(m.dataset.msgId);
           if (list) render(self, m, list);
-          else defer(m, false); // sin embed de Discord: la vista previa de Haven
+          else { defer(m, false); orig.call(self, m); }
         }
-        orig.call(self, containerEl, ...rest);
       });
     };
     // El embed de Discord llega un instante despues del mensaje: se reemplaza al vuelo
@@ -15478,4 +15509,70 @@ var puenteSinUbicacion = (function () {
   }
   setInterval(poner, 1500);
   addEventListener('resize', poner);
+})();
+// Las tarjetas de los enlaces, al instante (previas.js): las que el servidor ya tiene llegan junto
+// con los mensajes y se ponen en la memoria de Haven antes de que los dibuje, asi la tarjeta sale
+// con el mensaje (antes Haven las pedia despues, de a una). Con su imagen ya bajada, para los
+// mensajes de abajo. Y el enlace que se esta escribiendo se pide antes de mandarlo.
+(function () {
+  'use strict';
+  const EVENTOS = new Set(['message-history', 'thread-messages', 'new-message', 'new-thread-message']);
+  const URL_RE = /https?:\/\/[^\s<>()"'`]+/g;
+  const imagenes = new Set();
+  function precargar(app, d) {
+    for (const src of [d.image, d.avatar]) {
+      if (typeof src !== 'string' || !src || imagenes.has(src)) continue;
+      imagenes.add(src);
+      try { const p = typeof app._proxyMediaUrl === 'function' ? app._proxyMediaUrl(src) : src; if (p) new Image().src = p; } catch { /* sin imagen */ }
+    }
+  }
+  function poner(app, previas) {
+    if (!previas || typeof previas !== 'object') return;
+    if (!app._linkPreviewCache) app._linkPreviewCache = new Map();
+    const ahora = Date.now();
+    const todas = Object.entries(previas);
+    todas.forEach(([url, data], i) => {
+      if (!data || typeof data !== 'object' || typeof url !== 'string') return;
+      app._linkPreviewCache.set(url, { data, ts: ahora });
+      if (i >= todas.length - 8 && !(!data.title && !data.description && !data.text)) precargar(app, data); // las de los ultimos mensajes, que son los que se ven
+    });
+  }
+  function enganchar() {
+    const app = window.app, s = app && app.socket;
+    if (!s || s.__puentePrevias || typeof s.onevent !== 'function') return;
+    s.__puentePrevias = true;
+    const orig = s.onevent;
+    s.onevent = function (packet) {
+      try {
+        const d = packet && packet.data, p = d && EVENTOS.has(d[0]) && d[1];
+        if (p && p.puentePrevias) poner(app, p.puentePrevias);
+        if (p && (p.puenteEmbeds || p.puenteSinEmbed) && window.puenteEmbedsDatos) window.puenteEmbedsDatos(p.puenteEmbeds, p.puenteSinEmbed); // los de Discord (embeds.js)
+      } catch (err) { console.warn('[puente] previas:', err); }
+      return orig.apply(this, arguments);
+    };
+  }
+  // Lo que se escribe: cada enlace se pide una vez, medio segundo despues de dejar de escribir
+  const pedidos = new Set();
+  let timer = null;
+  function pedir(texto) {
+    const app = window.app;
+    if (!app || typeof app._linkPreviewData !== 'function') return;
+    for (let u of String(texto || '').match(URL_RE) || []) {
+      u = u.replace(/[.,;:!?*_~|>\]]+$/, '');
+      try { u = new URL(u).href; } catch { continue; }
+      if (pedidos.has(u) || u.startsWith(location.origin) || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u)) continue;
+      if (typeof app._extractYouTubeVideoId === 'function' && app._extractYouTubeVideoId(u)) continue;
+      if (pedidos.size > 300) pedidos.clear();
+      pedidos.add(u);
+      app._linkPreviewData(u).then((d) => { if (d) precargar(app, d); }).catch(() => {});
+    }
+  }
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLTextAreaElement) || !t.matches('#message-input, #thread-input, #dm-pip-input') || t.value.indexOf('http') < 0) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => pedir(t.value), 500);
+  }, true);
+  enganchar();
+  setInterval(enganchar, 1000);
 })();

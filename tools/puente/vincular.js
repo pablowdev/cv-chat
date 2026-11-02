@@ -130,6 +130,8 @@ function setup(ctx) {
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
   // Las vistas previas de los enlaces (la imagen con un pedacito del chat, del foro o de la web)
   require('./vistas.js').setup({ db, log, warn, publicUrl });
+  // Las tarjetas de los enlaces guardadas, y junto con los mensajes (previas.js)
+  require('./previas.js').setup({ db, io, log, warn });
   // De donde llega la gente que se crea la cuenta (la pestaña "Estadisticas" de la pagina "Miembros")
   require('./origenes.js').setup({ db, log, warn });
   // El equipo sin verificacion en dos pasos queda como miembro comun hasta que la prende
@@ -218,6 +220,8 @@ function hookHttp() {
         // Un enlace a un mensaje (de CV Chat o de Discord) se ve como "#canal › mensaje"
         // (web/aviso.js): sin tarjeta de vista previa
         if (isMessageLink(url)) { json(res, 400, { error: 'enlace a un mensaje' }); return true; }
+        // Las ya guardadas, al instante; si no, se guarda lo que se conteste (previas.js)
+        if (req.method === 'GET' && require('./previas.js').handle(req, res, sessionUser(req))) return true;
         // Un enlace al foro: la tarjeta con el tema (foro-lector.js)
         if (foroPreview(req, res)) return true;
         req.url = twitterProxyToX(url);

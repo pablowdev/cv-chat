@@ -28,6 +28,18 @@ function setup(ctx) {
     haven_message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     por INTEGER, fecha INTEGER NOT NULL
   )`);
+  // Junto con el historial de un canal o de un hilo van los embeds que ya estan guardados
+  // (puenteEmbeds) y cuales mensajes no van a tener (puenteSinEmbed): web/aviso.js los dibuja con
+  // el mensaje, sin tener que preguntarlos despues
+  if (io) io.on('connection', socket => {
+    const emitir = socket.emit;
+    socket.emit = function (event, payload, ...rest) {
+      if ((event === 'message-history' || event === 'thread-messages') && payload && Array.isArray(payload.messages) && !payload.puenteEmbeds) {
+        try { const h = paraHistorial(payload.messages); if (h) payload = { ...payload, ...h }; } catch (err) { warn('embeds:', err.message); }
+      }
+      return emitir.call(this, event, payload, ...rest);
+    };
+  });
 }
 
 const str = (v, n) => (typeof v === 'string' && v ? v.slice(0, n) : undefined);
@@ -167,6 +179,27 @@ async function forUser(user, ids) {
   // Se espera un poco a los viejos; los que tarden mas llegan despues por el socket
   if (waits.length) await Promise.race([Promise.all(waits), new Promise(r => setTimeout(r, MAX_WAIT_MS))]);
   return out;
+}
+
+// Para el historial que se le manda a alguien (ya puede ver esos mensajes): los embeds guardados, y
+// los mensajes con enlaces que no van a tener (no estan en Discord). Los que faltan pedirle a Discord
+// se piden ya; llegan por el socket ("puente-embeds")
+function paraHistorial(messages) {
+  const ids = messages.filter(m => m && Number.isInteger(m.id) && typeof m.content === 'string' && /https?:\/\//i.test(m.content)).map(m => m.id).slice(0, 200);
+  if (!ids.length) return null;
+  const rows = db.prepare(`SELECT m.id, m.content, m.thread_id, m.discord_message_id, c.is_dm, c.discord_channel_id dch, pe.embeds, sv.haven_message_id sv
+                           FROM messages m JOIN channels c ON c.id = m.channel_id
+                           LEFT JOIN puente_embeds pe ON pe.haven_message_id = m.id
+                           LEFT JOIN puente_sin_vista sv ON sv.haven_message_id = m.id
+                           WHERE m.id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  const embeds = {}, sin = [];
+  for (const r of rows) {
+    if (r.sv) { embeds[r.id] = []; continue; }
+    if (r.embeds != null) { try { embeds[r.id] = JSON.parse(r.embeds); continue; } catch { /* se vuelve a pedir */ } }
+    if (r.discord_message_id) fetchLater(r).catch(() => {});
+    else sin.push(r.id);
+  }
+  return { puenteEmbeds: embeds, puenteSinEmbed: sin };
 }
 
 // La ✕ de la vista previa: solo quien escribio el mensaje, o un admin. Queda el enlace solo, para
