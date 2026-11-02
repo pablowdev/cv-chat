@@ -163,7 +163,8 @@ const paso = (clave) => db.prepare('SELECT * FROM puente_mudanza_pasos WHERE cla
 const marcar = (clave, estado, detalle) => db.prepare('UPDATE puente_mudanza_pasos SET estado = ?, detalle = ?, hecho = CASE WHEN ? IN (\'hecho\', \'error\', \'vencido\') THEN ? ELSE hecho END WHERE clave = ?')
   .run(estado, detalle == null ? null : String(detalle).slice(0, 2000), estado, Date.now(), clave);
 const corteMs = () => (paso(CORTE) || {}).cuando || ar('2026-11-24T12:00');
-const enlace = () => (publicUrl || 'https://chat.circulovicioso.club') + '/puente/entrar';
+// (con su etiqueta: la app de Discord y los mails abren el enlace sin decir de donde se viene)
+const enlace = (de = 'discord') => (publicUrl || 'https://chat.circulovicioso.club') + '/puente/entrar?de=' + de;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // ── El reloj ────────────────────────────────────────────────────────────────
@@ -352,11 +353,11 @@ async function emails(p) {
     if (!e) { sinEmail++; anotar.run(String(x.h), Date.now(), 0); continue; }
     // El limite diario de envios (lo comparten con los de confirmar email): si no da, se sigue mañana
     if (!ENSAYO && !email.hayLugarMasivo()) return { estado: 'pendiente', detalle: `${ok} mandados hoy; sigue mañana (límite diario)`, reintentar: 6 * HORA };
-    const parrafos = completar(p.texto, { nombre: e.display_name || e.username }).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    const parrafos = completar(p.texto, { nombre: e.display_name || e.username, enlace: enlace('email') }).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
     let bien = true;
     if (ENSAYO) log(`mudanza (ensayo): email a ${e.username}`);
     else bien = await email.sendMail(e.email, 'Tu cuenta de CV Chat te está esperando', 'Nos mudamos del todo a CV Chat', parrafos,
-      ['Abrir CV Chat', (publicUrl || 'https://chat.circulovicioso.club') + '/app'], 'Te llega porque tenés una cuenta en CV Chat con este email confirmado.');
+      ['Abrir CV Chat', (publicUrl || 'https://chat.circulovicioso.club') + '/app?de=email'], 'Te llega porque tenés una cuenta en CV Chat con este email confirmado.');
     if (bien) {
       ok++; anotar.run(String(x.h), Date.now(), 1);
       if (!ENSAYO) db.prepare('INSERT INTO puente_email_envios (enviado, tipo, clave) VALUES (?, ?, ?)').run(Date.now(), 'mudanza', String(x.h));

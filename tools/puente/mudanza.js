@@ -20,7 +20,7 @@ const on = () => String(process.env.PUENTE_MUDANZA || '1').trim() !== '0';
 
 function texto() {
   const app = appName();
-  const url = (publicUrl || '') + '/puente/entrar';
+  const url = (publicUrl || '') + '/puente/entrar?de=discord';
   return [
     `👋 ¡Hola! El servidor de Discord donde escribís se está mudando a **${app}**.`,
     `Dentro de poco (la fecha todavía no está definida), **las cuentas de Discord sin vincular no van a poder escribir más ahí**. Mejor ir haciéndolo ahora: es un clic.`,

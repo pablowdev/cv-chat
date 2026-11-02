@@ -22,6 +22,9 @@
   var etiqueta = q.get('de') || q.get('utm_source') || '';
   var invita = q.get('invita') || '';
   var android = /^android-app:\/\/club\.circulovicioso\.chat/.test(ref);
+  // (la vuelta de "Entrar con Discord" o de vincularlo trae a discord.com como sitio anterior: no es
+  // haber llegado desde Discord, asi que no reemplaza por donde se llego antes)
+  if (/^\/puente\/(entrar|vincular)$/.test(location.pathname) && /(^|\.)discord(app)?\.com$/.test(refHost)) refHost = '';
   var deAfuera = !!etiqueta || !!invita || (!!refHost && !propio);
   var ya = leer();
   if (!ya || deAfuera) {

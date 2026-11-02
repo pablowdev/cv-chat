@@ -12,7 +12,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
 const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', 'Full Fat Search', '/full-fat-search'],
   ['marketplace', 'Marketplace', '/marketplace'],
-  ['foro', 'Foro', FORO + '/', true], ['chat', 'Chat', CHAT + '/app', true]];
+  ['foro', 'Foro', FORO + '/'], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice, imagen }) {
   const desc = descripcion || 'Círculo Vicioso: club de amigos, comunidad online, rejunto de gordos.';

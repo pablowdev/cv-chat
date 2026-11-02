@@ -2335,7 +2335,8 @@ function leido(sc) {
     const [, m, d] = e.split('-'); return Number(d) + '/' + Number(m);
   }
   function variacion(act, ant) {
-    if (!ant) return act ? ['nuevo', 'sube'] : ['', ''];
+    // (sin nada en el periodo anterior, por ejemplo antes de que existiera, no hay con que comparar)
+    if (!ant) return act ? ['sin datos de antes', ''] : ['', ''];
     const p = Math.round(((act - ant) / ant) * 100);
     return [(p > 0 ? '↑ +' : p < 0 ? '↓ ' : '') + p + '%', p > 0 ? 'sube' : p < 0 ? 'baja' : ''];
   }
@@ -2390,7 +2391,11 @@ function leido(sc) {
       c.appendChild(el('div', 'pe-total-l', label));
       const fila = el('div', 'pe-total-fila'); fila.appendChild(el('span', 'pe-total-n', fmt(act)));
       const [txt, cls] = variacion(act, ant);
-      if (txt && !(k === 'activos' && d.activosDesde && d.activosDesde > d.desde)) fila.appendChild(el('span', 'pe-var ' + cls, txt));
+      if (txt && !(k === 'activos' && d.activosDesde && d.activosDesde > d.desde)) {
+        const v = el('span', 'pe-var ' + cls, txt);
+        v.title = ant ? 'Comparado con el período anterior del mismo largo' : 'En el período anterior no hubo nada para comparar (todavía no existía o no se contaba)';
+        fila.appendChild(v);
+      }
       c.appendChild(fila);
       totales.appendChild(c);
     }
@@ -2423,7 +2428,7 @@ function leido(sc) {
     const can = el('div');
     const maxC = Math.max(1, ...d.canales.map(c => c.n));
     for (const c of d.canales.slice(0, 12)) {
-      const [txt] = variacion(c.n, c.ant);
+      const [txt] = c.ant ? variacion(c.n, c.ant) : [''];
       const f = filaBarra('#' + c.nombre, c.n, maxC, fmt(c.n) + (txt ? '  ' + txt : ''));
       f.classList.add('pe-clic'); f.addEventListener('click', () => { if (window.app) window.app.switchChannel(c.code); });
       can.appendChild(f);
