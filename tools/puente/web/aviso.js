@@ -15399,3 +15399,52 @@ var puenteSinUbicacion = (function () {
   })();
   try { if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', (e) => { if (e.data && e.data.type === 'push-notification-click') medir({ t: 'notif' }); }); } catch { /* sin service worker */ }
 })();
+// El enlace de cada canal: un botoncito arriba a la derecha (como el del Marketplace) que copia la
+// direccion del canal (/app?channel=<codigo>, con su vista previa: vistas.js); en el celular abre
+// "Compartir". Solo en los canales, no en los mensajes directos ni los grupos.
+(function () {
+  'use strict';
+  if (window.name === 'cv-ventana') return;
+  const mobile = () => matchMedia('(max-width: 768px)').matches;
+  const byId = (id) => document.getElementById(id);
+  const toast = (t, k) => { try { window.app && window.app._showToast && window.app._showToast(t, k || 'info'); } catch { /* sin aviso */ } };
+  const ENLACE = 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z';
+  const st = document.createElement('style');
+  st.textContent = '#puente-enlace-canal{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:2rem;height:2rem;margin:0 .25rem;padding:0;border:0;border-radius:50%;background:transparent;color:#b5bac1;cursor:pointer}'
+    + '#puente-enlace-canal:hover{color:#fff;background:#2e2d32}#puente-enlace-canal[hidden]{display:none!important}'
+    + '@media (max-width:768px){#puente-enlace-canal{width:2.75rem;height:2.75rem;margin:0}#puente-enlace-canal:active{background:#2e2d32}}';
+  document.head.appendChild(st);
+  const canal = () => {
+    const app = window.app;
+    const ch = app && app.currentChannel && (app.channels || []).find(c => c && c.code === app.currentChannel);
+    return ch && !ch.is_dm && !ch.is_group && !ch.is_self_dm ? ch : null;
+  };
+  function copiar() {
+    const ch = canal();
+    if (!ch) return;
+    const url = location.origin + '/app?channel=' + encodeURIComponent(ch.code);
+    if (navigator.share && mobile()) { navigator.share({ title: '#' + ch.name, url }).catch(() => {}); return; }
+    const listo = () => toast('Enlace de #' + ch.name + ' copiado: pegalo donde quieras', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(listo, () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+  function poner() {
+    const cab = document.querySelector('header.channel-header');
+    if (!cab) return;
+    let b = byId('puente-enlace-canal');
+    if (!b) {
+      b = document.createElement('button');
+      b.id = 'puente-enlace-canal'; b.type = 'button';
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="' + ENLACE + '"/></svg>';
+      b.addEventListener('click', (e) => { e.stopPropagation(); copiar(); });
+    }
+    b.title = mobile() ? 'Compartir el canal' : 'Copiar el enlace del canal'; b.setAttribute('aria-label', b.title);
+    // En el celular, al lado de la lupa; en la PC, antes del buscador
+    const antes = mobile() ? (byId('puente-lupa') || byId('mobile-users-btn')) : byId('search-container');
+    if (antes && antes.parentElement === cab) { if (b.nextSibling !== antes) cab.insertBefore(b, antes); }
+    else if (b.parentElement !== cab) cab.appendChild(b);
+    b.hidden = !canal();
+  }
+  setInterval(poner, 1500);
+  addEventListener('resize', poner);
+})();
