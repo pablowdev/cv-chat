@@ -4698,7 +4698,32 @@ document.addEventListener('pointerdown', (ev) => {
       body.appendChild(f);
     }
     c.insertBefore(body, c.firstChild);
+    if (e.type !== 'video') conVideo(app, c, e);
     return c;
+  }
+
+  // Los tuits con video: Discord guarda solo la foto, asi que el video se busca aparte (la vista previa de
+  // tuits del puente, vincular.js) y va en la tarjeta en lugar de la foto, para verlo aca mismo
+  const TUIT = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com|(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx)\.com)\/[A-Za-z0-9_]{1,20}\/status(?:es)?\/\d+/i;
+  const tuits = new Map(); // enlace -> promesa con la vista previa
+  function conVideo(app, c, e) {
+    const u = okUrl(e.url);
+    if (!u || !TUIT.test(u)) return;
+    const tk = token();
+    if (!tk) return;
+    if (!tuits.has(u)) {
+      tuits.set(u, fetch('/api/link-preview?url=' + encodeURIComponent(u), { headers: { Authorization: 'Bearer ' + tk } })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null)
+        .then(d => { if (!d) tuits.delete(u); return d; }));
+    }
+    tuits.get(u).then(d => {
+      if (!d || !okUrl(d.video) || !c.isConnected || c.querySelector('.pe-video')) return;
+      const v = video(app, { video: { url: d.video, w: d.videoW, h: d.videoH }, thumbnail: okUrl(d.image) ? { url: d.image, w: d.videoW, h: d.videoH } : null });
+      c.querySelectorAll('.pe-thumb, .pe-images').forEach(n => n.remove());
+      c.classList.remove('pe-has-thumb');
+      const body = c.querySelector('.pe-body'), pie = body && body.querySelector('.pe-footer');
+      if (body) body.insertBefore(v, pie || null);
+    });
   }
 
   function render(app, msgEl, list) {

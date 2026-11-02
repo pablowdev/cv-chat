@@ -311,6 +311,8 @@ function tweetPreview(req, res, next) {
             title: a.name ? `${a.name} on X` : 'X / Twitter', text: text || null, description: text.slice(0, 280) || null,
             image: vid?.thumbnail_url || photos[0] || null, images: photos.length >= 2 ? photos.slice(0, 4) : undefined,
             video: vid?.url || null, videoType: vid?.url ? 'video/mp4' : undefined,
+            // (las medidas, para la tarjeta de los tuits que llegan de Discord: web/aviso.js, conVideo)
+            videoW: vid?.width || undefined, videoH: vid?.height || undefined,
             stats: { replies: tw.replies ?? -1, reposts: tw.retweets ?? -1, likes: tw.likes ?? -1, views: tw.views ?? -1 },
           };
           tweetCache.set(m[2], { at: Date.now(), data });
