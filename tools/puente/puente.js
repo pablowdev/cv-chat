@@ -147,6 +147,7 @@ function start(deps) {
   require('./denuncias.js').setup({ db, io, log, warn });
   require('./presencia.js').setup({ db, io, log, warn });
   require('./panel-estadisticas.js').setup({ db, io, log, warn });
+  require('./juegos-estadisticas.js').setup({ db, warn });
   require('./uso.js').setup({ db, log, warn }); // (despues: usa puente_activos)
   require('./medidas.js').setup({ db, io, log, warn });
   require('./informe.js').setup({ db, log, warn, publicUrl });

@@ -2035,6 +2035,21 @@ html body #right-sidebar #online-users .user-group-label.offline-label { margin-
 /* Pestaña "Marketplace" (aviso.js, mercado.js /admin) */
 .pk-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
 .pk-vista[hidden] { display: none !important; }
+/* Pestaña "Juegos" de la administracion (aviso.js, juegos-estadisticas.js) */
+.pj-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
+.pj-vista[hidden] { display: none !important; }
+.pm-celular .pj-vista { padding: 0.75rem; }
+.pj-leyenda { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; margin-top: 0.5rem; font-size: 0.8125rem; color: #b5bac1; }
+.pj-ley, .pj-juego { display: inline-flex; align-items: center; gap: 0.375rem; }
+.pj-ley i, .pj-juego i { width: 0.625rem; height: 0.625rem; border-radius: 0.1875rem; flex: none; }
+.pj-juego { font-weight: 600; color: #fbfbfb; }
+.pj-personas button.pe-tabla-fila { width: 100%; border: 0; border-bottom: 1px solid #29292d; background: none; font: inherit; text-align: left; cursor: pointer; }
+.pj-personas button.pe-tabla-fila:hover { background: #2b2d31; }
+.pj-persona { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 0; color: #fbfbfb; font-weight: 600; }
+.pj-persona > span:not(.pj-nuevo) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-persona img { width: 1.5rem; height: 1.5rem; border-radius: 50%; object-fit: cover; flex: none; }
+.pj-nuevo { flex: none; padding: 0 0.375rem; border-radius: 999px; background: rgba(59, 165, 92, 0.18); color: #7fd6a2; font-size: 0.6875rem; font-weight: 700; }
+.pj-partida-t { color: #dbdee1; font-size: 0.875rem; font-weight: 600; }
 .pk-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 .pk-cuerpo .pe-caja > div:last-child { display: flex; flex-direction: column; gap: 0.375rem; }
 .pk-link { flex: 1 1 12rem; min-width: 0; padding: 0; border: 0; background: none; color: #efeff1; font: inherit; font-size: 0.9375rem; font-weight: 600; text-align: left; cursor: pointer; }

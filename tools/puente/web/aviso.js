@@ -2815,6 +2815,8 @@ function leido(sc) {
     page.querySelector('.pe-vista').hidden = v !== 'estadisticas';
     const mz = page.querySelector('.pmz-vista'); if (mz) mz.hidden = v !== 'mudanza';
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
+    const jg = page.querySelector('.pj-vista'); if (jg) jg.hidden = v !== 'juegos';
+    if (v === 'juegos' && !page.querySelector('.pj-cuerpo').childNodes.length) cargarJuegosEst();
     if (v === 'mudanza') cargarMudanza();
     if (v === 'marketplace') cargarMarketplace();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
@@ -3098,6 +3100,208 @@ function leido(sc) {
     box.appendChild(tarjeta('Publicaciones (' + fmt(d.publicaciones.length) + ')', pb, 'pe-ancha'));
   }
 
+  // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
+  // terminan, con las partidas terminadas y el tiempo de uso ──
+  let rangoJg = '4s';
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege'];
+  const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
+    tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
+  const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
+  const nombreJg = (id) => (JG[id] || [id])[0];
+  const cuandoJg = (ms) => (ms ? new Date(ms).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' }) : '—');
+  function armarVistaJuegos() {
+    const v = el('div', 'pj-vista'); v.hidden = true;
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'Juegos'));
+    const rangos = el('div', 'pe-rangos');
+    for (const [k, label] of [['7d', '7D'], ['4s', '4S'], ['3m', '3M'], ['1a', '1A'], ['todo', 'Todo']]) {
+      const b = el('button', 'pe-rango pj-rango', label); b.type = 'button'; b.dataset.r = k;
+      b.title = { '7d': 'Últimos 7 días', '4s': 'Últimas 4 semanas', '3m': 'Últimos 3 meses', '1a': 'Último año', todo: 'Desde la primera partida' }[k];
+      b.addEventListener('click', () => { rangoJg = k; cargarJuegosEst(); });
+      rangos.appendChild(b);
+    }
+    barra.appendChild(rangos);
+    v.append(barra, el('div', 'pe-cuerpo pj-cuerpo'));
+    return v;
+  }
+  function cargarJuegosEst() {
+    const box = page && page.querySelector('.pj-cuerpo');
+    if (!box) return;
+    page.querySelectorAll('.pj-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoJg));
+    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
+    fetch('/puente/api/estadisticas/juegos?rango=' + rangoJg, { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarJuegos(box, d); })
+      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar las estadísticas de los juegos.')); } });
+  }
+  // Barritas chicas en SVG (las horas del dia)
+  function barritas(valores, etiquetas, color) {
+    const W = 640, H = 150, izq = 26, abajo = 20, arriba = 8, n = valores.length, max = Math.max(1, ...valores);
+    const ancho = (W - izq) / n, b = Math.max(2, ancho * 0.7);
+    const y = v => H - abajo - ((H - abajo - arriba) * v) / max;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" class="pe-svg" role="img">`;
+    for (const f of [0, 1]) { const v = Math.round(max * f), yy = y(v); svg += `<line x1="${izq}" x2="${W}" y1="${yy}" y2="${yy}" class="pe-guia"/><text x="${izq - 6}" y="${yy + 4}" class="pe-eje" text-anchor="end">${fmt(v)}</text>`; }
+    valores.forEach((v, i) => {
+      const x = izq + i * ancho + (ancho - b) / 2;
+      if (v) svg += `<rect x="${x}" y="${y(v)}" width="${b}" height="${Math.max(1, y(0) - y(v))}" rx="2" fill="${color}"><title>${etiquetas[i]}: ${fmt(v)}</title></rect>`;
+      if (i % 3 === 0) svg += `<text x="${x + b / 2}" y="${H - 5}" class="pe-eje" text-anchor="middle">${etiquetas[i]}</text>`;
+    });
+    return svg + '</svg>';
+  }
+  function pintarJuegos(box, d) {
+    box.textContent = '';
+    const R = d.resumen, per = PERIODO_JG[d.rango] || 'este período';
+    const usoParcial = d.usoDesde && d.usoDesde > d.desde;
+    const juegos = JG_ORDEN.map(id => d.juegos.find(j => j.id === id)).filter(Boolean);
+    const totP = R.partidas[0];
+    if (!totP && !R.minutos[0]) { box.appendChild(el('div', 'pm-sin', 'Todavía no se jugó nada en ' + per + '.')); return; }
+
+    // 1. Lo principal, en pocas frases
+    const ul = el('ul', 'pe-resumen');
+    const masJugado = [...juegos].sort((a, b) => b.partidas - a.partidas)[0];
+    ul.appendChild(frase(['En ' + per + ' se terminaron ', ['b', fmt(totP)], totP === 1 ? ' partida' : ' partidas', cambio(totP, R.partidas[1]), '.']));
+    if (masJugado && masJugado.partidas) ul.appendChild(frase(['El más jugado: ', ['b', masJugado.nombre], ' (' + pct(masJugado.partidas, totP) + '% de las partidas, ' + fmt(masJugado.jugadores) + (masJugado.jugadores === 1 ? ' persona' : ' personas') + ').']));
+    ul.appendChild(frase([['b', fmt(R.jugadores[0])], R.jugadores[0] === 1 ? ' persona jugó' : ' personas jugaron', cambio(R.jugadores[0], R.jugadores[1]), R.nuevos ? '; ' : '.', ...(R.nuevos ? [['b', fmt(R.nuevos)], ' por primera vez.'] : [])]));
+    if (totP) ul.appendChild(frase([['b', pct(totP - R.contraPersonas[0], totP) + '%'], ' fueron contra la compu y ', ['b', pct(R.contraPersonas[0], totP) + '%'], ' entre personas (' + fmt(R.contraPersonas[0]) + ').']));
+    if (R.minutos[0]) ul.appendChild(frase(['Con un juego abierto estuvieron ', ['b', duracion(R.minutos[0])], ' en total (' + duracion(R.minutosPorJugador) + ' por persona)' + (usoParcial ? ', medido desde el ' + etiqueta(d.usoDesde, 'dia') : '') + '.']));
+    if (R.sala) ul.appendChild(frase(['De las ', ['b', fmt(R.sala)], ' personas que abrieron la sala de juegos, ', ['b', pct(R.salaJugaron, R.sala) + '%'], ' llegó a jugar algo.']));
+    if (R.invitados) ul.appendChild(frase(['Sin cuenta: ', ['b', fmt(R.invitados)], R.invitados === 1 ? ' invitado' : ' invitados', ' entraron a jugar' + (R.invitadosMin ? ' (' + duracion(R.invitadosMin) + ' en total)' : '') + '.']));
+    box.appendChild(tarjeta('En pocas palabras', ul, 'pe-ancha pe-resumen-caja'));
+
+    // 2. Los totales
+    const tot = el('div', 'pe-totales');
+    const dato = (l, v, act, ant, nota) => {
+      const c = el('div', 'pe-total'); c.appendChild(el('div', 'pe-total-l', l));
+      const f = el('div', 'pe-total-fila'); f.appendChild(el('span', 'pe-total-n', v));
+      if (ant != null && d.rango !== 'todo') { const [txt, cls] = variacion(act, ant); if (txt) f.appendChild(el('span', 'pe-var ' + cls, txt)); }
+      c.appendChild(f); if (nota) c.appendChild(el('div', 'pe-nota', nota)); tot.appendChild(c);
+    };
+    dato('Partidas terminadas', fmt(totP), totP, R.partidas[1]);
+    dato('Personas que jugaron', fmt(R.jugadores[0]), R.jugadores[0], R.jugadores[1]);
+    dato('Entre personas', fmt(R.contraPersonas[0]), R.contraPersonas[0], R.contraPersonas[1]);
+    dato('Jugaron por primera vez', fmt(R.nuevos));
+    dato('Tiempo en partidas', duracion(R.minutosPartidas[0]), R.minutosPartidas[0], R.minutosPartidas[1], 'De que empieza a que termina cada una');
+    dato('Con un juego abierto', duracion(R.minutos[0]), R.minutos[0], usoParcial ? null : R.minutos[1], usoParcial ? 'Se mide desde el ' + etiqueta(d.usoDesde, 'dia') : 'A la vista y en uso');
+    dato('Invitados (sin cuenta)', fmt(R.invitados), null, null, R.invitadosMin ? duracion(R.invitadosMin) + ' jugando' : '');
+    dato('Ahora', fmt(R.ahora.jugando) + ' · ' + fmt(R.ahora.esperando), null, null, 'Partidas en juego (último día) · mesas esperando rival');
+    box.appendChild(tot);
+
+    // 3. Partidas por dia, semana o mes, de cada juego (apiladas)
+    const g = el('div');
+    g.innerHTML = barras(JG_ORDEN.map(id => d.serie.juegos[id] || []), d.serie.etiquetas, d.serie.paso, JG_ORDEN.map(id => JG[id][1]));
+    const ley = el('div', 'pj-leyenda');
+    for (const id of JG_ORDEN) { const s = el('span', 'pj-ley'); const c = el('i'); c.style.background = JG[id][1]; s.append(c, document.createTextNode(JG[id][0])); ley.appendChild(s); }
+    g.appendChild(ley);
+    box.appendChild(tarjeta('Partidas por ' + ({ dia: 'día', semana: 'semana', mes: 'mes' }[d.serie.paso] || 'período'), g, 'pe-ancha'));
+
+    // 4. Cada juego, comparado
+    const cab = ['Juego', 'Partidas', 'Personas', 'Contra la compu', 'Entre personas', 'En partidas', 'Con el juego abierto', 'Una partida dura', 'Abandonos'];
+    const t = el('div', 'pe-tabla');
+    const fila = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(7rem, 1.5fr) repeat(' + (cab.length - 1) + ', minmax(5rem, 1fr))'; f.style.minWidth = '52rem'; celdas.forEach(c => f.appendChild(c instanceof Node ? c : el('span', '', c))); return f; };
+    t.appendChild(fila(cab, 'pe-tabla-cab'));
+    for (const j of juegos) {
+      const n = el('span', 'pj-juego'); const c = el('i'); c.style.background = JG[j.id][1]; n.append(c, document.createTextNode(j.nombre));
+      const [vtxt] = d.rango !== 'todo' ? variacion(j.partidas, j.antes) : [''];
+      t.appendChild(fila([n, fmt(j.partidas) + (vtxt ? ' (' + vtxt + ')' : ''), fmt(j.jugadores), fmt(j.contraCompu), fmt(j.contraPersonas), duracion(j.minutosPartidas),
+        j.minutos ? duracion(j.minutos) + ' · ' + fmt(j.personasUso) + ' pers.' : '—', j.duracion ? duracion(j.duracion) : '—', j.partidas ? j.abandonos + '%' : '—']));
+    }
+    const nota = el('div', 'pe-nota', '"Una partida dura": la mitad dura menos que eso (la mediana). Las partidas que quedan abiertas mucho tiempo cuentan hasta 2 horas. Con invitados no se guardan: de ellos queda solo el tiempo.');
+    const cj = el('div'); cj.append(t, nota);
+    box.appendChild(tarjeta('Cada juego', cj, 'pe-ancha'));
+
+    // 5. El detalle de cada juego: como terminan, como se juegan y cuanto le gana la compu
+    for (const j of juegos) {
+      if (!j.partidas) continue;
+      const c = el('div');
+      const top = el('div', 'pe-totales');
+      const mini = (l, v) => { const x = el('div', 'pe-total'); x.append(el('div', 'pe-total-l', l), el('div', 'pe-total-n', v)); top.appendChild(x); };
+      mini('Partidas', fmt(j.partidas));
+      if (j.ganaCompu != null) mini('La compu gana', j.ganaCompu + '%');
+      if (j.jugadas) mini('Jugadas por partida', fmt(j.jugadas));
+      if (j.rondas) mini('Rondas por partida', fmt(j.rondas));
+      c.appendChild(top);
+      if (j.motivos.length) {
+        c.appendChild(el('div', 'pe-sub', 'Cómo terminan'));
+        for (const m of j.motivos.slice(0, 5)) c.appendChild(filaBarra(MOTIVO_JG[m.m] || m.m, m.n, j.partidas, fmt(m.n) + ' · ' + pct(m.n, j.partidas) + '%'));
+      }
+      if (j.detalles.length) {
+        c.appendChild(el('div', 'pe-sub', 'Cómo se juega'));
+        for (const x of j.detalles) c.appendChild(filaBarra(x.d, x.n, j.partidas, fmt(x.n) + ' · ' + pct(x.n, j.partidas) + '%'));
+      }
+      box.appendChild(tarjeta(j.nombre, c));
+    }
+
+    // 6. Cuando se juega
+    const cu = el('div');
+    const hs = [...Array(24).keys()].map(h => h + ' h');
+    const hw = el('div'); hw.innerHTML = barritas(d.horas, hs, '#5865f2'); cu.appendChild(hw);
+    cu.appendChild(el('div', 'pe-sub', 'Por día de la semana'));
+    const maxD = Math.max(1, ...d.dias);
+    DIAS.forEach((n, i) => cu.appendChild(filaBarra(n, d.dias[i], maxD, fmt(d.dias[i]))));
+    cu.appendChild(el('div', 'pe-nota', 'Hora de Argentina, cuando terminó cada partida.'));
+    box.appendChild(tarjeta('Cuándo se juega', cu));
+
+    // 7. Los que mas se enfrentan
+    const rv = el('div');
+    if (!d.rivales.length) rv.appendChild(el('div', 'pe-nota', 'Todavía no hubo partidas entre personas en ' + per + '.'));
+    for (const r of d.rivales) {
+      const f = el('button', 'pe-riesgo-fila'); f.type = 'button'; f.title = 'Ver el perfil de ' + r.a.nombre;
+      f.append(el('span', 'pe-riesgo-n', r.a.nombre + ' vs ' + r.b.nombre), el('span', 'pe-riesgo-d', fmt(r.partidas) + (r.partidas === 1 ? ' partida' : ' partidas') + ' · ' + r.ganaA + ' a ' + r.ganaB + ' · ' + nombreJg(r.juego)));
+      f.addEventListener('click', () => abrirPerfil(r.a.id));
+      rv.appendChild(f);
+    }
+    box.appendChild(tarjeta('Los que más se enfrentan', rv));
+
+    // 8. Quien juega
+    const cabP = ['Persona', 'Partidas', 'Gana', 'Contra la compu', 'Entre personas', 'En partidas', 'Con el juego abierto', 'Su juego', 'Última'];
+    const tp = el('div', 'pe-tabla pj-personas');
+    const filaP = (celdas, cls) => { const f = el(cls === 'pe-tabla-cab' ? 'div' : 'button', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) repeat(' + (cabP.length - 1) + ', minmax(4.75rem, 1fr))'; f.style.minWidth = '54rem'; celdas.forEach(c => f.appendChild(c instanceof Node ? c : el('span', '', c))); return f; };
+    tp.appendChild(filaP(cabP, 'pe-tabla-cab'));
+    for (const p of d.personas) {
+      const n = el('span', 'pj-persona');
+      if (p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.loading = 'lazy'; n.appendChild(i); }
+      n.appendChild(el('span', '', p.nombre));
+      if (p.nuevo) n.appendChild(el('span', 'pj-nuevo', 'nuevo'));
+      const f = filaP([n, fmt(p.partidas), p.victorias == null ? '—' : p.victorias + '%', fmt(p.compu), fmt(p.personas), p.minutosPartidas ? duracion(p.minutosPartidas) : '—',
+        p.minutos ? duracion(p.minutos) : '—', p.favorito ? nombreJg(p.favorito) : '—', p.ultimo ? cuandoJg(p.ultimo) : '—']);
+      f.type = 'button'; f.title = 'Ver el perfil de ' + p.nombre;
+      f.addEventListener('click', () => abrirPerfil(p.id));
+      tp.appendChild(f);
+    }
+    const cp = el('div'); cp.appendChild(tp);
+    cp.appendChild(el('div', 'pe-nota', '"Gana": de sus partidas con ganador (sin tablas ni las que no terminaron). "nuevo": jugó por primera vez en este período. Tocá una persona para ver su perfil.'));
+    box.appendChild(tarjeta('Quién juega (' + fmt(d.personas.length) + ')', cp, 'pe-ancha'));
+
+    // 9. Las ultimas partidas
+    const ur = el('div');
+    for (const p of d.recientes) {
+      const f = el('div', 'pe-error');
+      const quienes = p.jugadores.map(x => x.nombre).join(' vs ') + (p.compu ? (p.jugadores.length ? ' vs ' : '') + 'la compu' : '');
+      const gano = p.ganador === 'compu' ? 'ganó la compu' : p.ganador ? 'ganó ' + p.ganador : p.motivo === 'tablas' || p.motivo === 'ahogado' ? 'tablas' : '';
+      f.append(el('div', 'pj-partida-t', nombreJg(p.juego) + ' · ' + quienes),
+        el('div', 'pe-error-d', [cuandoJg(p.fin), p.minutos ? duracion(p.minutos) : '', gano, MOTIVO_JG[p.motivo] || p.motivo || '', p.detalle].filter(Boolean).join(' · ')));
+      ur.appendChild(f);
+    }
+    box.appendChild(tarjeta('Últimas partidas', ur, 'pe-ancha'));
+
+    // 10. Para bajar en planilla
+    const csv = el('div', 'pe-csv');
+    const b = el('button', 'pe-csv-btn', 'Bajar en planilla (CSV)'); b.type = 'button';
+    b.addEventListener('click', () => {
+      const f = [['Juegos de CV Chat', d.desde + ' a ' + d.hasta], [], ['Juego', 'Partidas', 'Período anterior', 'Personas', 'Contra la compu', 'Entre personas', 'Minutos en partidas', 'Minutos con el juego abierto', 'Duración típica (min)', '% abandonos', '% gana la compu']];
+      for (const j of juegos) f.push([j.nombre, j.partidas, j.antes, j.jugadores, j.contraCompu, j.contraPersonas, j.minutosPartidas, j.minutos, j.duracion, j.abandonos, j.ganaCompu == null ? '' : j.ganaCompu]);
+      f.push([], ['Persona', 'Usuario', 'Partidas', '% gana', 'Contra la compu', 'Entre personas', 'Minutos en partidas', 'Minutos con un juego abierto', 'Su juego', 'Última partida']);
+      for (const p of d.personas) f.push([p.nombre, p.usuario, p.partidas, p.victorias == null ? '' : p.victorias, p.compu, p.personas, p.minutosPartidas, p.minutos, p.favorito ? nombreJg(p.favorito) : '', p.ultimo ? new Date(p.ultimo).toISOString().slice(0, 16).replace('T', ' ') : '']);
+      f.push([], ['Período', ...JG_ORDEN.map(nombreJg)]);
+      d.serie.etiquetas.forEach((e, i) => f.push([e, ...JG_ORDEN.map(id => (d.serie.juegos[id] || [])[i] || 0)]));
+      f.push([], ['Hora', 'Partidas']); d.horas.forEach((n, h) => f.push([h, n]));
+      bajarCSV('juegos-cv-chat-' + d.rango + '-' + d.hasta + '.csv', f);
+    });
+    csv.appendChild(b);
+    box.appendChild(csv);
+  }
+
   function armarVistaEstadisticas() {
     const v = el('div', 'pe-vista'); v.hidden = true;
     const barra = el('div', 'pe-barra');
@@ -3127,7 +3331,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -3192,7 +3396,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaMarketplace(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaMarketplace(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);

@@ -1276,6 +1276,10 @@ async function handle(req, res) {
     const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  if (p === '/puente/api/estadisticas/juegos') {
+    const r = await require('./juegos-estadisticas.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
   if (p.startsWith('/puente/api/origen/')) {
     const r = await require('./origenes.js').handle(req, res, p, u, { sessionUser, json, allowedOrigin: cuenta.allowedOrigin });
     if (r !== false) return;
