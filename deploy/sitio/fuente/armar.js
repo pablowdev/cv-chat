@@ -96,5 +96,7 @@ fs.writeFileSync(path.join(out, 'ediciones.html'), `<!DOCTYPE html><html lang="e
 <script>var a=new URLSearchParams(location.search).get('articulo');location.replace(a?'/wiki/'+encodeURIComponent(a)+'?editar=1':'/wiki')</script></head><body></body></html>\n`);
 // Para los buscadores: todo a la vista menos la cuenta; el mapa del sitio lo arma el chat (vistas.js: las
 // paginas, la wiki y las publicaciones del Marketplace), el Caddy principal lo manda ahi
+// La verificacion de Google Search Console (la cuenta del proyecto): no se saca, o deja de estar verificada
+for (const g of ['googleb5034ada7e99c577']) fs.writeFileSync(path.join(out, g + '.html'), 'google-site-verification: ' + g + '.html');
 fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nDisallow: /cuenta\n\nSitemap: https://circulovicioso.club/sitemap.xml\n');
 console.log('listo:', Object.keys(PAGINAS).length, 'paginas y', Object.keys(VIEJAS).length + 1, 'direcciones viejas en', out);

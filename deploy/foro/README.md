@@ -99,7 +99,7 @@ direcciones no cambian) y textos que estaban en ingles en castellano. Se puede c
 
 ## Google
 
-`robots.txt` va en la raiz de `codigo/` (no viene con vBulletin) y nombra el mapa del sitio (`/core/xmlsitemap.php`).
+`robots.txt` y `googleb5034ada7e99c577.html` (la verificacion de Google Search Console, cuenta del proyecto: no sacarlo) van en la raiz de `codigo/` (no vienen con vBulletin) y nombra el mapa del sitio (`/core/xmlsitemap.php`).
 El mapa lo arma vBulletin con su tarea programada "sitemap", todos los dias, en `escribible/sitemap` (montado en
 `core/store_sitemap`). `herramientas/mapa-del-sitio.php` lo prende y lo arma en el momento:
 
