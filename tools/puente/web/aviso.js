@@ -2197,15 +2197,17 @@ function leido(sc) {
   const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? String((m.discord && m.discord.usuario) || '').toLowerCase() :
     k === 'correo' ? String(m.correo || '').toLowerCase() : k === 'senales' ? signals(m).length : (m[k] ?? '');
   // Cada tipo de etiqueta tiene su color de fondo (Discord, email, admin...); cuando falta, el texto va
-  // en rojo sobre ese mismo fondo (" falta")
-  function signals(m) {
+  // en rojo sobre ese mismo fondo (" falta"). Siempre en el mismo orden: (email,) Discord, 2 pasos, admin,
+  // invitado, denuncias
+  function signals(m, conDiscord) {
     const out = [];
+    // ("En línea" ya va en la columna "Última vez")
+    if (conDiscord && m.discord) out.push(['@' + m.discord.usuario, 'discord']);
+    else if (!m.discord && !m.invitado) out.push(['Sin Discord', 'discord falta']);
+    if (m.dosPasos) out.push(['2 pasos', 'dospasos']);
     if (m.admin) out.push(['Admin', 'admin']);
     if (m.invitado) out.push(['Invitado', 'gris']);
-    // ("En línea" ya va en la columna "Última vez")
-    if (!m.discord && !m.invitado) out.push(['Sin Discord', 'discord falta']);
     if (m.denuncias) out.push([m.denuncias + (m.denuncias === 1 ? ' denuncia' : ' denuncias'), 'mal']);
-    if (m.dosPasos) out.push(['2 pasos', 'dospasos']);
     return out;
   }
   // El email: confirmado, sin confirmar o sin email (los invitados no tienen)
@@ -2345,11 +2347,10 @@ function leido(sc) {
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
       const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo) : null;
       const chips = el('div', 'pm-roles');
-      if (m.discord) chips.appendChild(el('span', 'pm-senal discord', '@' + m.discord.usuario));
       const es = emailSenal(m);
       if (es) chips.appendChild(el('span', 'pm-senal ' + es[1], es[0]));
+      for (const [label, kind] of signals(m, true)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
       if (m.invitacion) chips.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
-      for (const [label, kind] of signals(m)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
       info.append(names, meta);
       if (correo) info.appendChild(correo);
       if (chips.childNodes.length) info.appendChild(chips);
