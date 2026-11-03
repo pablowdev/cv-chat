@@ -99,6 +99,11 @@
     const b = el('div', 'jg-cuerpo jg-inicio mr-ui'); page.appendChild(b);
     const hero = el('div', 'jg-hero mr-hero');
     hero.append(el('div', 'jg-hero-t', 'GlobalSiege'), el('div', 'jg-hero-s', 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos'));
+    // El banner (banner.webp, de tools/misionrisk/armar-banner.js): el mapa del juego con su nombre
+    const ban = el('img', 'jg-banner'); ban.alt = 'GlobalSiege'; ban.src = ARTE + 'banner.webp?v=1';
+    ban.addEventListener('load', () => { hero.querySelector('.jg-hero-t')?.remove(); hero.classList.add('jg-con-banner'); });
+    ban.addEventListener('error', () => ban.remove());
+    hero.prepend(ban);
     const acc = el('div', 'jg-acciones');
     acc.append(
       btn('Crear partida', 'jg-primario', () => A.go('mrCrear')),
@@ -111,7 +116,7 @@
       }),
       btn('Cómo se juega', 'jg-suave', () => A.go('mrReglas')),
     );
-    hero.appendChild(acc); b.appendChild(hero);
+    hero.append(acc, credito()); b.appendChild(hero);
     const box = el('div'); box.appendChild(el('div', 'jg-estado', 'Cargando…')); b.appendChild(box);
     const d = await A.emit('mr:inicio');
     if (!box.isConnected) return;
@@ -126,11 +131,11 @@
       r.addEventListener('click', fn);
       return r;
     };
-    const mesaTxt = (m) => `${m.total} ejércitos · ${m.sentados} ${m.sentados === 1 ? 'persona' : 'personas'}${m.misiones === false ? ' · sin misiones' : ''}`;
+    const mesaTxt = (m) => `${m.flexible ? `entran hasta ${m.total}` : `${m.total} ejércitos`} · ${m.sentados} ${m.sentados === 1 ? 'persona' : 'personas'}${m.misiones === false ? ' · sin misiones' : ''}`;
     section('Te invitaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, `${a.creador.nombre} te invitó a una guerra`, mesaTxt(a), 'Entrar', 'azul', () => unirse(a.id)));
     section('Tus partidas', d.mias, (m) => {
-      const top = m.estado === 'esperando' ? `Esperando gente (${m.sentados} de ${m.total})` : `Con ${m.rival.nombre}`;
-      const bottom = m.estado === 'terminada' ? (m.ganaste ? '🏆 Ganaste' : 'Perdiste') : m.estado === 'jugando' ? `${m.ejercito}${m.vivo ? '' : ' (aniquilado)'} · ronda ${m.ronda}` : `${m.total} ejércitos`;
+      const top = m.estado === 'esperando' ? (m.flexible ? `Esperando gente (${m.sentados} en la mesa)` : `Esperando gente (${m.sentados} de ${m.total})`) : `Con ${m.rival.nombre}`;
+      const bottom = m.estado === 'terminada' ? (m.ganaste ? '🏆 Ganaste' : 'Perdiste') : m.estado === 'jugando' ? `${m.ejercito}${m.vivo ? '' : ' (aniquilado)'} · ronda ${m.ronda}` : m.flexible ? `entran hasta ${m.total}` : `${m.total} ejércitos`;
       const r = row({ nombre: '⚔' }, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => A.go('mrMesa', m.id));
       if (m.color) { const av = r.querySelector('.jg-av'); if (av) { av.textContent = ''; av.style.background = m.color; } }
       return r;
@@ -151,7 +156,6 @@
       list.forEach((p, i) => { const r = el('div', 'jg-fila jg-rank'); r.append(el('span', 'jg-pos', ['🥇', '🥈', '🥉'][i] || String(i + 1)), A.avatar(p), el('span', 'jg-fnombre', p.nombre), el('span', 'jg-chip', `${p.ganadas} ${p.ganadas === 1 ? 'victoria' : 'victorias'}`)); l.appendChild(r); });
       rk.appendChild(l);
     }
-    b.appendChild(credito());
   }
   // Con misiones secretas o a conquistar el mundo (como la casilla "Misión" del original).
   // Devuelve true, false o null (si se cierra sin elegir)
@@ -198,14 +202,17 @@
       }
       w.appendChild(s); f.appendChild(w); return w;
     };
-    seg('Cuántos ejércitos', 'total', [[2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']]);
-    seg('Contra quién', 'modo', [['compu', 'La compu'], ['gente', 'Gente del chat']], () => { gente.hidden = data.modo !== 'gente'; hint.textContent = HINT[data.modo]; });
+    const cuantos = seg('Cuántos ejércitos', 'total', [[2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']]);
+    seg('Contra quién', 'modo', [['compu', 'La compu'], ['gente', 'Gente del chat']], () => {
+      const conGente = data.modo === 'gente';
+      gente.hidden = !conGente; cuantos.hidden = conGente; nivel.hidden = conGente; hint.textContent = HINT[data.modo];
+    });
     const HINT = {
       compu: 'Vos contra la compu: los demás ejércitos los juega ella. No cuenta para el ranking.',
-      gente: 'La mesa queda en la sala hasta que se llene o hasta que toques "Empezar": los lugares vacíos los juega la compu. Cada turno tiene 4 minutos; si alguien no juega, la compu juega por él hasta que vuelva.',
+      gente: 'La mesa queda en la sala y entra quien quiera, hasta 6 (con 6 empieza sola). Cuando quieras tocá "Empezar" y la guerra arranca con los que estén, al menos 2. Cada turno tiene 4 minutos; si alguien no juega, la compu juega por él hasta que vuelva.',
     };
     const hint = el('div', 'jg-ayuda', HINT.compu); f.appendChild(hint);
-    seg('Nivel de la compu', 'nivel', [[1, 'Promedio'], [2, 'Sagaz']]);
+    const nivel = seg('Nivel de la compu', 'nivel', [[1, 'Promedio'], [2, 'Sagaz']]);
     seg('Misiones', 'misiones', [[true, 'Con misiones secretas'], [false, 'Conquistar el mundo']]);
     seg('Cartas del aniquilado', 'buitre', [[false, 'No'], [true, 'Se las queda el que lo aniquila']]);
     // Con gente: abierta o solo para los invitados, y a quien invitar
@@ -249,7 +256,7 @@
             const tx = el('div', 'jg-ftexto'); tx.append(el('div', 'jg-fnombre', p.nombre), el('div', 'jg-fmeta', '@' + p.usuario));
             r.append(A.avatar(p), tx);
             r.addEventListener('click', () => {
-              if (data.invitados.length >= data.total - 1) { A.toast(`En una guerra de ${data.total} entran ${data.total - 1} invitados.`, 'error'); return; }
+              if (data.invitados.length >= 5) { A.toast('En una guerra entran hasta 6: podés invitar a 5.', 'error'); return; }
               if (!data.invitados.some(x => x.id === p.id)) data.invitados.push(p);
               pintar(); list.textContent = ''; q.value = '';
             });
@@ -577,7 +584,10 @@
   }
 
   function esperando(b, s) {
-    b.appendChild(el('div', 'mr-texto', `Mesa de ${s.asientos.length} ejércitos${s.opciones.misiones ? ', con misiones secretas' : ''}. Los lugares vacíos los juega la compu (${s.nivel}).`));
+    const n = s.asientos.filter(a => a.nombre).length;
+    b.appendChild(el('div', 'mr-texto', s.flexible
+      ? `${n === 1 ? '1 en la mesa' : `${n} en la mesa`} (entran hasta ${s.maximo})${s.opciones.misiones ? ', con misiones secretas' : ''}. ${s.soyCreador ? (n < 2 ? 'Cuando entre alguien más, tocá "Empezar" para arrancar con los que estén.' : 'Tocá "Empezar" cuando quieras: la guerra arranca con los que están.') : 'La guerra empieza cuando la arranque quien armó la mesa, o sola si se llena.'}`
+      : `Mesa de ${s.asientos.length} ejércitos${s.opciones.misiones ? ', con misiones secretas' : ''}. Los lugares vacíos los juega la compu (${s.nivel}).`));
     const l = el('div', 'jg-lista');
     for (const a of s.asientos) {
       const r = el('div', 'jg-fila');
@@ -588,7 +598,11 @@
     if (s.invitados.length) b.appendChild(el('div', 'jg-ayuda', 'Invitados: ' + s.invitados.map(p => p.nombre).join(', ')));
     const acc = el('div', 'mr-acc');
     if (!s.soyJugador) acc.appendChild(btn('Entrar a la mesa', 'jg-primario', () => unirse(s.id)));
-    if (s.soyCreador) acc.appendChild(btn('Empezar', 'jg-primario', async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); }));
+    if (s.soyCreador) {
+      const emp = btn(s.flexible ? `Empezar con ${n}` : 'Empezar', 'jg-primario', async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); });
+      if (s.flexible && n < 2) { emp.disabled = true; emp.title = 'Hace falta que entre alguien más'; }
+      acc.appendChild(emp);
+    }
     acc.appendChild(btn('Copiar invitación', '', () => {
       const url = `${location.origin}/app?globalsiege=${s.id}`;
       const t = `¡Vení a jugar una guerra de GlobalSiege (el MissionRisk de siempre)! Entrá acá: ${url}`;

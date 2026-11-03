@@ -9767,7 +9767,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'truco', nombre: 'Truco', sub: 'Argentino, 1 contra 1', evento: 'truco:inicio', tapa: () => `/puente/cartas/banner.webp?v=${CARTAS_V}`, fondo: '#0d1410' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
-    { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/tapa.jpg', fondo: '#0a3f8f', mesa: 'mrMesa' },
+    { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
   ];
   async function biblioteca() {
     page.appendChild(head('Juegos', botonEnlace('/app?juegos', 'Juegos · __PUENTE_APP__')));

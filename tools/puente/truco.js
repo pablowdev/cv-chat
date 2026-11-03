@@ -167,7 +167,10 @@ function create(me, d) {
   games.set(g.id, g);
   if (modo === 'compu') { g.jugadores.push(BOT); start(g); }
   else { save(g); changed(); }
-  log(`truco: ${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''}${g.libre ? ', sin límite' : ''})`);
+  // La mesa abierta, en #que-paso (juegos-aviso.js)
+  if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'truco', quien: me, enlace: `/app?truco=${g.id}`,
+    texto: `armó una partida de **Truco** (a ${puntos}${g.flor ? ', con flor' : ''}) y busca rival` });
+  log(`truco:${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''}${g.libre ? ', sin límite' : ''})`);
   return { ok: true, id: g.id };
 }
 

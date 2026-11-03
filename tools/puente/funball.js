@@ -117,7 +117,10 @@ function create(me, d) {
   games.set(g.id, g);
   if (modo === 'compu') { g.jugadores.push(BOT); start(g); }
   else { save(g); changed(); }
-  log(`funball: ${nameOf(me).nombre} creó una partida (${modo}, ${boards[tablero].nombre})`);
+  // La mesa abierta, en #que-paso (juegos-aviso.js)
+  if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'funball', quien: me, enlace: `/app?funball=${g.id}`,
+    texto: `armó una partida de **Funball** (${boards[tablero].nombre}) y busca rival` });
+  log(`funball:${nameOf(me).nombre} creó una partida (${modo}, ${boards[tablero].nombre})`);
   return { ok: true, id: g.id };
 }
 

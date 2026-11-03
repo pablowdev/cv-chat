@@ -117,7 +117,10 @@ function create(me, d) {
   games.set(g.id, g);
   if (modo === 'compu') { g.jugadores.push(BOT); start(g); }
   else { save(g); changed(); }
-  log(`ajedrez: ${nameOf(me).nombre} creó una partida (${modo}, ${ritmoNombre(g.ritmo)})`);
+  // La mesa abierta, en #que-paso (juegos-aviso.js)
+  if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'ajedrez', quien: me, enlace: `/app?ajedrez=${g.id}`,
+    texto: `armó una partida de **Ajedrez** (${RITMOS[g.ritmo] ? g.ritmo : 'sin reloj'}) y busca rival` });
+  log(`ajedrez:${nameOf(me).nombre} creó una partida (${modo}, ${ritmoNombre(g.ritmo)})`);
   return { ok: true, id: g.id };
 }
 

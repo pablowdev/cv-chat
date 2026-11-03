@@ -746,15 +746,15 @@ async function handle(req, res) {
 
   // GlobalSiege (misionrisk.js): su pantalla (juego.js, juego.css y mapa.js) y el arte del juego
   // original (el mapa, las mascaras de los paises, las cartas, los dados y el sonido, de
-  // tools/misionrisk/armar-arte.js), en web/misionrisk/.
+  // tools/misionrisk/armar-arte.js) y su banner (armar-banner.js), en web/misionrisk/.
   // Van con huella, como aviso.js: el navegador pregunta siempre y si no cambio recibe un 304
-  const mrArch = req.method === 'GET' && /^\/puente\/misionrisk\/(juego\.js|juego\.css|mapa\.js|mapa\.jpg|paises-[123]\.png|cartas\.png|cartitas\.png|dados\.png|ding\.wav|tapa\.jpg)$/.exec(p);
+  const mrArch = req.method === 'GET' && /^\/puente\/misionrisk\/(juego\.js|juego\.css|mapa\.js|mapa\.jpg|paises-[123]\.png|cartas\.png|cartitas\.png|dados\.png|ding\.wav|tapa\.jpg|banner\.webp)$/.exec(p);
   if (mrArch) {
     const file = path.join(STATIC, 'misionrisk', mrArch[1]);
     let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
     const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
     if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
-    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg', png: 'image/png', wav: 'audio/wav' }[mrArch[1].split('.').pop()];
+    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg', png: 'image/png', wav: 'audio/wav', webp: 'image/webp' }[mrArch[1].split('.').pop()];
     let body = fs.readFileSync(file);
     if (mrArch[1] === 'juego.js') body = body.toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });

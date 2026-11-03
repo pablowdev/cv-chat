@@ -1,6 +1,10 @@
 /* GlobalSiege (juego.js), dentro de la seccion Juegos (.puente-jg, los estilos comunes .jg-* estan en el tema) */
 .puente-jg .mr-hero { background: linear-gradient(180deg, #0b4fa8, #08326c); }
+/* Con su banner (como el del Truco): arriba, del color del marco del banner */
+.puente-jg .mr-hero.jg-con-banner { background: #0b2552; }
+.puente-jg .mr-hero .jg-hero-s { color: #c8d8f5; padding: 0 1rem; }
 .puente-jg .mr-credito { margin: 1.5rem 0 0.5rem; font-size: 0.75rem; color: #949ba4; text-align: center; }
+.puente-jg .mr-hero .mr-credito { margin: 0.875rem 1rem 0; color: #9fb3d6; }
 .puente-jg .mr-credito a { color: #00a8fc; }
 .puente-jg .mr-reglas p { margin: 0 0 0.75rem; line-height: 1.5; color: #dbdee1; }
 .puente-jg .mr-invitados { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0.5rem 0; }

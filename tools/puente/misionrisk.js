@@ -5,6 +5,9 @@
 // Por el socket de Haven (con respuesta):
 //   mr:inicio                           -> { abiertas, mias, stats, ranking }
 //   mr:crear  { total, modo: 'compu'|'gente', nivel, invitados: [ids], misiones, buitre }
+//             (con gente no hay total: la mesa crece con los que entran, hasta 6, y el que la armo la
+//             empieza cuando quiere con los que haya, al menos 2: "flexible". Las de antes, de un total fijo,
+//             siguen como eran)
 //   mr:unirse { id }   mr:cancelar { id }   mr:empezar { id }   mr:ver { id }
 //   mr:accion { id, tipo, ... }  (las jugadas del motor, y 'abandonar' y 'volver')
 // Y el servidor avisa:
@@ -19,6 +22,7 @@ const MAPA = require('./web/misionrisk/mapa.js');
 const CP = require('./chat-partida.js');
 
 const NIVELES = ['Promedio', 'Sagaz'];
+const MAX = 6;
 const TURNO_MS = 4 * 60e3;
 const ESPERA_MS = 24 * 3600e3;
 
@@ -61,7 +65,13 @@ function setup(ctx) {
     on('mr:crear', create);
     on('mr:unirse', join);
     on('mr:cancelar', cancel);
-    on('mr:empezar', (me, d) => { const g = games.get(String(d.id)); if (!g || g.creador !== me || g.estado !== 'esperando') return { error: 'No se puede empezar.' }; start(g); return { ok: true }; });
+    on('mr:empezar', (me, d) => {
+      const g = games.get(String(d.id));
+      if (!g || g.creador !== me || g.estado !== 'esperando') return { error: 'No se puede empezar.' };
+      // (la flexible arranca con los que estan: hace falta alguien mas)
+      if (g.flexible && humanos(g).length < 2) return { error: 'Hace falta que entre alguien más para empezar. Si querés, jugá con la compu.' };
+      start(g); return { ok: true };
+    });
     // el que mira una partida (aunque no juegue) recibe sus cambios
     on('mr:ver', (me, d, socket) => { const g = games.get(String(d.id)); if (!g) return { error: 'Esa partida ya no está.' }; if (!canSee(g, me)) return { error: 'Esa partida es privada.' }; socket.mrMirando = g.id; return { partida: view(g, me) }; });
     on('mr:accion', act);
@@ -93,8 +103,8 @@ function sweep() {
 function create(me, d) {
   const mine = [...games.values()].filter(g => g.estado !== 'terminada' && seatOf(g, me) >= 0);
   if (mine.length >= 8) return { error: 'Tenés muchas partidas abiertas. Terminá o cancelá alguna.' };
-  const total = Math.max(2, Math.min(6, Number(d.total) || 4));
   const modo = d.modo === 'gente' ? 'gente' : 'compu';
+  const total = modo === 'gente' ? MAX : Math.max(2, Math.min(MAX, Number(d.total) || 4));
   const nivel = Number(d.nivel) === 1 ? 1 : 2;
   const invitados = modo === 'gente' && Array.isArray(d.invitados)
     ? [...new Set(d.invitados.map(Number))].filter(x => x > 0 && x !== me && db.prepare('SELECT 1 FROM users WHERE id = ?').get(x)).slice(0, total - 1)
@@ -103,13 +113,20 @@ function create(me, d) {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), creador: me, estado: 'esperando',
     publica: modo === 'gente' && d.privada !== true, invitados, nivel,
     opciones: { misiones: d.misiones !== false, buitre: !!d.buitre },
-    asientos: Array.from({ length: total }, (_, i) => i === 0 ? { uid: me } : { uid: null }),
+    asientos: modo === 'gente' ? [{ uid: me }] : Array.from({ length: total }, (_, i) => i === 0 ? { uid: me } : { uid: null }),
+    flexible: modo === 'gente',
     S: null, deadline: null, ausente: {}, compuPor: {},
   };
   games.set(g.id, g);
   if (modo === 'compu') start(g);
-  else { save(g); changed(); for (const uid of invitados) notify(uid, 'GlobalSiege', `${nameOf(me).nombre} te invitó a una guerra`, g.id); }
-  log(`globalsiege: ${nameOf(me).nombre} creó una partida (${modo}, ${total} ejércitos)`);
+  else {
+    save(g); changed();
+    for (const uid of invitados) notify(uid, 'GlobalSiege', `${nameOf(me).nombre} te invitó a una guerra`, g.id);
+    // La mesa abierta, en #que-paso (juegos-aviso.js)
+    if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'globalsiege', quien: me, enlace: `/app?globalsiege=${g.id}`,
+      texto: `armó una guerra de **GlobalSiege** (hasta ${MAX}${g.opciones.misiones ? ', con misiones secretas' : ''})` });
+  }
+  log(`globalsiege: ${nameOf(me).nombre} creó una partida (${modo}, ${g.flexible ? 'de 2 a ' + MAX : total + ' ejércitos'})`);
   return { ok: true, id: g.id };
 }
 
@@ -119,10 +136,15 @@ function join(me, d) {
   if (seatOf(g, me) >= 0) return { ok: true, id: g.id };
   if (g.estado !== 'esperando') return { error: 'Esa partida ya empezó.' };
   if (!g.publica && !g.invitados.includes(me)) return { error: 'Esa partida es privada.' };
-  const libre = g.asientos.find(a => !a.uid);
-  if (!libre) return { error: 'La mesa está completa.' };
-  libre.uid = me;
-  if (g.asientos.every(a => a.uid)) start(g);
+  if (g.flexible) {
+    if (g.asientos.length >= MAX) return { error: 'La mesa está completa.' };
+    g.asientos.push({ uid: me });
+  } else {
+    const libre = g.asientos.find(a => !a.uid);
+    if (!libre) return { error: 'La mesa está completa.' };
+    libre.uid = me;
+  }
+  if (g.asientos.length >= MAX ? g.asientos.every(a => a.uid) : !g.flexible && g.asientos.every(a => a.uid)) start(g);
   else { push(g); changed(); }
   return { ok: true, id: g.id };
 }
@@ -134,7 +156,7 @@ function cancel(me, d) {
   // Los demas se levantan de la mesa
   const i = seatOf(g, me);
   if (i < 0) return { error: 'No estás en esta partida.' };
-  g.asientos[i].uid = null;
+  if (g.flexible) g.asientos.splice(i, 1); else g.asientos[i].uid = null;
   push(g); changed();
   return { ok: true };
 }
@@ -283,7 +305,7 @@ function view(g, me) {
   const i = seatOf(g, me), e = i + 1;
   const S = g.S;
   const out = {
-    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me,
+    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me, flexible: !!g.flexible, maximo: MAX,
     nivel: NIVELES[g.nivel - 1], opciones: g.opciones, miEj: i >= 0 ? e : null,
     invitados: g.invitados.map(nameOf),
     // el chat, con el nombre y el color del ejercito de cada uno (en la espera todavia no tienen)
@@ -373,15 +395,15 @@ function resumen(g, me) {
 }
 function lobby(me) {
   const all = [...games.values()];
-  const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitados.includes(me)) && seatOf(g, me) < 0 && g.asientos.some(a => !a.uid))
+  const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitados.includes(me)) && seatOf(g, me) < 0 && (g.flexible ? g.asientos.length < MAX : g.asientos.some(a => !a.uid)))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, total: g.asientos.length, sentados: g.asientos.filter(a => a.uid).length, misiones: g.opciones.misiones, creador: nameOf(g.creador), paraVos: g.invitados.includes(me) }));
+    .map(g => ({ id: g.id, total: g.flexible ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length, misiones: g.opciones.misiones, creador: nameOf(g.creador), paraVos: g.invitados.includes(me) }));
   const mias = all.filter(g => seatOf(g, me) >= 0 && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const e = seatOf(g, me) + 1;
       return {
-        id: g.id, estado: g.estado, total: g.asientos.length, sentados: g.asientos.filter(a => a.uid).length,
+        id: g.id, estado: g.estado, total: g.flexible && g.estado === 'esperando' ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length,
         rival: { nombre: resumen(g, me) }, ejercito: g.S ? MAPA.ejercitos[e].nombre : null, color: g.S ? MAPA.ejercitos[e].color : null,
         teToca: g.estado === 'jugando' && g.S.turno === e && !g.asientos[e - 1].abandono,
         vivo: g.S ? g.S.ej[e].vivo : true, ronda: g.S ? g.S.ronda : 0,
