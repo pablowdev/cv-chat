@@ -811,6 +811,21 @@ async function handle(req, res) {
     if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
     return json(res, 200, { miembros: members() });
   }
+  // Volver a mandarle a alguien el mail para confirmar su email (boton en "Miembros"), con los mismos
+  // limites que cuando lo pide la persona
+  if (p === '/puente/api/miembros/reenviar' && req.method === 'POST') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
+    if (!email.on()) return json(res, 404, { error: 'El email no está configurado en el servidor.' });
+    const body = await readJson(req);
+    const id = body && Number.isInteger(body.id) ? body.id : 0;
+    const otro = id && db.prepare('SELECT id, is_guest FROM users WHERE id = ?').get(id);
+    if (!otro || otro.is_guest) return json(res, 404, { error: 'No está esa cuenta.' });
+    const r = await email.resend(id);
+    return json(res, r.ok ? 200 : 400, r);
+  }
 
   // Los emails de las cuentas, en una planilla (CSV con ";", se abre directo en Excel o
   // Google Sheets): solo administradores, desde la pagina "Miembros"

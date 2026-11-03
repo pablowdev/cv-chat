@@ -2197,13 +2197,17 @@ function leido(sc) {
   const value = (m, k) => k === 'nombre' ? String(m.nombre).toLowerCase() : k === 'discord' ? String((m.discord && m.discord.usuario) || '').toLowerCase() :
     k === 'correo' ? String(m.correo || '').toLowerCase() : k === 'senales' ? signals(m).length : (m[k] ?? '');
   // Cada tipo de etiqueta tiene su color de fondo (Discord, email, admin...); cuando falta, el texto va
-  // en rojo sobre ese mismo fondo (" falta"). Siempre en el mismo orden: (email,) Discord, 2 pasos, admin,
-  // invitado, denuncias
+  // en rojo sobre ese mismo fondo (" falta"). Siempre en el mismo orden: (email,) Discord, si nunca
+  // escribio, 2 pasos, admin, invitado, denuncias
   function signals(m, conDiscord) {
     const out = [];
     // ("En línea" ya va en la columna "Última vez")
     if (conDiscord && m.discord) out.push(['@' + m.discord.usuario, 'discord']);
     else if (!m.discord && !m.invitado) out.push(['Sin Discord', 'discord falta']);
+    // Entro hace entre 1 y 7 dias y nunca mando un mensaje en CV Chat: para darle la bienvenida (a
+    // todos los que nunca escribieron los muestra el filtro "No escribieron en CV Chat")
+    const hace = m.desde ? Date.now() - Date.parse(m.desde) : 0;
+    if (!m.invitado && !m.mensajes && hace > 864e5 && hace <= 7 * 864e5) out.push(['Todavía no escribió', 'actividad falta']);
     if (m.dosPasos) out.push(['2 pasos', 'dospasos']);
     if (m.admin) out.push(['Admin', 'admin']);
     if (m.invitado) out.push(['Invitado', 'gris']);
@@ -2215,6 +2219,26 @@ function leido(sc) {
     if (m.invitado) return null;
     if (!m.correo) return ['Sin email', 'email falta'];
     return m.email === 'confirmado' ? [corto ? 'Confirmado' : 'Email confirmado', 'email'] : [corto ? 'Sin confirmar' : 'Email sin confirmar', 'email falta'];
+  }
+  // Boton para volver a mandarle el mail de confirmacion (solo si tiene email y no lo confirmo)
+  function botonReenviar(m) {
+    if (m.invitado || !m.correo || m.email === 'confirmado') return null;
+    const b = el('button', 'pm-reenviar', 'Reenviar mail');
+    b.type = 'button';
+    b.title = 'Volver a mandarle el mail para confirmar su email';
+    b.addEventListener('click', (e) => {
+      e.stopPropagation(); // la fila abre el perfil
+      if (b.disabled) return;
+      b.disabled = true; b.textContent = 'Mandando…';
+      fetch('/puente/api/miembros/reenviar', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }) })
+        .then(r => r.json().catch(() => ({}))).then(d => {
+          if (d && d.confirmado) { m.email = 'confirmado'; b.textContent = 'Ya lo confirmó'; return; }
+          if (d && d.ok) { b.textContent = 'Mail enviado ✓'; b.classList.add('listo'); return; }
+          b.textContent = (d && d.error) || 'No se pudo mandar'; b.classList.add('error'); b.title = b.textContent;
+          setTimeout(() => { if (b.isConnected) { b.disabled = false; b.textContent = 'Reenviar mail'; b.classList.remove('error'); } }, 6000);
+        }).catch(() => { b.disabled = false; b.textContent = 'Sin conexión, probá de nuevo'; });
+    });
+    return b;
   }
 
   let pushed = false;
@@ -2287,6 +2311,8 @@ function leido(sc) {
       const es = emailSenal(m, true);
       if (es) mail.appendChild(el('span', 'pm-senal ' + es[1], es[0]));
       else mail.appendChild(el('span', 'pm-vacio', '—'));
+      const rb = botonReenviar(m);
+      if (rb) mail.appendChild(rb);
       const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
       // y de donde llego (origenes.js)
       if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente + (m.origen.estimado ? ' (estimado)' : ''))); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
@@ -2337,21 +2363,25 @@ function leido(sc) {
       const info = el('div', 'pm-item-info');
       const names = el('div', 'pm-item-nombres');
       names.append(el('span', 'pm-n1', m.nombre), el('span', 'pm-n2', m.usuario));
+      // Dos lineas: lo que hace en CV Chat, y desde donde entra y de donde llego
       const bits = ['Desde ' + ago(m.desde).replace(/^hace /, 'hace '), m.mensajes.toLocaleString('es-AR') + (m.mensajes === 1 ? ' mensaje' : ' mensajes')];
       if (m.recuperados) bits[1] += ' (+' + m.recuperados.toLocaleString('es-AR') + ' de Discord)';
       if (m.ultimo) bits.push('último ' + ago(m.ultimo));
-      bits.push(m.enLinea ? 'en línea' : m.visto ? 'conectado ' + ago(m.visto) : 'sin conexiones registradas');
-      if (m.entraDesde) bits.push(m.entraDesde);
       if (m.minutos7) bits.push('usó ' + duracion(m.minutos7) + ' en 7 días');
-      if (m.origen) bits.push('llegó desde ' + m.origen.fuente);
+      const bits2 = [m.enLinea ? 'En línea' : m.visto ? 'Conectado ' + ago(m.visto) : 'Sin conexiones registradas'];
+      if (m.entraDesde) bits2.push(m.entraDesde);
+      if (m.origen) bits2.push('llegó desde ' + m.origen.fuente);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
+      const meta2 = el('div', 'pm-item-meta', bits2.join(' · '));
       const correo = m.correo ? el('div', 'pm-item-meta pm-correo', m.correo) : null;
       const chips = el('div', 'pm-roles');
       const es = emailSenal(m);
       if (es) chips.appendChild(el('span', 'pm-senal ' + es[1], es[0]));
       for (const [label, kind] of signals(m, true)) chips.appendChild(el('span', 'pm-senal ' + kind, label));
       if (m.invitacion) chips.appendChild(el('span', 'pm-chip pm-invitacion', m.invitacion));
-      info.append(names, meta);
+      const rb = botonReenviar(m);
+      if (rb) chips.appendChild(rb);
+      info.append(names, meta, meta2);
       if (correo) info.appendChild(correo);
       if (chips.childNodes.length) info.appendChild(chips);
       row.append(av, info);
