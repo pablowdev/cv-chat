@@ -1,5 +1,6 @@
 // El Marketplace en la web (circulovicioso.club/marketplace): las publicaciones de CV Chat (mercado.js del
-// puente), solo para miembros, con la cuenta unica. Publicar y escribirle se hace en la app.
+// puente). La ve cualquiera, sin cuenta tambien; con la cuenta unica, ademas sus publicaciones. Publicar y
+// escribirle se hace en la app (sin cuenta, primero se la hace y despues sigue en esa publicacion).
 (function () {
   'use strict';
   var CHAT = 'https://chat.circulovicioso.club';
@@ -21,6 +22,16 @@
     return d < 1 ? 'hoy' : d === 1 ? 'ayer' : 'hace ' + d + ' días';
   }
   var app = function (id) { return CHAT + '/app?mercado=' + (id || ''); };
+  var sesion = true;
+  // sin cuenta: crearla (o entrar) y despues, ahi en el chat
+  var conCuenta = function (url) { return sesion ? url : CHAT + '/?registro=1&volver=' + encodeURIComponent(url); };
+  function cuenta(s) {
+    sesion = s !== false;
+    $('mk-mias').hidden = !sesion;
+    $('mk-sin-cuenta').hidden = sesion;
+    $('mk-publicar').href = conCuenta(app());
+    $('mk-registro').href = CHAT + '/?registro=1&volver=' + encodeURIComponent(app());
+  }
 
   function sinSesion() {
     $('cargando').hidden = true; $('mk').hidden = true; $('mk-item').hidden = true; $('sin-sesion').hidden = false;
@@ -61,6 +72,7 @@
     if (fase === 'vencidas') p.set('ver', 'vencidas');
     p.set('desde', String(desde));
     return api('/puente/api/mercado/web/lista?' + p).then(function (d) {
+      cuenta(d.sesion);
       $('cargando').hidden = true; $('mk').hidden = false; $('mk-item').hidden = true;
       var g = $('mk-grilla'), vg = $('mk-vgrilla');
       if (!mas) { g.textContent = ''; vg.textContent = ''; $('mk-vencidas').hidden = true; }
@@ -83,6 +95,7 @@
   function verItem(id) {
     return api('/puente/api/mercado/web/item?id=' + encodeURIComponent(id)).then(function (d) {
       var it = d.item;
+      cuenta(d.sesion);
       $('cargando').hidden = true; $('mk').hidden = true; $('mk-item').hidden = false;
       document.title = it.titulo + ' · Marketplace - Círculo Vicioso Club';
       $('mk-i-tipo').textContent = it.tipo === 'servicio' ? 'servicio' : it.condicion || 'producto';
@@ -120,7 +133,9 @@
         v.appendChild(info);
       }
       $('mk-i-escribir').hidden = it.mia || it.estado !== 'activa' || sinCuenta;
-      $('mk-i-escribir').href = app(it.id);
+      $('mk-i-escribir').href = conCuenta(app(it.id));
+      $('mk-i-escribir').textContent = sesion ? 'Escribirle en CV Chat' : 'Escribirle (creá tu cuenta)';
+      $('mk-i-abrir').hidden = !sesion;
       $('mk-i-abrir').href = app(it.id);
       $('mk-i-abrir').textContent = it.mia ? (vencida ? 'Republicar en CV Chat' : 'Editar en CV Chat') : 'Ver en CV Chat';
       $('mk-i-abrir').className = 'btn' + (it.mia && vencida ? ' btn--degrade' : '');

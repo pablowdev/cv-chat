@@ -73,3 +73,4 @@
   .mk-card__precio { font-size: 17px; }
   .mk__acciones .btn { flex: 1 1 100%; }
 }
+.mk__sin-cuenta { margin: 14px 0 0; max-width: 62ch; }

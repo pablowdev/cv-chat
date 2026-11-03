@@ -426,6 +426,27 @@ async function handle(req, res, p, u, h) {
   // (HEAD tambien: algunos lectores de vistas previas preguntan primero; Node no manda el cuerpo)
   if (!p.startsWith('/puente/vista/') || (req.method !== 'GET' && req.method !== 'HEAD')) return false;
   const q = u.searchParams;
+  // El Marketplace de la web, ya escrito (mercado.js, paginaWeb): una publicacion (?id=) o la lista
+  if (p === '/puente/vista/pagina/marketplace') {
+    let t;
+    try { t = require('./mercado.js').paginaWeb(await html('/marketplace.html'), q); } catch (err) { warn('vistas: marketplace:', err.message); return h.send(res, 502, 'text/plain', 'La web no contestó'); }
+    return h.send(res, 200, 'text/html', t, { 'Cache-Control': 'no-cache' });
+  }
+  // El mapa del sitio de la web (robots.txt lo nombra; el Caddy principal manda /sitemap.xml aca): las
+  // paginas, la wiki (entradas y categorias) y las publicaciones activas del Marketplace
+  if (p === '/puente/vista/sitemap.xml') {
+    const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
+    const urls = Object.values(PAGINAS).map(r => ({ loc: sitio + r })).concat([{ loc: sitio + '/marketplace' }]);
+    try {
+      const filas = db.prepare("SELECT slug, categoria, actualizada FROM puente_wiki WHERE estado = 'publicada'").all();
+      for (const w of filas) urls.push({ loc: `${sitio}/wiki/${encodeURIComponent(w.slug)}`, lastmod: w.actualizada ? new Date(w.actualizada).toISOString().slice(0, 10) : '' });
+      for (const c of new Set(filas.map(w => w.categoria).filter(Boolean))) urls.push({ loc: `${sitio}/wiki-categorias/${encodeURIComponent(slugify(c))}` });
+    } catch { /* sin la wiki */ }
+    try { urls.push(...require('./mercado.js').paraMapa()); } catch { /* sin el Marketplace */ }
+    const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+      + urls.map(r => `  <url><loc>${esc(r.loc)}</loc>${r.lastmod ? `<lastmod>${r.lastmod}</lastmod>` : ''}</url>`).join('\n') + '\n</urlset>\n';
+    return h.send(res, 200, 'application/xml', xml, { 'Cache-Control': 'public, max-age=3600' });
+  }
   if (p.startsWith('/puente/vista/pagina/')) {
     let t;
     try { t = await wikiPagina(p.slice('/puente/vista/pagina'.length)); } catch (err) { warn('vistas: pagina:', err.message); return h.send(res, 502, 'text/plain', 'La web no contestó'); }

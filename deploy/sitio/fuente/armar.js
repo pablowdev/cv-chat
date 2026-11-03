@@ -94,4 +94,7 @@ for (const [archivo, [to, t]] of Object.entries(VIEJAS)) {
 // ediciones.html?articulo=x -> /wiki/x?editar=1
 fs.writeFileSync(path.join(out, 'ediciones.html'), `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Wiki - Círculo Vicioso Club</title>
 <script>var a=new URLSearchParams(location.search).get('articulo');location.replace(a?'/wiki/'+encodeURIComponent(a)+'?editar=1':'/wiki')</script></head><body></body></html>\n`);
+// Para los buscadores: todo a la vista menos la cuenta; el mapa del sitio lo arma el chat (vistas.js: las
+// paginas, la wiki y las publicaciones del Marketplace), el Caddy principal lo manda ahi
+fs.writeFileSync(path.join(out, 'robots.txt'), 'User-agent: *\nAllow: /\nDisallow: /cuenta\n\nSitemap: https://circulovicioso.club/sitemap.xml\n');
 console.log('listo:', Object.keys(PAGINAS).length, 'paginas y', Object.keys(VIEJAS).length + 1, 'direcciones viejas en', out);

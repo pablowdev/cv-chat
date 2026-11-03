@@ -378,6 +378,9 @@ function injectScript(req, res, src) {
         if (html.includes('</body>') && !html.includes(src)) html = html.replace('</body>', tag + '</body>');
         // La lista de mensajes directos aparece ya ordenada (aviso.js le pone puente-ordenada); si no, igual a los 3 s
         if (src === '/puente/aviso.js' && html.includes('</head>') && !html.includes('puente-ordenada')) html = html.replace('</head>', '<style>@keyframes puente-ver{to{visibility:visible}}#dm-list:not(.puente-ordenada){visibility:hidden;animation:puente-ver 0s 3s forwards}</style></head>');
+        // Un enlace al Marketplace sin la sesion del chat: al Marketplace de la web, que se ve sin cuenta
+        // (afuera.js, antes que Haven; origen.js primero, para que cuente de donde llego)
+        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?mercado(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
         // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
         // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
         if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
@@ -632,7 +635,7 @@ async function handle(req, res) {
     if (r !== false) return;
   }
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js')) {
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js')) {
     const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     // Los .js y .css se guardan ya armados (aviso.js pesa 1 MB) y van con una huella (ETag): el

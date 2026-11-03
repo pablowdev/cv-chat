@@ -21,8 +21,9 @@
 // Los avisos que se habian traido de ahi (origen 'foro', foro-mercado.js) salen como los vencidos.
 // A los 30 dias sin renovar, una publicacion vence: sigue a la vista pero aparte, abajo (ver=vencidas), y
 // quien la publico la republica con un toque. Tres dias antes se le avisa (recordar). Cada publicacion nueva se avisa en #que-paso (MERCADO_CANAL, o el canal del foro).
-// La pagina del sitio (circulovicioso.club/marketplace, solo para miembros) usa /web/lista y /web/item,
-// con la cuenta del sitio (cuenta.js), y para publicar o escribirle abre la app.
+// La pagina del sitio (circulovicioso.club/marketplace) usa /web/lista y /web/item: la ve cualquiera, sin
+// cuenta tambien (con la del sitio, cuenta.js, ademas "Mis publicaciones"); publicar o escribirle, en la app.
+// Para Google, la pagina ya escrita (paginaWeb) y las publicaciones en el mapa del sitio (paraMapa).
 //
 //  GET  /puente/api/mercado/lista?q&tipo&estado&moneda&min&max&zona&orden&ver=mias|guardados|vencidas&desde
 //  GET  /puente/api/mercado/item?id
@@ -330,6 +331,76 @@ function vistaPrevia(id) {
     image: f ? (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + URL_DIR + f : undefined };
 }
 
+// La pagina del sitio (circulovicioso.club/marketplace) ya escrita, para Google y los que no ejecutan el
+// script: el Caddy principal la manda aca (vistas.js) y se devuelve marketplace.html con el titulo, la
+// descripcion, la imagen y la direccion de esa publicacion (o del Marketplace), los datos de producto
+// (schema.org) y las tarjetas o la publicacion ya puestas (web/marketplace.js las vuelve a armar igual).
+// Las vencidas, vendidas, ocultas o borradas no se indexan
+const escHtml = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const ISO = { ARS: 'ARS', USD: 'USD' }; // USDT no es una moneda para Google: va sin precio
+function paginaWeb(t, q) {
+  const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
+  const corto = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+  const meta = (k, attr, v) => { const re = new RegExp(`<meta ${attr}="${k}" content="[^"]*">`); const tag = `<meta ${attr}="${k}" content="${escHtml(v)}">`; t = re.test(t) ? t.replace(re, tag) : t.replace('</head>', tag + '\n</head>'); };
+  const cabeza = (titulo, desc, img, url, extra) => {
+    t = t.replace(/<title>[\s\S]*?<\/title>/, `<title>${escHtml(titulo)}</title>`);
+    meta('description', 'name', desc); meta('og:title', 'property', titulo); meta('og:description', 'property', desc);
+    if (img) meta('og:image', 'property', img);
+    meta('og:url', 'property', url);
+    const can = `<link rel="canonical" href="${escHtml(url)}">`;
+    t = /<link rel="canonical" href="[^"]*">/.test(t) ? t.replace(/<link rel="canonical" href="[^"]*">/, can) : t.replace('</head>', can + '\n</head>');
+    if (extra) t = t.replace('</head>', extra + '\n</head>');
+  };
+  const ld = o => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, '\\u003c')}</script>`;
+  const precio = r => (r.estado === 'vendida' ? 'Vendido' : precioTexto(r));
+  const id = /^\d+$/.test(q.get('id') || '') ? Number(q.get('id')) : 0;
+  if (id) {
+    const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada' AND oculta = 0").get(id);
+    if (!r) { t = t.replace('</head>', '<meta name="robots" content="noindex">\n</head>'); return t; }
+    const url = `${sitio}/marketplace?id=${r.id}`;
+    const fotos = fotosOf(r).map(f => base + URL_DIR + f);
+    const vencida = r.estado === 'activa' && vence(r) < now();
+    const desc = corto([precio(r), r.zona, r.tipo === 'servicio' ? 'servicio' : r.condicion].filter(Boolean).join(' · ') + '. ' + (r.descripcion || ''), 200);
+    const prod = { '@context': 'https://schema.org', '@type': r.tipo === 'servicio' ? 'Service' : 'Product', name: r.titulo, description: corto(r.descripcion || r.titulo, 600), url };
+    if (fotos.length) prod.image = fotos;
+    if (r.tipo !== 'servicio' && r.precio != null && ISO[r.moneda || 'ARS']) {
+      prod.offers = { '@type': 'Offer', url, price: String(r.precio), priceCurrency: ISO[r.moneda || 'ARS'],
+        availability: r.estado === 'vendida' ? 'https://schema.org/SoldOut' : vencida ? 'https://schema.org/Discontinued' : 'https://schema.org/InStock',
+        itemCondition: r.condicion === 'nuevo' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition' };
+    }
+    const noIndex = r.estado !== 'activa' || vencida ? '<meta name="robots" content="noindex">\n' : '';
+    cabeza(`${r.titulo} · ${precio(r)} - Marketplace - Círculo Vicioso Club`, desc, fotos[0] || base + '/puente/api/mercado/portada.jpg', url, noIndex + ld(prod));
+    // La publicacion, ya puesta (con el "Cargando…" escondido: el script lo usa)
+    t = t.replace('<section class="caja mk-item" id="mk-item" hidden>', '<section class="caja mk-item" id="mk-item">')
+      .replace('<p class="chico" id="cargando">Cargando…</p>', '<p class="chico" id="cargando" hidden>Cargando…</p>')
+      .replace('<h1 class="titulo-2" id="mk-i-titulo"></h1>', `<h1 class="titulo-2" id="mk-i-titulo">${escHtml(r.titulo)}</h1>`)
+      .replace('<p class="mk-item__precio" id="mk-i-precio"></p>', `<p class="mk-item__precio" id="mk-i-precio">${escHtml(precio(r))}</p>`)
+      .replace('<p class="chico" id="mk-i-linea"></p>', `<p class="chico" id="mk-i-linea">${escHtml(r.zona || '')}</p>`)
+      .replace('<div class="mk-item__texto" id="mk-i-texto"></div>', `<div class="mk-item__texto" id="mk-i-texto">${String(r.descripcion || '').split(/\n{2,}/).filter(p => p.trim()).map(p => `<p>${escHtml(p)}</p>`).join('')}</div>`);
+    if (fotos[0]) t = t.replace('<img id="mk-i-foto" alt="">', `<img id="mk-i-foto" alt="${escHtml(r.titulo)}" src="${escHtml(fotos[0])}">`);
+    return t;
+  }
+  // El Marketplace entero: las activas mas nuevas, con su enlace (asi Google llega a cada una)
+  const l = lista(new URLSearchParams(), 0);
+  const url = `${sitio}/marketplace`;
+  const v = vistaPortada();
+  cabeza('Marketplace - Círculo Vicioso Club', corto(v.description, 200), v.image, url, ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: 'Marketplace de Círculo Vicioso',
+    itemListElement: l.items.map((c, i) => ({ '@type': 'ListItem', position: i + 1, url: `${sitio}/marketplace?id=${c.id}`, name: c.titulo })) }));
+  const tarjetas = l.items.map(c => `<li class="mk-card"><a href="/marketplace?id=${c.id}"><div class="mk-card__foto">${c.foto ? `<img src="${escHtml(base + c.foto)}" alt="" loading="lazy">` : `<span>${c.tipo === 'servicio' ? 'servicio' : 'sin foto'}</span>`}</div>`
+    + `<div class="mk-card__datos"><p class="mk-card__precio">${escHtml(c.precio == null ? 'A convenir' : precioTexto(c))}</p><p class="mk-card__titulo">${escHtml(c.titulo)}</p><p class="chico">${escHtml(c.zona || '')}</p></div></a></li>`).join('');
+  t = t.replace('<div class="mk" id="mk" hidden>', '<div class="mk" id="mk">')
+    .replace('<p class="chico" id="cargando">Cargando…</p>', '<p class="chico" id="cargando" hidden>Cargando…</p>')
+    .replace('<ul class="lista-limpia mk__grilla" id="mk-grilla"></ul>', `<ul class="lista-limpia mk__grilla" id="mk-grilla">${tarjetas}</ul>`);
+  return t;
+}
+// Las publicaciones para el mapa del sitio (vistas.js, /sitemap.xml): las activas, a la vista
+function paraMapa() {
+  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
+  return db.prepare("SELECT id, renovado FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ? ORDER BY renovado DESC LIMIT 5000").all(now() - DURA)
+    .map(r => ({ loc: `${sitio}/marketplace?id=${r.id}`, lastmod: new Date(r.renovado).toISOString().slice(0, 10) }));
+}
+
 // La portada: la vista previa de un enlace al Marketplace entero (la web sin ?id, o /app?mercado), con
 // una imagen armada con las ultimas publicaciones (/puente/api/mercado/portada.jpg, tambien el og:image
 // de la pagina). Las activas con foto, de la mas nueva; si faltan, las vencidas, apagadas
@@ -446,23 +517,26 @@ async function handleWeb(req, res, p, u, h) {
   if (o) { res.setHeader('Access-Control-Allow-Origin', o); res.setHeader('Access-Control-Allow-Credentials', 'true'); res.setHeader('Vary', 'Origin'); }
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') return h.json(res, 405, { error: 'solo GET' });
+  // Sin cuenta tambien se puede mirar (sesion: false): las publicaciones, como las ve cualquiera; "Mis
+  // publicaciones" y escribirle, con la cuenta
   const user = h.webUser(req);
-  if (!user) return h.json(res, 401, { error: 'sin sesion' });
+  const me = user ? user.id : 0;
   const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
   const abs = s => (s && s.startsWith('/') ? base + s : s);
   const fix = c => { c.foto = abs(c.foto); if (c.fotos) c.fotos = c.fotos.map(abs); for (const k of ['vendedor']) if (c[k] && c[k].avatar) c[k].avatar = abs(c[k].avatar); return c; };
   if (p === '/puente/api/mercado/web/lista') {
     const q = new URLSearchParams(u.searchParams);
-    if (!['mias', 'vencidas'].includes(q.get('ver'))) q.delete('ver'); // los guardados, en la app
-    const l = lista(q, user.id);
-    return h.json(res, 200, { items: l.items.map(fix), mas: l.mas, chat: base });
+    if (!['mias', 'vencidas'].includes(q.get('ver')) || (!user && q.get('ver') === 'mias')) q.delete('ver'); // los guardados, en la app
+    const l = lista(q, me);
+    return h.json(res, 200, { items: l.items.map(fix), mas: l.mas, chat: base, sesion: !!user });
   }
   if (p === '/puente/api/mercado/web/item') {
     const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada'").get(Number(u.searchParams.get('id')) || 0);
-    if (!r || (r.oculta && r.user_id !== user.id && !isAdmin(user.id))) return h.json(res, 404, { error: 'Esa publicación ya no está.' });
-    const c = fix(full(r, user.id));
-    delete c.denuncias; delete c.denunciada;
-    return h.json(res, 200, { item: c, chat: base });
+    if (!r || (r.oculta && r.user_id !== me && !isAdmin(me))) return h.json(res, 404, { error: 'Esa publicación ya no está.' });
+    const c = fix(full(r, me));
+    delete c.denuncias; delete c.denunciada; delete c.guardada;
+    if (!user) delete c.venta;
+    return h.json(res, 200, { item: c, chat: base, sesion: !!user });
   }
   return h.json(res, 404, { error: 'no existe' });
 }
@@ -730,4 +804,4 @@ function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada };
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada, paginaWeb, paraMapa };

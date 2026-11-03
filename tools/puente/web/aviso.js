@@ -181,7 +181,7 @@ function sheetDrag(sheet, opts) {
       const go = el('button', 'pvc-boton'); go.type = 'button'; go.innerHTML = DISCORD_SVG; go.appendChild(el('span', null, 'Vincular con Discord'));
       go.addEventListener('click', () => start(go));
       box.appendChild(go);
-      const ref = document.getElementById('puente-miembros-btn') || list;
+      const ref = document.getElementById('puente-atajos') || list;
       ref.parentElement.insertBefore(box, ref);
     })();
   }
@@ -3216,7 +3216,10 @@ function leido(sc) {
     b.innerHTML = ICON;
     b.appendChild(el('span', '', 'Admin'));
     b.addEventListener('click', () => (page ? close() : open()));
-    list.parentElement.insertBefore(b, list);
+    // Admin, Actividad y Guardados van juntos en una fila arriba de los canales (#puente-atajos)
+    let fila = document.getElementById('puente-atajos');
+    if (!fila) { fila = el('div'); fila.id = 'puente-atajos'; list.parentElement.insertBefore(fila, list); }
+    fila.appendChild(b);
   }
   let tries = 0;
   (function wait() {
@@ -3526,7 +3529,10 @@ function leido(sc) {
     const b = el('button', 'puente-miembros-btn'); b.id = 'puente-actividad-btn'; b.type = 'button';
     b.innerHTML = ICON; b.appendChild(el('span', '', 'Actividad'));
     b.addEventListener('click', () => (page ? close() : open()));
-    list.parentElement.insertBefore(b, list);
+    // Admin, Actividad y Guardados van juntos en una fila arriba de los canales (#puente-atajos)
+    let fila = document.getElementById('puente-atajos');
+    if (!fila) { fila = el('div'); fila.id = 'puente-atajos'; list.parentElement.insertBefore(fila, list); }
+    fila.appendChild(b);
   }
   let tries = 0;
   (function wait() {
@@ -3718,7 +3724,10 @@ function leido(sc) {
     const b = el('button', 'puente-miembros-btn'); b.id = 'puente-guardados-btn'; b.type = 'button';
     b.innerHTML = LLENO; b.appendChild(el('span', '', 'Guardados'));
     b.addEventListener('click', () => (page ? close() : open()));
-    list.parentElement.insertBefore(b, list);
+    // Admin, Actividad y Guardados van juntos en una fila arriba de los canales (#puente-atajos)
+    let fila = document.getElementById('puente-atajos');
+    if (!fila) { fila = el('div'); fila.id = 'puente-atajos'; list.parentElement.insertBefore(fila, list); }
+    fila.appendChild(b);
   }
   let tries = 0;
   (function wait() {
