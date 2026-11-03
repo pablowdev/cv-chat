@@ -37,6 +37,7 @@
     ['Wiki', WEB + '/wiki', !enForo && /^\/wiki/.test(ruta)],
     ['Full Fat Search', WEB + '/full-fat-search', !enForo && ruta.startsWith('/full-fat-search')],
     ['Marketplace', MK + '/', enMk],
+    ['Juegos', 'https://juegos.' + DOM + '/', false],
     ['Foro', FORO + '/', enForo],
     ['Chat', CHAT + '/app', false],
   ];
@@ -329,6 +330,8 @@
           if (a.target && a.target !== '_self') { e.preventDefault(); e.stopImmediatePropagation(); location.href = u.href; }
           return;
         }
+        // la pagina de los Juegos (juegos.<dominio>): adentro de CV Chat, sus Juegos
+        if (u.origin === 'https://juegos.' + DOM) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'juegos' }, CHAT); return; }
         if (u.origin !== CHAT) return;
         e.preventDefault(); e.stopImmediatePropagation();
         window.parent.postMessage({ cv: 'chat', url: u.href }, CHAT);

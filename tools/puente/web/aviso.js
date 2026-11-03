@@ -15287,6 +15287,12 @@ var puenteSinUbicacion = (function () {
         const b = document.querySelector('.puente-mk-btn'); if (b) b.click();
         return;
       }
+      // (los Juegos de la web, juegos.<dominio>: los de aca)
+      if (e.data.cv === 'juegos') {
+        cerrar();
+        try { if (window.puenteJuegos) window.puenteJuegos.abrir(); } catch { /* sigue */ }
+        return;
+      }
       if (e.data.cv !== 'mensajes') return;
       cerrar();
       const b = document.querySelector('.puente-pc-dm, .puente-rail-dm'); if (b) b.click();

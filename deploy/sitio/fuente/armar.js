@@ -14,7 +14,7 @@ const ver = u => {
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const NAV = [['inicio', 'Inicio', WEB + '/'], ['wiki', 'Wiki', WEB + '/wiki'], ['fullfat', 'Full Fat Search', WEB + '/full-fat-search'],
-  ['marketplace', 'Marketplace', MK + '/'],
+  ['marketplace', 'Marketplace', MK + '/'], ['juegos', 'Juegos', 'https://juegos.circulovicioso.club/'],
   ['foro', 'Foro', FORO + '/'], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice, imagen }) {
