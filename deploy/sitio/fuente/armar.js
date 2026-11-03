@@ -2,6 +2,9 @@
 // Uso: node armar.js <carpeta de salida>
 const fs = require('fs'), path = require('path');
 const CHAT = 'https://chat.circulovicioso.club', FORO = 'https://foro.circulovicioso.club';
+// El Marketplace tiene su propio dominio (el Caddy principal manda ahi /marketplace): el menu y el logo van con
+// la direccion entera de la web, asi desde ahi tambien llevan a la web
+const WEB = 'https://circulovicioso.club', MK = 'https://marketplace.circulovicioso.club';
 const out = process.argv[2] || path.join(__dirname, 'listo');
 // Los estilos y scripts propios con su version (?v=): asi el navegador no se queda con uno viejo cuando cambian
 const ver = u => {
@@ -10,8 +13,8 @@ const ver = u => {
 };
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const NAV = [['inicio', 'Inicio', '/'], ['wiki', 'Wiki', '/wiki'], ['fullfat', 'Full Fat Search', '/full-fat-search'],
-  ['marketplace', 'Marketplace', '/marketplace'],
+const NAV = [['inicio', 'Inicio', WEB + '/'], ['wiki', 'Wiki', WEB + '/wiki'], ['fullfat', 'Full Fat Search', WEB + '/full-fat-search'],
+  ['marketplace', 'Marketplace', MK + '/'],
   ['foro', 'Foro', FORO + '/'], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice, imagen }) {
@@ -28,7 +31,7 @@ function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canoni
 <meta property="og:image" content="${esc(imagen || 'https://circulovicioso.club/images/social-img-3.png')}">${imagen ? '\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">' : ''}
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-${canonica ? `<link rel="canonical" href="https://circulovicioso.club${canonica}">\n` : ''}${sinIndice ? '<meta name="robots" content="noindex">\n' : ''}<link rel="icon" href="/images/favicon.png">
+${canonica ? `<link rel="canonical" href="${/^https:/.test(canonica) ? canonica : WEB + canonica}">\n` : ''}${sinIndice ? '<meta name="robots" content="noindex">\n' : ''}<link rel="icon" href="/images/favicon.png">
 <link rel="apple-touch-icon" href="/images/webclip.png">
 <meta name="theme-color" content="#211c1f">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +46,7 @@ ${js.map(j => `<script src="${ver(j)}" defer></script>`).join('\n')}
 <div class="envoltura">
   <header class="cab">
     <div class="cab__marca">
-      <a class="cab__logo" href="/" aria-label="Círculo Vicioso, inicio"><img class="cab__club" src="/images/logo-club.png" alt="" width="146" height="146"><img class="cab__letras" src="/images/wordmark_cv.svg" alt="Círculo Vicioso" width="528" height="64"></a>
+      <a class="cab__logo" href="${WEB}/" aria-label="Círculo Vicioso, inicio"><img class="cab__club" src="/images/logo-club.png" alt="" width="146" height="146"><img class="cab__letras" src="/images/wordmark_cv.svg" alt="Círculo Vicioso" width="528" height="64"></a>
       <div class="cab__degrade" aria-hidden="true"></div>
     </div>
     <nav class="nav" aria-label="Secciones">
@@ -55,7 +58,7 @@ ${cuerpo.trim()}
   </main>
   <footer class="pie">
     <span>Círculo Vicioso Club</span>
-    <nav><a href="/descargar">La app</a><a href="/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a></nav>
+    <nav><a href="${WEB}/descargar">La app</a><a href="${WEB}/legal">Privacidad</a><a href="mailto:circuloviciosomedia@gmail.com">Contacto</a></nav>
   </footer>
 </div>
 </body>

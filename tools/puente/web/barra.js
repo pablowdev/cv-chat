@@ -14,8 +14,10 @@
   const CHAT = new URL(me.src).origin;
   const host = location.hostname.replace(/^www\./, '');
   const enForo = host.startsWith('foro.');
-  const DOM = enForo ? host.slice('foro.'.length) : host;
-  const WEB = 'https://' + DOM, FORO = 'https://foro.' + DOM;
+  // el Marketplace tiene su propio dominio (marketplace.<dominio>)
+  const enMk = host.startsWith('marketplace.');
+  const DOM = enForo ? host.slice('foro.'.length) : enMk ? host.slice('marketplace.'.length) : host;
+  const WEB = 'https://' + DOM, FORO = 'https://foro.' + DOM, MK = 'https://marketplace.' + DOM;
   if (enForo && location.pathname.startsWith('/cvchat.php')) return;
   const aca = location.href;
   // El foro adentro de CV Chat (el boton del foro), o la web en esa misma ventana (la wiki, Full Fat
@@ -31,10 +33,10 @@
   const ruta = location.pathname.replace(/\/+$/, '') || '/';
   const LINKS = [
     ['Círculo Vicioso', WEB + '/', false],
-    ['Inicio', WEB + '/', !enForo && ruta === '/'],
+    ['Inicio', WEB + '/', !enForo && !enMk && ruta === '/'],
     ['Wiki', WEB + '/wiki', !enForo && /^\/wiki/.test(ruta)],
     ['Full Fat Search', WEB + '/full-fat-search', !enForo && ruta.startsWith('/full-fat-search')],
-    ['Marketplace', WEB + '/marketplace', !enForo && ruta.startsWith('/marketplace')],
+    ['Marketplace', MK + '/', enMk],
     ['Foro', FORO + '/', enForo],
     ['Chat', CHAT + '/app', false],
   ];
@@ -321,8 +323,8 @@
         const a = e.target.closest && e.target.closest('a[href]');
         if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
         let u; try { u = new URL(a.href, location.href); } catch { return; }
-        if (u.origin === WEB || u.origin === 'https://www.' + DOM || u.origin === FORO) {
-          if (u.origin !== FORO && /^\/marketplace\/?$/.test(u.pathname)) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'marketplace' }, CHAT); return; }
+        if (u.origin === WEB || u.origin === 'https://www.' + DOM || u.origin === FORO || u.origin === MK) {
+          if (u.origin === MK || (u.origin !== FORO && /^\/marketplace\/?$/.test(u.pathname))) { e.preventDefault(); e.stopImmediatePropagation(); window.parent.postMessage({ cv: 'marketplace' }, CHAT); return; }
           // (en una pestaña nueva no: aca mismo)
           if (a.target && a.target !== '_self') { e.preventDefault(); e.stopImmediatePropagation(); location.href = u.href; }
           return;

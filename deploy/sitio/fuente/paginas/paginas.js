@@ -7,7 +7,7 @@ module.exports = {
     descripcion: 'Buscá cualquier palabra en todos los episodios de Círculo Vicioso y andá directo al momento del video.', imagen: `${CHAT}/puente/vista/web.jpg?p=full-fat-search` },
   'wiki.html': { fuente: 'wiki.html', titulo: 'Wiki - Círculo Vicioso Club', actual: 'wiki', css: [`${CHAT}/puente/wiki.css`], js: [`${CHAT}/puente/wiki.js`],
     descripcion: 'La wiki de Círculo Vicioso: el lore, los efectos y los personajes del club, escrita por la comunidad.', imagen: `${CHAT}/puente/vista/web.jpg?p=wiki` },
-  'marketplace.html': { fuente: 'marketplace.html', titulo: 'Marketplace - Círculo Vicioso Club', actual: 'marketplace', canonica: '/marketplace', css: ['/css/marketplace.css'], js: ['/js/marketplace.js'],
+  'marketplace.html': { fuente: 'marketplace.html', titulo: 'Marketplace - Círculo Vicioso Club', actual: 'marketplace', canonica: 'https://marketplace.circulovicioso.club/', css: ['/css/marketplace.css'], js: ['/js/marketplace.js'],
     descripcion: 'La compra, venta y servicios entre los miembros de Círculo Vicioso, sin comisiones: mirá lo que hay publicado.',
     // la vista previa del enlace: las ultimas publicaciones (mercado.js, la portada)
     imagen: `${CHAT}/puente/api/mercado/portada.jpg` },

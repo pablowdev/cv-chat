@@ -8945,7 +8945,7 @@ document.addEventListener('pointerdown', (ev) => {
     const enlace = el('button', 'mk-icono'); enlace.type = 'button';
     enlace.title = mobile() ? 'Compartir el Marketplace' : 'Copiar el enlace del Marketplace'; enlace.setAttribute('aria-label', enlace.title);
     enlace.innerHTML = svg(I.enlace, 22);
-    enlace.addEventListener('click', () => compartir(location.origin + '/app?mercado', 'Marketplace · __PUENTE_APP__'));
+    enlace.addEventListener('click', () => compartir(webMk(), 'Marketplace · __PUENTE_APP__'));
     const der = el('div', 'mk-der'); der.append(enlace, pub);
     page.appendChild(head('Marketplace', { right: der }));
     const b = body(); page.appendChild(b);
@@ -9209,7 +9209,10 @@ document.addEventListener('pointerdown', (ev) => {
   }
 
   function linkOf(it) { return location.origin + '/app?mercado=' + it.id; }
-  // Enlace a la vidriera (/app?mercado), para pasarlo por un canal, WhatsApp o donde sea
+  // Para compartir afuera: la pagina del Marketplace (su propio dominio, marketplace.<dominio>), que se ve sin
+  // cuenta y con su vista previa; adentro del chat esos enlaces tambien se abren aca
+  const webMk = (id) => 'https://marketplace.' + location.hostname.replace(/^chat\./, '') + '/' + (id ? '?id=' + id : '');
+  // Enlace a la vidriera, para pasarlo por un canal, WhatsApp o donde sea
   function compartir(url, title) {
     if (navigator.share && mobile()) { navigator.share({ title, url }).catch(() => {}); return; }
     const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
@@ -9217,7 +9220,7 @@ document.addEventListener('pointerdown', (ev) => {
     else prompt('Copiá el enlace:', url);
   }
   function share(it) {
-    const url = linkOf(it), text = `${it.titulo} · ${money(it.precio, it.moneda)}`;
+    const url = webMk(it.id), text = `${it.titulo} · ${money(it.precio, it.moneda)}`;
     if (navigator.share && mobile()) { navigator.share({ title: it.titulo, text, url }).catch(() => {}); return; }
     const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
@@ -9556,12 +9559,14 @@ document.addEventListener('pointerdown', (ev) => {
       if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server')) close();
     }, true);
     // Enlaces a una publicacion (/app?mercado=<id>) o a la vidriera (/app?mercado): se abren aca mismo.
-    // Tambien los de la pagina de la web (circulovicioso.club/marketplace?id=<id>, como los avisos de #que-paso)
+    // Tambien los de la pagina de la web (marketplace.circulovicioso.club/?id=<id>, como los avisos de #que-paso,
+    // y los de antes, circulovicioso.club/marketplace?id=<id>)
     document.addEventListener('click', (e) => {
       const a = e.target instanceof Element && e.target.closest('a[href]');
       if (!a || e.ctrlKey || e.metaKey) return;
       let u; try { u = new URL(a.href, location.href); } catch { return; }
-      const web = /^(?:www\.)?circulovicioso\.club$/.test(u.hostname) && /^\/marketplace\/?$/.test(u.pathname) && !u.searchParams.has('ver');
+      const web = ((/^(?:www\.)?circulovicioso\.club$/.test(u.hostname) && /^\/marketplace\/?$/.test(u.pathname))
+        || (u.hostname === 'marketplace.circulovicioso.club' && /^\/?$/.test(u.pathname))) && !u.searchParams.has('ver');
       if (!web && (u.origin !== location.origin || !/^\/app/.test(u.pathname) || !u.searchParams.has('mercado'))) return;
       const id = web ? u.searchParams.get('id') : u.searchParams.get('mercado');
       if (id && !/^\d+$/.test(id)) return;

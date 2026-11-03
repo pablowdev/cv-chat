@@ -21,7 +21,7 @@
 // Los avisos que se habian traido de ahi (origen 'foro', foro-mercado.js) salen como los vencidos.
 // A los 30 dias sin renovar, una publicacion vence: sigue a la vista pero aparte, abajo (ver=vencidas), y
 // quien la publico la republica con un toque. Tres dias antes se le avisa (recordar). Cada publicacion nueva se avisa en #que-paso (MERCADO_CANAL, o el canal del foro).
-// La pagina del sitio (circulovicioso.club/marketplace) usa /web/lista y /web/item: la ve cualquiera, sin
+// La pagina del Marketplace en la web (marketplace.circulovicioso.club) usa /web/lista y /web/item: la ve cualquiera, sin
 // cuenta tambien (con la del sitio, cuenta.js, ademas "Mis publicaciones"); publicar o escribirle, en la app.
 // Para Google, la pagina ya escrita (paginaWeb) y las publicaciones en el mapa del sitio (paraMapa).
 //
@@ -63,13 +63,21 @@ const appLink = id => (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + '/app
 // El enlace de la pagina de la web: Haven solo arma tarjetas de enlaces a otro sitio, y en la app se abre
 // adentro igual (web/aviso.js). Sin la cuenta unica (cuenta.js), el de la app
 const DOMINIO = () => { try { const c = require('./cuenta.js'); return c.on() ? c.dominio() : ''; } catch { return ''; } };
-const webLink = id => (DOMINIO() ? `https://${DOMINIO()}/marketplace?id=${id}` : appLink(id));
+// La pagina del Marketplace tiene su propio dominio (marketplace.<dominio>); la de antes (<dominio>/marketplace)
+// la manda ahi el Caddy principal, y sus enlaces se siguen reconociendo
+const MK = () => 'https://marketplace.' + (DOMINIO() || 'circulovicioso.club');
+function esPaginaMk(t) {
+  if (!DOMINIO()) return false;
+  if (t.hostname === 'marketplace.' + DOMINIO()) return /^\/?$/.test(t.pathname);
+  return (t.hostname === DOMINIO() || t.hostname === 'www.' + DOMINIO()) && /^\/marketplace\/?$/.test(t.pathname);
+}
+const webLink = id => (DOMINIO() ? `${MK()}/?id=${id}` : appLink(id));
 // Un enlace a una publicacion (de la app o de la web) -> su numero, o null
 function idDeEnlace(enlace, chatHost) {
   try {
     const t = new URL(enlace);
     if (t.host === chatHost && /^\/app(?:\.html)?$/.test(t.pathname)) return /^\d+$/.test(t.searchParams.get('mercado') || '') ? t.searchParams.get('mercado') : null;
-    if (DOMINIO() && (t.hostname === DOMINIO() || t.hostname === 'www.' + DOMINIO()) && /^\/marketplace\/?$/.test(t.pathname)) return /^\d+$/.test(t.searchParams.get('id') || '') ? t.searchParams.get('id') : null;
+    if (esPaginaMk(t)) return /^\d+$/.test(t.searchParams.get('id') || '') ? t.searchParams.get('id') : null;
   } catch { /* no es una direccion */ }
   return null;
 }
@@ -331,8 +339,8 @@ function vistaPrevia(id) {
     image: f ? (process.env.PUBLIC_URL || '').replace(/\/+$/, '') + URL_DIR + f : undefined };
 }
 
-// La pagina del sitio (circulovicioso.club/marketplace) ya escrita, para Google y los que no ejecutan el
-// script: el Caddy principal la manda aca (vistas.js) y se devuelve marketplace.html con el titulo, la
+// La pagina del Marketplace en la web (marketplace.<dominio>) ya escrita, para Google y los que no ejecutan el
+// script: su Caddy la manda aca (vistas.js) y se devuelve marketplace.html con el titulo, la
 // descripcion, la imagen y la direccion de esa publicacion (o del Marketplace), los datos de producto
 // (schema.org) y las tarjetas o la publicacion ya puestas (web/marketplace.js las vuelve a armar igual).
 // Las vencidas, vendidas, ocultas o borradas no se indexan
@@ -340,8 +348,8 @@ const escHtml = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/
 const ISO = { ARS: 'ARS', USD: 'USD' }; // USDT no es una moneda para Google: va sin precio
 function paginaWeb(t, q) {
   const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
-  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
-  const corto = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+  const sitio = MK();
+  const corto =(s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
   const meta = (k, attr, v) => { const re = new RegExp(`<meta ${attr}="${k}" content="[^"]*">`); const tag = `<meta ${attr}="${k}" content="${escHtml(v)}">`; t = re.test(t) ? t.replace(re, tag) : t.replace('</head>', tag + '\n</head>'); };
   const cabeza = (titulo, desc, img, url, extra) => {
     t = t.replace(/<title>[\s\S]*?<\/title>/, `<title>${escHtml(titulo)}</title>`);
@@ -358,7 +366,7 @@ function paginaWeb(t, q) {
   if (id) {
     const r = db.prepare("SELECT * FROM puente_mercado WHERE id = ? AND estado != 'borrada' AND oculta = 0").get(id);
     if (!r) { t = t.replace('</head>', '<meta name="robots" content="noindex">\n</head>'); return t; }
-    const url = `${sitio}/marketplace?id=${r.id}`;
+    const url = `${sitio}/?id=${r.id}`;
     const fotos = fotosOf(r).map(f => base + URL_DIR + f);
     const vencida = r.estado === 'activa' && vence(r) < now();
     const desc = corto([precio(r), r.zona, r.tipo === 'servicio' ? 'servicio' : r.condicion].filter(Boolean).join(' · ') + '. ' + (r.descripcion || ''), 200);
@@ -383,22 +391,22 @@ function paginaWeb(t, q) {
   }
   // El Marketplace entero: las activas mas nuevas, con su enlace (asi Google llega a cada una)
   const l = lista(new URLSearchParams(), 0);
-  const url = `${sitio}/marketplace`;
+  const url = `${sitio}/`;
   const v = vistaPortada();
   cabeza('Marketplace - Círculo Vicioso Club', corto(v.description, 200), v.image, url, ld({ '@context': 'https://schema.org', '@type': 'ItemList', name: 'Marketplace de Círculo Vicioso',
-    itemListElement: l.items.map((c, i) => ({ '@type': 'ListItem', position: i + 1, url: `${sitio}/marketplace?id=${c.id}`, name: c.titulo })) }));
-  const tarjetas = l.items.map(c => `<li class="mk-card"><a href="/marketplace?id=${c.id}"><div class="mk-card__foto">${c.foto ? `<img src="${escHtml(base + c.foto)}" alt="" loading="lazy">` : `<span>${c.tipo === 'servicio' ? 'servicio' : 'sin foto'}</span>`}</div>`
+    itemListElement: l.items.map((c, i) => ({ '@type': 'ListItem', position: i + 1, url: `${sitio}/?id=${c.id}`, name: c.titulo })) }));
+  const tarjetas = l.items.map(c => `<li class="mk-card"><a href="/?id=${c.id}"><div class="mk-card__foto">${c.foto ? `<img src="${escHtml(base + c.foto)}" alt="" loading="lazy">` : `<span>${c.tipo === 'servicio' ? 'servicio' : 'sin foto'}</span>`}</div>`
     + `<div class="mk-card__datos"><p class="mk-card__precio">${escHtml(c.precio == null ? 'A convenir' : precioTexto(c))}</p><p class="mk-card__titulo">${escHtml(c.titulo)}</p><p class="chico">${escHtml(c.zona || '')}</p></div></a></li>`).join('');
   t = t.replace('<div class="mk" id="mk" hidden>', '<div class="mk" id="mk">')
     .replace('<p class="chico" id="cargando">Cargando…</p>', '<p class="chico" id="cargando" hidden>Cargando…</p>')
     .replace('<ul class="lista-limpia mk__grilla" id="mk-grilla"></ul>', `<ul class="lista-limpia mk__grilla" id="mk-grilla">${tarjetas}</ul>`);
   return t;
 }
-// Las publicaciones para el mapa del sitio (vistas.js, /sitemap.xml): las activas, a la vista
+// Las publicaciones para el mapa del sitio del Marketplace (vistas.js, marketplace.<dominio>/sitemap.xml): las activas
 function paraMapa() {
-  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
+  const sitio = MK();
   return db.prepare("SELECT id, renovado FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ? ORDER BY renovado DESC LIMIT 5000").all(now() - DURA)
-    .map(r => ({ loc: `${sitio}/marketplace?id=${r.id}`, lastmod: new Date(r.renovado).toISOString().slice(0, 10) }));
+    .map(r => ({ loc: `${sitio}/?id=${r.id}`, lastmod: new Date(r.renovado).toISOString().slice(0, 10) }));
 }
 
 // La portada: la vista previa de un enlace al Marketplace entero (la web sin ?id, o /app?mercado), con
@@ -408,7 +416,7 @@ function esPortada(enlace, chatHost) {
   try {
     const t = new URL(enlace);
     if (t.host === chatHost && /^\/app(?:\.html)?$/.test(t.pathname)) return t.searchParams.has('mercado') && !t.searchParams.get('mercado');
-    return !!DOMINIO() && (t.hostname === DOMINIO() || t.hostname === 'www.' + DOMINIO()) && /^\/marketplace\/?$/.test(t.pathname) && !t.searchParams.get('id');
+    return esPaginaMk(t) && !t.searchParams.get('id');
   } catch { return false; }
 }
 const PORTADA = 6;
@@ -509,7 +517,7 @@ function lista(q, me) {
   return { items: rows.slice(0, PAGE).map(r => card(r, me)), mas: rows.length > PAGE };
 }
 
-// La pagina del sitio (circulovicioso.club/marketplace): solo mirar, con la cuenta del sitio (la cookie,
+// La pagina del Marketplace en la web (marketplace.circulovicioso.club): solo mirar, con la cuenta del sitio (la cookie,
 // desde las paginas propias). Las fotos con la direccion entera, porque la pagina esta en otro lado
 async function handleWeb(req, res, p, u, h) {
   const o = req.headers.origin;
@@ -807,9 +815,8 @@ function summary(userId) {
 // Las ultimas publicaciones activas con foto (portada.js, la pantalla de entrar), para la web
 function ultimas(n = 6) {
   const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
-  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
   return lista(new URLSearchParams(), 0).items.filter(c => c.foto).slice(0, n)
-    .map(c => ({ titulo: c.titulo, precio: precioTexto(c), foto: base + c.foto, zona: c.zona || '', url: sitio + '/marketplace?id=' + c.id }));
+    .map(c => ({ titulo: c.titulo, precio: precioTexto(c), foto: base + c.foto, zona: c.zona || '', url: MK() + '/?id=' + c.id }));
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada, paginaWeb, paraMapa, ultimas };
+module.exports = { MK, guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada, paginaWeb, paraMapa, ultimas };

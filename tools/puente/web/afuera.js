@@ -29,5 +29,5 @@
   if (juegos && !uno) { location.replace('https://juegos.' + dom + '/'); return; }
   if (juegos) { location.replace('/?jugar=' + (q.has('truco') || q.get('juegos') === 'truco' ? 'truco' : 'juegos') + '&volver=' + encodeURIComponent(location.href)); return; }
   var id = q.get('mercado');
-  location.replace('https://' + dom + '/marketplace' + (/^\d+$/.test(id || '') ? '?id=' + id : ''));
+  location.replace('https://marketplace.' + dom + '/' + (/^\d+$/.test(id || '') ? '?id=' + id : ''));
 })();

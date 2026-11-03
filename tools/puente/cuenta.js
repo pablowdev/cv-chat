@@ -50,9 +50,9 @@ function setup(ctx) {
 }
 const on = () => !!dominio;
 
-// Las paginas propias que pueden preguntar quien es: la web (con y sin www), el foro y el chat
+// Las paginas propias que pueden preguntar quien es: la web (con y sin www), el Marketplace, el foro y el chat
 function origins() {
-  const list = [`https://${dominio}`, `https://www.${dominio}`];
+  const list = [`https://${dominio}`, `https://www.${dominio}`, `https://marketplace.${dominio}`];
   if (foroUrl) list.push(new URL(foroUrl).origin);
   if (publicUrl) list.push(new URL(publicUrl).origin);
   return list;

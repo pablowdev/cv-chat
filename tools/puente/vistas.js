@@ -437,16 +437,24 @@ async function handle(req, res, p, u, h) {
     return h.send(res, 200, 'text/html', t, { 'Cache-Control': 'no-cache' });
   }
   // El mapa del sitio de la web (robots.txt lo nombra; el Caddy principal manda /sitemap.xml aca): las
-  // paginas, la wiki (entradas y categorias) y las publicaciones activas del Marketplace
+  // paginas y la wiki (entradas y categorias). El del Marketplace (su propio dominio, marketplace.<dominio>,
+  // que lo manda a /puente/vista/sitemap-marketplace.xml): la pagina y las publicaciones activas
+  if (p === '/puente/vista/sitemap-marketplace.xml') {
+    const mk = require('./mercado.js');
+    const urls = [{ loc: mk.MK() + '/' }];
+    try { urls.push(...mk.paraMapa()); } catch { /* sin el Marketplace */ }
+    const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+      + urls.map(r => `  <url><loc>${esc(r.loc)}</loc>${r.lastmod ? `<lastmod>${r.lastmod}</lastmod>` : ''}</url>`).join('\n') + '\n</urlset>\n';
+    return h.send(res, 200, 'application/xml', xml, { 'Cache-Control': 'public, max-age=3600' });
+  }
   if (p === '/puente/vista/sitemap.xml') {
     const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
-    const urls = Object.values(PAGINAS).map(r => ({ loc: sitio + r })).concat([{ loc: sitio + '/marketplace' }]);
+    const urls = Object.values(PAGINAS).map(r => ({ loc: sitio + r }));
     try {
       const filas = db.prepare("SELECT slug, categoria, actualizada FROM puente_wiki WHERE estado = 'publicada'").all();
       for (const w of filas) urls.push({ loc: `${sitio}/wiki/${encodeURIComponent(w.slug)}`, lastmod: w.actualizada ? new Date(w.actualizada).toISOString().slice(0, 10) : '' });
       for (const c of new Set(filas.map(w => w.categoria).filter(Boolean))) urls.push({ loc: `${sitio}/wiki-categorias/${encodeURIComponent(slugify(c))}` });
     } catch { /* sin la wiki */ }
-    try { urls.push(...require('./mercado.js').paraMapa()); } catch { /* sin el Marketplace */ }
     const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
       + urls.map(r => `  <url><loc>${esc(r.loc)}</loc>${r.lastmod ? `<lastmod>${r.lastmod}</lastmod>` : ''}</url>`).join('\n') + '\n</urlset>\n';
     return h.send(res, 200, 'application/xml', xml, { 'Cache-Control': 'public, max-age=3600' });

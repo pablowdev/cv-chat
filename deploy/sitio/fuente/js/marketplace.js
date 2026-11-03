@@ -1,4 +1,4 @@
-// El Marketplace en la web (circulovicioso.club/marketplace): las publicaciones de CV Chat (mercado.js del
+// El Marketplace en la web (marketplace.circulovicioso.club, su propio dominio): las publicaciones de CV Chat (mercado.js del
 // puente). La ve cualquiera, sin cuenta tambien; con la cuenta unica, ademas sus publicaciones. Publicar y
 // escribirle se hace en la app (sin cuenta, primero se la hace y despues sigue en esa publicacion).
 (function () {
@@ -49,7 +49,7 @@
   // ── La lista ──
   function tarjeta(it) {
     var li = el('li', 'mk-card' + (it.estado === 'vendida' ? ' is-vendida' : it.vencida ? ' is-vencida' : ''));
-    var a = el('a'); a.href = '/marketplace?id=' + it.id;
+    var a = el('a'); a.href = '/?id=' + it.id;
     a.addEventListener('click', function (ev) { if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return; ev.preventDefault(); history.pushState(null, '', a.href); ver(); });
     var f = el('div', 'mk-card__foto');
     if (it.foto) { var i = el('img'); i.src = it.foto; i.alt = ''; i.loading = 'lazy'; f.appendChild(i); }
@@ -83,7 +83,7 @@
       if (!d.mas && fase === 'activas' && !mias) { fase = 'vencidas'; desde = 0; return pedirLista(true); }
       $('mk-mas').hidden = !d.mas;
       $('mk-mias').textContent = mias ? 'Ver todo' : 'Mis publicaciones';
-      $('mk-mias').href = mias ? '/marketplace' : '?ver=mias';
+      $('mk-mias').href = mias ? '/' : '?ver=mias';
       var activas = g.children.length;
       $('mk-estado').textContent = activas ? '' : mias ? 'Todavía no publicaste nada. Se publica desde CV Chat.'
         : q.get('q') || q.get('tipo') ? 'No hay publicaciones activas con eso.' : vg.children.length ? 'No hay publicaciones activas ahora.' : 'Todavía no hay publicaciones.';
@@ -155,7 +155,7 @@
     if ($('mk-q').value.trim()) p.set('q', $('mk-q').value.trim());
     if ($('mk-tipo').value) p.set('tipo', $('mk-tipo').value);
     if ($('mk-orden').value) p.set('orden', $('mk-orden').value);
-    history.pushState(null, '', '/marketplace' + (p.toString() ? '?' + p : ''));
+    history.pushState(null, '', '/' + (p.toString() ? '?' + p : ''));
     ver();
   });
   ['mk-tipo', 'mk-orden'].forEach(function (id) { $(id).addEventListener('change', function () { $('mk-filtros').requestSubmit(); }); });
@@ -163,7 +163,7 @@
   $('mk-mias').addEventListener('click', function (ev) { ev.preventDefault(); history.pushState(null, '', $('mk-mias').getAttribute('href')); ver(); });
   $('mk-volver').addEventListener('click', function (ev) {
     ev.preventDefault();
-    history.pushState(null, '', '/marketplace'); ver();
+    history.pushState(null, '', '/'); ver();
   });
   window.addEventListener('popstate', ver);
   ver();

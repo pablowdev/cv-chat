@@ -224,6 +224,7 @@
   const pedido = new URLSearchParams(location.search).get('jugar');
   if (pedido === 'truco' || pedido === 'juegos') ss.set('puente_jugar', pedido);
   const web = 'https://' + location.hostname.replace(/^chat\./, '');
+  const mercado = 'https://marketplace.' + location.hostname.replace(/^chat\./, '') + '/'; // (su propio dominio)
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
   // El modo invitado: el formulario de Haven con nuestro texto arriba (cual, el juego elegido)
@@ -308,7 +309,7 @@
     j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
     j.addEventListener('click', aLosJuegos);
     const m = mk('a', 'puente-visita-btn');
-    m.href = web + '/marketplace';
+    m.href = mercado;
     m.append(mk('span', 'puente-visita-ico', '🛍️'), mk('span', 'puente-visita-txt'));
     m.lastChild.append(mk('b', '', 'Ver el Marketplace'), mk('small', '', 'Lo que venden los del club, sin comisiones'));
     const f = mk('a', 'puente-visita-btn');
@@ -430,7 +431,7 @@
         g.appendChild(a);
       }
       p.appendChild(g);
-      const b = mk('a', 'puente-panel-btn', 'Ver todo el Marketplace'); b.href = web + '/marketplace';
+      const b = mk('a', 'puente-panel-btn', 'Ver todo el Marketplace'); b.href = mercado;
       p.appendChild(b);
       grid.appendChild(p);
     }
@@ -481,7 +482,7 @@
   // Solo las paginas propias: el chat, la web (con y sin www) y el foro
   const dom = location.hostname.split('.').slice(1).join('.');
   const propia = (url) => {
-    try { const u = new URL(url); return u.protocol === 'https:' && [location.hostname, dom, 'www.' + dom, 'foro.' + dom].includes(u.hostname); } catch { return false; }
+    try { const u = new URL(url); return u.protocol === 'https:' && [location.hostname, dom, 'www.' + dom, 'foro.' + dom, 'marketplace.' + dom].includes(u.hostname); } catch { return false; }
   };
   const volver = q.get('volver');
   if (volver && propia(volver)) ss.set('puente_volver', volver);
