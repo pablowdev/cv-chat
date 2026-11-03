@@ -41,7 +41,12 @@
   <div class="caja__cab"><a class="rotulo" id="mk-volver" href="/">← Marketplace</a><span class="rotulo" id="mk-i-tipo"></span></div>
   <div class="mk-item__cuerpo">
     <div class="mk-item__fotos">
-      <img id="mk-i-foto" alt="">
+      <div class="mk-item__visor" id="mk-i-visor">
+        <img id="mk-i-foto" alt="">
+        <button class="mk-item__flecha is-ant" id="mk-i-ant" type="button" aria-label="Foto anterior" hidden>‹</button>
+        <button class="mk-item__flecha is-sig" id="mk-i-sig" type="button" aria-label="Foto siguiente" hidden>›</button>
+        <span class="mk-item__cuenta" id="mk-i-cuenta" hidden></span>
+      </div>
       <div class="mk-item__miniaturas" id="mk-i-minis"></div>
     </div>
     <div class="mk-item__datos">

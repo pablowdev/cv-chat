@@ -7,6 +7,18 @@
   var $ = function (id) { return document.getElementById(id); };
   var PRECIO = { ARS: '$', USD: 'US$', USDT: 'USDT ' };
   var desde = 0, fase = 'activas';
+  var galeria = [], fotoActual = 0;
+  // Muestra la foto n de la publicacion (da la vuelta en las puntas), con su miniatura marcada y a la vista
+  function verFoto(n) {
+    if (!galeria.length) return;
+    fotoActual = (n + galeria.length) % galeria.length;
+    $('mk-i-foto').src = galeria[fotoActual];
+    $('mk-i-cuenta').textContent = (fotoActual + 1) + ' / ' + galeria.length;
+    var bs = $('mk-i-minis').querySelectorAll('button');
+    for (var i = 0; i < bs.length; i++) bs[i].className = i === fotoActual ? 'is-actual' : '';
+    var b = bs[fotoActual];
+    if (b) { var m = $('mk-i-minis'); m.scrollTo({ left: b.offsetLeft - (m.clientWidth - b.offsetWidth) / 2, behavior: 'smooth' }); }
+  }
 
   function api(p) {
     return fetch(CHAT + p, { credentials: 'include', cache: 'no-store' }).then(function (r) {
@@ -113,14 +125,17 @@
       (it.descripcion || '').split(/\n{2,}/).forEach(function (par) { if (par.trim()) t.appendChild(el('p', '', par)); });
       var foto = $('mk-i-foto'), minis = $('mk-i-minis'); minis.textContent = '';
       var fotos = it.fotos || [];
-      foto.hidden = !fotos.length; if (fotos.length) foto.src = fotos[0];
+      foto.hidden = !fotos.length;
       document.querySelector('.mk-item__cuerpo').classList.toggle('sin-fotos', !fotos.length);
+      galeria = fotos;
       if (fotos.length > 1) fotos.forEach(function (src, n) {
-        var b = el('button', n ? '' : 'is-actual'); b.type = 'button'; b.setAttribute('aria-label', 'Foto ' + (n + 1));
-        var i = el('img'); i.src = src; i.alt = ''; b.appendChild(i);
-        b.addEventListener('click', function () { foto.src = src; minis.querySelectorAll('button').forEach(function (x) { x.className = x === b ? 'is-actual' : ''; }); });
+        var b = el('button'); b.type = 'button'; b.setAttribute('aria-label', 'Foto ' + (n + 1));
+        var i = el('img'); i.src = src; i.alt = ''; i.loading = 'lazy'; b.appendChild(i);
+        b.addEventListener('click', function () { verFoto(n); });
         minis.appendChild(b);
       });
+      $('mk-i-ant').hidden = $('mk-i-sig').hidden = $('mk-i-cuenta').hidden = fotos.length < 2;
+      if (fotos.length) verFoto(0);
       var v = $('mk-i-vendedor'); v.textContent = '';
       if (it.vendedor) {
         var av = el('div', 'mk-item__avatar');
@@ -166,5 +181,21 @@
     history.pushState(null, '', '/'); ver();
   });
   window.addEventListener('popstate', ver);
+  // Las fotos de la publicacion: con las flechas, deslizando la foto con el dedo o con las flechas del teclado
+  $('mk-i-ant').addEventListener('click', function () { verFoto(fotoActual - 1); });
+  $('mk-i-sig').addEventListener('click', function () { verFoto(fotoActual + 1); });
+  var toque = null;
+  $('mk-i-visor').addEventListener('touchstart', function (ev) { toque = ev.touches.length === 1 ? { x: ev.touches[0].clientX, y: ev.touches[0].clientY } : null; }, { passive: true });
+  $('mk-i-visor').addEventListener('touchend', function (ev) {
+    if (!toque || galeria.length < 2) return;
+    var dx = ev.changedTouches[0].clientX - toque.x, dy = ev.changedTouches[0].clientY - toque.y;
+    toque = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) verFoto(fotoActual + (dx < 0 ? 1 : -1));
+  });
+  document.addEventListener('keydown', function (ev) {
+    if ($('mk-item').hidden || galeria.length < 2 || /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target && ev.target.tagName) || '')) return;
+    if (ev.key === 'ArrowLeft') verFoto(fotoActual - 1);
+    else if (ev.key === 'ArrowRight') verFoto(fotoActual + 1);
+  });
   ver();
 })();

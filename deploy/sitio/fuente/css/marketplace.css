@@ -35,17 +35,26 @@
 .mk-card.is-vencida .mk-card__precio, .mk-card.is-vencida .mk-card__titulo { color: var(--fg-3); }
 .mk-card.is-vencida a:hover .mk-card__foto img { filter: grayscale(.5) brightness(.8); }
 .mk-item__aviso { margin: 14px 0 0; color: var(--fg-2); border-color: var(--line-soft); }
-.mk-item.is-vencida .mk-item__fotos > img { filter: grayscale(1) brightness(.7); }
+.mk-item.is-vencida .mk-item__visor > img { filter: grayscale(1) brightness(.7); }
 
 .mk-item { margin-top: 16px; }
 .mk-item__cuerpo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
-.mk-item__fotos { border-right: 1px solid var(--line); background: var(--bg-2); }
+.mk-item__fotos { min-width: 0; border-right: 1px solid var(--line); background: var(--bg-2); }
 .mk-item__cuerpo.sin-fotos { grid-template-columns: 1fr; }
 .mk-item__cuerpo.sin-fotos .mk-item__fotos { display: none; }
-.mk-item__fotos > img { width: 100%; max-height: 640px; object-fit: contain; }
-.mk-item__miniaturas { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; border-top: 1px solid var(--line-soft); }
+/* La foto grande: con flechas a los costados y "2 / 5" (marketplace.js); deslizando con el dedo tambien pasa */
+.mk-item__visor { position: relative; touch-action: pan-y; }
+.mk-item__visor > img { display: block; width: 100%; max-height: min(640px, 70vh); object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.mk-item__flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; padding: 0; border: 1px solid var(--line-soft); background: rgba(33, 28, 31, .75); color: var(--fg); font: 400 30px/1 var(--mono); cursor: pointer; }
+.mk-item__flecha:hover { border-color: var(--accent); color: var(--accent); }
+.mk-item__flecha.is-ant { left: 10px; }
+.mk-item__flecha.is-sig { right: 10px; }
+.mk-item__flecha[hidden], .mk-item__cuenta[hidden] { display: none; }
+.mk-item__cuenta { position: absolute; right: 10px; bottom: 10px; padding: 2px 8px; background: rgba(33, 28, 31, .75); color: var(--fg); font-size: 13px; }
+/* Las miniaturas en una fila que se desplaza de costado */
+.mk-item__miniaturas { display: flex; gap: 8px; padding: 10px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; border-top: 1px solid var(--line-soft); }
 .mk-item__miniaturas:empty { display: none; }
-.mk-item__miniaturas button { width: 64px; height: 64px; padding: 0; border: 1px solid var(--line-soft); background: none; cursor: pointer; }
+.mk-item__miniaturas button { flex: none; width: 64px; height: 64px; padding: 0; border: 1px solid var(--line-soft); background: none; cursor: pointer; }
 .mk-item__miniaturas button.is-actual { border-color: var(--accent); }
 .mk-item__miniaturas img { width: 100%; height: 100%; object-fit: cover; }
 .mk-item__datos { padding: 24px; }
@@ -59,7 +68,7 @@
 .mk-item__avatar img { width: 100%; height: 100%; object-fit: cover; }
 
 @media (max-width: 860px) {
-  .mk-item__cuerpo { grid-template-columns: 1fr; }
+  .mk-item__cuerpo { grid-template-columns: minmax(0, 1fr); }
   .mk-item__fotos { border-right: 0; border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 720px) {
