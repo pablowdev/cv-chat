@@ -129,7 +129,7 @@ html.puente-dos body.auth-page .auth-container { flex-direction: column; align-i
 .puente-lado { width: 100%; max-width: 30rem; box-sizing: border-box; }
 html.puente-dos body.auth-page .auth-header { margin: 0; }
 .puente-login-pitch { margin: 0.625rem auto 0; max-width: 26rem; color: #b5bac1; font-size: 0.9375rem; line-height: 1.45; }
-.puente-visita { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 1.125rem 0 0; }
+.puente-visita { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 1.125rem 0 0; }
 .puente-visita-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 12px 8px; border: 1px solid #3f4147; border-radius: 10px; background: #2b2d31; color: #f2f3f5; font: inherit; text-align: center; text-decoration: none; cursor: pointer; transition: border-color .15s, background .15s; }
 .puente-visita-btn:hover { border-color: #5865f2; background: #313338; color: #fff; }
 .puente-visita-ico { flex: 0 0 auto; font-size: 1.6rem; line-height: 1; }

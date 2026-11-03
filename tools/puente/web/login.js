@@ -278,7 +278,13 @@
     f.href = 'https://foro.' + web.replace(/^https:\/\//, '') + '/';
     f.append(mk('span', 'puente-visita-ico', '💬'), mk('span', 'puente-visita-txt'));
     f.lastChild.append(mk('b', '', 'Leer el foro'), mk('small', '', 'Los temas del club, desde hace años'));
-    box.append(j, m, f);
+    // Y el chat: lleva al formulario de entrar (en el celular queda abajo de todo)
+    const c = mk('button', 'puente-visita-btn');
+    c.type = 'button';
+    c.append(mk('span', 'puente-visita-ico', '🗨️'), mk('span', 'puente-visita-txt'));
+    c.lastChild.append(mk('b', '', 'Entrar al chat'), mk('small', '', 'CV Chat, el chat del club'));
+    c.addEventListener('click', () => irAlFormulario());
+    box.append(j, m, f, c);
     const pitch = mk('p', 'puente-login-pitch', 'El club de amigos y rejunto de gordos: el chat, el foro, los juegos y el Marketplace, todo en un lugar.');
     sub.insertAdjacentElement('afterend', pitch);
     pitch.insertAdjacentElement('afterend', box);
