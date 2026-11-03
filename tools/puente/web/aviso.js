@@ -7007,7 +7007,7 @@ document.addEventListener('pointerdown', (ev) => {
 
   document.addEventListener('selectionchange', () => { if (bar && bar.style.display !== 'none' || isComposer(resolve(document.activeElement))) setTimeout(check, 0); });
   document.addEventListener('mouseup', () => { dragging = false; setTimeout(check, 0); }, true);
-  document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key.startsWith('Arrow') || e.key === 'a') setTimeout(check, 0); }, true);
+  document.addEventListener('keyup', (e) => { if (e.shiftKey || (e.key || '').startsWith('Arrow') || e.key === 'a') setTimeout(check, 0); }, true);
   document.addEventListener('focusout', () => setTimeout(check, 0), true);
   window.addEventListener('resize', hide);
   document.addEventListener('scroll', () => { if (target) place(target); }, true);
@@ -7288,9 +7288,10 @@ document.addEventListener('pointerdown', (ev) => {
     if (e.isComposing || composing) return;
     const mod = e.ctrlKey || e.metaKey;
     // Deshacer / rehacer propios (el cuadro se redibuja, el del navegador no sirve)
-    if (mod && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+    const tecla = String(e.key || '').toLowerCase();
+    if (mod && !e.altKey && (tecla === 'z' || tecla === 'y')) {
       e.preventDefault();
-      const back = e.key.toLowerCase() === 'z' && !e.shiftKey;
+      const back = tecla === 'z' && !e.shiftKey;
       const from = back ? undo : redo, to = back ? redo : undo;
       const cur = { v: getVal(), s: ta.selectionStart, e: ta.selectionEnd };
       let snap = from.pop();
@@ -15667,6 +15668,16 @@ var puenteSinUbicacion = (function () {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') mandar(); });
   window.addEventListener('pagehide', mandar);
 })();
+// Cuando el navegador autocompleta un campo (Chrome, los gestores de contraseñas) manda "teclas" sin
+// tecla (e.key vacio): Haven y otros lectores hacen e.key.length y tiran un error. Antes de que les
+// llegue (en window, en captura, va primero) se les pone una tecla vacia; no se frena nada
+(function () {
+  'use strict';
+  if (window.__puenteTeclaVacia) return;
+  window.__puenteTeclaVacia = true;
+  const arreglar = (e) => { if (typeof e.key !== 'string') { try { Object.defineProperty(e, 'key', { value: '', configurable: true }); } catch { /* no se pudo */ } } };
+  for (const t of ['keydown', 'keyup', 'keypress']) window.addEventListener(t, arreglar, true);
+})();
 // Errores y velocidad (medidas.js): los errores de JavaScript que aparecen en CV Chat (como mucho 5 por
 // apertura, sin los de extensiones del navegador) y cuanto tarda en abrir hasta tener los canales, por
 // dispositivo. Y si se toco una notificacion con CV Chat abierto.
@@ -15685,9 +15696,13 @@ var puenteSinUbicacion = (function () {
     medir({ t: 'error', m, f: String(f || ''), l: l || 0 });
   }
   window.addEventListener('error', (e) => { if (e && e.message) anotar(e.message, e.filename, e.lineno); });
+  // De una promesa: el archivo y la linea salen de la pila. Si la pila no pasa por ningun archivo de la
+  // pagina, es de algo que el navegador mete (una extension, un traductor) y no se anota
   window.addEventListener('unhandledrejection', (e) => {
     const r = e && e.reason;
-    anotar(r && r.message ? r.message : typeof r === 'string' ? r : '', r && r.stack ? (String(r.stack).match(/https?:\/\/[^\s)]+/) || [''])[0].replace(/:\d+:\d+$/, '') : '', 0);
+    const lugar = r && r.stack ? String(r.stack).match(/(https?:\/\/[^\s)]+?):(\d+):\d+/) : null;
+    if (!lugar) return;
+    anotar(r && r.message ? r.message : typeof r === 'string' ? r : '', lugar[1], Number(lugar[2]) || 0);
   });
   // Cuanto tardo en abrir: desde que se pidio la pagina hasta que aparecen los canales
   const t0 = Date.now();
