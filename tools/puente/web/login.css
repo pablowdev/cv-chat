@@ -214,3 +214,44 @@ html.puente-dos.puente-volvio .puente-pasando { order: 3; }
 .puente-card-t { margin: 0; color: #fbfbfb; font-size: 1.375rem; font-weight: 800; }
 .puente-card-s { margin: 0.375rem 0 0; color: #96969e; font-size: 0.875rem; line-height: 1.4; }
 html.puente-jugar .puente-card-cab { display: none; }
+/* La sala de juegos para los que llegan sin cuenta (login.js): encima de todo, con su propio desplazamiento.
+   Al elegir un juego, la tarjeta del formulario (el nombre de invitado) queda flotando encima (html.puente-nombre) */
+.puente-sala { position: fixed; inset: 0; z-index: 1000; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; background: radial-gradient(ellipse at top, #2a2350 0%, #111214 60%) fixed, #111214; color: #f2f3f5; }
+.puente-sala-w { box-sizing: border-box; max-width: 68rem; margin: 0 auto; padding: 16px 16px 32px; }
+.puente-sala-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.puente-sala-marca { display: flex; align-items: center; gap: 10px; font-size: 1.125rem; font-weight: 800; }
+.puente-sala-marca img { width: 36px; height: 36px; border-radius: 50%; }
+.puente-sala-ya { padding: 8px 14px; border: 1px solid #4e5058; border-radius: 8px; background: transparent; color: #f2f3f5; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+.puente-sala-ya:hover { border-color: #5865f2; background: rgba(88, 101, 242, 0.15); }
+.puente-sala-hero { margin: 1.75rem 0 1.25rem; text-align: center; }
+.puente-sala-hero h1 { margin: 0; font-size: clamp(1.75rem, 6vw, 2.75rem); font-weight: 900; line-height: 1.1; }
+.puente-sala-hero p { max-width: 34rem; margin: 0.75rem auto 0; color: #b5bac1; font-size: 1rem; line-height: 1.45; }
+.puente-sala-juegos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 600px) { .puente-sala-juegos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; } }
+.puente-sala-juego { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; border: 1px solid #2e2f35; border-radius: 14px; background: #1e1f22; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; }
+.puente-sala-juego:hover, .puente-sala-juego:focus-visible { transform: translateY(-3px); border-color: #5865f2; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.puente-sala-tapa { display: flex; align-items: center; justify-content: center; aspect-ratio: 1200 / 630; overflow: hidden; background: #2b2d31; font-size: 1.5rem; font-weight: 800; }
+.puente-sala-tapa img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
+.puente-sala-juego:hover .puente-sala-tapa img { transform: scale(1.04); }
+.puente-sala-txt { display: flex; flex-direction: column; gap: 2px; padding: 12px 96px 14px 16px; }
+.puente-sala-txt b { font-size: 1.125rem; }
+.puente-sala-txt small { color: #b5bac1; font-size: 0.875rem; }
+.puente-sala-jugar { position: absolute; right: 14px; bottom: 14px; padding: 8px 18px; border-radius: 999px; background: #5865f2; color: #fff; font-size: 0.9375rem; font-weight: 700; }
+.puente-sala-juego:hover .puente-sala-jugar { background: #4752c4; }
+.puente-sala-mesas:not(:empty) { margin-top: 1.5rem; padding: 16px; border: 1px solid #2e2f35; border-radius: 14px; background: #1a191e; }
+.puente-sala-mesas h2 { margin: 0 0 12px; font-size: 1rem; font-weight: 700; }
+.puente-sala-pie { margin-top: 1.75rem; text-align: center; }
+.puente-sala-pie button { padding: 8px; border: 0; background: none; color: #00a8fc; font: inherit; font-size: 0.9375rem; cursor: pointer; }
+.puente-sala-pie button:hover { text-decoration: underline; }
+.puente-sala-velo { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); }
+html.puente-nombre .puente-sala-velo { display: block; }
+html.puente-con-sala.puente-nombre body.auth-page .auth-card { position: fixed !important; inset: 0; z-index: 1001; box-sizing: border-box; width: min(27rem, calc(100vw - 32px)) !important; max-width: none !important; height: fit-content; max-height: calc(100dvh - 32px); margin: auto !important; overflow-y: auto; transform: none !important; animation: none !important; }
+html.puente-con-sala.puente-nombre body.auth-page .auth-tabs { display: none !important; }
+@media (max-width: 599px) {
+  .puente-sala-hero { margin: 1.25rem 0 1rem; }
+  .puente-sala-juegos { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .puente-sala-txt { padding: 8px 10px 4px; }
+  .puente-sala-txt b { font-size: 1rem; }
+  .puente-sala-txt small { font-size: 0.75rem; line-height: 1.3; }
+  .puente-sala-jugar { position: static; margin: auto 10px 10px; padding: 7px 0; text-align: center; font-size: 0.875rem; }
+}

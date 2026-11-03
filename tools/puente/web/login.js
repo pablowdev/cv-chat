@@ -226,8 +226,8 @@
   const web = 'https://' + location.hostname.replace(/^chat\./, '');
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-  // El modo invitado: el formulario de Haven con nuestro texto arriba
-  function jugar(tipo) {
+  // El modo invitado: el formulario de Haven con nuestro texto arriba (cual, el juego elegido en la sala)
+  function jugar(tipo, cual) {
     ss.set('puente_jugar', tipo);
     document.documentElement.classList.add('puente-jugar');
     let tries = 0;
@@ -241,8 +241,8 @@
       let p = document.getElementById('puente-jugar-aviso');
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
-      p.append(mk('b', '', tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
-        mk('span', '', (tipo === 'truco' ? '' : 'Truco, Funball, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
+      p.append(mk('b', '', cual ? '🎮 ' + cual + ': elegí tu nombre' : tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
+        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Funball, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
           + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
       if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
@@ -250,9 +250,94 @@
       const atras = document.getElementById('guest-back-btn');
       if (atras && !atras.dataset.puente) {
         atras.dataset.puente = '1';
-        atras.addEventListener('click', () => { ss.del('puente_jugar'); document.documentElement.classList.remove('puente-jugar'); });
+        atras.addEventListener('click', () => {
+          document.documentElement.classList.remove('puente-jugar', 'puente-nombre');
+          // desde la sala de juegos: de vuelta a la sala
+          if (!document.getElementById('puente-sala')) ss.del('puente_jugar');
+        });
       }
     })();
+  }
+
+  // La sala de juegos para los que llegan sin cuenta: primero los juegos y las mesas que esperan rival, y
+  // recien al elegir uno el nombre de invitado (la tarjeta del formulario, encima de la sala: html.puente-nombre)
+  const JUEGOS = [
+    { id: 'truco', nombre: 'Truco', sub: 'Argentino, 1 contra 1' },
+    { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995' },
+    { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj' },
+    { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre' },
+  ];
+  let portada = null;
+  const datos = () => portada || (portada = fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).catch(() => null));
+  function elegir(volver, tipo, cual) {
+    ss.set('puente_volver', volver);
+    document.documentElement.classList.add('puente-nombre');
+    jugar(tipo, cual);
+    // "Volver al inicio de sesion" vuelve a la sala
+    const atras = document.getElementById('guest-back-btn');
+    if (atras) { atras.removeAttribute('data-i18n'); atras.textContent = '← Elegir otro juego'; }
+  }
+  function cerrarSala() {
+    const s = document.getElementById('puente-sala');
+    if (s) s.remove();
+    ss.del('puente_jugar');
+    document.documentElement.classList.remove('puente-con-sala', 'puente-nombre', 'puente-jugar');
+    const atras = document.getElementById('guest-back-btn');
+    if (atras) atras.textContent = '← Volver al inicio de sesión';
+  }
+  function sala() {
+    ss.set('puente_jugar', 'juegos');
+    if (document.getElementById('puente-sala')) return;
+    const s = mk('div', 'puente-sala'); s.id = 'puente-sala';
+    const velo = mk('div', 'puente-sala-velo');
+    velo.addEventListener('click', () => { const a = document.getElementById('guest-back-btn'); if (a) a.click(); else document.documentElement.classList.remove('puente-nombre'); });
+    const w = mk('div', 'puente-sala-w');
+    const cab = mk('header', 'puente-sala-cab');
+    const marca = mk('div', 'puente-sala-marca');
+    const logo = document.querySelector('.puente-login-logo');
+    if (logo && logo.src) { const i = mk('img'); i.src = logo.src; i.alt = ''; marca.appendChild(i); }
+    marca.appendChild(mk('span', '', 'CV Chat'));
+    const ya = mk('button', 'puente-sala-ya', 'Ya tengo cuenta'); ya.type = 'button';
+    ya.addEventListener('click', () => { cerrarSala(); irAlFormulario('login'); });
+    cab.append(marca, ya);
+    const hero = mk('div', 'puente-sala-hero');
+    hero.append(mk('h1', '', 'Jugá ahora, sin cuenta'),
+      mk('p', '', 'Contra la compu o contra la gente del club. Elegí un juego y después un nombre para jugar: no hace falta registrarse.'));
+    const grilla = mk('div', 'puente-sala-juegos');
+    for (const j of JUEGOS) {
+      const b = mk('button', 'puente-sala-juego'); b.type = 'button';
+      const tapa = mk('span', 'puente-sala-tapa');
+      const i = mk('img'); i.src = '/puente/tapas/' + j.id + '.jpg'; i.alt = ''; i.onerror = () => { i.remove(); tapa.textContent = j.nombre; };
+      tapa.appendChild(i);
+      const tx = mk('span', 'puente-sala-txt'); tx.append(mk('b', '', j.nombre), mk('small', '', j.sub));
+      b.append(tapa, tx, mk('span', 'puente-sala-jugar', 'Jugar'));
+      b.addEventListener('click', () => elegir(location.origin + '/app?juegos=' + j.id, j.id === 'truco' ? 'truco' : 'juegos', j.nombre));
+      grilla.appendChild(b);
+    }
+    const mesas = mk('section', 'puente-sala-mesas');
+    const pie = mk('div', 'puente-sala-pie');
+    const club = mk('button', '', 'Conocé el resto del club: el chat, el foro y el Marketplace →'); club.type = 'button';
+    club.addEventListener('click', () => { cerrarSala(); const c = document.querySelector('.auth-container'); if (c) c.scrollTop = 0; });
+    pie.appendChild(club);
+    w.append(cab, hero, grilla, mesas, pie);
+    s.append(w, velo);
+    document.body.appendChild(s);
+    document.documentElement.classList.add('puente-con-sala');
+    datos().then(d => {
+      const l = (d && d.abiertas) || [];
+      if (!l.length || !mesas.isConnected) return;
+      mesas.appendChild(mk('h2', '', 'Te están esperando para jugar'));
+      const ul = mk('ul', 'puente-mesas');
+      for (const m of l) {
+        const li = mk('li', 'puente-mesa');
+        const t = mk('div', 'puente-mesa-txt'); t.append(mk('b', '', m.nombre + (m.detalle ? ' ' + m.detalle : '')), mk('span', '', m.quien + ' busca rival'));
+        const b = mk('button', 'puente-panel-btn chico', 'Jugar'); b.type = 'button';
+        b.addEventListener('click', () => elegir(location.origin + m.enlace, m.juego === 'truco' ? 'truco' : 'juegos', m.nombre));
+        li.append(t, b);
+        ul.appendChild(li);
+      }
+      mesas.appendChild(ul);
+    });
   }
 
   // Los dos botones, abajo del saludo
@@ -265,12 +350,7 @@
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
     j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
-    j.addEventListener('click', () => {
-      // se vuelve a los juegos, salvo que ya fuera a algun lado (un enlace de una mesa)
-      if (!ss.get('puente_volver')) ss.set('puente_volver', location.origin + '/app?juegos');
-      jugar(ss.get('puente_jugar') === 'truco' ? 'truco' : 'juegos');
-      irAlFormulario(); // (en el celular el formulario queda abajo)
-    });
+    j.addEventListener('click', sala);
     const m = mk('a', 'puente-visita-btn');
     m.href = web + '/marketplace';
     m.append(mk('span', 'puente-visita-ico', '🛍️'), mk('span', 'puente-visita-txt'));
@@ -379,7 +459,7 @@
       if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', 'Truco, Funball, Ajedrez y GlobalSiege contra la compu, o armá una mesa y que se sume alguien del club.'));
       else p.appendChild(ul);
       const b = mk('button', 'puente-panel-btn', 'Ver todos los juegos'); b.type = 'button';
-      b.addEventListener('click', () => { if (!ss.get('puente_volver')) ss.set('puente_volver', location.origin + '/app?juegos'); jugar('juegos'); irAlFormulario(); });
+      b.addEventListener('click', sala);
       p.appendChild(b);
       grid.appendChild(p);
     }
@@ -421,10 +501,13 @@
   (function poner() {
     if (!botones()) { if (++n < 40) setTimeout(poner, 150); return; }
     if (!document.documentElement.classList.contains('puente-dos')) return; // (solo en la pantalla de entrar)
-    fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).then(d => { if (d) pasando(d); }).catch(() => {});
+    datos().then(d => { if (d) pasando(d); });
   })();
+  // Llegando sin cuenta a los juegos: la sala; si el enlace era de una mesa (ya eligio la partida), el nombre
   const tipo = ss.get('puente_jugar');
-  if (tipo === 'truco' || tipo === 'juegos') jugar(tipo);
+  const aMesa = /[?&](?:truco|funball|ajedrez|globalsiege)=/.test(new URLSearchParams(location.search).get('volver') || ss.get('puente_volver') || '');
+  if ((tipo === 'truco' || tipo === 'juegos') && aMesa) jugar(tipo);
+  else if (tipo === 'truco' || tipo === 'juegos') sala();
 })();
 
 // Cuenta unica (cuenta.js): con ?volver= (la web o el foro mandan aca para entrar)
