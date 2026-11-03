@@ -290,6 +290,10 @@
       cont.insertBefore(lado, card);
       lado.appendChild(head);
       document.documentElement.classList.add('puente-dos');
+      // Y en la tarjeta, para que se entienda que ese formulario es para entrar al chat
+      const t = mk('div', 'puente-card-cab');
+      t.append(mk('h2', 'puente-card-t', 'Entrá a CV Chat'), mk('p', 'puente-card-s', 'El chat del club. Con la misma cuenta entrás al foro y a la web.'));
+      card.insertBefore(t, card.firstChild);
     }
     return true;
   }

@@ -202,3 +202,8 @@ html.puente-dos.puente-volvio .puente-pasando { order: 3; }
 }
 @media (min-width: 1280px) { .puente-pasando-grid { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 959px) { .puente-chat-msg:nth-child(n+5) { display: none; } }
+/* El titulo de la tarjeta del formulario (login.js): que es para entrar a CV Chat */
+.puente-card-cab { margin: 0 0 1.25rem; text-align: center; }
+.puente-card-t { margin: 0; color: #fbfbfb; font-size: 1.375rem; font-weight: 800; }
+.puente-card-s { margin: 0.375rem 0 0; color: #96969e; font-size: 0.875rem; line-height: 1.4; }
+html.puente-jugar .puente-card-cab { display: none; }
