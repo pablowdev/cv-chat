@@ -224,6 +224,8 @@ async function handle(req, res, p, u) {
     const user = sessionUser(req);
     if (!user) return json(res, 401, { error: 'sin sesion' });
     if (!on()) return json(res, 200, { ok: false });
+    // los invitados (el truco sin cuenta) no tienen la web ni el foro: su cuenta se borra al irse
+    if ((db.prepare('SELECT is_guest FROM users WHERE id = ?').get(user.id) || {}).is_guest) return json(res, 200, { ok: false });
     const cur = userFromCookie(req);
     if (!cur || cur.id !== user.id) open(req, res, user.id);
     return json(res, 200, { ok: true });

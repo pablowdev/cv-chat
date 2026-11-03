@@ -208,6 +208,41 @@
 })();
 
 
+// El truco sin cuenta: quien abre un enlace de truco sin sesion llega aca con ?jugar=truco (afuera.js) y
+// puede jugar como invitado: elige un nombre y Haven le hace una cuenta temporal, que no ve ningun canal y
+// se borra al irse (la entrada de invitado de Haven; en el login de siempre queda escondida, login.css).
+// Despues vuelve a la mesa (?volver=, como la cuenta unica). Va antes de esa parte, que borra la direccion.
+(function () {
+  'use strict';
+  const ss = {
+    get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* */ } },
+  };
+  if (new URLSearchParams(location.search).get('jugar') === 'truco') ss.set('puente_jugar', 'truco');
+  if (ss.get('puente_jugar') !== 'truco') return;
+  document.documentElement.classList.add('puente-jugar');
+  let tries = 0;
+  (function poner() {
+    const form = document.getElementById('guest-form');
+    const sec = document.getElementById('guest-login-section');
+    // (Haven muestra la entrada de invitado cuando el servidor dice que se puede)
+    if (!form || !sec || sec.style.display === 'none') { if (++tries < 40) setTimeout(poner, 150); return; }
+    const mostrar = document.getElementById('guest-login-show-btn');
+    if (form.style.display === 'none' && mostrar) mostrar.click();
+    if (!document.getElementById('puente-jugar-aviso')) {
+      const p = document.createElement('div');
+      p.id = 'puente-jugar-aviso'; p.className = 'puente-jugar-aviso';
+      const t = document.createElement('b'); t.textContent = '🃏 Jugá al truco sin cuenta';
+      const s = document.createElement('span');
+      s.textContent = 'Elegí un nombre para la partida (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.';
+      p.append(t, s);
+      form.insertBefore(p, form.firstChild);
+    }
+    const u = document.getElementById('guest-username');
+    if (u) { u.placeholder = 'Tu nombre para la partida'; u.focus(); }
+  })();
+})();
+
 // Cuenta unica (cuenta.js): con ?volver= (la web o el foro mandan aca para entrar)
 // se vuelve ahi despues de entrar (aviso.js); si ya hay sesion en la web o el foro,
 // entra solo; y al salir del chat sale tambien de la web y del foro.
@@ -233,8 +268,10 @@
     return;
   }
   if (q.get('registro') === '1') {
-    const tab = () => { const b = document.querySelector('.auth-tab[data-tab="register"]'); if (b) b.click(); };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(tab, 50)); else setTimeout(tab, 50);
+    const tab = () => { const b = document.querySelector('.auth-tab[data-tab="register"]'); if (b && !b.classList.contains('active')) b.click(); };
+    // (Haven vuelve a poner "Iniciar sesion" cuando termina de arrancar: se insiste un poco)
+    const varias = () => [50, 400, 900, 1500].forEach(ms => setTimeout(tab, ms));
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', varias); else varias();
   }
   // Con la flecha de atras el navegador muestra esta pagina guardada, sin volver a correr nada:
   // con la sesion abierta, de vuelta al chat en vez de quedarse en el login

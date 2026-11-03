@@ -281,7 +281,10 @@ function finish(g, winner, motivo) {
   g.estado = 'terminada'; g.ganador = winner; g.motivo = motivo; g.fin = Date.now(); g.deadline = null;
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   note(g, `🏆 Ganó ${nameOf(g.jugadores[winner]).nombre}, ${g.puntaje[winner]} a ${g.puntaje[other(winner)]}.`);
-  try {
+  // Las partidas con un invitado (sin cuenta, que se borra al irse) no cuentan para el ranking ni las estadisticas
+  // (o con alguien que ya no esta: el invitado que se fue antes de terminar)
+  const conInvitado = g.jugadores.some(id => id !== BOT && (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(id) || { is_guest: 1 }).is_guest);
+  if (!conInvitado) try {
     db.prepare('INSERT OR REPLACE INTO puente_truco_partidas (id, j1, j2, puntos, flor, p1, p2, ganador, motivo, inicio, fin, compu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(g.id + '-' + g.manos, g.jugadores[0], g.jugadores[1], g.puntos, g.flor ? 1 : 0, g.puntaje[0], g.puntaje[1], g.jugadores[winner], motivo, g.inicio || null, g.fin, g.compu ? 1 : 0);
   } catch (err) { warn('truco: guardar resultado:', err.message); }

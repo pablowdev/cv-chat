@@ -10387,6 +10387,18 @@ document.addEventListener('pointerdown', (ev) => {
     }
     const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'truco'); });
     acts.appendChild(v);
+    // Quien jugo sin cuenta (invitado, login.js): la invitacion a hacerse la cuenta. La temporal se borra al
+    // salir, asi que se sale de esa y se va a crear la nueva
+    const invitado = !!(window.app && window.app.user && window.app.user.isGuest);
+    if (invitado) {
+      w.appendChild(el('div', 'jg-hero-s', 'Jugaste como invitado. Con tu cuenta (gratis) quedan tus partidas y el ranking, y entrás al chat del club.'));
+      const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta'); c.type = 'button';
+      c.addEventListener('click', () => {
+        try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+        location.href = '/?registro=1';
+      });
+      acts.insertBefore(c, acts.firstChild);
+    }
     w.appendChild(acts);
     const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
     w.appendChild(log);

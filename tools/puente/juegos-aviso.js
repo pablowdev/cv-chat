@@ -15,8 +15,9 @@ function anunciar(db, io, warn, { juego, quien, texto, enlace }) {
     const k = juego + ':' + quien;
     if (Date.now() - (ultimo.get(k) || 0) < CADA) return;
     const ch = db.prepare('SELECT id, code FROM channels WHERE LOWER(name) = ? AND is_dm = 0 ORDER BY id LIMIT 1').get(CANAL());
-    const u = db.prepare('SELECT COALESCE(display_name, username) nombre FROM users WHERE id = ?').get(quien);
-    if (!ch || !u) return;
+    const u = db.prepare('SELECT COALESCE(display_name, username) nombre, is_guest FROM users WHERE id = ?').get(quien);
+    // (las mesas de los invitados, que juegan sin cuenta, no se avisan)
+    if (!ch || !u || u.is_guest) return;
     ultimo.set(k, Date.now());
     if (ultimo.size > 500) ultimo.delete(ultimo.keys().next().value);
     const base = String(process.env.PUBLIC_URL || '').replace(/\/+$/, '');

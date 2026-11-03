@@ -104,3 +104,10 @@ html body.auth-page .puente-nota-chica { margin: 0.75rem 0 0; font-size: 0.8125r
 #eula-modal:has(#custom-tos-section[style*="block"]) .eula-content[data-i18n-html="auth.eula.terms_body"],
 #eula-modal #custom-tos-section [data-i18n="auth.eula.default_terms"] { display: none !important; }
 #eula-modal #custom-tos-content { border-bottom: 0 !important; padding-bottom: 0 !important; }
+
+/* Entrar como invitado (cuentas temporales de Haven): solo para jugar al truco sin cuenta, cuando se llega
+   desde un enlace de truco (login.js, html.puente-jugar). En el login de siempre no aparece */
+html:not(.puente-jugar) #guest-login-section, html:not(.puente-jugar) #guest-form { display: none !important; }
+.puente-jugar-aviso { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: rgba(88, 101, 242, 0.15); color: #dbdee1; font-size: 0.9rem; line-height: 1.4; text-align: left; }
+.puente-jugar-aviso b { font-size: 1rem; color: #fff; }
+.puente-jugar #guest-form > p[data-i18n="auth.guest.desc"] { display: none; }
