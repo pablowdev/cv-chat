@@ -341,6 +341,8 @@ function esPortada(enlace, chatHost) {
   } catch { return false; }
 }
 const PORTADA = 6;
+// Cambia con el dibujo, para que la direccion de la imagen sea otra y los que la guardaron la pidan de nuevo
+const PORTADA_DIBUJO = 'f2';
 function portadaItems() {
   const corte = now() - DURA;
   const de = (cond, n) => db.prepare(`SELECT id, titulo, precio, moneda, fotos, renovado FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND fotos != '[]' AND ${cond} ORDER BY renovado DESC LIMIT ?`).all(corte, n);
@@ -352,7 +354,7 @@ function vistaPortada() {
   const corte = now() - DURA;
   const n = db.prepare("SELECT COUNT(*) n FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ?").get(corte).n;
   const ult = db.prepare("SELECT titulo, precio, moneda FROM puente_mercado WHERE estado = 'activa' AND oculta = 0 AND renovado >= ? ORDER BY renovado DESC LIMIT 4").all(corte);
-  const v = crypto.createHash('sha1').update(portadaItems().map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',')).digest('hex').slice(0, 10);
+  const v = crypto.createHash('sha1').update(PORTADA_DIBUJO + portadaItems().map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',')).digest('hex').slice(0, 10);
   return { siteName: 'Marketplace · CV Chat', accentColor: '#ee2d6f', title: 'Marketplace de Círculo Vicioso',
     description: (n ? `${n} ${n === 1 ? 'publicación activa' : 'publicaciones activas'}. Lo último: ` + ult.map(r => `${r.titulo} (${precioTexto(r)})`).join(' · ')
       : 'La compra, venta y servicios entre los miembros del club.'),
@@ -361,16 +363,19 @@ function vistaPortada() {
 let portadaHecha = null; // { clave, buf }
 async function portadaJpg() {
   const items = portadaItems();
-  const clave = items.map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',');
+  const clave = PORTADA_DIBUJO + items.map(r => r.id + ':' + r.renovado + (r.vencida ? 'v' : '')).join(',');
   if (portadaHecha && portadaHecha.clave === clave) return portadaHecha.buf;
-  const W = 1200, H = 630, CAB = 84, G = 6, TW = 396, TH = 270;
+  // Abajo queda una franja sin fotos (PIE): X pone el titulo del enlace encima de la esquina de abajo a
+  // la izquierda de la imagen y tapaba los nombres de la segunda fila
+  const W = 1200, H = 630, CAB = 76, PIE = 92, G = 6, TW = 396, TH = (H - CAB - PIE - G) / 2;
   const x = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const corto = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const capas = [];
   const fondo = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#211c1f"/>
-    <text x="40" y="56" font-family="DejaVu Sans" font-weight="bold" font-size="40" fill="#f2eef0">Marketplace</text>
-    <rect x="40" y="68" width="64" height="4" fill="#ee2d6f"/>
-    <text x="${W - 40}" y="54" text-anchor="end" font-family="DejaVu Sans Mono" font-size="22" fill="#a89ca2">circulovicioso.club</text></svg>`;
+    <text x="40" y="52" font-family="DejaVu Sans" font-weight="bold" font-size="38" fill="#f2eef0">Marketplace</text>
+    <rect x="40" y="63" width="64" height="4" fill="#ee2d6f"/>
+    <text x="${W - 40}" y="50" text-anchor="end" font-family="DejaVu Sans Mono" font-size="22" fill="#a89ca2">circulovicioso.club</text>
+    <text x="${W - 40}" y="${H - PIE / 2 + 9}" text-anchor="end" font-family="DejaVu Sans" font-size="24" fill="#a89ca2">Compra, venta y servicios entre los del club</text></svg>`;
   for (let i = 0; i < PORTADA; i++) {
     const left = (i % 3) * (TW + G), top = CAB + Math.floor(i / 3) * (TH + G), r = items[i];
     let foto = null;
@@ -388,9 +393,9 @@ async function portadaJpg() {
     const linea1 = r.vencida ? 'Vencida' : precioTexto(r);
     capas.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${TW}" height="${TH}">
       <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".85"/></linearGradient></defs>
-      <rect y="${TH - 110}" width="${TW}" height="110" fill="url(#g)"/>
-      <text x="16" y="${TH - 46}" font-family="DejaVu Sans" font-weight="bold" font-size="28" fill="${r.vencida ? '#b8adb2' : '#ffffff'}">${x(corto(linea1, 22))}</text>
-      <text x="16" y="${TH - 16}" font-family="DejaVu Sans" font-size="20" fill="#e6dfe2">${x(corto(r.titulo, 32))}</text></svg>`), left, top });
+      <rect y="${TH - 100}" width="${TW}" height="100" fill="url(#g)"/>
+      <text x="16" y="${TH - 44}" font-family="DejaVu Sans" font-weight="bold" font-size="27" fill="${r.vencida ? '#b8adb2' : '#ffffff'}">${x(corto(linea1, 22))}</text>
+      <text x="16" y="${TH - 15}" font-family="DejaVu Sans" font-size="20" fill="#e6dfe2">${x(corto(r.titulo, 32))}</text></svg>`), left, top });
   }
   const buf = await sharp(Buffer.from(fondo)).composite(capas).jpeg({ quality: 82, mozjpeg: true }).toBuffer();
   portadaHecha = { clave, buf };
