@@ -30,4 +30,10 @@ function anunciar(db, io, warn, { juego, quien, texto, enlace }) {
   } catch (err) { if (warn) warn(`juegos: aviso en #${CANAL()}:`, err.message); }
 }
 
-module.exports = { anunciar };
+// Si en una partida jugo un invitado (sin cuenta: se borra al irse) o alguien que ya no esta: esas no
+// cuentan para el ranking ni las estadisticas (la compu, BOT = -1, y los asientos vacios no cuentan)
+function conInvitado(db, ids) {
+  try { return ids.some(id => Number(id) > 0 && (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(id) || { is_guest: 1 }).is_guest); } catch { return false; }
+}
+
+module.exports = { anunciar, conInvitado };

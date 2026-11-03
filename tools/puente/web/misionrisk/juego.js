@@ -622,6 +622,14 @@
     b.appendChild(w);
     const acc = el('div', 'mr-acc');
     acc.append(btn('Otra guerra', 'jg-primario', () => A.go('mrCrear')), btn('Volver a GlobalSiege', '', () => { A.stack().length = 0; A.go('inicio', 'globalsiege'); }));
+    // Quien jugo sin cuenta (invitado): la invitacion a hacerse la cuenta, como en los otros juegos (aviso.js)
+    if (window.app && window.app.user && window.app.user.isGuest) {
+      w.appendChild(el('div', 'mr-final-s', 'Jugaste como invitado. Con tu cuenta (gratis) quedan tus partidas y el ranking, y entrás al chat del club.'));
+      acc.insertBefore(btn('Crear mi cuenta', 'jg-primario', () => {
+        try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+        location.href = '/?registro=1';
+      }), acc.firstChild);
+    }
     b.appendChild(acc);
   }
 

@@ -180,7 +180,8 @@ function finish(g) {
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   const gan = g.S.ganador ? g.asientos[g.S.ganador.ej - 1] : null;
   const hum = humanos(g).length;
-  try {
+  // (las de los invitados no cuentan: juegos-aviso.js)
+  if (!require('./juegos-aviso.js').conInvitado(db, g.asientos.map(a => a.uid || 0))) try {
     db.prepare('INSERT OR REPLACE INTO puente_mr_partidas (id, jugadores, ganador, humanos, rondas, inicio, fin) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(g.id, JSON.stringify(g.asientos.map(a => a.uid || 0)), gan && gan.uid ? gan.uid : null, hum, g.S.ronda, g.inicio || null, g.fin);
     for (const a of g.asientos) {

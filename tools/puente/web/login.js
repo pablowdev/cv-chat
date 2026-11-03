@@ -208,39 +208,80 @@
 })();
 
 
-// El truco sin cuenta: quien abre un enlace de truco sin sesion llega aca con ?jugar=truco (afuera.js) y
-// puede jugar como invitado: elige un nombre y Haven le hace una cuenta temporal, que no ve ningun canal y
-// se borra al irse (la entrada de invitado de Haven; en el login de siempre queda escondida, login.css).
-// Despues vuelve a la mesa (?volver=, como la cuenta unica). Va antes de esa parte, que borra la direccion.
+// Para los que todavia no tienen cuenta, en la pantalla de entrar: "Jugar sin cuenta" y "Ver el
+// Marketplace". Jugar sin cuenta es la entrada de invitado de Haven (una cuenta temporal, que no ve ningun
+// canal y se borra al irse; en el login de siempre queda escondida, login.css): se elige un nombre y se va a
+// los juegos. Quien abre un enlace de juegos sin sesion llega aca con ?jugar=truco|juegos (afuera.js) y ya
+// entra a esa parte; despues vuelve a donde iba (?volver=, como la cuenta unica). Va antes de esa parte,
+// que borra la direccion.
 (function () {
   'use strict';
   const ss = {
     get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
     set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* */ } },
+    del: k => { try { sessionStorage.removeItem(k); } catch { /* */ } },
   };
-  if (new URLSearchParams(location.search).get('jugar') === 'truco') ss.set('puente_jugar', 'truco');
-  if (ss.get('puente_jugar') !== 'truco') return;
-  document.documentElement.classList.add('puente-jugar');
-  let tries = 0;
-  (function poner() {
-    const form = document.getElementById('guest-form');
-    const sec = document.getElementById('guest-login-section');
-    // (Haven muestra la entrada de invitado cuando el servidor dice que se puede)
-    if (!form || !sec || sec.style.display === 'none') { if (++tries < 40) setTimeout(poner, 150); return; }
-    const mostrar = document.getElementById('guest-login-show-btn');
-    if (form.style.display === 'none' && mostrar) mostrar.click();
-    if (!document.getElementById('puente-jugar-aviso')) {
-      const p = document.createElement('div');
-      p.id = 'puente-jugar-aviso'; p.className = 'puente-jugar-aviso';
-      const t = document.createElement('b'); t.textContent = '🃏 Jugá al truco sin cuenta';
-      const s = document.createElement('span');
-      s.textContent = 'Elegí un nombre para la partida (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.';
-      p.append(t, s);
-      form.insertBefore(p, form.firstChild);
-    }
-    const u = document.getElementById('guest-username');
-    if (u) { u.placeholder = 'Tu nombre para la partida'; u.focus(); }
-  })();
+  const pedido = new URLSearchParams(location.search).get('jugar');
+  if (pedido === 'truco' || pedido === 'juegos') ss.set('puente_jugar', pedido);
+  const web = 'https://' + location.hostname.replace(/^chat\./, '');
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+  // El modo invitado: el formulario de Haven con nuestro texto arriba
+  function jugar(tipo) {
+    ss.set('puente_jugar', tipo);
+    document.documentElement.classList.add('puente-jugar');
+    let tries = 0;
+    (function poner() {
+      const form = document.getElementById('guest-form');
+      const sec = document.getElementById('guest-login-section');
+      // (Haven muestra la entrada de invitado cuando el servidor dice que se puede)
+      if (!form || !sec || sec.style.display === 'none') { if (++tries < 40) setTimeout(poner, 150); return; }
+      const mostrar = document.getElementById('guest-login-show-btn');
+      if (form.style.display === 'none' && mostrar) mostrar.click();
+      let p = document.getElementById('puente-jugar-aviso');
+      if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
+      p.textContent = '';
+      p.append(mk('b', '', tipo === 'truco' ? '🃏 Jugá al truco sin cuenta' : '🎮 Jugá sin cuenta'),
+        mk('span', '', (tipo === 'truco' ? '' : 'Truco, Funball, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
+          + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
+      const u = document.getElementById('guest-username');
+      if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
+      // "Volver al inicio de sesion" sale del modo invitado
+      const atras = document.getElementById('guest-back-btn');
+      if (atras && !atras.dataset.puente) {
+        atras.dataset.puente = '1';
+        atras.addEventListener('click', () => { ss.del('puente_jugar'); document.documentElement.classList.remove('puente-jugar'); });
+      }
+    })();
+  }
+
+  // Los dos botones, abajo del saludo
+  function botones() {
+    if (document.getElementById('puente-visita')) return true;
+    const sub = document.querySelector('.puente-login-sub');
+    if (!sub) return false;
+    const box = mk('div', 'puente-visita'); box.id = 'puente-visita';
+    const j = mk('button', 'puente-visita-btn');
+    j.type = 'button';
+    j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
+    j.lastChild.append(mk('b', '', 'Jugar sin cuenta'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
+    j.addEventListener('click', () => {
+      // se vuelve a los juegos, salvo que ya fuera a algun lado (un enlace de una mesa)
+      if (!ss.get('puente_volver')) ss.set('puente_volver', location.origin + '/app?juegos');
+      jugar(ss.get('puente_jugar') === 'truco' ? 'truco' : 'juegos');
+    });
+    const m = mk('a', 'puente-visita-btn');
+    m.href = web + '/marketplace';
+    m.append(mk('span', 'puente-visita-ico', '🛍️'), mk('span', 'puente-visita-txt'));
+    m.lastChild.append(mk('b', '', 'Ver el Marketplace'), mk('small', '', 'Lo que venden los del club, sin comisiones'));
+    box.append(j, m);
+    sub.insertAdjacentElement('afterend', box);
+    return true;
+  }
+  let n = 0;
+  (function poner() { if (!botones() && ++n < 40) setTimeout(poner, 150); })();
+  const tipo = ss.get('puente_jugar');
+  if (tipo === 'truco' || tipo === 'juegos') jugar(tipo);
 })();
 
 // Cuenta unica (cuenta.js): con ?volver= (la web o el foro mandan aca para entrar)

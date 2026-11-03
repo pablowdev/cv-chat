@@ -170,7 +170,8 @@ function finish(g, winnerSeat, motivo) {
   if (motivo === 'anulada') note(g, 'Partida anulada: no cuenta.');
   else if (winnerSeat === null) note(g, `🤝 Tablas (${RESULTADO[motivo] || motivo}).`);
   else note(g, `🏆 Ganó ${nameOf(g.jugadores[winnerSeat]).nombre} (${RESULTADO[motivo] || motivo}).`);
-  if (motivo !== 'anulada') {
+  // (las de los invitados no cuentan: juegos-aviso.js)
+  if (motivo !== 'anulada' && !require('./juegos-aviso.js').conInvitado(db, g.jugadores)) {
     try {
       const w = g.jugadores[g.blancas], b = g.jugadores[1 - g.blancas];
       const res = winnerSeat === null ? '½-½' : winnerSeat === g.blancas ? '1-0' : '0-1';

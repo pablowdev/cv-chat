@@ -163,7 +163,8 @@ function finish(g, winnerSeat, motivo) {
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   if (winnerSeat === null) note(g, '🤝 Empate: no quedó ninguna bola.');
   else note(g, `🏆 Ganó ${nameOf(g.jugadores[winnerSeat]).nombre}.`);
-  try {
+  // (las de los invitados no cuentan: juegos-aviso.js)
+  if (!require('./juegos-aviso.js').conInvitado(db, g.jugadores)) try {
     db.prepare('INSERT OR REPLACE INTO puente_funball_partidas (id, j1, j2, tablero, ganador, motivo, jugadas, inicio, fin, compu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(g.id, g.jugadores[0], g.jugadores[1], g.tablero, winnerSeat === null ? null : g.jugadores[winnerSeat], motivo, g.jugadas, g.inicio || null, g.fin, g.compu ? 1 : 0);
   } catch (err) { warn('funball: guardar resultado:', err.message); }

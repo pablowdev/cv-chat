@@ -111,3 +111,16 @@ html:not(.puente-jugar) #guest-login-section, html:not(.puente-jugar) #guest-for
 .puente-jugar-aviso { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: rgba(88, 101, 242, 0.15); color: #dbdee1; font-size: 0.9rem; line-height: 1.4; text-align: left; }
 .puente-jugar-aviso b { font-size: 1rem; color: #fff; }
 .puente-jugar #guest-form > p[data-i18n="auth.guest.desc"] { display: none; }
+
+/* Para los que no tienen cuenta (login.js): jugar sin cuenta y el Marketplace, abajo del saludo */
+.puente-visita { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 18px; }
+.puente-visita-btn { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; border: 1px solid #3f4147; border-radius: 10px; background: #2b2d31; color: #f2f3f5; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: border-color .15s, background .15s; }
+.puente-visita-btn:hover { border-color: #5865f2; background: #313338; color: #fff; }
+.puente-visita-ico { flex: 0 0 auto; font-size: 1.6rem; line-height: 1; }
+.puente-visita-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.puente-visita-txt b { font-size: 0.95rem; color: #f2f3f5; }
+a.puente-visita-btn, a.puente-visita-btn:visited { color: #f2f3f5; }
+.puente-visita-txt small { font-size: 0.78rem; line-height: 1.25; color: #b5bac1; }
+@media (max-width: 420px) { .puente-visita { grid-template-columns: 1fr; } }
+/* eligiendo el nombre de invitado, sin los botones */
+html.puente-jugar .puente-visita { display: none; }

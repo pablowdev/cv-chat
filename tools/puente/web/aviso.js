@@ -7507,7 +7507,9 @@ document.addEventListener('pointerdown', (ev) => {
     // Quieto un momento, o como mucho 1,2 s despues de que aparecen los mensajes (las vistas
     // previas de enlaces pueden seguir cargando, y no vale la pena hacer esperar mas)
     const settled = Date.now() - last > 300 || (firstMsg && Date.now() - firstMsg > 1200);
-    if (channels && shown && fonts && settled) {
+    // El invitado (jugar sin cuenta, login.js) no tiene canales: listo cuando ya estan los juegos
+    const invitado = !!(app && app.user && app.user.isGuest) && fonts && (!!document.querySelector('.puente-jg') || Date.now() - t0 > 1500);
+    if ((channels && shown && fonts && settled) || invitado) {
       requestAnimationFrame(() => requestAnimationFrame(done));
       return;
     }
@@ -10372,6 +10374,18 @@ document.addEventListener('pointerdown', (ev) => {
         : `¡Mintió! ${tenia} ${m.tenia}. Los ${m.pts} puntos son para vos.`));
     return w;
   }
+  // Al terminar una partida, quien jugo sin cuenta (invitado, login.js): la invitacion a hacerse la cuenta.
+  // La temporal se borra al salir, asi que se sale de esa y se va a crear la nueva (truco, funball, ajedrez)
+  function ctaInvitado(w, acts) {
+    if (!(window.app && window.app.user && window.app.user.isGuest)) return;
+    w.appendChild(el('div', 'jg-hero-s', 'Jugaste como invitado. Con tu cuenta (gratis) quedan tus partidas y el ranking, y entrás al chat del club.'));
+    const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta'); c.type = 'button';
+    c.addEventListener('click', () => {
+      try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+      location.href = '/?registro=1';
+    });
+    acts.insertBefore(c, acts.firstChild);
+  }
   function end(b, s) {
     const w = el('div', 'jg-fin');
     const won = s.ganador === 'yo';
@@ -10387,18 +10401,7 @@ document.addEventListener('pointerdown', (ev) => {
     }
     const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'truco'); });
     acts.appendChild(v);
-    // Quien jugo sin cuenta (invitado, login.js): la invitacion a hacerse la cuenta. La temporal se borra al
-    // salir, asi que se sale de esa y se va a crear la nueva
-    const invitado = !!(window.app && window.app.user && window.app.user.isGuest);
-    if (invitado) {
-      w.appendChild(el('div', 'jg-hero-s', 'Jugaste como invitado. Con tu cuenta (gratis) quedan tus partidas y el ranking, y entrás al chat del club.'));
-      const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta'); c.type = 'button';
-      c.addEventListener('click', () => {
-        try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
-        location.href = '/?registro=1';
-      });
-      acts.insertBefore(c, acts.firstChild);
-    }
+    ctaInvitado(w, acts);
     w.appendChild(acts);
     const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
     w.appendChild(log);
@@ -11755,6 +11758,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }
     const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'funball'); });
     acts.appendChild(v);
+    ctaInvitado(w, acts);
     w.appendChild(acts);
     const log = el('div', 'jg-log'); (s.log || []).slice(-6).forEach(l => log.appendChild(el('div', '', l)));
     w.appendChild(log);
@@ -12160,6 +12164,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }
     const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'ajedrez'); });
     acts.appendChild(v);
+    ctaInvitado(w, acts);
     w.appendChild(acts);
     return w;
   }
