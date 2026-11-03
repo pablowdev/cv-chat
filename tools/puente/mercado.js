@@ -804,4 +804,12 @@ function summary(userId) {
   try { return reputation(userId); } catch { return null; }
 }
 
-module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada, paginaWeb, paraMapa };
+// Las ultimas publicaciones activas con foto (portada.js, la pantalla de entrar), para la web
+function ultimas(n = 6) {
+  const base = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+  const sitio = 'https://' + (DOMINIO() || 'circulovicioso.club');
+  return lista(new URLSearchParams(), 0).items.filter(c => c.foto).slice(0, n)
+    .map(c => ({ titulo: c.titulo, precio: precioTexto(c), foto: base + c.foto, zona: c.zona || '', url: sitio + '/marketplace?id=' + c.id }));
+}
+
+module.exports = { guardarFoto, URL_DIR, setup, handle, summary, borrarAviso, vistaPrevia, idDeEnlace, esPortada, vistaPortada, paginaWeb, paraMapa, ultimas };

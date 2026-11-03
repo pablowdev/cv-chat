@@ -238,4 +238,16 @@ async function handle(req, res, p, u) {
   catch (err) { warn('foro: buscar:', err.message); return json(res, 503, { error: 'El foro no contestó. Probá de nuevo.' }); }
 }
 
-module.exports = { setup, handle, vistaPrevia, nodoDe, on, datos };
+// Los temas con movimiento mas reciente (portada.js, la pantalla de entrar): guardados 2 minutos
+let recientesHechos = { at: 0, temas: [] };
+async function recientes(n = 5) {
+  if (!on()) return [];
+  if (Date.now() - recientesHechos.at < 120e3) return recientesHechos.temas;
+  try {
+    const r = await lector('/recientes?limite=' + Math.min(10, Math.max(1, n)));
+    recientesHechos = { at: Date.now(), temas: (r && Array.isArray(r.temas)) ? r.temas : [] };
+  } catch (err) { warn('foro: recientes:', err.message); recientesHechos.at = Date.now() - 90e3; }
+  return recientesHechos.temas;
+}
+
+module.exports = { setup, handle, vistaPrevia, nodoDe, on, datos, recientes };

@@ -220,6 +220,10 @@ function pedacitoDatos(ch, msgId) {
   const { filas, marcado } = pedacito(ch, msgId, msgId ? 5 : 4);
   return filas.map(r => { const l = leer(r.content); return { id: r.id, autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at), marcado: r.id === marcado }; });
 }
+// Los ultimos n mensajes de un canal publico (canalPublico), sin dibujo: la pantalla de entrar (portada.js)
+function ultimosDatos(ch, n = 6) {
+  return pedacito(ch, null, n).filas.map(r => { const l = leer(r.content); return { autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at) }; });
+}
 function fotoUrl(r) {
   const f = fotoDe(r);
   if (f) return publicUrl + '/uploads/' + path.relative(UPLOADS, f).split(path.sep).join('/');
@@ -471,4 +475,4 @@ async function handle(req, res, p, u, h) {
   return res.end(buf);
 }
 
-module.exports = { setup, on, handle, chatEnlace, canalPublico, pedacitoDatos };
+module.exports = { setup, on, handle, chatEnlace, canalPublico, pedacitoDatos, ultimosDatos };

@@ -112,15 +112,93 @@ html:not(.puente-jugar) #guest-login-section, html:not(.puente-jugar) #guest-for
 .puente-jugar-aviso b { font-size: 1rem; color: #fff; }
 .puente-jugar #guest-form > p[data-i18n="auth.guest.desc"] { display: none; }
 
-/* Para los que no tienen cuenta (login.js): jugar sin cuenta y el Marketplace, abajo del saludo */
-.puente-visita { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 18px; }
-.puente-visita-btn { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; border: 1px solid #3f4147; border-radius: 10px; background: #2b2d31; color: #f2f3f5; font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: border-color .15s, background .15s; }
+/* Para los que no tienen cuenta (login.js): que es el club y tres accesos sin cuenta (jugar, el Marketplace y
+   el foro). El logo, el nombre y eso van en una columna aparte (.puente-lado, fuera de la tarjeta): en la compu
+   a la izquierda del formulario, en el celular arriba */
+html body.auth-page { align-items: safe center; }
+html.puente-dos body.auth-page .auth-container { flex-direction: column; align-items: center; gap: 1.25rem; }
+.puente-lado { width: 100%; max-width: 30rem; box-sizing: border-box; }
+html.puente-dos body.auth-page .auth-header { margin: 0; }
+.puente-login-pitch { margin: 0.625rem auto 0; max-width: 26rem; color: #b5bac1; font-size: 0.9375rem; line-height: 1.45; }
+.puente-visita { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 1.125rem 0 0; }
+.puente-visita-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 12px 8px; border: 1px solid #3f4147; border-radius: 10px; background: #2b2d31; color: #f2f3f5; font: inherit; text-align: center; text-decoration: none; cursor: pointer; transition: border-color .15s, background .15s; }
 .puente-visita-btn:hover { border-color: #5865f2; background: #313338; color: #fff; }
 .puente-visita-ico { flex: 0 0 auto; font-size: 1.6rem; line-height: 1; }
 .puente-visita-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.puente-visita-txt b { font-size: 0.95rem; color: #f2f3f5; }
+.puente-visita-txt b { font-size: 0.875rem; line-height: 1.2; color: #f2f3f5; }
 a.puente-visita-btn, a.puente-visita-btn:visited { color: #f2f3f5; }
-.puente-visita-txt small { font-size: 0.78rem; line-height: 1.25; color: #b5bac1; }
-@media (max-width: 420px) { .puente-visita { grid-template-columns: 1fr; } }
-/* eligiendo el nombre de invitado, sin los botones */
+.puente-visita-txt small { display: none; font-size: 0.8125rem; line-height: 1.3; color: #b5bac1; }
+@media (min-width: 960px) {
+  html.puente-dos body.auth-page .auth-container { flex-direction: row; justify-content: center; gap: 4.5rem; padding: 3rem 2rem !important; }
+  html.puente-dos .puente-lado { flex: 0 1 30rem; }
+  html.puente-dos body.auth-page .auth-header { text-align: left; }
+  html.puente-dos .puente-login-logo { width: 8.5rem; height: 8.5rem; margin: 0 0 1.25rem; }
+  html.puente-dos body.auth-page .auth-header h1 { font-size: 2.5rem; }
+  html.puente-dos .puente-login-sub { font-size: 1.125rem; }
+  html.puente-dos .puente-login-pitch { margin: 0.75rem 0 0; font-size: 1rem; }
+  html.puente-dos .puente-visita { grid-template-columns: 1fr; gap: 10px; margin-top: 1.75rem; }
+  html.puente-dos .puente-visita-btn { flex-direction: row; gap: 14px; padding: 14px 18px; text-align: left; }
+  html.puente-dos .puente-visita-txt b { font-size: 1rem; }
+  html.puente-dos .puente-visita-txt small { display: block; }
+  html.puente-dos body.auth-page .auth-card { flex: 0 0 27rem; max-width: 27rem !important; }
+}
+/* eligiendo el nombre de invitado, sin los accesos */
 html.puente-jugar .puente-visita { display: none; }
+
+/* Lo que esta pasando en el club (login.js, portada.js): la actividad, el chat, las mesas, el Marketplace y el
+   foro. En el celular, quien llega por primera vez ve primero el club y despues el formulario; quien ya entro
+   alguna vez en este navegador (html.puente-volvio), al reves */
+.puente-actividad { display: flex; align-items: center; gap: 8px; margin: 0.75rem 0 0; color: #dbdee1; font-size: 0.875rem; font-weight: 600; }
+.puente-actividad-punto { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: #23a55a; box-shadow: 0 0 0 3px rgba(35, 165, 90, 0.25); }
+html.puente-dos body.auth-page .auth-header { display: flex; flex-direction: column; align-items: center; }
+html.puente-dos .puente-lado { order: 1; }
+html.puente-dos .puente-pasando { order: 2; }
+html.puente-dos body.auth-page .auth-card { order: 3; }
+html.puente-dos.puente-volvio body.auth-page .auth-card { order: 1; }
+html.puente-dos.puente-volvio .puente-lado { order: 2; }
+html.puente-dos.puente-volvio .puente-pasando { order: 3; }
+.puente-pasando { width: 100%; max-width: 30rem; box-sizing: border-box; }
+.puente-pasando-t { margin: 0 0 12px; color: #fbfbfb; font-size: 1.125rem; font-weight: 800; }
+.puente-pasando-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.puente-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; border: 1px solid #29292d; border-radius: 12px; background: #1a191e; }
+.puente-panel-t { margin: 0; color: #fbfbfb; font-size: 0.9375rem; font-weight: 700; }
+.puente-panel-s { margin: 0; color: #b5bac1; font-size: 0.875rem; line-height: 1.45; }
+.puente-panel-btn { display: block; box-sizing: border-box; width: 100%; margin-top: auto; padding: 10px 12px; border: 1px solid #3f4147; border-radius: 8px; background: #2b2d31; color: #f2f3f5 !important; font: inherit; font-size: 0.875rem; font-weight: 600; text-align: center; text-decoration: none !important; cursor: pointer; }
+.puente-panel-btn:hover { border-color: #5865f2; background: #313338; }
+.puente-panel-btn.chico { width: auto; margin: 0; padding: 6px 14px; background: #5865f2; border-color: #5865f2; color: #fff !important; }
+.puente-panel-btn.chico:hover { background: #4752c4; }
+.puente-chat, .puente-mesas, .puente-foro { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.puente-chat-msg { display: flex; gap: 10px; min-width: 0; }
+.puente-chat-av { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: #5865f2; color: #fff; font-size: 0.875rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.puente-chat-av img { width: 100%; height: 100%; object-fit: cover; }
+.puente-chat-cuerpo { min-width: 0; flex: 1 1 auto; }
+.puente-chat-cab { display: flex; align-items: baseline; gap: 8px; }
+.puente-chat-cab b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f2f3f5; font-size: 0.875rem; }
+.puente-chat-cab span { flex: 0 0 auto; color: #80848e; font-size: 0.75rem; }
+.puente-chat-txt { color: #dbdee1; font-size: 0.875rem; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.puente-chat-img { display: block; max-width: 100%; max-height: 90px; margin-top: 4px; border-radius: 6px; object-fit: cover; }
+.puente-mesa { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.puente-mesa-txt { display: flex; flex-direction: column; min-width: 0; }
+.puente-mesa-txt b { color: #f2f3f5; font-size: 0.9375rem; }
+.puente-mesa-txt span { color: #b5bac1; font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-tienda { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.puente-tienda-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: #f2f3f5 !important; text-decoration: none !important; }
+.puente-tienda-foto { display: block; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #2b2d31; }
+.puente-tienda-foto img { width: 100%; height: 100%; object-fit: cover; transition: transform .2s; }
+.puente-tienda-item:hover .puente-tienda-foto img { transform: scale(1.05); }
+.puente-tienda-item b { margin-top: 4px; font-size: 0.8125rem; }
+.puente-tienda-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b5bac1; font-size: 0.75rem; }
+.puente-foro li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.puente-foro-tema { color: #f2f3f5 !important; font-size: 0.9rem; font-weight: 600; text-decoration: none !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-foro-tema:hover { color: #00a8fc !important; }
+.puente-foro-linea { color: #80848e; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 960px) {
+  html.puente-dos body.auth-page .auth-container { flex-wrap: wrap; align-content: flex-start; row-gap: 3rem; }
+  html.puente-dos body.auth-page .auth-header { align-items: flex-start; }
+  html.puente-dos .puente-lado, html.puente-dos.puente-volvio .puente-lado { order: 1; }
+  html.puente-dos body.auth-page .auth-card, html.puente-dos.puente-volvio body.auth-page .auth-card { order: 2; }
+  html.puente-dos .puente-pasando, html.puente-dos.puente-volvio .puente-pasando { order: 3; flex: 0 0 100%; max-width: 72rem; }
+  .puente-pasando-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) { .puente-pasando-grid { grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 959px) { .puente-chat-msg:nth-child(n+5) { display: none; } }

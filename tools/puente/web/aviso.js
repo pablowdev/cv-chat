@@ -7486,6 +7486,9 @@ document.addEventListener('pointerdown', (ev) => {
   try { token = localStorage.getItem('haven_token'); } catch { /* sin almacenamiento */ }
   if (!token) { done(); return; }           // sin sesion: Haven lleva al inicio de sesion
   setTimeout(done, 8000);                    // pase lo que pase
+  // Ya entro alguna vez en este navegador (no como invitado): la pantalla de entrar le muestra primero el
+  // formulario en el celular (login.js)
+  try { if (!/"isGuest":\s*true/.test(localStorage.getItem('haven_user') || '')) localStorage.setItem('cv_ya_entro', '1'); } catch { /* sin almacenamiento */ }
   const t0 = Date.now();
   let fonts = false, last = Date.now(), firstMsg = 0;
   try { document.fonts.ready.then(() => { fonts = true; }); } catch { fonts = true; }

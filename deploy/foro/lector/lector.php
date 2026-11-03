@@ -10,6 +10,7 @@
 //  GET /tema?id=<nodeid>                     un tema o respuesta (para la vista previa de un enlace)
 //  GET /contexto?id=<nodeid>                 el tema o respuesta con su conversacion (debajo de un enlace al foro en CV Chat)
 //  GET /buscar?q=<texto>                     temas que lo mencionan
+//  GET /recientes?limite=<n>                 los temas con movimiento mas reciente
 //  GET /canal?ruta=<forum/...>               un foro (o la portada, con ruta vacia): nombre, cuentas y el ultimo tema
 //  GET /miembro?id=<userid>                  nombre, foto, mensajes y desde cuando (lo que se ve al lado de cada mensaje)
 //  GET /vivo                                 el ultimo tema o respuesta publico (el foro se actualiza solo cuando cambia)
@@ -146,6 +147,20 @@ if ($ruta === '/contexto') {
 		foreach ($d->fetchAll() as $y) $filas[] = $armar($y);
 	}
 	salir(['tema' => $x, 'filas' => $filas]);
+}
+
+// Los temas con movimiento mas reciente (la pantalla de entrar de CV Chat, para los que no tienen cuenta)
+if ($ruta === '/recientes') {
+	$limite = min(10, max(1, (int) ($_GET['limite'] ?? 5)));
+	$q = $db->query($sql . ' AND n.nodeid = n.starter ORDER BY n.lastcontent DESC LIMIT ' . ($limite * 4));
+	$out = [];
+	foreach ($q->fetchAll() as $r) {
+		if (!publico((int) $r['canal'])) continue;
+		$x = $armar($r); $x['ultimo'] = (int) $r['lastcontent'] * 1000;
+		$out[] = $x;
+		if (count($out) >= $limite) break;
+	}
+	salir(['temas' => $out]);
 }
 
 if ($ruta === '/buscar') {

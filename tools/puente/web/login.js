@@ -274,12 +274,139 @@
     m.href = web + '/marketplace';
     m.append(mk('span', 'puente-visita-ico', '🛍️'), mk('span', 'puente-visita-txt'));
     m.lastChild.append(mk('b', '', 'Ver el Marketplace'), mk('small', '', 'Lo que venden los del club, sin comisiones'));
-    box.append(j, m);
-    sub.insertAdjacentElement('afterend', box);
+    const f = mk('a', 'puente-visita-btn');
+    f.href = 'https://foro.' + web.replace(/^https:\/\//, '') + '/';
+    f.append(mk('span', 'puente-visita-ico', '💬'), mk('span', 'puente-visita-txt'));
+    f.lastChild.append(mk('b', '', 'Leer el foro'), mk('small', '', 'Los temas del club, desde hace años'));
+    box.append(j, m, f);
+    const pitch = mk('p', 'puente-login-pitch', 'El club de amigos y rejunto de gordos: el chat, el foro, los juegos y el Marketplace, todo en un lugar.');
+    sub.insertAdjacentElement('afterend', pitch);
+    pitch.insertAdjacentElement('afterend', box);
+    // El logo, el nombre y los accesos en su propia columna, fuera de la tarjeta del formulario: en la compu a la
+    // izquierda, en el celular arriba (login.css, html.puente-dos). Solo en la pantalla de entrar de Haven
+    const head = sub.closest('.auth-header'), card = document.querySelector('.auth-card'), cont = card && card.parentElement;
+    if (head && card && cont && document.getElementById('login-form') && head.parentElement === card) {
+      const lado = mk('div', 'puente-lado');
+      cont.insertBefore(lado, card);
+      lado.appendChild(head);
+      document.documentElement.classList.add('puente-dos');
+    }
     return true;
   }
+  // Lo que esta pasando en el club (portada.js): la actividad arriba, y abajo el chat, las mesas abiertas, el
+  // Marketplace y el foro. Quien ya entro alguna vez en este navegador (cv_ya_entro, aviso.js) ve primero el
+  // formulario en el celular; el que llega por primera vez, primero el club (login.css, html.puente-volvio)
+  try { if (localStorage.getItem('cv_ya_entro')) document.documentElement.classList.add('puente-volvio'); } catch { /* sin almacenamiento */ }
+  const irAlFormulario = (tab) => {
+    const b = tab && document.querySelector('.auth-tab[data-tab="' + tab + '"]');
+    if (b && !b.classList.contains('active')) b.click();
+    const card = document.querySelector('.auth-card');
+    if (card) setTimeout(() => card.scrollIntoView({ block: 'start' }), 50); // (despues de que se reacomoda)
+  };
+  function panel(titulo, extra) {
+    const p = mk('section', 'puente-panel' + (extra ? ' ' + extra : ''));
+    p.appendChild(mk('h2', 'puente-panel-t', titulo));
+    return p;
+  }
+  function pasando(d) {
+    const lado = document.querySelector('.puente-lado'), card = document.querySelector('.auth-card');
+    if (!lado || !card || document.getElementById('puente-pasando')) return;
+    // 1. La actividad, abajo de la presentacion
+    const bits = [];
+    if (d.conectados) bits.push(d.conectados + (d.conectados === 1 ? ' conectado ahora' : ' conectados ahora'));
+    if (d.mensajesHoy) bits.push(d.mensajesHoy.toLocaleString('es-AR') + (d.mensajesHoy === 1 ? ' mensaje hoy' : ' mensajes hoy'));
+    if (d.partidas) bits.push(d.partidas + (d.partidas === 1 ? ' partida en juego' : ' partidas en juego'));
+    const pitch = lado.querySelector('.puente-login-pitch');
+    if (bits.length && pitch) {
+      const a = mk('p', 'puente-actividad');
+      a.append(mk('span', 'puente-actividad-punto'), mk('span', '', bits.join(' · ')));
+      pitch.insertAdjacentElement('afterend', a);
+    }
+    const sec = mk('div', 'puente-pasando'); sec.id = 'puente-pasando';
+    sec.appendChild(mk('h2', 'puente-pasando-t', 'Lo que está pasando en el club'));
+    const grid = mk('div', 'puente-pasando-grid');
+    // 2. Un pedacito del chat
+    if (d.chat && d.chat.mensajes && d.chat.mensajes.length) {
+      const p = panel('Ahora en #' + d.chat.canal, 'puente-panel-chat');
+      const ul = mk('ul', 'puente-chat');
+      for (const m of d.chat.mensajes) {
+        const li = mk('li', 'puente-chat-msg');
+        const av = mk('span', 'puente-chat-av');
+        if (m.foto) { const i = mk('img'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.onerror = () => { i.remove(); av.textContent = (m.autor || '?').charAt(0).toUpperCase(); }; av.appendChild(i); }
+        else av.textContent = (m.autor || '?').charAt(0).toUpperCase();
+        const cuerpo = mk('div', 'puente-chat-cuerpo');
+        const cab = mk('div', 'puente-chat-cab'); cab.append(mk('b', '', m.autor), mk('span', '', m.hora || ''));
+        cuerpo.appendChild(cab);
+        if (m.texto) cuerpo.appendChild(mk('div', 'puente-chat-txt', m.texto));
+        if (m.imagen) { const i = mk('img', 'puente-chat-img'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; cuerpo.appendChild(i); }
+        li.append(av, cuerpo);
+        ul.appendChild(li);
+      }
+      p.appendChild(ul);
+      const b = mk('button', 'puente-panel-btn', 'Sumate a la charla: creá tu cuenta'); b.type = 'button';
+      b.addEventListener('click', () => irAlFormulario('register'));
+      p.appendChild(b);
+      grid.appendChild(p);
+    }
+    // 4. Mesas esperando rival (o, si no hay, jugar contra la compu)
+    {
+      const p = panel(d.abiertas && d.abiertas.length ? 'Te están esperando para jugar' : 'Jugá ahora, sin cuenta', 'puente-panel-mesas');
+      const ul = mk('ul', 'puente-mesas');
+      for (const m of (d.abiertas || [])) {
+        const li = mk('li', 'puente-mesa');
+        const t = mk('div', 'puente-mesa-txt'); t.append(mk('b', '', m.nombre + (m.detalle ? ' ' + m.detalle : '')), mk('span', '', m.quien + ' busca rival'));
+        const b = mk('button', 'puente-panel-btn chico', 'Jugar'); b.type = 'button';
+        b.addEventListener('click', () => { ss.set('puente_volver', location.origin + m.enlace); jugar(m.juego === 'truco' ? 'truco' : 'juegos'); irAlFormulario(); });
+        li.append(t, b);
+        ul.appendChild(li);
+      }
+      if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', 'Truco, Funball, Ajedrez y GlobalSiege contra la compu, o armá una mesa y que se sume alguien del club.'));
+      else p.appendChild(ul);
+      const b = mk('button', 'puente-panel-btn', 'Ver todos los juegos'); b.type = 'button';
+      b.addEventListener('click', () => { if (!ss.get('puente_volver')) ss.set('puente_volver', location.origin + '/app?juegos'); jugar('juegos'); irAlFormulario(); });
+      p.appendChild(b);
+      grid.appendChild(p);
+    }
+    // 3. El Marketplace
+    if (d.mercado && d.mercado.length) {
+      const p = panel('En el Marketplace', 'puente-panel-mk');
+      const g = mk('div', 'puente-tienda');
+      for (const it of d.mercado) {
+        const a = mk('a', 'puente-tienda-item'); a.href = it.url;
+        const f = mk('span', 'puente-tienda-foto'); const i = mk('img'); i.src = it.foto; i.alt = ''; i.loading = 'lazy'; f.appendChild(i);
+        a.append(f, mk('b', '', it.precio), mk('span', 'puente-tienda-titulo', it.titulo));
+        g.appendChild(a);
+      }
+      p.appendChild(g);
+      const b = mk('a', 'puente-panel-btn', 'Ver todo el Marketplace'); b.href = web + '/marketplace';
+      p.appendChild(b);
+      grid.appendChild(p);
+    }
+    // 5. El foro (de la wiki, nada)
+    if (d.foro && d.foro.length) {
+      const p = panel('En el foro', 'puente-panel-foro');
+      const ul = mk('ul', 'puente-foro');
+      for (const t of d.foro) {
+        const li = mk('li');
+        const a = mk('a', 'puente-foro-tema', t.tema); a.href = t.url;
+        const r = t.respuestas == null ? '' : ' · ' + t.respuestas + (t.respuestas === 1 ? ' respuesta' : ' respuestas');
+        li.append(a, mk('span', 'puente-foro-linea', (t.canal ? t.canal + ' · ' : '') + 'de ' + t.autor + r));
+        ul.appendChild(li);
+      }
+      p.appendChild(ul);
+      const b = mk('a', 'puente-panel-btn', 'Leer el foro'); b.href = 'https://foro.' + web.replace(/^https:\/\//, '') + '/';
+      p.appendChild(b);
+      grid.appendChild(p);
+    }
+    sec.appendChild(grid);
+    card.parentElement.appendChild(sec);
+  }
   let n = 0;
-  (function poner() { if (!botones() && ++n < 40) setTimeout(poner, 150); })();
+  (function poner() {
+    if (!botones()) { if (++n < 40) setTimeout(poner, 150); return; }
+    if (!document.documentElement.classList.contains('puente-dos')) return; // (solo en la pantalla de entrar)
+    fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).then(d => { if (d) pasando(d); }).catch(() => {});
+  })();
   const tipo = ss.get('puente_jugar');
   if (tipo === 'truco' || tipo === 'juegos') jugar(tipo);
 })();
