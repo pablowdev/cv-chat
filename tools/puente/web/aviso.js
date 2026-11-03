@@ -9704,7 +9704,7 @@ document.addEventListener('pointerdown', (ev) => {
     b.title = mobile() ? 'Compartir' : 'Copiar enlace'; b.setAttribute('aria-label', b.title);
     b.innerHTML = svg(I.enlace, 22);
     b.addEventListener('click', () => {
-      const url = location.origin + ruta;
+      const url = /^https?:\/\//.test(ruta) ? ruta : location.origin + ruta;
       if (navigator.share && mobile()) { navigator.share({ title: titulo, url }).catch(() => {}); return; }
       const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
@@ -9818,7 +9818,8 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
   ];
   async function biblioteca() {
-    page.appendChild(head('Juegos', botonEnlace('/app?juegos', 'Juegos · __PUENTE_APP__')));
+    // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
+    page.appendChild(head('Juegos', botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__')));
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
     const copaBox = el('div'); b.appendChild(copaBox); copaMudanza(copaBox);
