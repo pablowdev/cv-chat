@@ -6,7 +6,11 @@ html body.auth-page {
   background: radial-gradient(ellipse at 50% 0%, #1f1e24 0%, #121214 60%) fixed !important;
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #dbdee1;
 }
-html body.auth-page { overflow-x: hidden; }
+/* Que la pagina se desplace como cualquier pagina (la ventana), y no adentro de un body con el alto fijo de la
+   pantalla (Haven deja el html con overflow hidden): en el celular, al aparecer o irse la barra del navegador,
+   ese alto cambiaba y el desplazamiento rebotaba para arriba */
+html:has(> body.auth-page) { height: auto !important; overflow-y: auto !important; overflow-x: hidden !important; }
+html body.auth-page { height: auto !important; min-height: 100vh; min-height: 100svh; overflow: visible !important; overflow-x: clip !important; }
 html body.auth-page .auth-container { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 2rem 1rem 5rem !important; box-sizing: border-box; display: flex; justify-content: center; background: none !important; }
 html body.auth-page .auth-card {
   width: 100% !important; max-width: 30rem !important; min-width: 0 !important; margin: 0 !important; box-sizing: border-box; padding: 2rem 2rem 1.25rem;
