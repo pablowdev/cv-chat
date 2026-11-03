@@ -12,6 +12,25 @@ const ADENTRO = [ORIGEN, 'https://discord.com', 'https://www.discord.com'];
 
 let win = null, tray = null, saliendo = false;
 
+// Abrir con Windows (como Discord): prendido de entrada, la primera vez que se abre esta version;
+// arranca escondida junto al reloj (--oculto). Se apaga desde el icono. La de la Microsoft Store no
+// (ahi Windows lo maneja con su propio permiso)
+const OCULTO = '--oculto';
+const oculta = process.argv.includes(OCULTO);
+const conInicio = () => app.isPackaged && !process.windowsStore;
+function inicioPrendido() { return conInicio() && app.getLoginItemSettings({ args: [OCULTO] }).openAtLogin; }
+function ponerInicio(si) {
+  if (!conInicio()) return;
+  app.setLoginItemSettings({ openAtLogin: !!si, path: process.execPath, args: [OCULTO] });
+}
+function inicioDeEntrada() {
+  if (!conInicio()) return;
+  const marca = path.join(app.getPath('userData'), 'inicio-con-windows.txt');
+  if (fs.existsSync(marca)) return; // ya se decidio (prendido o apagado desde el icono)
+  ponerInicio(true);
+  try { fs.writeFileSync(marca, 'prendido de entrada\n'); } catch { /* la proxima */ }
+}
+
 // Una sola copia: si ya hay una abierta, esta se cierra en el acto (sin ventanita ni nada) y la
 // otra pasa al frente ('second-instance'). Antes seguia arrancando un rato y quedaban dos abiertas
 const unica = app.requestSingleInstanceLock();
@@ -32,7 +51,8 @@ function crear() {
   });
   win.removeMenu();
   win.loadURL(INICIO);
-  win.once('ready-to-show', () => win.show());
+  // Al abrirse con Windows queda junto al reloj (carga igual, para que lleguen los avisos)
+  win.once('ready-to-show', () => { if (!oculta) win.show(); });
 
   const deAdentro = (url) => ADENTRO.some(o => url === o || url.startsWith(o + '/'));
   // Enlaces que abren otra ventana: los de CV Chat adentro, el resto en el navegador
@@ -52,15 +72,22 @@ function crear() {
 function bandeja() {
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png')).resize({ width: 16, height: 16 }));
   tray.setToolTip('CV Chat');
-  tray.setContextMenu(Menu.buildFromTemplate([
+  const menu = () => Menu.buildFromTemplate([
     { label: 'Abrir CV Chat', click: mostrar },
     { label: 'Recargar', click: () => win && win.webContents.reloadIgnoringCache() },
     { type: 'separator' },
+    ...(conInicio() ? [{ label: 'Abrir al iniciar Windows', type: 'checkbox', checked: inicioPrendido(), click: (it) => { ponerInicio(it.checked); tray.setContextMenu(menu()); } }, { type: 'separator' }] : []),
     { label: 'Salir', click: () => { saliendo = true; app.quit(); } },
-  ]));
+  ]);
+  tray.setContextMenu(menu());
   tray.on('click', mostrar);
 }
-function mostrar() { if (!win) return; if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+function mostrar() {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show(); win.focus();
+  if (pendiente) { const info = pendiente; pendiente = null; ofrecer(info); } // actualizacion que llego con la ventana escondida
+}
 
 // Al abrir, como Discord: una ventanita con el logo busca si hay una version nueva
 // (/puente/descargas/latest.yml). Si hay, la baja mostrando el avance, la instala y CV Chat se
@@ -120,9 +147,12 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionCheckHandler((wc, permiso) => permiso !== 'notifications');
   session.defaultSession.setSpellCheckerLanguages(['es-ES', 'en-US']);
+  inicioDeEntrada();
   if (!app.isPackaged) { abrirApp(); return; } // probando sin instalar: no hay de donde actualizar
   // La de la Microsoft Store se actualiza desde la Store (y firmada por Microsoft): sin el actualizador propio
   if (process.windowsStore) { abrirApp(); return; }
+  // Abierta con Windows: sin la ventanita (nada aparece en pantalla); lo nuevo se baja en segundo plano
+  if (oculta) { abrirApp(); return; }
   ventanita();
   plazo(10000);
   autoUpdater.checkForUpdates().catch(abrirApp);
@@ -158,6 +188,12 @@ autoUpdater.on('update-downloaded', async (info) => {
   }
   if (avisado) return;
   avisado = true;
+  // Con la ventana escondida (abierta con Windows) no sale un cartel de la nada: se ofrece al abrirla
+  if (!win || !win.isVisible()) { pendiente = info; return; }
+  ofrecer(info);
+});
+let pendiente = null;
+async function ofrecer(info) {
   const opts = {
     type: 'info', title: 'CV Chat', buttons: ['Reiniciar y actualizar', 'Más tarde'], defaultId: 0, cancelId: 1,
     message: `Hay una versión nueva de CV Chat (${info.version}).`,
@@ -165,5 +201,5 @@ autoUpdater.on('update-downloaded', async (info) => {
   };
   const r = win && win.isVisible() ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
   if (r.response === 0) { saliendo = true; autoUpdater.quitAndInstall(true, true); }
-});
+}
 app.whenReady().then(() => { if (!unica || process.windowsStore) return; setTimeout(buscarActualizacion, 60000); setInterval(buscarActualizacion, 6 * 3600 * 1000); });
