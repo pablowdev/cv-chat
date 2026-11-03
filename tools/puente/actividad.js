@@ -65,7 +65,9 @@ function destacadosTodos() {
 }
 function destacados(userId) {
   const mios = new Set(db.prepare('SELECT m.channel_id FROM channel_members m JOIN channels c ON c.id = m.channel_id WHERE m.user_id = ? AND c.is_dm = 0').all(userId).map(r => r.channel_id));
-  const canales = new Map(db.prepare('SELECT id, name, code FROM channels WHERE is_dm = 0').all().map(c => [c.id, c]));
+  // #circulo-vicioso queda afuera: ahi van mas que nada anuncios
+  const anuncios = (n) => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() === 'circulo-vicioso';
+  const canales = new Map(db.prepare('SELECT id, name, code FROM channels WHERE is_dm = 0').all().filter(c => !anuncios(c.name)).map(c => [c.id, c]));
   const porCanal = new Map();
   for (const m of destacadosTodos()) {
     if (!mios.has(m.channel_id) || !canales.has(m.channel_id)) continue;
