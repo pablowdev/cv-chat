@@ -9039,8 +9039,43 @@ document.addEventListener('pointerdown', (ev) => {
       if (it.fotos.length > 1) {
         const dots = el('div', 'mk-puntos');
         it.fotos.forEach((_, k) => dots.appendChild(el('span', k ? '' : 'on')));
-        strip.addEventListener('scroll', () => { const k = Math.round(strip.scrollLeft / strip.clientWidth); dots.querySelectorAll('span').forEach((s, j) => s.classList.toggle('on', j === k)); }, { passive: true });
-        car.appendChild(dots);
+        // Y las flechas a los costados (en la compu no se puede deslizar), y las del teclado
+        const actual = () => Math.round(strip.scrollLeft / (strip.clientWidth || 1));
+        // (a donde va mientras se desliza: tocar seguido sigue pasando de a una)
+        let destino = null, llegar = null;
+        const ir = (k) => {
+          destino = Math.max(0, Math.min(it.fotos.length - 1, k));
+          const x = destino * strip.clientWidth;
+          strip.scrollTo({ left: x, behavior: 'smooth' });
+          pintar(true);
+          // (si el deslizamiento se corto, la pone directo)
+          clearTimeout(llegar);
+          llegar = setTimeout(() => { if (Math.abs(strip.scrollLeft - x) > 2) strip.scrollTo({ left: x }); destino = null; pintar(); }, 600);
+        };
+        const flecha = (cls, d, label, paso) => {
+          const f = el('button', 'mk-flecha ' + cls); f.type = 'button'; f.setAttribute('aria-label', label);
+          f.innerHTML = svg(d, 28);
+          f.addEventListener('click', (e) => { e.stopPropagation(); ir((destino ?? actual()) + paso); });
+          return f;
+        };
+        const ant = flecha('ant', 'M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12l4.6-4.6Z', 'Foto anterior', -1);
+        const sig = flecha('sig', 'M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6-4.6 4.6Z', 'Foto siguiente', 1);
+        // (las flechas se esconden recien cuando llega: esconder la que se acaba de tocar cortaba el deslizamiento)
+        function pintar(soloPuntos) {
+          const k = destino ?? actual();
+          dots.querySelectorAll('span').forEach((s, j) => s.classList.toggle('on', j === k));
+          if (!soloPuntos) { ant.hidden = k <= 0; sig.hidden = k >= it.fotos.length - 1; }
+        }
+        let quieto = null;
+        strip.addEventListener('scroll', () => {
+          // Cuando deja de moverse, vale donde quedo (tambien si se deslizo con el dedo)
+          clearTimeout(quieto); quieto = setTimeout(() => { destino = null; pintar(); }, 150);
+          if (destino === null) pintar();
+        }, { passive: true });
+        car.tabIndex = 0;
+        car.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') { e.preventDefault(); ir((destino ?? actual()) - 1); } else if (e.key === 'ArrowRight') { e.preventDefault(); ir((destino ?? actual()) + 1); } });
+        car.append(dots, ant, sig);
+        pintar();
       }
       b.appendChild(car);
     }

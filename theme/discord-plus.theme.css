@@ -2797,6 +2797,14 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-mk .mk-puntos { position: absolute; left: 0; right: 0; bottom: 0.625rem; display: flex; justify-content: center; gap: 0.375rem; pointer-events: none; }
 .puente-mk .mk-puntos span { width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: rgba(255,255,255,0.45); }
 .puente-mk .mk-puntos span.on { background: #fff; }
+/* Las flechas para pasar las fotos (aviso.js): redondas, a los costados, a media altura */
+.puente-mk .mk-fotos:focus { outline: none; }
+.puente-mk .mk-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 2.75rem; height: 2.75rem; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.55); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s; }
+.puente-mk .mk-flecha:hover { background: rgba(0, 0, 0, 0.8); }
+.puente-mk .mk-flecha[hidden] { display: none; }
+.puente-mk .mk-flecha.ant { left: 0.75rem; }
+.puente-mk .mk-flecha.sig { right: 0.75rem; }
+@media (max-width: 768px) { .puente-mk .mk-flecha { width: 2.25rem; height: 2.25rem; } .puente-mk .mk-flecha svg { width: 22px; height: 22px; } }
 .puente-mk .mk-precio { font-size: 1.5rem; font-weight: 800; color: #f2f3f5; }
 .puente-mk .mk-nombre { margin: 0.125rem 0 0.5rem; font-size: 1.1875rem; font-weight: 600; color: #f2f3f5; overflow-wrap: anywhere; }
 .puente-mk .mk-tags { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.375rem; }
