@@ -208,8 +208,8 @@
 })();
 
 
-// Para los que todavia no tienen cuenta, en la pantalla de entrar: "Jugar sin cuenta" y "Ver el
-// Marketplace". Jugar sin cuenta es la entrada de invitado de Haven (una cuenta temporal, que no ve ningun
+// Para los que todavia no tienen cuenta, en la pantalla de entrar: "Jugar como invitado" y "Ver el
+// Marketplace". Jugar como invitado es la entrada de invitado de Haven (una cuenta temporal, que no ve ningun
 // canal y se borra al irse; en el login de siempre queda escondida, login.css): se elige un nombre y se va a
 // los juegos. Quien abre un enlace de juegos sin sesion llega aca con ?jugar=truco|juegos (afuera.js) y ya
 // entra a esa parte; despues vuelve a donde iba (?volver=, como la cuenta unica). Va antes de esa parte,
@@ -241,7 +241,7 @@
       let p = document.getElementById('puente-jugar-aviso');
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
-      p.append(mk('b', '', tipo === 'truco' ? '🃏 Jugá al truco sin cuenta' : '🎮 Jugá sin cuenta'),
+      p.append(mk('b', '', tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
         mk('span', '', (tipo === 'truco' ? '' : 'Truco, Funball, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
           + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
@@ -264,11 +264,12 @@
     const j = mk('button', 'puente-visita-btn');
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
-    j.lastChild.append(mk('b', '', 'Jugar sin cuenta'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
+    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
     j.addEventListener('click', () => {
       // se vuelve a los juegos, salvo que ya fuera a algun lado (un enlace de una mesa)
       if (!ss.get('puente_volver')) ss.set('puente_volver', location.origin + '/app?juegos');
       jugar(ss.get('puente_jugar') === 'truco' ? 'truco' : 'juegos');
+      irAlFormulario(); // (en el celular el formulario queda abajo)
     });
     const m = mk('a', 'puente-visita-btn');
     m.href = web + '/marketplace';
@@ -283,7 +284,12 @@
     c.type = 'button';
     c.append(mk('span', 'puente-visita-ico', '🗨️'), mk('span', 'puente-visita-txt'));
     c.lastChild.append(mk('b', '', 'Entrar al chat'), mk('small', '', 'CV Chat, el chat del club'));
-    c.addEventListener('click', () => irAlFormulario());
+    c.addEventListener('click', () => {
+      // si estaba eligiendo el nombre de invitado, de vuelta al formulario de entrar
+      const atras = document.getElementById('guest-back-btn');
+      if (document.documentElement.classList.contains('puente-jugar') && atras) atras.click();
+      irAlFormulario();
+    });
     box.append(j, m, f, c);
     const pitch = mk('p', 'puente-login-pitch', 'El club de amigos y rejunto de gordos: el chat, el foro, los juegos y el Marketplace, todo en un lugar.');
     sub.insertAdjacentElement('afterend', pitch);

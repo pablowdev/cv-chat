@@ -151,8 +151,6 @@ a.puente-visita-btn, a.puente-visita-btn:visited { color: #f2f3f5; }
   html.puente-dos .puente-visita-txt small { display: block; }
   html.puente-dos body.auth-page .auth-card { flex: 0 0 27rem; max-width: 27rem !important; }
 }
-/* eligiendo el nombre de invitado, sin los accesos */
-html.puente-jugar .puente-visita { display: none; }
 
 /* Lo que esta pasando en el club (login.js, portada.js): la actividad, el chat, las mesas, el Marketplace y el
    foro. En el celular, quien llega por primera vez ve primero el club y despues el formulario; quien ya entro
