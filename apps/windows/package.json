@@ -55,7 +55,9 @@
         "en-US"
       ],
       "artifactName": "CV-Chat-Store.appx",
-      "minVersion": "10.0.17763.0",
+      "minVersion": "10.0.19041.0",
+      "customManifestPath": "appxmanifest.xml",
+      "customExtensionsPath": "appx-inicio.xml",
       "maxVersionTested": "10.0.26100.0"
     }
   },

@@ -13,8 +13,9 @@ const ADENTRO = [ORIGEN, 'https://discord.com', 'https://www.discord.com'];
 let win = null, tray = null, saliendo = false;
 
 // Abrir con Windows (como Discord): prendido de entrada, la primera vez que se abre esta version;
-// arranca escondida junto al reloj (--oculto). Se apaga desde el icono. La de la Microsoft Store no
-// (ahi Windows lo maneja con su propio permiso)
+// arranca escondida junto al reloj (--oculto). Se apaga desde el icono. En la de la Microsoft Store lo
+// maneja Windows (la tarea de inicio de appx-inicio.xml, que tambien pasa --oculto): el icono lleva a
+// Configuracion > Aplicaciones > Inicio
 const OCULTO = '--oculto';
 const oculta = process.argv.includes(OCULTO);
 const conInicio = () => app.isPackaged && !process.windowsStore;
@@ -77,6 +78,7 @@ function bandeja() {
     { label: 'Recargar', click: () => win && win.webContents.reloadIgnoringCache() },
     { type: 'separator' },
     ...(conInicio() ? [{ label: 'Abrir al iniciar Windows', type: 'checkbox', checked: inicioPrendido(), click: (it) => { ponerInicio(it.checked); tray.setContextMenu(menu()); } }, { type: 'separator' }] : []),
+    ...(process.windowsStore ? [{ label: 'Abrir al iniciar Windows…', click: () => shell.openExternal('ms-settings:startupapps') }, { type: 'separator' }] : []),
     { label: 'Salir', click: () => { saliendo = true; app.quit(); } },
   ]);
   tray.setContextMenu(menu());

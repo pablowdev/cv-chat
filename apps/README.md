@@ -11,7 +11,10 @@ Las imágenes (íconos) y la clave de firma son propias de cada servidor y no es
 Electron con instalador NSIS (`CV-Chat-Windows.exe`). Cerrar la ventana la deja junto al reloj.
 Desde la 1.0.4 se abre con Windows, como Discord: prendido de entrada la primera vez, arranca escondida
 junto al reloj (`--oculto`) y se apaga con "Abrir al iniciar Windows" en el menú del ícono. Al desinstalar,
-`instalador.nsh` borra esa entrada. La versión de la Microsoft Store no lo tiene.
+`instalador.nsh` borra esa entrada. En la de la Microsoft Store (también desde la 1.0.4) es una tarea de inicio del
+paquete (`appx-inicio.xml`, con `appxmanifest.xml`: la plantilla de electron-builder con el espacio `uap10` para
+pasarle `--oculto`; pide Windows 10 2004 o más nuevo). Se prende o apaga en Configuración > Aplicaciones > Inicio
+(el menú del ícono lleva ahí).
 
 1. Poner el ícono de 512×512 en `windows/build/icon.png`.
 2. `npm install` y `npm run armar`. El instalador queda en `windows/dist/`.

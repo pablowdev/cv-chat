@@ -1,0 +1,5 @@
+
+        <!-- Abrir con Windows (como el .exe, main.js): escondida junto al reloj. Windows lo deja prender o apagar en Configuracion > Aplicaciones > Inicio -->
+        <desktop:Extension Category="windows.startupTask" Executable="app\CV Chat.exe" EntryPoint="Windows.FullTrustApplication" uap10:Parameters="--oculto">
+          <desktop:StartupTask TaskId="CVChatInicio" Enabled="true" DisplayName="CV Chat" />
+        </desktop:Extension>
