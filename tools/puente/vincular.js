@@ -1089,7 +1089,7 @@ async function handle(req, res) {
       // Con PUENTE_EMAIL_OBLIGATORIO=1, quien no tiene email (salvo los invitados) no puede cerrar el cartel sin poner uno
       const guest = (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(user.id) || {}).is_guest;
       const obligatorio = process.env.PUENTE_EMAIL_OBLIGATORIO === '1' && !guest;
-      return json(res, 200, { ...email.status(user.id), discord: !!(clientId && clientSecret), vinculado: linked, obligatorio });
+      return json(res, 200, { ...email.status(user.id), discord: !!(clientId && clientSecret), vinculado: linked, obligatorio, invitado: !!guest });
     }
     if (p === '/puente/api/email/guardar' && req.method === 'POST') {
       const body = await readJson(req);

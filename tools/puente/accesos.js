@@ -219,6 +219,10 @@ function permissions(member, ch) {
 // ── Aplicar accesos ───────────────────────────────────────────────────────
 // member = objeto miembro de Discord, o null si ya no esta en el servidor.
 function apply(havenUserId, member) {
+  // Los invitados (jugar sin cuenta, login.js) no ven ningun canal: ni los publicos de las cuentas sin
+  // vincular. Si tuvieran alguno dado por aca, se les saca
+  const u = db.prepare('SELECT is_guest FROM users WHERE id = ?').get(havenUserId);
+  if (u && u.is_guest) member = null;
   const channels = db.prepare('SELECT id, name, discord_channel_id FROM channels WHERE discord_channel_id IS NOT NULL').all();
   const want = new Set();
   const flags = new Map(); // channel id -> flags (escribir, hilos, reaccionar, adjuntar)

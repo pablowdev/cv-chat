@@ -125,6 +125,8 @@ function sheetDrag(sheet, opts) {
   async function check() {
     const token = storage(() => localStorage.getItem('haven_token'));
     if (!token) return false; // todavia en el login: volver a probar
+    // Los invitados (jugar sin cuenta) no tienen Discord que vincular: sin el cartel
+    try { if (JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).isGuest) return true; } catch { /* sigue */ }
     const res = await fetch('/puente/api/estado', { headers: { Authorization: 'Bearer ' + token } }).catch(() => null);
     if (!res || !res.ok) return res && res.status === 401 ? false : true;
     const st = await res.json().catch(() => null);

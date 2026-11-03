@@ -155,7 +155,7 @@
     const busy = [...document.querySelectorAll('.modal-overlay')].some(m => m.id !== 'puente-email-modal' && getComputedStyle(m).display !== 'none');
     if (busy) { setTimeout(maybeShow, 5000); return; }
     call('GET', '/puente/api/email/estado').then(({ ok, d }) => {
-      if (!ok || d.confirmado) return;
+      if (!ok || d.confirmado || d.invitado) return; // (los invitados, jugar sin cuenta: sin email)
       const forced = d.obligatorio && !d.email;
       const until = parseInt(store(s => s.getItem(SNOOZE_KEY)) || '0', 10);
       if (!forced && until > Date.now()) return; // "Ahora no" vale solo si ya puso uno o no es obligatorio
