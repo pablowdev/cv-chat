@@ -38,6 +38,8 @@ function setup(ctx) {
     );
     CREATE INDEX IF NOT EXISTS idx_puente_ajedrez_fin ON puente_ajedrez_partidas(fin);
   `);
+  // Las amistosas no suman al ranking (las elige quien arma la mesa; con un invitado siempre lo son)
+  try { db.exec('ALTER TABLE puente_ajedrez_partidas ADD COLUMN amistosa INTEGER NOT NULL DEFAULT 0'); } catch { /* ya estaba */ }
   try { webpush = require('/app/node_modules/web-push'); } catch { /* sin avisos al celular */ }
   for (const r of db.prepare('SELECT id, estado FROM puente_ajedrez_mesas').all()) {
     try {
@@ -111,7 +113,7 @@ function create(me, d) {
   }
   const g = nueva(me, {
     ritmo: Object.prototype.hasOwnProperty.call(RITMOS, d.ritmo) ? d.ritmo : 'libre',
-    publica: modo === 'abierta', invitado: rival, compu: modo === 'compu',
+    publica: modo === 'abierta', invitado: rival, compu: modo === 'compu', amistosa: modo !== 'compu' && d.amistosa === true,
     nivel: Math.max(1, Math.min(4, Number(d.nivel) || 2)), color: d.color === 'w' || d.color === 'b' ? d.color : null,
   });
   games.set(g.id, g);
@@ -119,8 +121,8 @@ function create(me, d) {
   else { save(g); changed(); }
   // La mesa abierta, en #que-paso (juegos-aviso.js)
   if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'ajedrez', quien: me, enlace: `/app?ajedrez=${g.id}`,
-    texto: `armó una partida de **Ajedrez** (${RITMOS[g.ritmo] ? g.ritmo : 'sin reloj'}) y busca rival` });
-  log(`ajedrez:${nameOf(me).nombre} creó una partida (${modo}, ${ritmoNombre(g.ritmo)})`);
+    texto: `armó una partida${g.amistosa ? ' amistosa' : ''} de **Ajedrez** (${RITMOS[g.ritmo] ? g.ritmo : 'sin reloj'}) y busca rival` });
+  log(`ajedrez:${nameOf(me).nombre} creó una partida (${modo}, ${ritmoNombre(g.ritmo)}${g.amistosa ? ', amistosa' : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -170,13 +172,15 @@ function finish(g, winnerSeat, motivo) {
   if (motivo === 'anulada') note(g, 'Partida anulada: no cuenta.');
   else if (winnerSeat === null) note(g, `🤝 Tablas (${RESULTADO[motivo] || motivo}).`);
   else note(g, `🏆 Ganó ${nameOf(g.jugadores[winnerSeat]).nombre} (${RESULTADO[motivo] || motivo}).`);
-  // (las de los invitados no cuentan: juegos-aviso.js)
-  if (motivo !== 'anulada' && !require('./juegos-aviso.js').conInvitado(db, g.jugadores)) {
+  // (las de los invitados quedan como amistosas: juegos-aviso.js)
+  const amistosa = g.amistosa || require('./juegos-aviso.js').conInvitado(db, g.jugadores);
+  if (motivo !== 'anulada') {
+    if (amistosa && !g.compu) note(g, g.amistosa ? 'Partida amistosa: no suma al ranking.' : 'Jugó un invitado: queda como amistosa, no suma al ranking.');
     try {
       const w = g.jugadores[g.blancas], b = g.jugadores[1 - g.blancas];
       const res = winnerSeat === null ? '½-½' : winnerSeat === g.blancas ? '1-0' : '0-1';
-      db.prepare('INSERT OR REPLACE INTO puente_ajedrez_partidas (id, blancas, negras, ganador, resultado, motivo, jugadas, ritmo, inicio, fin, compu, movidas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(g.id, w, b, winnerSeat === null ? null : g.jugadores[winnerSeat], res, motivo, g.san.length, g.ritmo, g.inicio || null, g.fin, g.compu ? 1 : 0, g.uci.join(' '));
+      db.prepare('INSERT OR REPLACE INTO puente_ajedrez_partidas (id, blancas, negras, ganador, resultado, motivo, jugadas, ritmo, inicio, fin, compu, movidas, amistosa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(g.id, w, b, winnerSeat === null ? null : g.jugadores[winnerSeat], res, motivo, g.san.length, g.ritmo, g.inicio || null, g.fin, g.compu ? 1 : 0, g.uci.join(' '), amistosa ? 1 : 0);
     } catch (err) { warn('ajedrez: guardar resultado:', err.message); }
   }
   changed();
@@ -294,7 +298,7 @@ function botDraw(g, k) {
 }
 
 function rematch(g) {
-  const n = nueva(g.jugadores[0], { ritmo: g.ritmo, compu: g.compu, nivel: g.nivel, jugadores: g.jugadores.slice() });
+  const n = nueva(g.jugadores[0], { ritmo: g.ritmo, compu: g.compu, amistosa: !!g.amistosa, nivel: g.nivel, jugadores: g.jugadores.slice() });
   games.set(n.id, n);
   start(n, 1 - g.blancas);
   g.siguiente = n.id; push(g, true);
@@ -415,26 +419,27 @@ function changed() {
 
 // ── Sala ──
 function stats(userId) {
-  const q = (compu) => db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, SUM(CASE WHEN ganador IS NULL THEN 1 ELSE 0 END) t, COUNT(*) n
-    FROM puente_ajedrez_partidas WHERE compu = ? AND (blancas = ? OR negras = ?)`).get(userId, compu, userId, userId);
-  const r = q(0), c = q(1);
-  return { ganadas: r.g || 0, tablas: r.t || 0, perdidas: (r.n || 0) - (r.g || 0) - (r.t || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0) - (c.t || 0) };
+  const q = (compu, amistosa) => db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, SUM(CASE WHEN ganador IS NULL THEN 1 ELSE 0 END) t, COUNT(*) n
+    FROM puente_ajedrez_partidas WHERE compu = ? AND (amistosa = ? OR compu = 1) AND (blancas = ? OR negras = ?)`).get(userId, compu, amistosa, userId, userId);
+  const r = q(0, 0), c = q(1, 0), a = q(0, 1);
+  return { ganadas: r.g || 0, tablas: r.t || 0, perdidas: (r.n || 0) - (r.g || 0) - (r.t || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0) - (c.t || 0),
+    amistosasGanadas: a.g || 0, amistosasPerdidas: (a.n || 0) - (a.g || 0) - (a.t || 0) };
 }
 function ranking(since) {
-  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_ajedrez_partidas WHERE compu = 0 AND ganador IS NOT NULL AND fin >= ?
+  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_ajedrez_partidas WHERE compu = 0 AND amistosa = 0 AND ganador IS NOT NULL AND fin >= ?
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, ritmo: ritmoNombre(g.ritmo), color: g.color ? M.otro(g.color) : null, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
+    .map(g => ({ id: g.id, ritmo: ritmoNombre(g.ritmo), color: g.color ? M.otro(g.color) : null, amistosa: !!g.amistosa, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
   const mias = all.filter(g => g.jugadores.includes(me) && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const i = seat(g, me), o = 1 - i;
       return {
-        id: g.id, estado: g.estado, ritmo: ritmoNombre(g.ritmo), compu: g.compu, color: g.estado === 'esperando' ? g.color : colorOf(g, i), jugadas: g.san ? g.san.length : 0,
+        id: g.id, estado: g.estado, ritmo: ritmoNombre(g.ritmo), compu: g.compu, amistosa: !!g.amistosa, color: g.estado === 'esperando' ? g.color : colorOf(g, i), jugadas: g.san ? g.san.length : 0,
         rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null, invitado: g.invitado ? nameOf(g.invitado) : null,
         teToca: g.estado === 'jugando' && colorOf(g, i) === turno(g),
         ganaste: g.estado === 'terminada' ? (g.ganador === null || g.ganador === undefined ? null : g.ganador === i) : null, motivo: g.motivo || null,

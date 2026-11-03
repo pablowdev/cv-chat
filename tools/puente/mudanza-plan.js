@@ -218,7 +218,8 @@ function copa(limite = 5) {
   ];
   for (const [t, g, c, f] of tablas) {
     let filas = [];
-    try { filas = db.prepare(`SELECT ${g} g, ${c} c, ${f} f FROM ${t} WHERE ${f} >= ? AND ${f} < ? AND ${g} > 0`).all(desde, hasta); } catch { continue; }
+    try { filas = db.prepare(`SELECT ${g} g, ${c} c, ${f} f FROM ${t} WHERE ${f} >= ? AND ${f} < ? AND ${g} > 0 AND amistosa = 0`).all(desde, hasta); }
+    catch { try { filas = db.prepare(`SELECT ${g} g, ${c} c, ${f} f FROM ${t} WHERE ${f} >= ? AND ${f} < ? AND ${g} > 0`).all(desde, hasta); } catch { continue; } }
     for (const r of filas) {
       if (!r.c) { sumar(r.g, 3); continue; }
       const k = r.g + ':' + new Date(r.f - 3 * HORA).toISOString().slice(0, 10);

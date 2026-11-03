@@ -4,7 +4,7 @@
 // Salen de lo que ya se guarda: las partidas terminadas de cada juego (truco.js, funball.js, ajedrez.js y
 // misionrisk.js: quien jugo, contra quien o contra la compu, cuando empezo y termino, quien gano y por que)
 // y el tiempo de uso (uso.js: los segundos que cada persona tuvo cada juego abierto y lo estaba usando, desde
-// que se mide). Las partidas con invitados no se guardan (no tienen cuenta): de ellos queda solo el tiempo.
+// que se mide). Las partidas con invitados se guardan desde el 2026-11-03 (como amistosas); antes, de ellos quedaba solo el tiempo.
 //
 //  GET /puente/api/estadisticas/juegos?rango=7d|4s|3m|1a|todo   (solo administradores)
 

@@ -43,6 +43,9 @@ function setup(ctx) {
     CREATE TABLE IF NOT EXISTS puente_mr_resultados (partida TEXT NOT NULL, user_id INTEGER NOT NULL, gano INTEGER NOT NULL, humanos INTEGER NOT NULL, fin INTEGER NOT NULL, PRIMARY KEY (partida, user_id));
     CREATE INDEX IF NOT EXISTS idx_puente_mr_res_user ON puente_mr_resultados(user_id);
   `);
+  // Las amistosas no suman al ranking (las elige quien arma la mesa; con un invitado siempre lo son)
+  try { db.exec('ALTER TABLE puente_mr_partidas ADD COLUMN amistosa INTEGER NOT NULL DEFAULT 0'); } catch { /* ya estaba */ }
+  try { db.exec('ALTER TABLE puente_mr_resultados ADD COLUMN amistosa INTEGER NOT NULL DEFAULT 0'); } catch { /* ya estaba */ }
   try { webpush = require('/app/node_modules/web-push'); } catch { /* sin avisos al celular */ }
   for (const r of db.prepare('SELECT id, estado FROM puente_mr_mesas').all()) {
     try {
@@ -111,7 +114,7 @@ function create(me, d) {
     : [];
   const g = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), creador: me, estado: 'esperando',
-    publica: modo === 'gente' && d.privada !== true, invitados, nivel,
+    publica: modo === 'gente' && d.privada !== true, invitados, nivel, amistosa: modo === 'gente' && d.amistosa === true,
     opciones: { misiones: d.misiones !== false, buitre: !!d.buitre },
     asientos: modo === 'gente' ? [{ uid: me }] : Array.from({ length: total }, (_, i) => i === 0 ? { uid: me } : { uid: null }),
     flexible: modo === 'gente',
@@ -124,9 +127,9 @@ function create(me, d) {
     for (const uid of invitados) notify(uid, 'GlobalSiege', `${nameOf(me).nombre} te invitó a una guerra`, g.id);
     // La mesa abierta, en #que-paso (juegos-aviso.js)
     if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'globalsiege', quien: me, enlace: `/app?globalsiege=${g.id}`,
-      texto: `armó una guerra de **GlobalSiege** (hasta ${MAX}${g.opciones.misiones ? ', con misiones secretas' : ''})` });
+      texto: `armó una guerra${g.amistosa ? ' amistosa' : ''} de **GlobalSiege** (hasta ${MAX}${g.opciones.misiones ? ', con misiones secretas' : ''})` });
   }
-  log(`globalsiege: ${nameOf(me).nombre} creó una partida (${modo}, ${g.flexible ? 'de 2 a ' + MAX : total + ' ejércitos'})`);
+  log(`globalsiege: ${nameOf(me).nombre} creó una partida (${modo}, ${g.flexible ? 'de 2 a ' + MAX : total + ' ejércitos'}${g.amistosa ? ', amistosa' : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -180,13 +183,14 @@ function finish(g) {
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   const gan = g.S.ganador ? g.asientos[g.S.ganador.ej - 1] : null;
   const hum = humanos(g).length;
-  // (las de los invitados no cuentan: juegos-aviso.js)
-  if (!require('./juegos-aviso.js').conInvitado(db, g.asientos.map(a => a.uid || 0))) try {
-    db.prepare('INSERT OR REPLACE INTO puente_mr_partidas (id, jugadores, ganador, humanos, rondas, inicio, fin) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(g.id, JSON.stringify(g.asientos.map(a => a.uid || 0)), gan && gan.uid ? gan.uid : null, hum, g.S.ronda, g.inicio || null, g.fin);
+  // (las de los invitados quedan como amistosas: juegos-aviso.js)
+  const amistosa = g.amistosa || require('./juegos-aviso.js').conInvitado(db, g.asientos.map(a => a.uid || 0));
+  try {
+    db.prepare('INSERT OR REPLACE INTO puente_mr_partidas (id, jugadores, ganador, humanos, rondas, inicio, fin, amistosa) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(g.id, JSON.stringify(g.asientos.map(a => a.uid || 0)), gan && gan.uid ? gan.uid : null, hum, g.S.ronda, g.inicio || null, g.fin, amistosa ? 1 : 0);
     for (const a of g.asientos) {
       if (!a.uid) continue;
-      db.prepare('INSERT OR REPLACE INTO puente_mr_resultados (partida, user_id, gano, humanos, fin) VALUES (?, ?, ?, ?, ?)').run(g.id, a.uid, gan && gan.uid === a.uid && !a.abandono ? 1 : 0, hum, g.fin);
+      db.prepare('INSERT OR REPLACE INTO puente_mr_resultados (partida, user_id, gano, humanos, fin, amistosa) VALUES (?, ?, ?, ?, ?, ?)').run(g.id, a.uid, gan && gan.uid === a.uid && !a.abandono ? 1 : 0, hum, g.fin, amistosa ? 1 : 0);
     }
   } catch (err) { warn('globalsiege: guardar resultado:', err.message); }
   changed();
@@ -379,12 +383,14 @@ function changed() {
 
 // ── Sala ──
 function stats(userId) {
-  const r = db.prepare('SELECT SUM(gano) g, COUNT(*) n FROM puente_mr_resultados WHERE user_id = ? AND humanos > 1').get(userId);
+  const r = db.prepare('SELECT SUM(gano) g, COUNT(*) n FROM puente_mr_resultados WHERE user_id = ? AND humanos > 1 AND amistosa = 0').get(userId);
+  const a = db.prepare('SELECT SUM(gano) g, COUNT(*) n FROM puente_mr_resultados WHERE user_id = ? AND humanos > 1 AND amistosa = 1').get(userId);
   const c = db.prepare('SELECT SUM(gano) g, COUNT(*) n FROM puente_mr_resultados WHERE user_id = ? AND humanos = 1').get(userId);
-  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0) };
+  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0),
+    amistosasGanadas: a.g || 0, amistosasPerdidas: (a.n || 0) - (a.g || 0) };
 }
 function ranking(since) {
-  return db.prepare(`SELECT user_id id, SUM(gano) n FROM puente_mr_resultados WHERE humanos > 1 AND fin >= ?
+  return db.prepare(`SELECT user_id id, SUM(gano) n FROM puente_mr_resultados WHERE humanos > 1 AND amistosa = 0 AND fin >= ?
     GROUP BY user_id HAVING n > 0 ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 function resumen(g, me) {
@@ -398,13 +404,13 @@ function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitados.includes(me)) && seatOf(g, me) < 0 && (g.flexible ? g.asientos.length < MAX : g.asientos.some(a => !a.uid)))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, total: g.flexible ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length, misiones: g.opciones.misiones, creador: nameOf(g.creador), paraVos: g.invitados.includes(me) }));
+    .map(g => ({ id: g.id, total: g.flexible ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length, misiones: g.opciones.misiones, amistosa: !!g.amistosa, creador: nameOf(g.creador), paraVos: g.invitados.includes(me) }));
   const mias = all.filter(g => seatOf(g, me) >= 0 && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const e = seatOf(g, me) + 1;
       return {
-        id: g.id, estado: g.estado, total: g.flexible && g.estado === 'esperando' ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length,
+        id: g.id, estado: g.estado, total: g.flexible && g.estado === 'esperando' ? MAX : g.asientos.length, flexible: !!g.flexible, amistosa: !!g.amistosa, sentados: g.asientos.filter(a => a.uid).length,
         rival: { nombre: resumen(g, me) }, ejercito: g.S ? MAPA.ejercitos[e].nombre : null, color: g.S ? MAPA.ejercitos[e].color : null,
         teToca: g.estado === 'jugando' && g.S.turno === e && !g.asientos[e - 1].abandono,
         vivo: g.S ? g.S.ej[e].vivo : true, ronda: g.S ? g.S.ronda : 0,

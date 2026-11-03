@@ -55,6 +55,8 @@ function setup(ctx) {
     );
     CREATE INDEX IF NOT EXISTS idx_puente_truco_fin ON puente_truco_partidas(fin);
   `);
+  // Las amistosas no suman al ranking (las elige quien arma la mesa; con un invitado siempre lo son)
+  try { db.exec('ALTER TABLE puente_truco_partidas ADD COLUMN amistosa INTEGER NOT NULL DEFAULT 0'); } catch { /* ya estaba */ }
   try { webpush = require('/app/node_modules/web-push'); } catch { /* sin avisos al celular */ }
   // Las partidas que estaban en curso (por ejemplo, antes de un reinicio)
   for (const r of db.prepare('SELECT id, estado FROM puente_truco_mesas').all()) {
@@ -161,7 +163,7 @@ function create(me, d) {
   }
   const g = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos, flor: !!d.flor, publica: modo === 'abierta',
-    invitado: rival, compu: modo === 'compu', jugadores: [me], puntaje: [0, 0], manoDe: 0, manos: 0,
+    invitado: rival, compu: modo === 'compu', amistosa: modo !== 'compu' && d.amistosa === true, jugadores: [me], puntaje: [0, 0], manoDe: 0, manos: 0,
     estado: 'esperando', log: [], grito: null, revancha: [false, false], timeouts: [0, 0], libre: d.libre !== false,
   };
   games.set(g.id, g);
@@ -169,8 +171,8 @@ function create(me, d) {
   else { save(g); changed(); }
   // La mesa abierta, en #que-paso (juegos-aviso.js)
   if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'truco', quien: me, enlace: `/app?truco=${g.id}`,
-    texto: `armó una partida de **Truco** (a ${puntos}${g.flor ? ', con flor' : ''}) y busca rival` });
-  log(`truco:${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''}${g.libre ? ', sin límite' : ''})`);
+    texto: `armó una partida${g.amistosa ? ' amistosa' : ''} de **Truco** (a ${puntos}${g.flor ? ', con flor' : ''}) y busca rival` });
+  log(`truco:${nameOf(me).nombre} creó una partida (${modo}, a ${puntos}${g.flor ? ', con flor' : ''}${g.libre ? ', sin límite' : ''}${g.amistosa ? ', amistosa' : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -281,12 +283,13 @@ function finish(g, winner, motivo) {
   g.estado = 'terminada'; g.ganador = winner; g.motivo = motivo; g.fin = Date.now(); g.deadline = null;
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   note(g, `🏆 Ganó ${nameOf(g.jugadores[winner]).nombre}, ${g.puntaje[winner]} a ${g.puntaje[other(winner)]}.`);
-  // Las partidas con un invitado (sin cuenta, que se borra al irse) no cuentan para el ranking ni las estadisticas
+  // Las partidas con un invitado (sin cuenta, que se borra al irse) quedan como amistosas: en el récord, no en el ranking
   // (o con alguien que ya no esta: el invitado que se fue antes de terminar)
-  const conInvitado = g.jugadores.some(id => id !== BOT && (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(id) || { is_guest: 1 }).is_guest);
-  if (!conInvitado) try {
-    db.prepare('INSERT OR REPLACE INTO puente_truco_partidas (id, j1, j2, puntos, flor, p1, p2, ganador, motivo, inicio, fin, compu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(g.id + '-' + g.manos, g.jugadores[0], g.jugadores[1], g.puntos, g.flor ? 1 : 0, g.puntaje[0], g.puntaje[1], g.jugadores[winner], motivo, g.inicio || null, g.fin, g.compu ? 1 : 0);
+  const amistosa = g.amistosa || require('./juegos-aviso.js').conInvitado(db, g.jugadores);
+  if (amistosa && !g.compu) note(g, g.amistosa ? 'Partida amistosa: no suma al ranking.' : 'Jugó un invitado: queda como amistosa, no suma al ranking.');
+  try {
+    db.prepare('INSERT OR REPLACE INTO puente_truco_partidas (id, j1, j2, puntos, flor, p1, p2, ganador, motivo, inicio, fin, compu, amistosa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(g.id + '-' + g.manos, g.jugadores[0], g.jugadores[1], g.puntos, g.flor ? 1 : 0, g.puntaje[0], g.puntaje[1], g.jugadores[winner], motivo, g.inicio || null, g.fin, g.compu ? 1 : 0, amistosa ? 1 : 0);
   } catch (err) { warn('truco: guardar resultado:', err.message); }
   changed();
 }
@@ -553,7 +556,7 @@ function handWinner(r, mano) {
 
 function rematch(g) {
   const n = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos: g.puntos, flor: g.flor, libre: !!g.libre, publica: false, invitado: null, compu: g.compu,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), puntos: g.puntos, flor: g.flor, libre: !!g.libre, publica: false, invitado: null, compu: g.compu, amistosa: !!g.amistosa,
     jugadores: g.jugadores.slice(), puntaje: [0, 0], manoDe: 0, manos: 0, estado: 'esperando', log: [], grito: null, revancha: [false, false], timeouts: [0, 0],
   };
   games.set(n.id, n);
@@ -657,7 +660,7 @@ function view(g, me) {
   const o = other(pov);
   const P = g.jugadores.map(nameOf);
   const out = {
-    id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, compu: g.compu, publica: g.publica,
+    id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, compu: g.compu, publica: g.publica, amistosa: !!g.amistosa,
     yo: P[pov] ? { ...P[pov], puntos: g.puntaje[pov] } : null, rival: P[o] ? { ...P[o], puntos: g.puntaje[o] } : null,
     invitado: g.invitado ? nameOf(g.invitado) : null, soyJugador: i >= 0, soyCreador: g.jugadores[0] === me,
     log: g.log.slice(-6).map(x => x.text), grito: g.grito && Date.now() - g.grito.t < 6000 ? { mio: g.grito.de === pov, text: g.grito.text } : null,
@@ -726,14 +729,17 @@ function changed() {
 // ── Sala: mesas abiertas, tus partidas, ranking ──
 function stats(userId) {
   const r = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_truco_partidas
-    WHERE compu = 0 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
+    WHERE compu = 0 AND amistosa = 0 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
+  const a = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_truco_partidas
+    WHERE compu = 0 AND amistosa = 1 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
   const c = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_truco_partidas
     WHERE compu = 1 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
-  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0) };
+  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0),
+    amistosasGanadas: a.g || 0, amistosasPerdidas: (a.n || 0) - (a.g || 0) };
 }
 
 function ranking(since) {
-  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_truco_partidas WHERE compu = 0 AND ganador IS NOT NULL AND fin >= ?
+  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_truco_partidas WHERE compu = 0 AND amistosa = 0 AND ganador IS NOT NULL AND fin >= ?
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 
@@ -741,13 +747,13 @@ function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, puntos: g.puntos, flor: g.flor, libre: !!g.libre, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
+    .map(g => ({ id: g.id, puntos: g.puntos, flor: g.flor, libre: !!g.libre, amistosa: !!g.amistosa, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
   const mias = all.filter(g => g.jugadores.includes(me) && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const i = seat(g, me), o = other(i);
       return {
-        id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, compu: g.compu, rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null,
+        id: g.id, estado: g.estado, puntos: g.puntos, flor: g.flor, libre: !!g.libre, amistosa: !!g.amistosa, compu: g.compu, rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null,
         invitado: g.invitado ? nameOf(g.invitado) : null, yo: g.puntaje[i], el: g.puntaje[o],
         teToca: g.estado === 'jugando' && actor(g) === i, ganaste: g.estado === 'terminada' ? g.ganador === i : null,
       };

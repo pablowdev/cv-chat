@@ -45,6 +45,8 @@ function setup(ctx) {
     );
     CREATE INDEX IF NOT EXISTS idx_puente_funball_fin ON puente_funball_partidas(fin);
   `);
+  // Las amistosas no suman al ranking (las elige quien arma la mesa; con un invitado siempre lo son)
+  try { db.exec('ALTER TABLE puente_funball_partidas ADD COLUMN amistosa INTEGER NOT NULL DEFAULT 0'); } catch { /* ya estaba */ }
   try { webpush = require('/app/node_modules/web-push'); } catch { /* sin avisos al celular */ }
   for (const r of db.prepare('SELECT id, estado FROM puente_funball_mesas').all()) {
     try {
@@ -111,7 +113,7 @@ function create(me, d) {
   const nivel = Math.max(1, Math.min(4, Number(d.nivel) || 2));
   const g = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), tablero, arania: d.arania !== false,
-    publica: modo === 'abierta', invitado: rival, compu: modo === 'compu', nivel,
+    publica: modo === 'abierta', invitado: rival, compu: modo === 'compu', amistosa: modo !== 'compu' && d.amistosa === true, nivel,
     jugadores: [me], colores: ['R', 'G'], estado: 'esperando', log: [], revancha: [false, false], timeouts: [0, 0], jugadas: 0,
   };
   games.set(g.id, g);
@@ -119,8 +121,8 @@ function create(me, d) {
   else { save(g); changed(); }
   // La mesa abierta, en #que-paso (juegos-aviso.js)
   if (g.publica) require('./juegos-aviso.js').anunciar(db, io, warn, { juego: 'funball', quien: me, enlace: `/app?funball=${g.id}`,
-    texto: `armó una partida de **Funball** (${boards[tablero].nombre}) y busca rival` });
-  log(`funball:${nameOf(me).nombre} creó una partida (${modo}, ${boards[tablero].nombre})`);
+    texto: `armó una partida${g.amistosa ? ' amistosa' : ''} de **Funball** (${boards[tablero].nombre}) y busca rival` });
+  log(`funball:${nameOf(me).nombre} creó una partida (${modo}, ${boards[tablero].nombre}${g.amistosa ? ', amistosa' : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -163,10 +165,12 @@ function finish(g, winnerSeat, motivo) {
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   if (winnerSeat === null) note(g, '🤝 Empate: no quedó ninguna bola.');
   else note(g, `🏆 Ganó ${nameOf(g.jugadores[winnerSeat]).nombre}.`);
-  // (las de los invitados no cuentan: juegos-aviso.js)
-  if (!require('./juegos-aviso.js').conInvitado(db, g.jugadores)) try {
-    db.prepare('INSERT OR REPLACE INTO puente_funball_partidas (id, j1, j2, tablero, ganador, motivo, jugadas, inicio, fin, compu) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(g.id, g.jugadores[0], g.jugadores[1], g.tablero, winnerSeat === null ? null : g.jugadores[winnerSeat], motivo, g.jugadas, g.inicio || null, g.fin, g.compu ? 1 : 0);
+  // (las de los invitados quedan como amistosas: juegos-aviso.js)
+  const amistosa = g.amistosa || require('./juegos-aviso.js').conInvitado(db, g.jugadores);
+  if (amistosa && !g.compu) note(g, g.amistosa ? 'Partida amistosa: no suma al ranking.' : 'Jugó un invitado: queda como amistosa, no suma al ranking.');
+  try {
+    db.prepare('INSERT OR REPLACE INTO puente_funball_partidas (id, j1, j2, tablero, ganador, motivo, jugadas, inicio, fin, compu, amistosa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(g.id, g.jugadores[0], g.jugadores[1], g.tablero, winnerSeat === null ? null : g.jugadores[winnerSeat], motivo, g.jugadas, g.inicio || null, g.fin, g.compu ? 1 : 0, amistosa ? 1 : 0);
   } catch (err) { warn('funball: guardar resultado:', err.message); }
   changed();
 }
@@ -238,7 +242,7 @@ function act(me, d) {
 function rematch(g) {
   const n = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), tablero: g.tablero, arania: g.arania, publica: false, invitado: null,
-    compu: g.compu, nivel: g.nivel, jugadores: g.jugadores.slice(), colores: ['R', 'G'], estado: 'esperando', log: [], revancha: [false, false], timeouts: [0, 0], jugadas: 0,
+    compu: g.compu, amistosa: !!g.amistosa, nivel: g.nivel, jugadores: g.jugadores.slice(), colores: ['R', 'G'], estado: 'esperando', log: [], revancha: [false, false], timeouts: [0, 0], jugadas: 0,
   };
   games.set(n.id, n);
   start(n);
@@ -342,25 +346,27 @@ function changed() {
 
 // ── Sala ──
 function stats(userId) {
-  const r = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_funball_partidas WHERE compu = 0 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
+  const r = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_funball_partidas WHERE compu = 0 AND amistosa = 0 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
+  const a = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_funball_partidas WHERE compu = 0 AND amistosa = 1 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
   const c = db.prepare(`SELECT SUM(CASE WHEN ganador = ? THEN 1 ELSE 0 END) g, COUNT(*) n FROM puente_funball_partidas WHERE compu = 1 AND (j1 = ? OR j2 = ?)`).get(userId, userId, userId);
-  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0) };
+  return { ganadas: r.g || 0, perdidas: (r.n || 0) - (r.g || 0), compuGanadas: c.g || 0, compuPerdidas: (c.n || 0) - (c.g || 0),
+    amistosasGanadas: a.g || 0, amistosasPerdidas: (a.n || 0) - (a.g || 0) };
 }
 function ranking(since) {
-  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_funball_partidas WHERE compu = 0 AND ganador IS NOT NULL AND fin >= ?
+  return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_funball_partidas WHERE compu = 0 AND amistosa = 0 AND ganador IS NOT NULL AND fin >= ?
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
-    .map(g => ({ id: g.id, tablero: boards[g.tablero] ? boards[g.tablero].nombre : '', arania: g.arania, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
+    .map(g => ({ id: g.id, tablero: boards[g.tablero] ? boards[g.tablero].nombre : '', arania: g.arania, amistosa: !!g.amistosa, creador: nameOf(g.jugadores[0]), paraVos: g.invitado === me }));
   const mias = all.filter(g => g.jugadores.includes(me) && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
     .sort((a, b) => b.creado - a.creado)
     .map(g => {
       const i = seat(g, me), o = 1 - i;
       return {
-        id: g.id, estado: g.estado, tablero: boards[g.tablero] ? boards[g.tablero].nombre : '', compu: g.compu,
+        id: g.id, estado: g.estado, tablero: boards[g.tablero] ? boards[g.tablero].nombre : '', compu: g.compu, amistosa: !!g.amistosa,
         rival: g.jugadores[o] !== undefined ? nameOf(g.jugadores[o]) : null, invitado: g.invitado ? nameOf(g.invitado) : null,
         teToca: g.estado === 'jugando' && colorOf(g, i) === g.turno, ganaste: g.estado === 'terminada' ? (g.ganador === null ? null : g.ganador === i) : null,
       };

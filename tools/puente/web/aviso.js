@@ -10143,7 +10143,7 @@ document.addEventListener('pointerdown', (ev) => {
       r.addEventListener('click', fn);
       return r;
     };
-    const rules = (m) => `A ${m.puntos} · ${m.flor ? 'con flor' : 'sin flor'}${m.libre ? ' · sin límite' : ''}`;
+    const rules = (m) => `A ${m.puntos} · ${m.flor ? 'con flor' : 'sin flor'}${m.libre ? ' · sin límite' : ''}${m.amistosa ? ' · amistosa' : ''}`;
     section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => joinGame(a.id)));
     section('Tus partidas', d.mias, (m) => {
       const who = m.rival || m.invitado || { nombre: '?' };
@@ -10159,6 +10159,7 @@ document.addEventListener('pointerdown', (ev) => {
     const st = el('div', 'jg-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    if (s.amistosasGanadas || s.amistosasPerdidas) box.appendChild(el('div', 'jg-ayuda', `Amistosas: ${s.amistosasGanadas} ${s.amistosasGanadas === 1 ? 'ganada' : 'ganadas'} y ${s.amistosasPerdidas} ${s.amistosasPerdidas === 1 ? 'perdida' : 'perdidas'} (no suman al ranking).`));
     // los rankings aparte: en pantallas anchas van en su propia columna
     const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
@@ -10182,7 +10183,7 @@ document.addEventListener('pointerdown', (ev) => {
     page.appendChild(head('Nueva partida'));
     const b = el('div', 'jg-cuerpo'); page.appendChild(b);
     const f = el('div', 'jg-form'); b.appendChild(f);
-    const data = { puntos: 30, flor: false, libre: true, modo: 'abierta', rival: null };
+    const data = { puntos: 30, flor: false, libre: true, modo: 'abierta', rival: null, amistosa: false };
     const seg = (label, key, opts, onChange) => {
       const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
       const s = el('div', 'jg-seg');
@@ -10199,7 +10200,7 @@ document.addEventListener('pointerdown', (ev) => {
     const THINT = { true: 'Cada uno juega cuando puede: te avisa al celular cuando te toca. Si pasan 7 días sin que juegues, perdés por abandono.', false: 'Para jugar en el momento: 2 minutos por jugada; si se te pasa, la compu juega por vos.' };
     seg('Tiempo', 'libre', [[true, 'Sin límite'], [false, '2 min por jugada']], () => { th.textContent = THINT[data.libre]; });
     const th = el('div', 'jg-ayuda', THINT.true); f.appendChild(th);
-    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; hint.textContent = HINT[data.modo]; });
+    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; hint.textContent = HINT[data.modo]; verAm(); });
     const HINT = {
       abierta: 'La mesa queda en la sala y la toma el primero que quiera jugar.',
       desafio: 'Le mandás un mensaje directo con el enlace a la mesa.',
@@ -10233,13 +10234,18 @@ document.addEventListener('pointerdown', (ev) => {
         }
       }, 300);
     });
+    // Competitiva (suma al ranking) o amistosa (queda en el récord, sin sumar). Con la compu no hace falta
+    const AHINT = { false: 'Suma al ranking del mes y al histórico.', true: 'Queda en tu récord como amistosa, pero no suma al ranking.' };
+    const am = seg('Ranking', 'amistosa', [[false, 'Competitiva'], [true, 'Amistosa']], () => { ah.textContent = AHINT[data.amistosa]; });
+    const ah = el('div', 'jg-ayuda', AHINT.false); f.appendChild(ah);
+    const verAm = () => { am.hidden = ah.hidden = data.modo === 'compu' || !!(window.app && window.app.user && window.app.user.isGuest); }; verAm();
     const err = el('div', 'jg-error'); f.appendChild(err);
     const go2 = el('button', 'jg-btn jg-primario jg-ancho', 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
     go2.addEventListener('click', async () => {
       err.textContent = '';
       if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
       go2.disabled = true;
-      const r = await emit('truco:crear', { puntos: data.puntos, flor: data.flor, libre: data.libre, modo: data.modo, rival: data.rival && data.rival.id });
+      const r = await emit('truco:crear', { puntos: data.puntos, flor: data.flor, libre: data.libre, modo: data.modo, rival: data.rival && data.rival.id, amistosa: data.amistosa });
       go2.disabled = false;
       if (r.error) { err.textContent = r.error; return; }
       if (data.modo === 'desafio') { challenge(data.rival, r.id, data); return; }
@@ -10250,7 +10256,7 @@ document.addEventListener('pointerdown', (ev) => {
   // Mensaje directo al desafiado, con el enlace ya escrito (sin mandar)
   function challenge(p, id, data) {
     const a = app();
-    const text = `¡Te desafío a un truco a ${data.puntos}${data.flor ? ' con flor' : ''}${data.libre ? ', sin límite de tiempo (jugamos cuando podamos)' : ''}! Entrá acá: ${location.origin}/app?truco=${id}`;
+    const text = `¡Te desafío a un truco a ${data.puntos}${data.flor ? ' con flor' : ''}${data.libre ? ', sin límite de tiempo (jugamos cuando podamos)' : ''}${data.amistosa ? ', amistoso (no suma al ranking)' : ''}! Entrá acá: ${location.origin}/app?truco=${id}`;
     let done = false;
     const fill = () => {
       if (done) return; done = true;
@@ -10982,7 +10988,7 @@ document.addEventListener('pointerdown', (ev) => {
       r.addEventListener('click', fn);
       return r;
     };
-    const rules = (m) => m.tablero + (m.arania === false ? ' · sin araña' : '');
+    const rules = (m) => m.tablero + (m.arania === false ? ' · sin araña' : '') + (m.amistosa ? ' · amistosa' : '');
     section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => fbJoin(a.id)));
     section('Tus partidas', d.mias, (m) => {
       const who = m.rival || m.invitado || { nombre: '?' };
@@ -10997,6 +11003,7 @@ document.addEventListener('pointerdown', (ev) => {
     const st = el('div', 'jg-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    if (s.amistosasGanadas || s.amistosasPerdidas) box.appendChild(el('div', 'jg-ayuda', `Amistosas: ${s.amistosasGanadas} ${s.amistosasGanadas === 1 ? 'ganada' : 'ganadas'} y ${s.amistosasPerdidas} ${s.amistosasPerdidas === 1 ? 'perdida' : 'perdidas'} (no suman al ranking).`));
     // los rankings aparte: en pantallas anchas van en su propia columna
     const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
@@ -11022,7 +11029,7 @@ document.addEventListener('pointerdown', (ev) => {
     const info = await emit('funball:inicio');
     if (!page || !f.isConnected) return;
     const tabs = (info && info.tableros) || [];
-    const data = { tablero: -1, arania: true, modo: 'abierta', nivel: 2, rival: null };
+    const data = { tablero: -1, arania: true, modo: 'abierta', nivel: 2, rival: null, amistosa: false };
     const seg = (label, key, opts, onChange) => {
       const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
       const s = el('div', 'jg-seg' + (opts.length > 3 ? ' fb-seg-varias' : ''));
@@ -11035,7 +11042,7 @@ document.addEventListener('pointerdown', (ev) => {
     };
     seg('Tablero', 'tablero', [[-1, 'Al azar'], ...tabs.map((t, i) => [i, t])]);
     seg('La araña', 'arania', [[true, 'Sí, que venga'], [false, 'Sin araña']]);
-    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; });
+    seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; verAm(); });
     const lvl = seg('Nivel de la compu', 'nivel', (info.niveles || ['Fácil', 'Normal', 'Difícil', 'Imposible']).map((n, i) => [i + 1, n]));
     lvl.hidden = true;
     const HINT = {
@@ -11070,22 +11077,27 @@ document.addEventListener('pointerdown', (ev) => {
         }
       }, 300);
     });
+    // Competitiva (suma al ranking) o amistosa (queda en el récord, sin sumar). Con la compu no hace falta
+    const AHINT = { false: 'Suma al ranking del mes y al histórico.', true: 'Queda en tu récord como amistosa, pero no suma al ranking.' };
+    const am = seg('Ranking', 'amistosa', [[false, 'Competitiva'], [true, 'Amistosa']], () => { ah.textContent = AHINT[data.amistosa]; });
+    const ah = el('div', 'jg-ayuda', AHINT.false); f.appendChild(ah);
+    const verAm = () => { am.hidden = ah.hidden = data.modo === 'compu' || !!(window.app && window.app.user && window.app.user.isGuest); }; verAm();
     const err = el('div', 'jg-error'); f.appendChild(err);
     const go2 = el('button', 'jg-btn jg-primario jg-ancho', 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
     go2.addEventListener('click', async () => {
       err.textContent = '';
       if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
       go2.disabled = true;
-      const r = await emit('funball:crear', { tablero: data.tablero, arania: data.arania, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id });
+      const r = await emit('funball:crear', { tablero: data.tablero, arania: data.arania, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id, amistosa: data.amistosa });
       go2.disabled = false;
       if (r.error) { err.textContent = r.error; return; }
-      if (data.modo === 'desafio') { fbChallenge(data.rival, r.id); return; }
+      if (data.modo === 'desafio') { fbChallenge(data.rival, r.id, data.amistosa); return; }
       stack.pop(); go('fbMesa', r.id);
     });
   }
-  function fbChallenge(p, id) {
+  function fbChallenge(p, id, amistosa) {
     const a = app();
-    const text = `¡Te desafío a un Funball! Entrá acá: ${location.origin}/app?funball=${id}`;
+    const text = `¡Te desafío a un Funball${amistosa ? ' amistoso (no suma al ranking)' : ''}! Entrá acá: ${location.origin}/app?funball=${id}`;
     let done = false;
     const fill = () => {
       if (done) return; done = true;
@@ -12052,7 +12064,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       return r;
     };
     const conColor = (c, quien) => c ? `${quien} con ${c === 'w' ? 'blancas' : 'negras'}` : '';
-    const rules = (a) => [a.ritmo, conColor(a.color, 'Jugás')].filter(Boolean).join(' · ');
+    const rules = (a) => [a.ritmo, conColor(a.color, 'Jugás'), a.amistosa ? 'amistosa' : ''].filter(Boolean).join(' · ');
     section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => ajJoin(a.id)));
     section('Tus partidas', d.mias, (m) => {
       const who = m.rival || m.invitado || { nombre: '?' };
@@ -12068,6 +12080,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const st = el('div', 'jg-stats aj-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.tablas, 'tablas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    if (s.amistosasGanadas || s.amistosasPerdidas) box.appendChild(el('div', 'jg-ayuda', `Amistosas: ${s.amistosasGanadas} ${s.amistosasGanadas === 1 ? 'ganada' : 'ganadas'} y ${s.amistosasPerdidas} ${s.amistosasPerdidas === 1 ? 'perdida' : 'perdidas'} (no suman al ranking).`));
     const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
       const list = d.ranking[k];
@@ -12090,7 +12103,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const f = el('div', 'jg-form'); b.appendChild(f);
     const info = await emit('ajedrez:inicio');
     if (!page || !f.isConnected) return;
-    const data = { ritmo: 'libre', color: null, modo: modo === 'compu' ? 'compu' : 'abierta', nivel: 2, rival: null };
+    const data = { ritmo: 'libre', color: null, modo: modo === 'compu' ? 'compu' : 'abierta', nivel: 2, rival: null, amistosa: false };
     const seg = (label, key, opts, onChange) => {
       const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
       const s = el('div', 'jg-seg' + (opts.length > 3 ? ' fb-seg-varias' : ''));
@@ -12111,7 +12124,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     seg('Reloj', 'ritmo', ritmos, () => { rh.textContent = data.ritmo === 'libre' ? RHINT.libre : RHINT.otro; });
     const rh = el('div', 'jg-ayuda', RHINT.libre); f.appendChild(rh);
     seg('Tus piezas', 'color', [[null, 'Al azar'], ['w', 'Blancas'], ['b', 'Negras']]);
-    if (modo !== 'compu') seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; });
+    if (modo !== 'compu') seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; verAm(); });
     const lvl = seg('Nivel de la compu', 'nivel', ((info && info.niveles) || ['Fácil', 'Normal', 'Difícil', 'Muy difícil']).map((n, i) => [i + 1, n]));
     lvl.hidden = data.modo !== 'compu';
     const hint = el('div', 'jg-ayuda', HINT[data.modo]); f.appendChild(hint);
@@ -12141,22 +12154,27 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         }
       }, 300);
     });
+    // Competitiva (suma al ranking) o amistosa (queda en el récord, sin sumar). Con la compu no hace falta
+    const AHINT = { false: 'Suma al ranking del mes y al histórico.', true: 'Queda en tu récord como amistosa, pero no suma al ranking.' };
+    const am = seg('Ranking', 'amistosa', [[false, 'Competitiva'], [true, 'Amistosa']], () => { ah.textContent = AHINT[data.amistosa]; });
+    const ah = el('div', 'jg-ayuda', AHINT.false); f.appendChild(ah);
+    const verAm = () => { am.hidden = ah.hidden = data.modo === 'compu' || !!(window.app && window.app.user && window.app.user.isGuest); }; verAm();
     const err = el('div', 'jg-error'); f.appendChild(err);
     const go2 = el('button', 'jg-btn jg-primario jg-ancho', modo === 'compu' ? 'Empezar' : 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
     go2.addEventListener('click', async () => {
       err.textContent = '';
       if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
       go2.disabled = true;
-      const r = await emit('ajedrez:crear', { ritmo: data.ritmo, color: data.color, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id });
+      const r = await emit('ajedrez:crear', { ritmo: data.ritmo, color: data.color, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id, amistosa: data.amistosa });
       go2.disabled = false;
       if (r.error) { err.textContent = r.error; return; }
-      if (data.modo === 'desafio') { ajChallenge(data.rival, r.id, data.ritmo); return; }
+      if (data.modo === 'desafio') { ajChallenge(data.rival, r.id, data.ritmo, data.amistosa); return; }
       stack.pop(); go('ajMesa', r.id);
     });
   }
-  function ajChallenge(p, id, ritmo) {
+  function ajChallenge(p, id, ritmo, amistosa) {
     const a = app();
-    const text = `¡Te desafío a un ajedrez${ritmo && ritmo !== 'libre' ? ' (' + ritmo + ')' : ''}! Entrá acá: ${location.origin}/app?ajedrez=${id}`;
+    const text = `¡Te desafío a un ajedrez${ritmo && ritmo !== 'libre' ? ' (' + ritmo + ')' : ''}${amistosa ? ', amistoso (no suma al ranking)' : ''}! Entrá acá: ${location.origin}/app?ajedrez=${id}`;
     let done = false;
     const fill = () => {
       if (done) return; done = true;

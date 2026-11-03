@@ -131,7 +131,7 @@
       r.addEventListener('click', fn);
       return r;
     };
-    const mesaTxt = (m) => `${m.flexible ? `entran hasta ${m.total}` : `${m.total} ejércitos`} · ${m.sentados} ${m.sentados === 1 ? 'persona' : 'personas'}${m.misiones === false ? ' · sin misiones' : ''}`;
+    const mesaTxt = (m) => `${m.flexible ? `entran hasta ${m.total}` : `${m.total} ejércitos`} · ${m.sentados} ${m.sentados === 1 ? 'persona' : 'personas'}${m.misiones === false ? ' · sin misiones' : ''}${m.amistosa ? ' · amistosa' : ''}`;
     section('Te invitaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, `${a.creador.nombre} te invitó a una guerra`, mesaTxt(a), 'Entrar', 'azul', () => unirse(a.id)));
     section('Tus partidas', d.mias, (m) => {
       const top = m.estado === 'esperando' ? (m.flexible ? `Esperando gente (${m.sentados} en la mesa)` : `Esperando gente (${m.sentados} de ${m.total})`) : `Con ${m.rival.nombre}`;
@@ -147,6 +147,7 @@
     const st = el('div', 'jg-stats');
     for (const [n, l] of [[s.ganadas, 'ganadas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
     box.appendChild(st);
+    if (s.amistosasGanadas || s.amistosasPerdidas) box.appendChild(el('div', 'jg-ayuda', `Amistosas: ${s.amistosasGanadas} ${s.amistosasGanadas === 1 ? 'ganada' : 'ganadas'} y ${s.amistosasPerdidas} ${s.amistosasPerdidas === 1 ? 'perdida' : 'perdidas'} (no suman al ranking).`));
     const rk = el('div', 'jg-rankings'); b.appendChild(rk);
     for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
       const list = d.ranking[k];
@@ -191,7 +192,7 @@
     page.appendChild(A.head('Nueva guerra'));
     const b = el('div', 'jg-cuerpo mr-ui'); page.appendChild(b);
     const f = el('div', 'jg-form'); b.appendChild(f);
-    const data = { total: 4, modo: 'compu', nivel: 2, misiones: true, buitre: false, privada: false, invitados: [] };
+    const data = { total: 4, modo: 'compu', nivel: 2, misiones: true, buitre: false, privada: false, invitados: [], amistosa: false };
     const seg = (label, key, opts, onChange) => {
       const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
       const s = el('div', 'jg-seg');
@@ -226,6 +227,18 @@
         s.appendChild(x);
       }
       w.appendChild(s); gente.appendChild(w);
+      // Competitiva (suma al ranking) o amistosa (queda en el récord, sin sumar)
+      const AHINT = { false: 'Suma al ranking del mes y al histórico.', true: 'Queda en tu récord como amistosa, pero no suma al ranking.' };
+      const wa = el('div', 'jg-campo'); wa.appendChild(el('span', 'jg-etq', 'Ranking'));
+      const sa = el('div', 'jg-seg');
+      const ah = el('div', 'jg-ayuda', AHINT.false);
+      for (const [v, l] of [[false, 'Competitiva'], [true, 'Amistosa']]) {
+        const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', data.amistosa === v);
+        x.addEventListener('click', () => { data.amistosa = v; sa.querySelectorAll('.jg-seg-op').forEach(y => y.classList.toggle('on', y === x)); ah.textContent = AHINT[v]; });
+        sa.appendChild(x);
+      }
+      wa.appendChild(sa); gente.append(wa, ah);
+      if (window.app && window.app.user && window.app.user.isGuest) wa.hidden = ah.hidden = true; // para un invitado siempre es amistosa
       const pick = el('div', 'jg-campo'); pick.appendChild(el('span', 'jg-etq', 'Invitar (les llega un aviso)'));
       const sbox = el('label', 'jg-buscar'); sbox.insertAdjacentHTML('beforeend', A.svg(A.I.buscar, 20));
       const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar a quién invitar'; sbox.appendChild(q);
@@ -270,7 +283,7 @@
     go2.addEventListener('click', async () => {
       err.textContent = '';
       go2.disabled = true;
-      const r = await A.emit('mr:crear', { total: data.total, modo: data.modo, nivel: data.nivel, misiones: data.misiones, buitre: data.buitre, privada: data.privada, invitados: data.invitados.map(p => p.id) });
+      const r = await A.emit('mr:crear', { total: data.total, modo: data.modo, nivel: data.nivel, misiones: data.misiones, buitre: data.buitre, privada: data.privada, invitados: data.invitados.map(p => p.id), amistosa: data.modo === 'gente' && data.amistosa });
       go2.disabled = false;
       if (r.error) { err.textContent = r.error; return; }
       A.stack().pop(); A.go('mrMesa', r.id);
