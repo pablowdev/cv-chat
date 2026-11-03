@@ -8,12 +8,19 @@
   var PRECIO = { ARS: '$', USD: 'US$', USDT: 'USDT ' };
   var desde = 0, fase = 'activas';
   var galeria = [], fotoActual = 0;
-  // Muestra la foto n de la publicacion (da la vuelta en las puntas), con su miniatura marcada y a la vista
-  function verFoto(n) {
+  // Las fotos de la publicacion estan una al lado de la otra en una tira que se desliza con el dedo (y se
+  // acomoda en cada foto, marketplace.css). Ir a la foto n (da la vuelta en las puntas): la tira se mueve hasta ahi
+  function verFoto(n, suave) {
     if (!galeria.length) return;
-    fotoActual = (n + galeria.length) % galeria.length;
-    $('mk-i-foto').src = galeria[fotoActual];
-    $('mk-i-cuenta').textContent = (fotoActual + 1) + ' / ' + galeria.length;
+    n = (n + galeria.length) % galeria.length;
+    var p = $('mk-i-pista');
+    p.scrollTo({ left: n * p.clientWidth, behavior: suave === false ? 'auto' : 'smooth' });
+    marcarFoto(n);
+  }
+  // La foto que se ve: el "2 / 5" y su miniatura marcada y a la vista
+  function marcarFoto(n) {
+    fotoActual = n;
+    $('mk-i-cuenta').textContent = (n + 1) + ' / ' + galeria.length;
     var bs = $('mk-i-minis').querySelectorAll('button');
     for (var i = 0; i < bs.length; i++) bs[i].className = i === fotoActual ? 'is-actual' : '';
     var b = bs[fotoActual];
@@ -123,11 +130,15 @@
       document.querySelector('.mk-item').classList.toggle('is-vencida', vencida);
       var t = $('mk-i-texto'); t.textContent = '';
       (it.descripcion || '').split(/\n{2,}/).forEach(function (par) { if (par.trim()) t.appendChild(el('p', '', par)); });
-      var foto = $('mk-i-foto'), minis = $('mk-i-minis'); minis.textContent = '';
+      var foto = $('mk-i-foto'), minis = $('mk-i-minis'), pista = $('mk-i-pista'); minis.textContent = '';
       var fotos = it.fotos || [];
       foto.hidden = !fotos.length;
       document.querySelector('.mk-item__cuerpo').classList.toggle('sin-fotos', !fotos.length);
       galeria = fotos;
+      // la primera es la que ya estaba (la pagina puede venir con ella puesta); las demas, al lado
+      while (pista.lastElementChild && pista.lastElementChild !== foto) pista.removeChild(pista.lastElementChild);
+      if (fotos.length) foto.src = fotos[0];
+      fotos.slice(1).forEach(function (src) { var i = el('img'); i.src = src; i.alt = ''; i.draggable = false; pista.appendChild(i); });
       if (fotos.length > 1) fotos.forEach(function (src, n) {
         var b = el('button'); b.type = 'button'; b.setAttribute('aria-label', 'Foto ' + (n + 1));
         var i = el('img'); i.src = src; i.alt = ''; i.loading = 'lazy'; b.appendChild(i);
@@ -135,7 +146,7 @@
         minis.appendChild(b);
       });
       $('mk-i-ant').hidden = $('mk-i-sig').hidden = $('mk-i-cuenta').hidden = fotos.length < 2;
-      if (fotos.length) verFoto(0);
+      if (fotos.length) verFoto(0, false);
       var v = $('mk-i-vendedor'); v.textContent = '';
       if (it.vendedor) {
         var av = el('div', 'mk-item__avatar');
@@ -181,17 +192,15 @@
     history.pushState(null, '', '/'); ver();
   });
   window.addEventListener('popstate', ver);
-  // Las fotos de la publicacion: con las flechas, deslizando la foto con el dedo o con las flechas del teclado
+  // Las fotos de la publicacion: deslizando la tira con el dedo, con las flechas o con las flechas del teclado
   $('mk-i-ant').addEventListener('click', function () { verFoto(fotoActual - 1); });
   $('mk-i-sig').addEventListener('click', function () { verFoto(fotoActual + 1); });
-  var toque = null;
-  $('mk-i-visor').addEventListener('touchstart', function (ev) { toque = ev.touches.length === 1 ? { x: ev.touches[0].clientX, y: ev.touches[0].clientY } : null; }, { passive: true });
-  $('mk-i-visor').addEventListener('touchend', function (ev) {
-    if (!toque || galeria.length < 2) return;
-    var dx = ev.changedTouches[0].clientX - toque.x, dy = ev.changedTouches[0].clientY - toque.y;
-    toque = null;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) verFoto(fotoActual + (dx < 0 ? 1 : -1));
-  });
+  $('mk-i-pista').addEventListener('scroll', function () {
+    var p = $('mk-i-pista'), n = Math.round(p.scrollLeft / Math.max(1, p.clientWidth));
+    if (galeria.length && n !== fotoActual && n < galeria.length) marcarFoto(n);
+  }, { passive: true });
+  // (si cambia el ancho, por ejemplo al girar el celular, que quede en la misma foto)
+  window.addEventListener('resize', function () { if (galeria.length) verFoto(fotoActual, false); });
   document.addEventListener('keydown', function (ev) {
     if ($('mk-item').hidden || galeria.length < 2 || /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target && ev.target.tagName) || '')) return;
     if (ev.key === 'ArrowLeft') verFoto(fotoActual - 1);
