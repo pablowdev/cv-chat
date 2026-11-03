@@ -11313,14 +11313,15 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       actual = key;
       const a = fbXY(sel[0], sel[1], flip), b = fbXY(c, r, flip), rr = fbR(v0[2]);
       capa = sv('g', { class: 'fb-muestra' }, board);
+      // Como en el original (grabado en el emulador): un solo salto rapido, de una decima, y la
+      // bola queda quieta en el destino mientras el mouse siga ahi; sin repetir ni transparencia
       const t0 = performance.now();
       const paso = (now) => {
         if (!capa || !capa.isConnected) return;
-        const ciclo = (now - t0) % 1150;
+        const u = Math.min(1, (now - t0) / 100);
         capa.textContent = '';
-        if (ciclo < 260) { const u = ciclo / 260; fbEsfera(capa, v0[1], rr, a.x + (b.x - a.x) * u, a.y + 2 + (b.y - a.y) * u - 22 * Math.sin(u * Math.PI), { sombra: false }); }
-        else if (ciclo < 1000) fbEsfera(capa, v0[1], rr, b.x, b.y + 2);
-        raf = requestAnimationFrame(paso);
+        if (u < 1) { fbEsfera(capa, v0[1], rr, a.x + (b.x - a.x) * u, a.y + 2 + (b.y - a.y) * u - 22 * Math.sin(u * Math.PI), { sombra: false }); raf = requestAnimationFrame(paso); }
+        else fbEsfera(capa, v0[1], rr, b.x, b.y + 2);
       };
       raf = requestAnimationFrame(paso);
     });
