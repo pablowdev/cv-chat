@@ -1,8 +1,9 @@
 // Enlaces del chat abiertos sin la sesion de CV Chat (alguien que llega desde X, WhatsApp...):
 //  - Al Marketplace (/app?mercado o /app?mercado=<id>): en vez de la pantalla de entrar, el Marketplace en
 //    la web, que se ve sin cuenta (y "Escribirle" hace la cuenta y vuelve a la publicacion en el chat).
-//  - A los juegos (/app?juegos, /app?juegos=truco, una mesa: ?truco=, ?funball=, ?ajedrez=, ?globalsiege=):
-//    a la pantalla de entrar, que ofrece jugar sin cuenta, como invitado (login.js); despues vuelve ahi.
+//  - A los juegos (/app?juegos): a su pagina, juegos.<dominio> (juegos.html), donde se elige uno.
+//  - A un juego o una mesa (/app?juegos=truco, ?truco=, ?funball=, ?ajedrez=, ?globalsiege=): a la pantalla de
+//    entrar, a poner el nombre de invitado (login.js); despues vuelve ahi.
 // Lo pone vincular.js en la cabeza de /app solo para esos enlaces, despues de origen.js (asi cuenta de donde
 // llego) y antes que Haven, que sin sesion manda a "/". Si hay sesion en la web o el foro, primero entra
 // con esa (como el login, cuenta.js) y sigue en el chat.
@@ -22,8 +23,11 @@
       if (d && d.token) { localStorage.setItem('haven_token', d.token); localStorage.setItem('haven_user', JSON.stringify(d.user)); return; }
     }
   } catch (e) { /* sin la cuenta de la web */ }
+  var dom = location.hostname.replace(/^chat\./, '');
+  // a los juegos en general: su pagina (juegos.<dominio>); a un juego o una mesa: a poner el nombre de invitado
+  var uno = q.get('juegos') || ['truco', 'funball', 'ajedrez', 'globalsiege'].some(function (k) { return q.has(k); });
+  if (juegos && !uno) { location.replace('https://juegos.' + dom + '/'); return; }
   if (juegos) { location.replace('/?jugar=' + (q.has('truco') || q.get('juegos') === 'truco' ? 'truco' : 'juegos') + '&volver=' + encodeURIComponent(location.href)); return; }
   var id = q.get('mercado');
-  var dom = location.hostname.replace(/^chat\./, '');
   location.replace('https://' + dom + '/marketplace' + (/^\d+$/.test(id || '') ? '?id=' + id : ''));
 })();

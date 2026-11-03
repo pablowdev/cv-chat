@@ -7,6 +7,7 @@
 //  /puente/api/desvincular     POST                              (requiere sesion)
 //  /puente/aviso.js            aviso "Vincula tu cuenta" que se inyecta en /app
 //  /puente/login.js            enlace "¿Olvidaste tu contraseña?" que se inyecta en el login
+//  /puente/juegos              la pagina de los juegos para los que no tienen cuenta (juegos.<dominio>, Caddy)
 //  /puente/api/recuperar/*     recuperar la contraseña iniciando sesion con Discord
 //  /puente/tema-fijo.js        el tema y el diseño del servidor para todos (tema-fijo.js)
 //  /puente/api/ui-fija         POST -> un administrador publica su diseño (tema-fijo.js)
@@ -636,8 +637,8 @@ async function handle(req, res) {
     if (r !== false) return;
   }
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js')) {
-    const file = p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css')) {
+    const file = p === '/puente/juegos' ? 'juegos.html' : p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     // Los .js y .css se guardan ya armados (aviso.js pesa 1 MB) y van con una huella (ETag): el
     // navegador pregunta siempre (no-cache, asi nunca usa uno viejo) y si no cambio recibe un 304
@@ -669,6 +670,11 @@ async function handle(req, res) {
         ? appName().replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
         : appName().replace(/[\\'"`\r\n<>]/g, ''); // va dentro de un string de JS
       body = body.toString('utf8').replace(/__PUENTE_APP__/g, app);
+    }
+    // La pagina de los juegos (juegos.html) se ve en juegos.<dominio> y lleva al chat (PUBLIC_URL)
+    if (file === 'juegos.html') {
+      const chat = String(publicUrl || '').replace(/\/+$/, '').replace(/["<>&]/g, '');
+      body = body.toString('utf8').replace(/__CHAT__/g, chat).replace(/__ORIGEN__/g, chat.replace(/^(https?:\/\/)chat\./, '$1juegos.'));
     }
     if (clave) {
       const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 20) + '"';
