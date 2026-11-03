@@ -97,6 +97,16 @@ el panel, asi todo se ve y se cambia desde ahi: un solo estilo y un solo idioma,
 Grupos ni Calendario, los ultimos temas arriba en la portada, "Varios" con los foros de menos movimiento (sus
 direcciones no cambian) y textos que estaban en ingles en castellano. Se puede correr mas de una vez.
 
+## Google
+
+`robots.txt` va en la raiz de `codigo/` (no viene con vBulletin) y nombra el mapa del sitio (`/core/xmlsitemap.php`).
+El mapa lo arma vBulletin con su tarea programada "sitemap", todos los dias, en `escribible/sitemap` (montado en
+`core/store_sitemap`). `herramientas/mapa-del-sitio.php` lo prende y lo arma en el momento:
+
+```
+docker exec -i -u 33 foro-web php < herramientas/mapa-del-sitio.php
+```
+
 ## Actualizar vBulletin
 
 1. Copiar el `upload/` del paquete nuevo en `codigo/`, sin pisar `config.php` ni `core/includes/config.php`.

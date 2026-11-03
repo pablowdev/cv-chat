@@ -18,6 +18,8 @@ services:
       - ./codigo:/var/www/html:ro
       - ./escribible/cache:/var/www/html/cache
       - ./escribible/core-cache:/var/www/html/core/cache
+      # El mapa del sitio para Google (herramientas/mapa-del-sitio.php y la tarea programada "sitemap")
+      - ./escribible/sitemap:/var/www/html/core/store_sitemap
     networks: [foro-frente, foro-datos]
     depends_on: [db, correo]
     read_only: true

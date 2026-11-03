@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /core/admincp/
+Disallow: /core/modcp/
+Disallow: /core/install/
+Disallow: /search
+Disallow: /privatemessage/
+
+Sitemap: https://foro.circulovicioso.club/core/xmlsitemap.php
