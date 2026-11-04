@@ -40,8 +40,8 @@
     c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 8, TT - 8); c.closePath();
   }
   function pintarMesa(c) {
-    // ── El aspecto de la imagen del dueño: madera de caoba con vetas, esquineras de madera clara con el
-    // corte a inglete, bandas y paño verde oscuro, troneras negras. Las medidas son las de siempre. ──
+    // ── El aspecto: madera roja con volumen (oscura afuera y adentro, brillante al medio), esquineras doradas
+    // con un filo claro alrededor de cada tronera, bandas y paño verde. Las medidas son las de siempre. ──
     let sem = 11; const rnd = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
     // madera con vetas: un degradé de base y muchas lineas finas onduladas, a lo largo de la pieza
     const madera = (x, y, w, h, acostada, tonos, vetas) => {
@@ -63,12 +63,12 @@
       }
       c.globalAlpha = 1; c.restore();
     };
-    const CAOBA = [[0, '#6e2a1c'], [0.25, '#5a1e14'], [0.6, '#4a170f'], [1, '#33100a']];
-    const VETA_CAOBA = { n: 70, oscura: '#2a0b06', clara: '#8a3a26' };
-    const CLARA = [[0, '#e2b986'], [0.5, '#d6a671'], [1, '#c48f58']];
-    const VETA_CLARA = { n: 26, oscura: '#a87442', clara: '#f0cfa0' };
+    const CAOBA = [[0, '#4e0505'], [0.35, '#a01414'], [0.6, '#8a0e0e'], [1, '#560606']];
+    const VETA_CAOBA = { n: 18, oscura: '#5a0707', clara: '#b52020' };
+    const CLARA = [[0, '#f6b53a'], [0.5, '#eaa52a'], [1, '#d88f1c']];
+    const VETA_CLARA = { n: 0, oscura: '#c07a10', clara: '#ffd070' };
     // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
-    c.fillStyle = '#3a120b'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#4e0505'; c.fillRect(0, 0, W, H);
     const ARR = TT - 28, ABA = TB + 28, IZQ = TL - 30, DER = TR + 30; // donde la madera se junta con las bandas
     madera(0, 0, W, ARR, true, CAOBA, VETA_CAOBA);
     madera(0, ABA, W, H - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
@@ -80,7 +80,7 @@
     // las bandas: verde un poco mas claro que el paño, con luz en el filo de arriba
     c.save();
     c.beginPath(); c.rect(IZQ, ARR, DER - IZQ, ABA - ARR); c.clip();
-    c.fillStyle = '#1d6b2c'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
+    c.fillStyle = '#0c6a22'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
     const banda = c.createLinearGradient(0, ARR, 0, ARR + 30);
     banda.addColorStop(0, 'rgba(255,255,255,0.10)'); banda.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = banda; c.fillRect(IZQ, ARR, DER - IZQ, 30);
@@ -98,7 +98,7 @@
       c.clip();
       madera(Math.min(x0, x0 + sx * q), Math.min(y0, y0 + sy * q), q, q, true, CLARA, VETA_CLARA);
       // el inglete: la junta en diagonal entre las dos maderas de la esquinera
-      c.strokeStyle = 'rgba(110,70,30,0.55)'; c.lineWidth = 1.5;
+      c.strokeStyle = 'rgba(170,100,20,0.35)'; c.lineWidth = 1;
       c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0 + sy * q); c.stroke();
       c.restore();
       c.save();
@@ -106,7 +106,7 @@
       c.moveTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
       c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
       c.lineTo(x0 + sx * 22, y0 + sy * q);
-      c.strokeStyle = 'rgba(80,45,15,0.6)'; c.lineWidth = 1.5; c.stroke();
+      c.strokeStyle = '#f3c99a'; c.lineWidth = 2.5; c.stroke();
       c.restore();
     }
     // las del medio: una pieza de madera clara alrededor de la tronera, con dos cortes en diagonal
@@ -118,17 +118,17 @@
       c.clip();
       madera(p.x - 52, Math.min(yb, p.y + s * 14), 104, Math.abs(p.y + s * 14 - yb), true, CLARA, VETA_CLARA);
       c.restore();
-      c.strokeStyle = 'rgba(80,45,15,0.6)'; c.lineWidth = 1.5;
+      c.strokeStyle = '#f3c99a'; c.lineWidth = 2.5;
       c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x - 30, p.y + s * 14); c.moveTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.stroke();
     }
     // el paño: verde oscuro parejo, con una textura fina de fieltro y apenas mas oscuro en los bordes
     c.save();
     contornoPano(c);
     c.clip();
-    c.fillStyle = '#17652a'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#0d7428'; c.fillRect(0, 0, W, H);
     const tex = document.createElement('canvas'); tex.width = tex.height = 96;
     const tc = tex.getContext('2d'), td = tc.createImageData(96, 96);
-    for (let i = 0; i < td.data.length; i += 4) { const k = (rnd() - 0.5) * 16; td.data[i] = 23 + k * 0.6; td.data[i + 1] = 101 + k; td.data[i + 2] = 42 + k * 0.7; td.data[i + 3] = 255; }
+    for (let i = 0; i < td.data.length; i += 4) { const k = (rnd() - 0.5) * 16; td.data[i] = 14 + k * 0.5; td.data[i + 1] = 112 + k; td.data[i + 2] = 40 + k * 0.6; td.data[i + 3] = 255; }
     tc.putImageData(td, 0, 0);
     c.fillStyle = c.createPattern(tex, 'repeat'); c.fillRect(0, 0, W, H);
     const vin = c.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, W * 0.62);
@@ -143,7 +143,7 @@
     c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
     // las troneras: negras, con un borde apenas mas claro y la sombra adentro
     for (const p of POCKETS) {
-      c.fillStyle = '#141414'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 2.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#f3c99a'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI * 2); c.fill();
       const g = c.createRadialGradient(p.x - 5, p.y - 5, 2, p.x, p.y, POCKET_R);
       g.addColorStop(0, '#000'); g.addColorStop(0.7, '#030303'); g.addColorStop(1, '#202020');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
