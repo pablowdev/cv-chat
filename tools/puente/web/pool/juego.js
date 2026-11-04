@@ -68,7 +68,7 @@
       c.globalAlpha = 1; c.restore();
     };
     const CAOBA = [[0, '#3f0303'], [0.3, '#8e0c0c'], [0.55, '#9c1010'], [1, '#4a0404']];
-    const VETA_CAOBA = { n: 22, oscura: '#4a0505', clara: '#a81818' };
+    const VETA_CAOBA = { n: 0, oscura: '#4a0505', clara: '#a81818' };
     const CLARA = [[0, '#f4a62c'], [0.5, '#ec9a1e'], [1, '#d98612']];
     const VETA_CLARA = { n: 0, oscura: '#c07a10', clara: '#ffd070' };
     // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
@@ -79,6 +79,15 @@
     madera(FX0, ABA, CW, FY1 - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
     madera(FX0, FY0, IZQ - FX0, CH, false, CAOBA, VETA_CAOBA);
     madera(DER, FY0, FX1 - DER, CH, false, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
+    // el satinado: rayas rectas finas y muy suaves a lo largo de cada lado
+    const satinar = (x, y, w, h, acostada) => {
+      c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+      const ancho = acostada ? h : w;
+      for (let k = 0; k < ancho; k += 1.5) { c.globalAlpha = 0.03 + rnd() * 0.07; c.fillStyle = rnd() < 0.5 ? '#000' : '#ff8080'; if (acostada) c.fillRect(x, y + k, w, 1); else c.fillRect(x + k, y, 1, h); }
+      c.globalAlpha = 1; c.restore();
+    };
+    satinar(FX0, FY0, CW, ARR - FY0, true); satinar(FX0, ABA, CW, FY1 - ABA, true);
+    satinar(FX0, FY0, IZQ - FX0, CH, false); satinar(DER, FY0, FX1 - DER, CH, false);
     // el canto de la madera hacia adentro: un filo claro y una sombra
     c.strokeStyle = 'rgba(255,200,170,0.22)'; c.lineWidth = 2; c.strokeRect(IZQ + 1, ARR + 1, DER - IZQ - 2, ABA - ARR - 2);
     c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(FX0 + 2, FY0 + 2, CW - 4, CH - 4);
@@ -90,6 +99,24 @@
     banda.addColorStop(0, 'rgba(255,255,255,0.10)'); banda.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = banda; c.fillRect(IZQ, ARR, DER - IZQ, 30);
     c.restore();
+    // las bocas: la banda termina en su punta y de ahi a la tronera todo es dorado (el paño se dibuja encima)
+    {
+      const cxm = Math.sqrt(BOCA * BOCA - BY * BY), cym = Math.sqrt(BOCA * BOCA - BX * BX);
+      const cuna = (pts) => {
+        c.save(); c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.clip();
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        madera(Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), true, CLARA, VETA_CLARA);
+        c.restore();
+      };
+      for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
+        const bx = sx > 0 ? IZQ : DER, by = sy > 0 ? ARR : ABA;
+        cuna([[px + sx * cxm, py + sy * BY], [px + sx * cxm, by], [bx, by], [bx, py + sy * cym], [px + sx * BX, py + sy * cym]]);
+      }
+      for (const [yb, sy] of [[TT, 1], [TB, -1]]) {
+        const m = TL + TW / 2, by = sy > 0 ? ARR : ABA;
+        cuna([[m - BOCA_M, yb + sy * BY], [m - BOCA_M, by], [m + BOCA_M, by], [m + BOCA_M, yb + sy * BY]]);
+      }
+    }
     // las esquineras de madera clara, con el corte a inglete en diagonal y el lado de adentro curvo alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x === TL + TW / 2) continue;
@@ -102,16 +129,24 @@
       c.lineTo(x0 + sx * 22, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
       c.clip();
       madera(Math.min(x0, x0 + sx * q), Math.min(y0, y0 + sy * q), q, q, true, CLARA, VETA_CLARA);
-      // el inglete: la junta en diagonal entre las dos maderas de la esquinera
-      c.strokeStyle = 'rgba(170,100,20,0.35)'; c.lineWidth = 1;
+      // el inglete: la junta en diagonal entre las dos piezas de la esquinera
+      c.strokeStyle = 'rgba(150,85,10,0.35)'; c.lineWidth = 1;
       c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0 + sy * q); c.stroke();
+      // el bisel: una franja clara por dentro del borde y otra apenas mas oscura
+      c.beginPath();
+      c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
+      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
+      c.lineTo(x0 + sx * 22, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
+      c.lineJoin = 'round';
+      c.strokeStyle = 'rgba(255,225,160,0.75)'; c.lineWidth = 9; c.stroke();
+      c.strokeStyle = 'rgba(180,105,15,0.55)'; c.lineWidth = 4; c.stroke();
       c.restore();
       c.save();
       c.beginPath();
       c.moveTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
       c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
       c.lineTo(x0 + sx * 22, y0 + sy * q);
-      c.strokeStyle = '#f3c99a'; c.lineWidth = 2.5; c.stroke();
+      c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 3; c.stroke();
       c.restore();
     }
     // las del medio: una pieza de madera clara alrededor de la tronera, con dos cortes en diagonal
@@ -122,6 +157,10 @@
       c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
       c.clip();
       madera(p.x - 52, Math.min(yb, p.y + s * 14), 104, Math.abs(p.y + s * 14 - yb), true, CLARA, VETA_CLARA);
+      // el bisel
+      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
+      c.lineJoin = 'round'; c.strokeStyle = 'rgba(255,225,160,0.75)'; c.lineWidth = 9; c.stroke();
+      c.strokeStyle = 'rgba(180,105,15,0.55)'; c.lineWidth = 4; c.stroke();
       c.restore();
       c.strokeStyle = '#f3c99a'; c.lineWidth = 2.5;
       c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x - 30, p.y + s * 14); c.moveTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.stroke();
@@ -145,10 +184,28 @@
     c.restore();
     // el filo de las bandas
     contornoPano(c);
-    c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
+    c.lineJoin = 'round'; c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
     // las troneras: negras, con un borde apenas mas claro y la sombra adentro
+    // los cortes de la boca: una franja clara redondeada a lo largo de cada corte en diagonal del paño
+    const cx2 = Math.sqrt(BOCA * BOCA - BY * BY), cy2 = Math.sqrt(BOCA * BOCA - BX * BX);
+    const CORTES = [];
+    for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
+      CORTES.push([px + sx * cx2, py + sy * BY, px + sx * 8, py - sy * 8], [px + sx * BX, py + sy * cy2, px + sx * 8, py - sy * 8]);
+    }
+    for (const [yb, s2] of [[TT, 1], [TB, -1]]) {
+      const m = TL + TW / 2, yc = yb + s2 * BY, ya = yb - s2 * 6;
+      CORTES.push([m - BOCA_M, yc, m - BOCA_M + 9, ya], [m + BOCA_M, yc, m + BOCA_M - 9, ya]);
+    }
+    c.lineCap = 'round';
+    for (const [x1, y1, x2, y2] of CORTES) {
+      c.strokeStyle = '#b88a5c'; c.lineWidth = 7; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = '#f3c99a'; c.lineWidth = 4; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    }
+    c.lineCap = 'butt';
     for (const p of POCKETS) {
-      c.fillStyle = '#f3c99a'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI * 2); c.fill();
+      const aro = c.createRadialGradient(p.x, p.y, POCKET_R, p.x, p.y, POCKET_R + 6);
+      aro.addColorStop(0, '#c9996a'); aro.addColorStop(0.45, '#f6d2a6'); aro.addColorStop(1, '#b88a5c');
+      c.fillStyle = aro; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 6, 0, Math.PI * 2); c.fill();
       const g = c.createRadialGradient(p.x - 5, p.y - 5, 2, p.x, p.y, POCKET_R);
       g.addColorStop(0, '#000'); g.addColorStop(0.7, '#030303'); g.addColorStop(1, '#202020');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
