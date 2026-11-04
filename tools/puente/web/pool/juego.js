@@ -32,23 +32,28 @@
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
   let fondoMesa = null;
-  // El paño: hasta las bandas, y en cada boca (donde no hay banda) llega hasta la madera y entra derecho en la
-  // tronera. Cada banda termina en su punta con un corte corto en angulo. (La madera llega hasta WX/WY de la
-  // linea de las troneras: queda una banda verde finita.)
+  // El paño y las bandas, como en una mesa de verdad: cada banda corre derecho hasta cerca de la tronera y
+  // termina en una quijada a 45° que apunta al agujero; el paño entra derecho en la tronera.
+  // afuera = false: el borde del paño (la linea de las bandas); afuera = true: el borde de las bandas contra la madera.
+  // (La fisica no cambia: en la boca no hay banda, la quijada es solo el dibujo)
   const WX = BX - 9, WY = BY - 8, CH_ = 8;
-  function contornoPano(c) {
-    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX), m = TL + TW / 2;
-    const pts = [
-      // arriba a la izquierda -> arriba al medio -> arriba a la derecha
-      [TL + cx, TT + BY], [m - BOCA_M, TT + BY], [m - BOCA_M + CH_, TT + WY], [m + BOCA_M - CH_, TT + WY], [m + BOCA_M, TT + BY],
-      [TR - cx, TT + BY], [TR - cx + CH_, TT + WY], [TR - WX, TT + WY], [TR - WX, TT + cy - CH_], [TR - BX, TT + cy],
-      // la derecha, abajo
-      [TR - BX, TB - cy], [TR - WX, TB - cy + CH_], [TR - WX, TB - WY], [TR - cx + CH_, TB - WY], [TR - cx, TB - BY],
-      [m + BOCA_M, TB - BY], [m + BOCA_M - CH_, TB - WY], [m - BOCA_M + CH_, TB - WY], [m - BOCA_M, TB - BY],
-      [TL + cx, TB - BY], [TL + cx - CH_, TB - WY], [TL + WX, TB - WY], [TL + WX, TB - cy + CH_], [TL + BX, TB - cy],
-      // la izquierda, arriba
-      [TL + BX, TT + cy], [TL + WX, TT + cy - CH_], [TL + WX, TT + WY], [TL + cx - CH_, TT + WY],
-    ];
+  const QE = 34, QM = 36; // donde empieza la quijada: en las esquinas, a QE del centro de la tronera; en las del medio, a QM
+  function contornoPano(c, afuera) {
+    const m = TL + TW / 2, ox = afuera ? BX - WX : 0, oy = afuera ? BY - WY : 0; // las bandas, corridas hasta la madera
+    const pts = [];
+    const esq = (px, py, sx, sy, primero) => {
+      // la quijada de la banda larga y la de la corta, de la linea de las bandas hasta dentro del agujero
+      const larga = [[px + sx * (QE - oy), py + sy * (BY - oy)], [px + sx * (QE - BY), py]];
+      const corta = [[px, py + sy * (QE - BX)], [px + sx * (BX - ox), py + sy * (QE - ox)]];
+      pts.push(...(primero ? larga : corta.slice().reverse()), ...(primero ? corta : larga.slice().reverse()));
+    };
+    const medio = (py, sy, ida) => {
+      const yb = py + sy * (MEDIO_AFUERA + BY - oy), sub = py + sy * (MEDIO_AFUERA - 8);
+      const a = [[m - QM + oy, yb], [m - QM + oy + (BY + 8), sub]], b = [[m + QM - oy - (BY + 8), sub], [m + QM - oy, yb]];
+      pts.push(...(ida ? [...a, ...b] : [...b.slice().reverse(), ...a.slice().reverse()]));
+    };
+    esq(TL, TT, 1, 1, false); medio(TT - MEDIO_AFUERA, 1, true); esq(TR, TT, -1, 1, true);
+    esq(TR, TB, -1, -1, false); medio(TB + MEDIO_AFUERA, -1, false); esq(TL, TB, 1, -1, true);
     c.beginPath();
     pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
     c.closePath();
@@ -101,62 +106,33 @@
     // el canto de la madera hacia adentro: un filo claro y una sombra
     c.strokeStyle = 'rgba(255,200,170,0.22)'; c.lineWidth = 2; c.strokeRect(IZQ + 1, ARR + 1, DER - IZQ - 2, ABA - ARR - 2);
     c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(FX0 + 2, FY0 + 2, CW - 4, CH - 4);
-    // las bandas: verde un poco mas claro que el paño, con luz en el filo de arriba
-    c.save();
-    c.beginPath(); c.rect(IZQ, ARR, DER - IZQ, ABA - ARR); c.clip();
-    c.fillStyle = '#0d5f22'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
-    const banda = c.createLinearGradient(0, ARR, 0, ARR + 30);
-    banda.addColorStop(0, 'rgba(255,255,255,0.10)'); banda.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = banda; c.fillRect(IZQ, ARR, DER - IZQ, 30);
-    c.restore();
-    // las esquineras de madera clara, con el corte a inglete en diagonal y el lado de adentro curvo alrededor de la tronera
-    for (const p of POCKETS) {
-      if (p.x === TL + TW / 2) continue;
-      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 82;
-      const x0 = p.x < W / 2 ? FX0 : FX1, y0 = p.y < H / 2 ? FY0 : FY1;
-      c.save();
-      c.beginPath();
-      c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
-      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
-      c.lineTo(x0 + sx * 22, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
-      c.clip();
-      madera(Math.min(x0, x0 + sx * q), Math.min(y0, y0 + sy * q), q, q, true, CLARA, VETA_CLARA);
-      // el inglete: la junta en diagonal entre las dos piezas de la esquinera
-      c.strokeStyle = 'rgba(150,85,10,0.35)'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0 + sy * q); c.stroke();
-      // el bisel: una franja clara por dentro del borde y otra apenas mas oscura
-      c.beginPath();
-      c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
-      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
-      c.lineTo(x0 + sx * 22, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
+    // las esquineras: un cuadrado dorado prolijo en cada esquina (hasta un poco pasando la tronera), con bisel
+    // y un filo claro donde se juntan con la madera roja
+    const dorado = (x, y, w, h) => {
+      madera(x, y, w, h, true, CLARA, VETA_CLARA);
+      c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
       c.lineJoin = 'round';
-      c.strokeStyle = 'rgba(255,225,160,0.75)'; c.lineWidth = 9; c.stroke();
-      c.strokeStyle = 'rgba(180,105,15,0.55)'; c.lineWidth = 4; c.stroke();
+      c.strokeStyle = 'rgba(255,225,160,0.7)'; c.lineWidth = 8; c.strokeRect(x, y, w, h);
+      c.strokeStyle = 'rgba(170,95,10,0.5)'; c.lineWidth = 2; c.strokeRect(x + 5, y + 5, w - 10, h - 10);
       c.restore();
-      c.save();
-      c.beginPath();
-      c.moveTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
-      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
-      c.lineTo(x0 + sx * 22, y0 + sy * q);
-      c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 3; c.stroke();
-      c.restore();
+      c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.strokeRect(x, y, w, h);
+    };
+    const Q = 30; // cuanto pasa la esquinera del centro de la tronera
+    for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
+      const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q;
+      dorado(x0, y0, (sx > 0 ? px + Q : FX1) - x0, (sy > 0 ? py + Q : FY1) - y0);
     }
-    // las del medio: una pieza de madera clara alrededor de la tronera, con dos cortes en diagonal
+    // las del medio: una pieza dorada alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x !== TL + TW / 2) continue;
-      const arriba = p.y < H / 2, yb = arriba ? FY0 : FY1, s = arriba ? 1 : -1;
-      c.save();
-      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
-      c.clip();
-      madera(p.x - 52, Math.min(yb, p.y + s * 14), 104, Math.abs(p.y + s * 14 - yb), true, CLARA, VETA_CLARA);
-      // el bisel
-      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
-      c.lineJoin = 'round'; c.strokeStyle = 'rgba(255,225,160,0.75)'; c.lineWidth = 9; c.stroke();
-      c.strokeStyle = 'rgba(180,105,15,0.55)'; c.lineWidth = 4; c.stroke();
-      c.restore();
-      c.strokeStyle = '#f3c99a'; c.lineWidth = 2.5;
-      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x - 30, p.y + s * 14); c.moveTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.stroke();
+      const arriba = p.y < H / 2, y0 = arriba ? FY0 : p.y - 8, y1 = arriba ? p.y + 8 : FY1;
+      dorado(p.x - 40, y0, 80, y1 - y0);
     }
+    // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
+    c.save();
+    contornoPano(c, true);
+    c.fillStyle = '#0d5f22'; c.fill();
+    c.restore();
     // el aro claro de las troneras (del lado de la madera: el paño lo tapa del otro lado)
     for (const p of POCKETS) {
       const aro = c.createRadialGradient(p.x, p.y, POCKET_R, p.x, p.y, POCKET_R + 6);
@@ -183,6 +159,23 @@
     // el filo de las bandas
     contornoPano(c);
     c.lineJoin = 'round'; c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
+    // el filo claro de cada quijada, del paño al agujero
+    {
+      const m = TL + TW / 2, seg = [];
+      for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
+        seg.push([px + sx * QE, py + sy * BY, px + sx * (QE - BY), py], [px + sx * BX, py + sy * QE, px, py + sy * (QE - BX)]);
+      }
+      for (const [py, sy] of [[TT - MEDIO_AFUERA, 1], [TB + MEDIO_AFUERA, -1]]) {
+        const yb = py + sy * (MEDIO_AFUERA + BY), sub = py + sy * (MEDIO_AFUERA - 8);
+        seg.push([m - QM, yb, m - QM + BY + 8, sub], [m + QM, yb, m + QM - BY - 8, sub]);
+      }
+      c.lineCap = 'round';
+      for (const [x1, y1, x2, y2] of seg) {
+        c.strokeStyle = '#b88a5c'; c.lineWidth = 5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+        c.strokeStyle = '#f3c99a'; c.lineWidth = 3; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      }
+      c.lineCap = 'butt';
+    }
     // las troneras: negras, con un borde apenas mas claro y la sombra adentro
     for (const p of POCKETS) {
       const g = c.createRadialGradient(p.x - 5, p.y - 5, 2, p.x, p.y, POCKET_R);
