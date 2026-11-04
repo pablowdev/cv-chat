@@ -122,21 +122,20 @@
       forma(); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
     };
     const rectRedondo = (x, y, w, h, r) => () => { c.beginPath(); c.roundRect(x, y, w, h, r); };
-    const Q = 30; // cuanto pasa la esquinera del centro de la tronera
+    const Q = 7; // cuanto pasa la esquinera del centro de la tronera (en la referencia, apenas: queda bajo el agujero)
     for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
       const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q, w = (sx > 0 ? px + Q : FX1) - x0, h = (sy > 0 ? py + Q : FY1) - y0;
       // la esquina de adentro (la que da al paño) redondeada
-      const r = [sx < 0 && sy < 0 ? 14 : 0, sx > 0 && sy < 0 ? 14 : 0, sx > 0 && sy > 0 ? 14 : 0, sx < 0 && sy > 0 ? 14 : 0];
-      dorado(rectRedondo(x0, y0, w, h, r), x0, y0, w, h);
+      dorado(rectRedondo(x0, y0, w, h, 0), x0, y0, w, h);
     }
     // las del medio: una pieza dorada alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x !== TL + TW / 2) continue;
-      // las del medio: una pieza dorada con los costados en diagonal (45°), angosta a la altura del centro del
-      // agujero y abriendose hacia el borde de afuera
-      const arriba = p.y < H / 2, a = POCKET_R + 4, yb = arriba ? FY0 : FY1, alto = Math.abs(yb - p.y), b = a + alto;
-      const forma = () => { c.beginPath(); c.moveTo(p.x - a, p.y); c.lineTo(p.x - b, yb); c.lineTo(p.x + b, yb); c.lineTo(p.x + a, p.y); c.closePath(); };
-      dorado(forma, p.x - b, Math.min(yb, p.y), b * 2, alto);
+      // las del medio: un trapecio dorado desde el borde de afuera (56 a cada lado) que baja a 45° hasta 28 a cada
+      // lado; de ahi sigue el aro del agujero hasta la banda
+      const arriba = p.y < H / 2, s = arriba ? 1 : -1, yb = arriba ? FY0 : FY1, alto = 28, a = 28, b = a + alto;
+      const forma = () => { c.beginPath(); c.moveTo(p.x - b, yb); c.lineTo(p.x + b, yb); c.lineTo(p.x + a, yb + s * alto); c.lineTo(p.x - a, yb + s * alto); c.closePath(); };
+      dorado(forma, p.x - b, Math.min(yb, yb + s * alto), b * 2, alto);
     }
     // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
     c.save();
@@ -183,12 +182,49 @@
       for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
     }
-    // las troneras: negras, con un borde apenas mas claro y la sombra adentro
+    // las troneras: negras, con un borde apenas mas claro y la sombra adentro. Como en la referencia, el agujero
+    // sigue entre los biseles hasta la banda y lo rodea un aro dorado claro, del lado de la madera y por los biseles
+    // (dibujado en una esquina o arriba, y espejado para las demas)
+    const fondo = TT + BY - PROF;
+    for (const p of POCKETS) {
+      const medio = p.x === TL + TW / 2, sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1;
+      c.save(); c.translate(p.x, p.y); c.scale(medio ? 1 : sx, sy);
+      const boca = [];
+      if (medio) {
+        const yf = fondo - (TT - MEDIO_AFUERA); // el fondo de la banda y su punta, desde el centro
+        boca.push([-POCKET_R, 0], [-POCKET_R, yf], [POCKET_R, yf], [POCKET_R, 0]);
+      } else {
+        const nl = [BOCA, BY], ml = [BOCA - PROF, BY - PROF], ns = [BX, BOCA], ms = [BX - PROF, BOCA - PROF];
+        boca.push(ml, nl, ns, ms);
+      }
+      c.fillStyle = '#020202'; c.beginPath();
+      if (medio) boca.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+      else { const [ml, nl, ns, ms] = boca, k = 45 / Math.SQRT2; c.moveTo(...ml); c.lineTo(...nl); c.quadraticCurveTo(k, k, ...ns); c.lineTo(...ms); }
+      c.closePath(); c.fill();
+      c.restore();
+    }
     for (const p of POCKETS) {
       const g = c.createRadialGradient(p.x + 4, p.y + 4, 2, p.x, p.y, POCKET_R);
       g.addColorStop(0, '#000'); g.addColorStop(0.75, '#020202'); g.addColorStop(1, '#151515');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
       c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1.2; c.beginPath(); c.arc(p.x, p.y, POCKET_R - 1, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+    }
+    // el aro dorado claro (con un filo mas oscuro de cada lado)
+    for (const p of POCKETS) {
+      const medio = p.x === TL + TW / 2, sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, ra = POCKET_R + 2.5;
+      c.save(); c.translate(p.x, p.y); c.scale(medio ? 1 : sx, sy);
+      c.beginPath();
+      if (medio) {
+        const yf = fondo - (TT - MEDIO_AFUERA);
+        c.moveTo(-BISEL_M, yf); c.lineTo(-ra, 0); c.arc(0, 0, ra, Math.PI, 0, false); c.lineTo(BISEL_M, yf);
+      } else {
+        const a1 = Math.atan2(BY - PROF, BOCA - PROF), a2 = Math.atan2(BOCA - PROF, BX - PROF);
+        c.moveTo(BOCA, BY); c.lineTo(Math.cos(a1) * ra, Math.sin(a1) * ra); c.arc(0, 0, ra, a1, a2, true); c.lineTo(BX, BOCA);
+      }
+      c.lineJoin = 'round'; c.lineCap = 'round';
+      c.strokeStyle = '#9a6a3a'; c.lineWidth = 6.5; c.stroke();
+      c.strokeStyle = '#f0c595'; c.lineWidth = 4.5; c.stroke();
+      c.restore();
     }
     // la linea de cabecera: fina, amarillo verdosa
     c.strokeStyle = 'rgba(200,210,60,0.7)'; c.lineWidth = 1;
