@@ -68,10 +68,10 @@ for (const [py, sy] of [[TT, 1], [TB, -1]]) for (const s of [-1, 1]) {
   QUIJADAS.push({ x1: TL + TW / 2 + s * BOCA_M, y1: py + sy * BY, x2: TL + TW / 2 + s * BISEL_M, y2: py + sy * (BY - PROF) });
 }
 const PUNTAS = QUIJADAS.map(q => ({ x: q.x1, y: q.y1 }));
-// el agujero que se ve en cada esquina (juego.js lo dibuja igual): toca de costado los dos biseles y su centro cae 6
-// adentro del rincon del paño. La bola cuyo centro queda encima de ese agujero, cae
+// el agujero que se ve en cada esquina (juego.js lo dibuja igual): toca de costado los dos biseles y su centro cae 4,5
+// afuera del rincon del paño (medido en la referencia del dueño). La bola cuyo centro queda encima de ese agujero, cae
 const ESQ_R = (BOCA - BY) / Math.SQRT2;
-const HUECO = POCKETS.map((p, i) => (i === 1 || i === 4 ? null : { x: p.x + Math.sign(TL + TW / 2 - p.x) * (BX + 6), y: p.y + Math.sign(TT + TH / 2 - p.y) * (BY + 6) }));
+const HUECO = POCKETS.map((p, i) => (i === 1 || i === 4 ? null : { x: p.x + Math.sign(TL + TW / 2 - p.x) * (BX - 4.5), y: p.y + Math.sign(TT + TH / 2 - p.y) * (BY - 4.5) }));
 // en la boca no hay banda recta: la bola puede pasar la linea (entre los biseles) y caer
 const enBocaLado = (x, y) => y < TT + BOCA || y > TB - BOCA;                                                     // bandas cortas
 const enBocaLargo = (x, y) => x < TL + BOCA || x > TR - BOCA || Math.abs(x - (TL + TW / 2)) < BOCA_M;            // bandas largas

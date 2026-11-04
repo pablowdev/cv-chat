@@ -43,7 +43,7 @@
   // El agujero que se ve: en las del medio, el de la fisica. En las esquinas, un circulo que toca de costado los
   // dos biseles (estan a ESQ_LADO de la diagonal), corrido hacia el paño: asi el aro sigue derecho por los biseles
   // como en la referencia. La bola cae igual que siempre (a CAE_ESQ del centro de la tronera, en pool-motor.js)
-  const ESQ_LADO = (BOCA - BY) / Math.SQRT2, ESQ_R = ESQ_LADO, ESQ_C = BX + 6; // (en la referencia, el centro del agujero cae 6 adentro del rincon del paño)
+  const ESQ_LADO = (BOCA - BY) / Math.SQRT2, ESQ_R = ESQ_LADO, ESQ_C = BX - 4.5; // (en la referencia, el centro del agujero cae 4,5 afuera del rincon del paño)
   const HUECO = POCKETS.map((p, i) => (i === 1 || i === 4 ? { x: p.x, y: p.y, r: POCKET_R }
     : { x: p.x + (p.x < W / 2 ? 1 : -1) * ESQ_C, y: p.y + (p.y < H / 2 ? 1 : -1) * ESQ_C, r: ESQ_R }));
   function contornoPano(c, afuera) {
@@ -157,7 +157,7 @@
       c.restore();
       camino(pts); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
     };
-    const Q = ESQ_C + 6; // cuanto pasa la esquinera del centro de la tronera (en la referencia, apenas pasa el centro del agujero)
+    const Q = BX + 3.5; // cuanto pasa la esquinera de la linea de las troneras (en la referencia, 3,5 pasado el borde del paño)
     for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
       const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q, w = (sx > 0 ? px + Q : FX1) - x0, h = (sy > 0 ? py + Q : FY1) - y0;
       dorado([[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]]);
@@ -240,7 +240,8 @@
         c.moveTo(-BISEL_M, yf); c.lineTo(-ra, 0); c.arc(0, 0, ra, Math.PI, 0, false); c.lineTo(BISEL_M, yf);
       } else {
         // (en ejes de la diagonal: u hacia el paño, v hacia la banda larga; la punta de cada bisel esta en u = PU)
-        const rr = ESQ_R + 2.2, q = Math.SQRT1_2, PU = (BOCA + BY) * q, cu = ESQ_C / q;
+        // (como en la referencia, el aro llega hasta el fondo de la banda; de ahi sigue el bisel verde hasta el paño)
+        const rr = ESQ_R + 2.2, q = Math.SQRT1_2, PU = (BOCA - PROF + BY - PROF) * q, cu = ESQ_C / q;
         const pt = (u, v) => [(u + v) * q, (u - v) * q];
         c.moveTo(...pt(PU, rr)); c.lineTo(...pt(cu, rr));
         c.arc(ESQ_C, ESQ_C, rr, -Math.PI / 4, Math.PI * 3 / 4, true);
@@ -350,7 +351,7 @@
 
   function dibujarTaco(c, x, y, ang, fuerza, alfa = 1) {
     const dx = Math.cos(ang), dy = Math.sin(ang), back = R + 2 + fuerza * 80;
-    const sx = x - dx * back, sy = y - dy * back, ex = sx - dx * 540, ey = sy - dy * 540;
+    const sx = x - dx * back, sy = y - dy * back, ex = sx - dx * 263, ey = sy - dy * 263; // (el largo del taco del video: 113 px, 263 unidades)
     c.save(); c.globalAlpha = alfa; c.lineCap = 'butt';
     c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 7; c.beginPath(); c.moveTo(sx + 2, sy + 3); c.lineTo(ex + 2, ey + 3); c.stroke();
     const g = c.createLinearGradient(sx, sy, ex, ey);
@@ -574,7 +575,7 @@
     const b = el('div', 'jg-cuerpo jg-reglas pl-ui'); page.appendChild(b);
     const sec = (t, x) => { b.appendChild(el('div', 'jg-sub', t)); b.appendChild(el('p', null, x)); };
     sec('El objetivo', 'Pool de 8 bolas: uno se queda con las lisas (1 a 7) y el otro con las rayadas (9 a 15). Gana el que mete todas las suyas y después la 8.');
-    sec('Tirar', 'Apuntás con el mouse (la línea muestra hasta dónde va la blanca). La fuerza la elegís en la barra de la derecha y tirás con la barra espaciadora. También podés apretar sobre la mesa, arrastrar hacia atrás y soltar: cuanto más arrastrás, más fuerte. En el celular o la tablet: arrastrá el dedo sobre la mesa para apuntar, afiná con la rueda y arrastrá la barra de fuerza; al soltarla, tirás.');
+    sec('Tirar', 'Para apuntar, hacé clic sobre la mesa y arrastrá: el taco sigue al mouse mientras lo tenés apretado (la línea muestra hasta dónde va la blanca). La fuerza la elegís en la barra de la derecha y tirás con la barra espaciadora. En el celular o la tablet: arrastrá el dedo sobre la mesa para apuntar, afiná con la rueda y arrastrá la barra de fuerza; al soltarla, tirás.');
     sec('El efecto', 'En la bola de arriba a la derecha elegís dónde le pega el taco a la blanca. Arriba: después del choque la blanca sigue de largo. Abajo: vuelve para atrás. A un costado: sale más abierta o más cerrada de la primera banda. Doble clic la vuelve al centro.');
     sec('La salida', 'El que rompe tiene la bola en mano detrás de la línea: arrastrá la blanca adonde quieras antes de tirar. Si entra la 8 en la salida, se rearma el triángulo y rompe de nuevo.');
     sec('Los grupos', 'Mientras la mesa está abierta podés pegarle a cualquier bola menos a la 8. El primero que mete una bola sin falta se queda con ese grupo (lisas o rayadas).');
@@ -901,14 +902,8 @@
         if (M.valido) { const cue = blanca(); cue.x = q.x; cue.y = q.y; cue.on = true; }
         contar(); return;
       }
-      if (M.dedo) { apuntarDedo(p); contar(); return; }
-      if (e.pointerType === 'touch') return;
-      if (M.apuntando) {
-        // arrastrar hacia atras (en contra del tiro) carga la fuerza
-        const pull = (M.desde.x - p.x) * Math.cos(M.ang) + (M.desde.y - p.y) * Math.sin(M.ang);
-        M.fuerza = clamp(pull / 200, 0, 1);
-      } else apuntarA(p.x, p.y);
-      contar();
+      // como en el video: el taco solo se mueve mientras se tiene apretado (clic y arrastrar, o el dedo)
+      if (M.dedo) { apuntarDedo(p); contar(); }
     });
     cv.addEventListener('pointerdown', (e) => {
       audio.init();
@@ -919,17 +914,12 @@
       const toque = e.pointerType === 'touch';
       if (toque) tactil();
       if (M.s.enMano && cue && Math.hypot(p.x - cue.x, p.y - cue.y) < R * (toque ? 3.2 : 2.2)) { M.arrastra = true; M.valido = true; return; }
-      if (toque) { M.dedo = true; apuntarDedo(p); contar(); return; }
-      M.apuntando = true; M.fuerza = 0; M.desde = p;
+      M.dedo = true; apuntarDedo(p); contar();
     });
     const soltar = (e) => {
       try { cv.releasePointerCapture(e.pointerId); } catch { /* ya suelto */ }
       if (M.arrastra) { M.arrastra = false; M.valido = true; return; }
-      if (M.dedo) { M.dedo = false; return; }
-      if (!M.apuntando) return;
-      M.apuntando = false;
-      if (M.fuerza > 0.02) { M.barra = M.fuerza; tirar(M.fuerza); }
-      M.fuerza = 0;
+      M.dedo = false;
     };
     cv.addEventListener('pointerup', soltar);
     cv.addEventListener('pointercancel', () => { M.apuntando = false; M.arrastra = false; M.dedo = false; M.fuerza = 0; });
