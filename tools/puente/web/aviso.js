@@ -12622,6 +12622,47 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     document.addEventListener('click', (e) => {
       if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn')) close();
     }, true);
+    // Vista previa de los enlaces a los juegos en los mensajes (/app?juegos, /app?juegos=pool). Haven no arma la
+    // de los enlaces a su misma direccion, asi que va aca la tarjeta de siempre (la de los demas enlaces), con
+    // la tapa del juego y el texto que ven WhatsApp o X (vincular.js, JUEGOS_ENLACE). Al tocarla abre el juego.
+    const TARJETA = {
+      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege y Pool para jugar con la gente del chat.', v: '' },
+      truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
+      funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
+      ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },
+      globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.', v: '' },
+      pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '?v=3' },
+    };
+    const escH = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const tarjetas = () => {
+      for (const l of document.querySelectorAll('.message-content a[href], .thread-msg-content a[href]')) {
+        if (l.closest('.link-preview')) continue;
+        let u; try { u = new URL(l.href); } catch { continue; }
+        if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
+        const id = u.searchParams.get('juegos') || 'juegos', t = TARJETA[id];
+        const box = t && l.closest('.message-content, .thread-msg-content');
+        if (!box || [...box.querySelectorAll('.link-preview')].some(x => x.dataset.url === l.href)) continue;
+        try {
+          const url = l.href, cerrada = !!(a._collapsedEmbeds && a._collapsedEmbeds.has(url));
+          const card = el('div', 'link-preview link-preview--rich jg-tarjeta-enlace' + (cerrada ? ' lp-collapsed' : ''));
+          card.dataset.url = url;
+          const cab = typeof a._embedHeaderHtml === 'function' ? a._embedHeaderHtml('__PUENTE_APP__', cerrada) : '';
+          card.innerHTML = cab + '<div class="lp-content">' +
+            `<a class="lp-meta" href="${escH(url)}"><span class="link-preview-title">${escH(t.nombre)}</span><span class="lp-text">${escH(t.desc)}</span></a>` +
+            `<a class="lp-media" href="${escH(url)}"><img class="lp-image" src="/puente/tapas/${id}.jpg${t.v}" alt="" loading="lazy" width="1200" height="630"></a>` +
+            '</div>';
+          if (cab && typeof a._wireEmbedControls === 'function') a._wireEmbedControls(card, url);
+          if (typeof a._applyEmbedSpoiler === 'function') a._applyEmbedSpoiler(card, l);
+          const abajo = a._coupledToBottom;
+          box.appendChild(card);
+          if (abajo && typeof a._scrollToBottom === 'function') a._scrollToBottom(true);
+        } catch (err) { console.warn('[puente] tarjeta del juego:', err); }
+      }
+    };
+    let tarjetasT = null;
+    new MutationObserver(() => { if (!tarjetasT) tarjetasT = setTimeout(() => { tarjetasT = null; tarjetas(); }, 150); })
+      .observe(document.body, { childList: true, subtree: true });
+    tarjetas();
     // Enlace a una mesa: se abre aca mismo
     document.addEventListener('click', (e) => {
       const l = e.target instanceof Element && e.target.closest('a[href]');
