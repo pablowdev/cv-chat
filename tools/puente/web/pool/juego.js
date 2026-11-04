@@ -24,9 +24,9 @@
     9: '#f6d31a', 10: '#2a6fe8', 11: '#e8231c', 12: '#8a3ad8', 13: '#f28a1e', 14: '#3cc43a', 15: '#e2389e',
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  // El marco de madera: como en el diseño del dueño, la madera ocupa un 7% del largo de la mesa a cada lado
-  // (del centro de las troneras al borde de afuera). La mesa de juego no cambia: el lienzo crece alrededor
-  const MARCO = 63, OX = MARCO - TL, OY = MARCO - TT, CW = W + 2 * OX, CH = H + 2 * OY;
+  // El marco de madera: como en el diseño del dueño, la madera que se ve ocupa un 6,3% del largo de la mesa a
+  // cada lado. La mesa de juego no cambia: el lienzo crece alrededor
+  const MARCO = 52, OX = MARCO - TL, OY = MARCO - TT, CW = W + 2 * OX, CH = H + 2 * OY;
   const FX0 = -OX, FY0 = -OY, FX1 = W + OX, FY1 = H + OY;
 
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
@@ -102,7 +102,7 @@
     // las esquineras de madera clara, con el corte a inglete en diagonal y el lado de adentro curvo alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x === TL + TW / 2) continue;
-      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 92;
+      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 82;
       const x0 = p.x < W / 2 ? FX0 : FX1, y0 = p.y < H / 2 ? FY0 : FY1;
       c.save();
       c.beginPath();
