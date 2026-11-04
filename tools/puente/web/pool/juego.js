@@ -108,25 +108,31 @@
     c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(FX0 + 2, FY0 + 2, CW - 4, CH - 4);
     // las esquineras: un cuadrado dorado prolijo en cada esquina (hasta un poco pasando la tronera), con bisel
     // y un filo claro donde se juntan con la madera roja
-    const dorado = (x, y, w, h) => {
+    // una pieza dorada con la forma que se le pase (un camino), con bisel y su filo claro
+    const dorado = (forma, x, y, w, h) => {
+      c.save(); forma(); c.clip();
       madera(x, y, w, h, true, CLARA, VETA_CLARA);
-      c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
       c.lineJoin = 'round';
-      c.strokeStyle = 'rgba(255,225,160,0.7)'; c.lineWidth = 8; c.strokeRect(x, y, w, h);
-      c.strokeStyle = 'rgba(170,95,10,0.5)'; c.lineWidth = 2; c.strokeRect(x + 5, y + 5, w - 10, h - 10);
+      forma(); c.strokeStyle = 'rgba(255,225,160,0.7)'; c.lineWidth = 8; c.stroke();
+      forma(); c.strokeStyle = 'rgba(170,95,10,0.35)'; c.lineWidth = 2.5; c.stroke();
       c.restore();
-      c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.strokeRect(x, y, w, h);
+      forma(); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
     };
+    const rectRedondo = (x, y, w, h, r) => () => { c.beginPath(); c.roundRect(x, y, w, h, r); };
     const Q = 30; // cuanto pasa la esquinera del centro de la tronera
     for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
-      const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q;
-      dorado(x0, y0, (sx > 0 ? px + Q : FX1) - x0, (sy > 0 ? py + Q : FY1) - y0);
+      const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q, w = (sx > 0 ? px + Q : FX1) - x0, h = (sy > 0 ? py + Q : FY1) - y0;
+      // la esquina de adentro (la que da al paño) redondeada
+      const r = [sx < 0 && sy < 0 ? 14 : 0, sx > 0 && sy < 0 ? 14 : 0, sx > 0 && sy > 0 ? 14 : 0, sx < 0 && sy > 0 ? 14 : 0];
+      dorado(rectRedondo(x0, y0, w, h, r), x0, y0, w, h);
     }
     // las del medio: una pieza dorada alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x !== TL + TW / 2) continue;
-      const arriba = p.y < H / 2, y0 = arriba ? FY0 : p.y - 8, y1 = arriba ? p.y + 8 : FY1;
-      dorado(p.x - 40, y0, 80, y1 - y0);
+      // las del medio: un arco dorado que envuelve el agujero del lado de la madera
+      const arriba = p.y < H / 2, rr = POCKET_R + 13, yb = arriba ? FY0 : FY1;
+      const forma = () => { c.beginPath(); c.moveTo(p.x - rr, yb); c.lineTo(p.x - rr, p.y); c.arc(p.x, p.y, rr, Math.PI, 0, arriba); c.lineTo(p.x + rr, yb); c.closePath(); };
+      dorado(forma, p.x - rr, Math.min(yb, p.y - rr), rr * 2, Math.abs(yb - p.y) + rr);
     }
     // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
     c.save();
@@ -135,9 +141,9 @@
     c.restore();
     // el aro claro de las troneras (del lado de la madera: el paño lo tapa del otro lado)
     for (const p of POCKETS) {
-      const aro = c.createRadialGradient(p.x, p.y, POCKET_R, p.x, p.y, POCKET_R + 6);
-      aro.addColorStop(0, '#c9996a'); aro.addColorStop(0.45, '#f6d2a6'); aro.addColorStop(1, '#b88a5c');
-      c.fillStyle = aro; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 6, 0, Math.PI * 2); c.fill();
+      const aro = c.createRadialGradient(p.x, p.y, POCKET_R - 1, p.x, p.y, POCKET_R + 5);
+      aro.addColorStop(0, '#0a0a0a'); aro.addColorStop(0.55, '#2a2622'); aro.addColorStop(0.8, '#4a423a'); aro.addColorStop(1, '#1a1612');
+      c.fillStyle = aro; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 5, 0, Math.PI * 2); c.fill();
     }
     // el paño: verde oscuro parejo, con una textura fina de fieltro y apenas mas oscuro en los bordes
     c.save();
@@ -170,17 +176,15 @@
         seg.push([m - QM, yb, m - QM + BY + 8, sub], [m + QM, yb, m + QM - BY - 8, sub]);
       }
       c.lineCap = 'round';
-      for (const [x1, y1, x2, y2] of seg) {
-        c.strokeStyle = '#b88a5c'; c.lineWidth = 5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
-        c.strokeStyle = '#f3c99a'; c.lineWidth = 3; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
-      }
+      for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
     }
     // las troneras: negras, con un borde apenas mas claro y la sombra adentro
     for (const p of POCKETS) {
-      const g = c.createRadialGradient(p.x - 5, p.y - 5, 2, p.x, p.y, POCKET_R);
-      g.addColorStop(0, '#000'); g.addColorStop(0.7, '#030303'); g.addColorStop(1, '#202020');
+      const g = c.createRadialGradient(p.x + 4, p.y + 4, 2, p.x, p.y, POCKET_R);
+      g.addColorStop(0, '#000'); g.addColorStop(0.75, '#020202'); g.addColorStop(1, '#151515');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1.2; c.beginPath(); c.arc(p.x, p.y, POCKET_R - 1, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
     }
     // la linea de cabecera: fina, amarillo verdosa
     c.strokeStyle = 'rgba(200,210,60,0.7)'; c.lineWidth = 1;
