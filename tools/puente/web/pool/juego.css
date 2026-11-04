@@ -104,13 +104,3 @@
 /* La sala: la portada arriba, como el Truco y GlobalSiege */
 .puente-jg .pl-hero.jg-con-banner { background: #0c2416; }
 .puente-jg .pl-hero .jg-hero-s { color: #e9d9a6; }
-/* Detras de la mesa, el mismo fondo de la portada (web/pool/tapa.jpg): paño verde muy oscuro con rombos apenas marcados */
-.puente-jg .pl-mesa {
-  padding: 16px; border-radius: 10px;
-  background:
-    radial-gradient(ellipse at 50% 40%, rgba(60,140,80,0.18), rgba(0,0,0,0.5) 75%),
-    repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 34px),
-    repeating-linear-gradient(-45deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 34px),
-    #0c2416;
-}
-@media (max-width: 640px) { .puente-jg .pl-mesa { padding: 6px; } }
