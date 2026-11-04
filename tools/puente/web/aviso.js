@@ -6915,7 +6915,16 @@ document.addEventListener('pointerdown', (ev) => {
     const account = document.querySelector('[data-haven-region="account"]');
     if (!app || !account) { if (++tries < 120) setTimeout(wait, 500); return; }
     account.addEventListener('click', (e) => {
-      if (!pc() || !(e.target instanceof Element) || !e.target.closest('.user-names, .puente-account-avatar')) return;
+      if (!(e.target instanceof Element) || !e.target.closest('.user-names, .puente-account-avatar')) return;
+      // En el celular: tu perfil (con Tu historia, tus medallas, Editar perfil e Invitar gente), como dice la bienvenida
+      if (!pc()) {
+        const id = app.user && app.user.id;
+        if (!id || !app.socket) return;
+        e.stopPropagation();
+        app._isHoverPopup = false; app._hoverTarget = null; app._profilePopupAnchor = account.querySelector('.puente-account-avatar') || account;
+        app.socket.emit('get-user-profile', { userId: id });
+        return;
+      }
       e.stopPropagation();
       if (document.getElementById('puente-yo')) close(); else open(app, account);
     });
