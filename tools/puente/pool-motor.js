@@ -6,8 +6,9 @@
 // Pool League 001 y 002; cada pixel del video son 2,332 unidades de aca):
 //  - La mesa: 900 x 391 entre los centros de las troneras (385,9 x 167,5 px). Las bolas, radio 16
 //    (7 px). El agujero de las troneras, radio 25 (10,6 px); las del medio, 22 mas afuera.
-//  - Las bandas estan metidas hacia adentro de la linea de las troneras: 21 en las cortas y 12 en
-//    las largas, cortadas cerca de cada tronera (la boca). Las puntas de la boca tambien rebotan.
+//  - Las bandas (medidas en una captura del Yahoo en alta: 12 px de 1123 y 13 px de 539) estan 10 adentro
+//    de la linea de las troneras, en los cuatro lados, y son rectas hasta el agujero: en las esquinas terminan
+//    donde las corta el agujero (radio 25) y en las del medio a 26 del centro. Donde terminan, la punta rebota.
 //  - Rodando, la bola frena casi parejo: ROCE + ROCE_V * velocidad (ajustado a 9 rodadas limpias:
 //    error medio de 9 unidades). Justo despues de un golpe patina y queda con 5/7 de la velocidad
 //    (como el pool de verdad; en el video los tiros fuertes pierden un 30-45% enseguida).
@@ -25,8 +26,8 @@ const R = 16, D = R * 2, POCKET_R = 25;
 // en las del medio a menos de 33 (asi entra la que viene pegada a la banda, como en el video)
 const CAE_ESQ = 42, CAE_MEDIO = 33;
 const MEDIO_AFUERA = 22;           // las troneras del medio, mas afuera que la linea de las esquinas
-const BX = 21, BY = 12;            // cuanto entran las bandas (cortas y largas)
-const BOCA = 75, BOCA_M = 31;      // la boca: en las esquinas, a menos de BOCA del centro no hay banda (cortadas en diagonal); en las del medio, a menos de BOCA_M
+const BX = 10, BY = 10;            // cuanto entran las bandas (cortas y largas)
+const BOCA = POCKET_R, BOCA_M = 26; // la boca: en las esquinas la banda llega hasta el agujero (a BOCA del centro); en las del medio, hasta BOCA_M del centro
 const MAX_POWER = 8000;
 const CURVA = 2.7;
 const ROCE = 80;                   // frenado rodando (unidades/s²)
@@ -48,6 +49,9 @@ const POCKETS = [
 ];
 // donde puede estar el centro de una bola sobre el paño (contra las bandas)
 const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY - R;
+// adonde apunta la compu en cada tronera: en las esquinas al rincon del paño (por ahi entra la bola, entre las dos
+// bandas), en las del medio al centro del agujero
+const BOCAS = POCKETS.map((p, i) => (i === 1 || i === 4 ? p : { x: p.x < TL + TW / 2 ? XMIN : XMAX, y: p.y < TT + TH / 2 ? YMIN : YMAX }));
 // las puntas de las bandas en cada boca (rebotan como un punto)
 const PUNTAS = [];
 const ESQ = [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]];
@@ -55,21 +59,13 @@ for (const [px, py, sx, sy] of ESQ) {
   PUNTAS.push({ x: px + sx * BX, y: py + sy * Math.sqrt(BOCA * BOCA - BX * BX) }, { x: px + sx * Math.sqrt(BOCA * BOCA - BY * BY), y: py + sy * BY });
 }
 for (const [py, sy] of [[TT, 1], [TB, -1]]) PUNTAS.push({ x: TL + TW / 2 - BOCA_M, y: py + sy * BY }, { x: TL + TW / 2 + BOCA_M, y: py + sy * BY });
-// las quijadas: de cada punta al borde del agujero, apuntando al centro de la tronera. Cierran la boca como un
-// embudo: la bola que entra cae o rebota, nunca puede quedar parada fuera del paño (sobre la banda)
-const QUIJADAS = [];
-for (const [i, t] of PUNTAS.entries()) {
-  const p = i < 8 ? POCKETS[[0, 0, 2, 2, 3, 3, 5, 5][i]] : POCKETS[i < 10 ? 1 : 4];
-  const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
-  let ux = dx / d, uy = dy / d;
-  if (i < 8) { const a = 45 * Math.PI / 180, sx = Math.sign(p.x - 500) * -1, sy = Math.sign(p.y - 250) * -1, larga = i % 2 === 1;
-    ux = larga ? sx * Math.cos(a) : -sx * Math.sin(a); uy = larga ? -sy * Math.sin(a) : sy * Math.cos(a); }
-  QUIJADAS.push({ x1: t.x, y1: t.y, x2: p.x + ux * (POCKET_R - 2), y2: p.y + uy * (POCKET_R - 2) });
-}
+// sin quijadas (como el Yahoo): las bandas son rectas y solo rebotan sus puntas (segmentos de largo 0)
+const QUIJADAS = PUNTAS.map(t => ({ x1: t.x, y1: t.y, x2: t.x, y2: t.y }));
 // en la boca no hay banda recta: la bola puede pasar la linea (entre las quijadas) y caer
-const enEsquina = (x, y) => ESQ.some(([px, py]) => (x - px) ** 2 + (y - py) ** 2 < BOCA * BOCA);
-const enBocaLado = (x, y) => enEsquina(x, y);                                                   // bandas cortas
-const enBocaLargo = (x, y) => enEsquina(x, y) || Math.abs(x - (TL + TW / 2)) < BOCA_M;           // bandas largas
+// (la banda corta llega hasta FIN_X de la linea de las troneras y la larga hasta FIN_Y: ahi las corta el agujero)
+const FIN_X = Math.sqrt(BOCA * BOCA - BX * BX), FIN_Y = Math.sqrt(BOCA * BOCA - BY * BY);
+const enBocaLado = (x, y) => y < TT + FIN_X || y > TB - FIN_X;                                                   // bandas cortas
+const enBocaLargo = (x, y) => x < TL + FIN_Y || x > TR - FIN_Y || Math.abs(x - (TL + TW / 2)) < BOCA_M;          // bandas largas
 
 // ── La mesa ──
 function rack() {
@@ -147,7 +143,7 @@ function simular(bolas, tiro, grabar) {
     // las quijadas (con sus puntas): el punto del segmento mas cercano a la bola
     for (const q of QUIJADAS) {
       const sx = q.x2 - q.x1, sy = q.y2 - q.y1, l2 = sx * sx + sy * sy;
-      const t = Math.max(0, Math.min(1, ((b.x - q.x1) * sx + (b.y - q.y1) * sy) / l2));
+      const t = l2 ? Math.max(0, Math.min(1, ((b.x - q.x1) * sx + (b.y - q.y1) * sy) / l2)) : 0;
       const cx = q.x1 + sx * t, cy = q.y1 + sy * t, dx = b.x - cx, dy = b.y - cy, d2 = dx * dx + dy * dy;
       if (d2 >= R * R || d2 === 0) continue;
       const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, vn = b.vx * nx + b.vy * ny;
@@ -203,7 +199,9 @@ function simular(bolas, tiro, grabar) {
         if (!b.on) continue;
         for (const [pi, p] of POCKETS.entries()) {
           const cae = pi === 1 || pi === 4 ? CAE_MEDIO : CAE_ESQ;
-          if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < cae * cae) {
+          // en las del medio tambien cae la que paso la linea de la banda por la boca y ya esta sobre el borde del agujero
+          const enBoca = (pi === 1 && b.y < YMIN - 8 || pi === 4 && b.y > YMAX + 8) && Math.abs(b.x - p.x) < BOCA_M;
+          if (enBoca || (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < cae * cae) {
             b.on = false; b.vx = 0; b.vy = 0;
             if (b.n === 0) out.blanca = true; else out.metidas.push(b.n);
             sonido('tronera', 1);
@@ -302,7 +300,7 @@ function compu(S, nivel, rnd = Math.random) {
   // Con bola en mano: prueba poner la blanca detras de cada bola, en linea con una tronera
   const lugares = [{ x: c.x, y: c.y }];
   if (S.enMano) {
-    for (const o of objetivos.slice(0, 6)) for (const p of POCKETS) {
+    for (const o of objetivos.slice(0, 6)) for (const p of BOCAS) {
       const ux = o.x - p.x, uy = o.y - p.y, u = Math.hypot(ux, uy) || 1;
       const x = o.x + ux / u * 120, y = o.y + uy / u * 120;
       if (sePuedePoner(S, x, y)) lugares.push({ x, y });
@@ -310,7 +308,7 @@ function compu(S, nivel, rnd = Math.random) {
   }
   const tiros = [];
   for (const L of lugares.slice(0, 8)) {
-    for (const o of objetivos) for (const p of POCKETS) {
+    for (const o of objetivos) for (const p of BOCAS) {
       // la "bola fantasma": donde tiene que estar la blanca al pegarle para mandarla a la tronera
       const ux = p.x - o.x, uy = p.y - o.y, u = Math.hypot(ux, uy) || 1;
       const gx = o.x - ux / u * D, gy = o.y - uy / u * D; // (D: dos radios)

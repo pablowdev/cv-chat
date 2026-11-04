@@ -16,7 +16,7 @@
   // ── La mesa (las mismas medidas que pool-motor.js: las del Yahoo, medidas en los videos) ──
   const W = 1000, H = 500, TL = 50, TR = 950, TT = 54.5, TB = 445.5, TW = TR - TL, TH = TB - TT;
   const R = 16, D = R * 2, POCKET_R = 25, HEAD_X = TL + TW / 4;
-  const MEDIO_AFUERA = 22, BX = 21, BY = 12, BOCA = 75, BOCA_M = 31;
+  const MEDIO_AFUERA = 22, BX = 10, BY = 10, BOCA = POCKET_R, BOCA_M = 26;
   const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY - R;
   const POCKETS = [{ x: TL, y: TT }, { x: TL + TW / 2, y: TT - MEDIO_AFUERA }, { x: TR, y: TT }, { x: TL, y: TB }, { x: TL + TW / 2, y: TB + MEDIO_AFUERA }, { x: TR, y: TB }];
   const COLOR = {
@@ -35,46 +35,20 @@
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
   let fondoMesa = null;
-  // El paño y las bandas con las mismas quijadas que la fisica (pool-motor.js): cada banda llega hasta su punta
-  // (a BOCA del centro de la tronera de esquina, a BOCA_M del de las del medio) y de ahi la quijada baja al borde
-  // del agujero (en las esquinas, girada 45° hacia la madera). Asi lo verde es justo donde la bola rebota.
-  // d: cuanto se corre el contorno hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda)
-  const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS, CH_ = 8;
-  const QUIJ = (() => {
-    const out = { esq: [], medio: [] };
-    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX), a = Math.PI / 4, rr = POCKET_R - 2;
-    for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TR, TB, -1, -1], [TL, TB, 1, -1]]) {
-      out.esq.push({ px, py, sx, sy,
-        larga: { tx: px + sx * cx, ty: py + sy * BY, ex: px + sx * Math.cos(a) * rr, ey: py - sy * Math.sin(a) * rr },
-        corta: { tx: px + sx * BX, ty: py + sy * cy, ex: px - sx * Math.sin(a) * rr, ey: py + sy * Math.cos(a) * rr } });
-    }
-    for (const [py, sy] of [[TT - MEDIO_AFUERA, 1], [TB + MEDIO_AFUERA, -1]]) {
-      const m = TL + TW / 2, yb = sy > 0 ? TT + BY : TB - BY;
-      const q = (tx) => { const dx = tx - m, dy = yb - py, d = Math.hypot(dx, dy); return { tx, ty: yb, ex: m + dx / d * rr, ey: py + dy / d * rr }; };
-      out.medio.push({ sy, izq: q(m - BOCA_M), der: q(m + BOCA_M) });
-    }
-    return out;
-  })();
-  // la punta corrida d hacia la madera, siguiendo la linea de la quijada
-  const corrida = (q, d, eje, signo) => {
-    if (!d) return [q.tx, q.ty];
-    if (eje === 'y') { const y = q.ty - signo * d, t = (y - q.ty) / (q.ey - q.ty); return [q.tx + (q.ex - q.tx) * t, y]; }
-    const x = q.tx - signo * d, t = (x - q.tx) / (q.ex - q.tx); return [x, q.ty + (q.ey - q.ty) * t];
-  };
+  // El paño y las bandas igual que la fisica (pool-motor.js), como el Yahoo: las bandas son rectas hasta el agujero
+  // (en las esquinas las corta el agujero) y en las del medio se cortan a BOCA_M del centro, con un bisel corto hasta
+  // el agujero. d: cuanto se corre el contorno hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda)
+  const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS;
+  // el bisel de las del medio: de la punta (a BOCA_M, sobre la banda) al borde del agujero
+  const BISEL = { x0: BOCA_M, y0: BY + MEDIO_AFUERA, x1: POCKET_R - 2, y1: 0 };
+  const bisel = (d) => { const y = BISEL.y0 - d, t = (BISEL.y0 - y) / (BISEL.y0 - BISEL.y1); return BISEL.x0 + (BISEL.x1 - BISEL.x0) * t; };
   function contornoPano(c, afuera) {
     const d = afuera === true ? BANDA_VIS : afuera || 0;
-    const pts = [];
-    const [tl, tr, br, bl] = QUIJ.esq, [mt, mb] = QUIJ.medio;
-    const larga = (e) => corrida(e.larga, d, 'y', e.sy), corta = (e) => corrida(e.corta, d, 'x', e.sx);
-    // arriba a la izquierda (llega por la banda corta y sale por la larga), el medio de arriba, arriba a la derecha...
-    pts.push(corta(tl), [tl.corta.ex, tl.corta.ey], [tl.larga.ex, tl.larga.ey], larga(tl));
-    pts.push(corrida(mt.izq, d, 'y', 1), [mt.izq.ex, mt.izq.ey], [mt.der.ex, mt.der.ey], corrida(mt.der, d, 'y', 1));
-    pts.push(larga(tr), [tr.larga.ex, tr.larga.ey], [tr.corta.ex, tr.corta.ey], corta(tr));
-    pts.push(corta(br), [br.corta.ex, br.corta.ey], [br.larga.ex, br.larga.ey], larga(br));
-    pts.push(corrida(mb.der, d, 'y', -1), [mb.der.ex, mb.der.ey], [mb.izq.ex, mb.izq.ey], corrida(mb.izq, d, 'y', -1));
-    pts.push(larga(bl), [bl.larga.ex, bl.larga.ey], [bl.corta.ex, bl.corta.ey], corta(bl));
+    const x0 = TL + BX - d, x1 = TR - BX + d, y0 = TT + BY - d, y1 = TB - BY + d, m = TL + TW / 2, a = bisel(d);
+    const mt = TT - MEDIO_AFUERA, mb = TB + MEDIO_AFUERA, h = BISEL.x1;
     c.beginPath();
-    pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+    c.moveTo(x0, y0); c.lineTo(m - a, y0); c.lineTo(m - h, mt); c.lineTo(m + h, mt); c.lineTo(m + a, y0); c.lineTo(x1, y0);
+    c.lineTo(x1, y1); c.lineTo(m + a, y1); c.lineTo(m + h, mb); c.lineTo(m - h, mb); c.lineTo(m - a, y1); c.lineTo(x0, y1);
     c.closePath();
   }
   function pintarMesa(c) {
@@ -186,11 +160,11 @@
     // el filo de las bandas
     contornoPano(c);
     c.lineJoin = 'round'; c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
-    // el filo de cada quijada, de la punta al agujero
+    // el filo del bisel de las del medio, de la punta al agujero
     {
       const seg = [];
-      for (const e of QUIJ.esq) for (const q of [e.larga, e.corta]) seg.push([q.tx, q.ty, q.ex, q.ey]);
-      for (const e of QUIJ.medio) for (const q of [e.izq, e.der]) seg.push([q.tx, q.ty, q.ex, q.ey]);
+      const m = TL + TW / 2;
+      for (const [yb, yp] of [[TT + BY, TT - MEDIO_AFUERA], [TB - BY, TB + MEDIO_AFUERA]]) for (const s of [-1, 1]) seg.push([m + s * BOCA_M, yb, m + s * BISEL.x1, yp]);
       c.lineCap = 'round';
       for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
@@ -792,7 +766,8 @@
     const mio = puedoTirar();
     // bola en mano: la zona de la cabecera y un aro alrededor de la blanca
     if (s.estado === 'jugando' && s.enMano && !M.anim && cue) {
-      if (s.cabecera) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); }
+      // (sin pintar encima de las troneras)
+      if (s.cabecera) { c.save(); c.beginPath(); c.rect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); for (const p of POCKETS) { c.moveTo(p.x + POCKET_R + 1, p.y); c.arc(p.x, p.y, POCKET_R + 1, 0, Math.PI * 2); } c.clip('evenodd'); c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); c.restore(); }
       c.save(); c.setLineDash([2, 3]); c.strokeStyle = M.valido ? '#e8e050' : '#ff5050'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(cue.x, cue.y, R + 4, 0, Math.PI * 2); c.stroke(); c.restore();
     }
