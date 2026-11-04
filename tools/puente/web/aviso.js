@@ -10469,8 +10469,9 @@ document.addEventListener('pointerdown', (ev) => {
     if (last && !s.tanto) st.appendChild(el('div', 'jg-ultimo', last));
     if (s.tantoVer) st.appendChild(el('div', 'jg-ultimo', 'Pidieron ver el tanto: las cartas se muestran al final de la mano.'));
     if (s.deadline) { const r = el('div', 'jg-reloj' + ((s.turno === 'yo' && !(s.pendiente && s.pendiente.de === 'yo')) ? ' mio' : '')); r.appendChild(el('span')); r.appendChild(el('span', 'jg-reloj-t')); st.appendChild(r); }
+    // (tu globo va encima del estado, sin correr nada: la mesa no tiene que saltar)
+    if (s.grito && s.grito.mio) st.appendChild(el('div', 'jg-globo mio', s.grito.text));
     b.appendChild(st);
-    if (s.grito && s.grito.mio) b.appendChild(el('div', 'jg-globo mio', s.grito.text));
     // Tus cartas
     const canPlay = (s.acciones || []).includes('jugar');
     const hand = el('div', 'jg-mano' + (canPlay ? ' juega' : ''));
@@ -10482,7 +10483,7 @@ document.addEventListener('pointerdown', (ev) => {
     });
     b.appendChild(hand);
     if (s.baza === 0 && s.miEnvido != null) b.appendChild(el('div', 'jg-envido', `Tu envido: ${s.miEnvido}${s.mano ? ' · sos mano' : ''}`));
-    else if (s.mano) b.appendChild(el('div', 'jg-envido', 'Sos mano'));
+    else b.appendChild(el('div', 'jg-envido', s.mano ? 'Sos mano' : '\u00a0')); // (siempre la linea, asi no se mueve lo de abajo)
     // Los cantos de ahora
     const acts = el('div', 'jg-cantos');
     if ((s.acciones || []).includes('tanto')) {
@@ -12556,12 +12557,15 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   }
   let badgeT = null;
   function refreshBadge() {
-    clearTimeout(badgeT);
+    // como mucho una vez cada 2 segundos: cada vez son 5 pedidos y el chat corta si llegan mas de 60 en 10 segundos
+    // (jugando rapido, cada jugada pedia de nuevo y aparecia el cartel de demasiados pedidos)
+    if (badgeT) return;
     badgeT = setTimeout(async () => {
+      badgeT = null;
       const [d, f, aj, gs, po] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio')]);
       const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length) + (gs.error || !gs.mias ? 0 : gs.mias.filter(m => m.teToca).length) + (po.error || !po.mias ? 0 : po.mias.filter(m => m.teToca).length);
       setBadge(n);
-    }, 400);
+    }, 2000);
   }
   function addButtons() {
     const mk = (cls) => {
