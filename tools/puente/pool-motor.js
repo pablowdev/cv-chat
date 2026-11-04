@@ -21,9 +21,9 @@ const W = 1000, H = 500;
 const TL = 50, TR = 950, TT = 54.5, TB = 445.5;
 const TW = TR - TL, TH = TB - TT;
 const R = 16, D = R * 2, POCKET_R = 25;
-// la bola cae cuando su centro entra en la boca: en las esquinas a menos de 38 del centro de la tronera,
+// la bola cae cuando su centro entra en la boca: en las esquinas a menos de 42 del centro de la tronera,
 // en las del medio a menos de 33 (asi entra la que viene pegada a la banda, como en el video)
-const CAE_ESQ = 38, CAE_MEDIO = 33;
+const CAE_ESQ = 42, CAE_MEDIO = 33;
 const MEDIO_AFUERA = 22;           // las troneras del medio, mas afuera que la linea de las esquinas
 const BX = 21, BY = 12;            // cuanto entran las bandas (cortas y largas)
 const BOCA = 75, BOCA_M = 31;      // la boca: en las esquinas, a menos de BOCA del centro no hay banda (cortadas en diagonal); en las del medio, a menos de BOCA_M
@@ -55,7 +55,18 @@ for (const [px, py, sx, sy] of ESQ) {
   PUNTAS.push({ x: px + sx * BX, y: py + sy * Math.sqrt(BOCA * BOCA - BX * BX) }, { x: px + sx * Math.sqrt(BOCA * BOCA - BY * BY), y: py + sy * BY });
 }
 for (const [py, sy] of [[TT, 1], [TB, -1]]) PUNTAS.push({ x: TL + TW / 2 - BOCA_M, y: py + sy * BY }, { x: TL + TW / 2 + BOCA_M, y: py + sy * BY });
-// en la boca no hay banda: la bola puede pasar la linea y caer
+// las quijadas: de cada punta al borde del agujero, apuntando al centro de la tronera. Cierran la boca como un
+// embudo: la bola que entra cae o rebota, nunca puede quedar parada fuera del paño (sobre la banda)
+const QUIJADAS = [];
+for (const [i, t] of PUNTAS.entries()) {
+  const p = i < 8 ? POCKETS[[0, 0, 2, 2, 3, 3, 5, 5][i]] : POCKETS[i < 10 ? 1 : 4];
+  const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
+  let ux = dx / d, uy = dy / d;
+  if (i < 8) { const a = 45 * Math.PI / 180, sx = Math.sign(p.x - 500) * -1, sy = Math.sign(p.y - 250) * -1, larga = i % 2 === 1;
+    ux = larga ? sx * Math.cos(a) : -sx * Math.sin(a); uy = larga ? -sy * Math.sin(a) : sy * Math.cos(a); }
+  QUIJADAS.push({ x1: t.x, y1: t.y, x2: p.x + ux * (POCKET_R - 2), y2: p.y + uy * (POCKET_R - 2) });
+}
+// en la boca no hay banda recta: la bola puede pasar la linea (entre las quijadas) y caer
 const enEsquina = (x, y) => ESQ.some(([px, py]) => (x - px) ** 2 + (y - py) ** 2 < BOCA * BOCA);
 const enBocaLado = (x, y) => enEsquina(x, y);                                                   // bandas cortas
 const enBocaLargo = (x, y) => enEsquina(x, y) || Math.abs(x - (TL + TW / 2)) < BOCA_M;           // bandas largas
@@ -133,12 +144,14 @@ function simular(bolas, tiro, grabar) {
       if (b.y < YMIN && b.vy < 0) { const v = -b.vy; b.y = YMIN; b.vy = v * BANDA; b.vx *= BANDA; rebote(b, v); }
       else if (b.y > YMAX && b.vy > 0) { const v = b.vy; b.y = YMAX; b.vy = -v * BANDA; b.vx *= BANDA; rebote(b, v); }
     }
-    // las puntas de las bocas
-    for (const p of PUNTAS) {
-      const dx = b.x - p.x, dy = b.y - p.y, d2 = dx * dx + dy * dy;
+    // las quijadas (con sus puntas): el punto del segmento mas cercano a la bola
+    for (const q of QUIJADAS) {
+      const sx = q.x2 - q.x1, sy = q.y2 - q.y1, l2 = sx * sx + sy * sy;
+      const t = Math.max(0, Math.min(1, ((b.x - q.x1) * sx + (b.y - q.y1) * sy) / l2));
+      const cx = q.x1 + sx * t, cy = q.y1 + sy * t, dx = b.x - cx, dy = b.y - cy, d2 = dx * dx + dy * dy;
       if (d2 >= R * R || d2 === 0) continue;
       const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, vn = b.vx * nx + b.vy * ny;
-      b.x = p.x + nx * R; b.y = p.y + ny * R;
+      b.x = cx + nx * R; b.y = cy + ny * R;
       if (vn < 0) { b.vx -= (1 + BANDA) * vn * nx; b.vy -= (1 + BANDA) * vn * ny; b.vx *= 0.85; b.vy *= 0.85; rebote(b, -vn); }
     }
     // por las dudas: nunca fuera de la mesa (la boca termina en el agujero)
@@ -333,4 +346,4 @@ function compu(S, nivel, rnd = Math.random) {
   return { ang: mejor.ang + (rnd() * 2 - 1) * err, fuerza: mejor.fuerza, efecto: { x: 0, y: 0 }, blanca: S.enMano ? { x: mejor.L.x, y: mejor.L.y } : null };
 }
 
-module.exports = { W, H, TL, TR, TT, TB, R, POCKET_R, POCKETS, HEAD_X, BX, BY, BOCA, BOCA_M, MEDIO_AFUERA, XMIN, XMAX, YMIN, YMAX, PUNTAS, nueva, tirar, compu, sePuedePoner, enGrupo, limpio, simular, aplicar };
+module.exports = { W, H, TL, TR, TT, TB, R, POCKET_R, POCKETS, HEAD_X, BX, BY, BOCA, BOCA_M, MEDIO_AFUERA, XMIN, XMAX, YMIN, YMAX, PUNTAS, QUIJADAS, nueva, tirar, compu, sePuedePoner, enGrupo, limpio, simular, aplicar };

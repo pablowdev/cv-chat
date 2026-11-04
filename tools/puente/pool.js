@@ -240,7 +240,9 @@ function arm(g) {
   if (g.estado !== 'jugando') return;
   if (g.jugadores[g.S.turno] !== BOT) return;
   // la compu espera a que termine de verse el tiro anterior, y piensa un poco
-  const espera = (g.ultima ? (g.ultima.frames.length / 30) * 1000 : 0) + 1500 + rng(1200);
+  // (si el tiro fue de la compu, la persona lo ve mas despacio: a 0.6, como VEL_RIVAL en web/pool/juego.js)
+  const vel = g.ultima && g.jugadores[g.ultima.quien] === BOT ? 0.6 : 1;
+  const espera = (g.ultima ? (g.ultima.frames.length / 30) * 1000 / vel + 500 / vel - 500 : 0) + 1500 + rng(1200);
   timers.set(g.id, setTimeout(() => botMove(g), espera));
 }
 

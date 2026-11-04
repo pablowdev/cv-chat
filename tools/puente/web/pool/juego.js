@@ -35,29 +35,44 @@
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
   let fondoMesa = null;
-  // El paño y las bandas, como en una mesa de verdad: cada banda corre derecho hasta cerca de la tronera y
-  // termina en una quijada a 45° que apunta al agujero; el paño entra derecho en la tronera.
-  // afuera = false: el borde del paño (la linea de las bandas); afuera = true: el borde de las bandas contra la madera.
-  // (La fisica no cambia: en la boca no hay banda, la quijada es solo el dibujo)
+  // El paño y las bandas con las mismas quijadas que la fisica (pool-motor.js): cada banda llega hasta su punta
+  // (a BOCA del centro de la tronera de esquina, a BOCA_M del de las del medio) y de ahi la quijada baja al borde
+  // del agujero (en las esquinas, girada 45° hacia la madera). Asi lo verde es justo donde la bola rebota.
+  // d: cuanto se corre el contorno hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda)
   const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS, CH_ = 8;
-  const QE = 34, QM = 36; // donde empieza la quijada: en las esquinas, a QE del centro de la tronera; en las del medio, a QM
+  const QUIJ = (() => {
+    const out = { esq: [], medio: [] };
+    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX), a = Math.PI / 4, rr = POCKET_R - 2;
+    for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TR, TB, -1, -1], [TL, TB, 1, -1]]) {
+      out.esq.push({ px, py, sx, sy,
+        larga: { tx: px + sx * cx, ty: py + sy * BY, ex: px + sx * Math.cos(a) * rr, ey: py - sy * Math.sin(a) * rr },
+        corta: { tx: px + sx * BX, ty: py + sy * cy, ex: px - sx * Math.sin(a) * rr, ey: py + sy * Math.cos(a) * rr } });
+    }
+    for (const [py, sy] of [[TT - MEDIO_AFUERA, 1], [TB + MEDIO_AFUERA, -1]]) {
+      const m = TL + TW / 2, yb = sy > 0 ? TT + BY : TB - BY;
+      const q = (tx) => { const dx = tx - m, dy = yb - py, d = Math.hypot(dx, dy); return { tx, ty: yb, ex: m + dx / d * rr, ey: py + dy / d * rr }; };
+      out.medio.push({ sy, izq: q(m - BOCA_M), der: q(m + BOCA_M) });
+    }
+    return out;
+  })();
+  // la punta corrida d hacia la madera, siguiendo la linea de la quijada
+  const corrida = (q, d, eje, signo) => {
+    if (!d) return [q.tx, q.ty];
+    if (eje === 'y') { const y = q.ty - signo * d, t = (y - q.ty) / (q.ey - q.ty); return [q.tx + (q.ex - q.tx) * t, y]; }
+    const x = q.tx - signo * d, t = (x - q.tx) / (q.ex - q.tx); return [x, q.ty + (q.ey - q.ty) * t];
+  };
   function contornoPano(c, afuera) {
     const d = afuera === true ? BANDA_VIS : afuera || 0;
-    const m = TL + TW / 2, ox = d, oy = d; // corrido d hacia la madera
     const pts = [];
-    const esq = (px, py, sx, sy, primero) => {
-      // la quijada de la banda larga y la de la corta, de la linea de las bandas hasta dentro del agujero
-      const larga = [[px + sx * (QE - oy), py + sy * (BY - oy)], [px + sx * (QE - BY), py]];
-      const corta = [[px, py + sy * (QE - BX)], [px + sx * (BX - ox), py + sy * (QE - ox)]];
-      pts.push(...(primero ? larga : corta.slice().reverse()), ...(primero ? corta : larga.slice().reverse()));
-    };
-    const medio = (py, sy, ida) => {
-      const yb = py + sy * (MEDIO_AFUERA + BY - oy), sub = py + sy * (MEDIO_AFUERA - 8);
-      const a = [[m - QM + oy, yb], [m - QM + oy + (BY + 8), sub]], b = [[m + QM - oy - (BY + 8), sub], [m + QM - oy, yb]];
-      pts.push(...(ida ? [...a, ...b] : [...b.slice().reverse(), ...a.slice().reverse()]));
-    };
-    esq(TL, TT, 1, 1, false); medio(TT - MEDIO_AFUERA, 1, true); esq(TR, TT, -1, 1, true);
-    esq(TR, TB, -1, -1, false); medio(TB + MEDIO_AFUERA, -1, false); esq(TL, TB, 1, -1, true);
+    const [tl, tr, br, bl] = QUIJ.esq, [mt, mb] = QUIJ.medio;
+    const larga = (e) => corrida(e.larga, d, 'y', e.sy), corta = (e) => corrida(e.corta, d, 'x', e.sx);
+    // arriba a la izquierda (llega por la banda corta y sale por la larga), el medio de arriba, arriba a la derecha...
+    pts.push(corta(tl), [tl.corta.ex, tl.corta.ey], [tl.larga.ex, tl.larga.ey], larga(tl));
+    pts.push(corrida(mt.izq, d, 'y', 1), [mt.izq.ex, mt.izq.ey], [mt.der.ex, mt.der.ey], corrida(mt.der, d, 'y', 1));
+    pts.push(larga(tr), [tr.larga.ex, tr.larga.ey], [tr.corta.ex, tr.corta.ey], corta(tr));
+    pts.push(corta(br), [br.corta.ex, br.corta.ey], [br.larga.ex, br.larga.ey], larga(br));
+    pts.push(corrida(mb.der, d, 'y', -1), [mb.der.ex, mb.der.ey], [mb.izq.ex, mb.izq.ey], corrida(mb.izq, d, 'y', -1));
+    pts.push(larga(bl), [bl.larga.ex, bl.larga.ey], [bl.corta.ex, bl.corta.ey], corta(bl));
     c.beginPath();
     pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
     c.closePath();
@@ -171,16 +186,11 @@
     // el filo de las bandas
     contornoPano(c);
     c.lineJoin = 'round'; c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
-    // el filo claro de cada quijada, del paño al agujero
+    // el filo de cada quijada, de la punta al agujero
     {
-      const m = TL + TW / 2, seg = [];
-      for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
-        seg.push([px + sx * QE, py + sy * BY, px + sx * (QE - BY), py], [px + sx * BX, py + sy * QE, px, py + sy * (QE - BX)]);
-      }
-      for (const [py, sy] of [[TT - MEDIO_AFUERA, 1], [TB + MEDIO_AFUERA, -1]]) {
-        const yb = py + sy * (MEDIO_AFUERA + BY), sub = py + sy * (MEDIO_AFUERA - 8);
-        seg.push([m - QM, yb, m - QM + BY + 8, sub], [m + QM, yb, m + QM - BY - 8, sub]);
-      }
+      const seg = [];
+      for (const e of QUIJ.esq) for (const q of [e.larga, e.corta]) seg.push([q.tx, q.ty, q.ex, q.ey]);
+      for (const e of QUIJ.medio) for (const q of [e.izq, e.der]) seg.push([q.tx, q.ty, q.ex, q.ey]);
       c.lineCap = 'round';
       for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
@@ -607,7 +617,8 @@
     // El tiro nuevo: se ve el recorrido (la primera vez que se abre la mesa, no: queda como esta)
     const nuevo = s.ultima && M.visto !== undefined && s.ultima.n !== M.visto;
     if (M.visto === undefined) M.visto = s.ultima ? s.ultima.n : 0;
-    if (nuevo) { M.visto = s.ultima.n; reproducir(s); }
+    // si todavia se esta viendo el tiro anterior, este espera su turno (se ven todos, en orden)
+    if (nuevo) { M.visto = s.ultima.n; if (M.anim) (M.cola = M.cola || []).push(s); else reproducir(s); }
     else if (!M.anim) M.bolas = bolasDe(s);
     if (s.estado === 'jugando' && s.teToca && (!antes || !antes.teToca)) { M.fuerza = 0; M.enviando = false; }
     if (antes && antes.estado === 'esperando' && s.estado === 'jugando' && s.teToca) audio.play('campana');
@@ -617,7 +628,9 @@
     if (A.chat) A.chat(M.chatBox, s, (texto) => A.emit('pool:accion', { id: s.id, tipo: 'chat', texto }));
   }
 
-  // El recorrido del ultimo tiro, cuadro por cuadro (30 por segundo), con sus sonidos
+  // El recorrido del ultimo tiro, cuadro por cuadro (30 por segundo), con sus sonidos. Los tiros del rival se
+  // ven mas despacio (VEL_RIVAL), para poder seguirlos; los propios, a velocidad real.
+  const VEL_RIVAL = 0.6;
   function reproducir(s) {
     const u = s.ultima;
     const base = u.desde.map(b => ({ ...b }));
@@ -625,7 +638,7 @@
     const fin = u.frames[u.frames.length - 1] || [];
     const total = base.filter((b, j) => b.on && b.n !== 0 && fin[j * 2] < 0).length;
     const bj = s.bandeja || [];
-    M.anim = { s, u, base, t0: performance.now(), sonado: 0, metidas: 0, antes: bj.slice(0, Math.max(0, bj.length - total)), nuevas: bj.slice(Math.max(0, bj.length - total)) };
+    M.anim = { s, u, base, t0: performance.now(), vel: u.mio ? 1 : VEL_RIVAL, sonado: 0, metidas: 0, antes: bj.slice(0, Math.max(0, bj.length - total)), nuevas: bj.slice(Math.max(0, bj.length - total)) };
     bandeja(M.anim.antes);
     M.bolas = base;
     if (!u.mio) audio.play('taco', u.fuerza);
@@ -633,15 +646,16 @@
   function avanzarAnim() {
     const a = M.anim;
     if (!a) return;
-    const fr = a.u.frames, f = (performance.now() - a.t0) / 1000 * 30;
+    const fr = a.u.frames, f = (performance.now() - a.t0) / 1000 * 30 * a.vel;
     const i = Math.floor(f);
     // los sonidos hasta este cuadro
     while (a.sonado < a.u.sonidos.length && a.u.sonidos[a.sonado][0] <= i) { const [, tipo, k] = a.u.sonidos[a.sonado++]; if (tipo !== 'taco') audio.play(tipo, k); }
     if (i >= fr.length - 1) {
       // quietas: medio segundo con la mesa asi y recien ahi cambia el turno
-      if (!a.quietas) { a.quietas = performance.now(); M.bolas = bolasDe(M.s); return; }
-      if (performance.now() - a.quietas < 500) return;
+      if (!a.quietas) { a.quietas = performance.now(); M.bolas = bolasDe(a.s); return; }
+      if (performance.now() - a.quietas < 500 / a.vel) return;
       M.anim = null;
+      if (M.cola && M.cola.length) { reproducir(M.cola.shift()); return; }
       M.bolas = bolasDe(M.s);
       hud(); pie();
       if (M.s.estado === 'terminada') finDeJuego();
@@ -767,7 +781,7 @@
     const mio = puedoTirar();
     // bola en mano: la zona de la cabecera y un aro alrededor de la blanca
     if (s.estado === 'jugando' && s.enMano && !M.anim && cue) {
-      if (s.cabecera) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL, TT, TW / 4, TH); }
+      if (s.cabecera) { c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); }
       c.save(); c.setLineDash([2, 3]); c.strokeStyle = M.valido ? '#e8e050' : '#ff5050'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(cue.x, cue.y, R + 4, 0, Math.PI * 2); c.stroke(); c.restore();
     }
