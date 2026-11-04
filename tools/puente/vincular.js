@@ -1365,6 +1365,10 @@ function shareTags(html, url) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;
     image = `/puente/tapas/${q[1] || 'juegos'}.jpg`; grande = true;
     enlace = q[1] ? `/app?juegos=${q[1]}` : '/app?juegos';
+    // con algo mas (?juegos=pool&v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
+    const extra = new URL(String(url), 'http://x').searchParams;
+    const resto = [...extra].filter(([k, x]) => k !== 'juegos' && /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x));
+    if (resto.length) enlace += '&' + resto.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   }
   // Un canal o un mensaje de un canal que ve cualquiera con cuenta: un pedacito del chat (vistas.js)
   const chq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;
