@@ -116,6 +116,8 @@ body { font-family: var(--font-main); -webkit-font-smoothing: antialiased; }
    asi que se ven normales, como en Discord. */
 .channel-item.private-channel .channel-name,
 .channel-item.private-channel .channel-hash { font-style: normal; opacity: 1; font-size: inherit; }
+/* Los creados en CV Chat (como #bienvenida) no son privados: el mismo tamaño de letra que los demas */
+.channel-item:not(.private-channel) .channel-name { font-size: inherit; }
 
 /* Categorias de canales: texto chico en mayusculas, sin recuadro (los estilos
    en linea del renderer de Haven obligan a usar !important) */
