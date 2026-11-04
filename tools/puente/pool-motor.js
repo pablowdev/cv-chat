@@ -7,8 +7,10 @@
 //  - La mesa: 900 x 391 entre los centros de las troneras (385,9 x 167,5 px). Las bolas, radio 16
 //    (7 px). El agujero de las troneras, radio 25 (10,6 px); las del medio, 22 mas afuera.
 //  - Las bandas (medidas en una captura del Yahoo en alta: 12 px de 1123 y 13 px de 539) estan 10 adentro
-//    de la linea de las troneras, en los cuatro lados, y son rectas hasta el agujero: en las esquinas terminan
-//    donde las corta el agujero (radio 25) y en las del medio a 26 del centro. Donde terminan, la punta rebota.
+//    de la linea de las troneras, en los cuatro lados. Son rectas y en cada boca terminan con un bisel corto
+//    hasta el agujero (medido en la mesa de referencia del dueño): en las esquinas la banda llega a 39,5 del
+//    centro de la tronera y el bisel baja a 45° hasta el borde del agujero; en las del medio llega a 35 y el bisel
+//    baja mas parado. El bisel y su punta rebotan como la banda.
 //  - Rodando, la bola frena casi parejo: ROCE + ROCE_V * velocidad (ajustado a 9 rodadas limpias:
 //    error medio de 9 unidades). Justo despues de un golpe patina y queda con 5/7 de la velocidad
 //    (como el pool de verdad; en el video los tiros fuertes pierden un 30-45% enseguida).
@@ -27,7 +29,10 @@ const R = 16, D = R * 2, POCKET_R = 25;
 const CAE_ESQ = 42, CAE_MEDIO = 33;
 const MEDIO_AFUERA = 22;           // las troneras del medio, mas afuera que la linea de las esquinas
 const BX = 10, BY = 10;            // cuanto entran las bandas (cortas y largas)
-const BOCA = POCKET_R, BOCA_M = 26; // la boca: en las esquinas la banda llega hasta el agujero (a BOCA del centro); en las del medio, hasta BOCA_M del centro
+const PROF = 15;                   // lo que mide la banda de fondo (de la punta a la madera)
+// la boca: en las esquinas la banda recta llega a BOCA del centro de la tronera y de ahi el bisel baja a 45° hasta
+// el agujero (justo donde la banda toca la madera); en las del medio llega a BOCA_M y el bisel baja hasta BISEL_M
+const BOCA = PROF + Math.sqrt(POCKET_R * POCKET_R - (PROF - BX) ** 2), BOCA_M = 35, BISEL_M = 27;
 const MAX_POWER = 8000;
 const CURVA = 2.7;
 const ROCE = 80;                   // frenado rodando (unidades/s²)
@@ -52,20 +57,20 @@ const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY
 // adonde apunta la compu en cada tronera: en las esquinas al rincon del paño (por ahi entra la bola, entre las dos
 // bandas), en las del medio al centro del agujero
 const BOCAS = POCKETS.map((p, i) => (i === 1 || i === 4 ? p : { x: p.x < TL + TW / 2 ? XMIN : XMAX, y: p.y < TT + TH / 2 ? YMIN : YMAX }));
-// las puntas de las bandas en cada boca (rebotan como un punto)
-const PUNTAS = [];
+// los biseles de cada boca: de la punta de la banda (sobre el paño) hasta el agujero
+const QUIJADAS = [];
 const ESQ = [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]];
 for (const [px, py, sx, sy] of ESQ) {
-  PUNTAS.push({ x: px + sx * BX, y: py + sy * Math.sqrt(BOCA * BOCA - BX * BX) }, { x: px + sx * Math.sqrt(BOCA * BOCA - BY * BY), y: py + sy * BY });
+  QUIJADAS.push({ x1: px + sx * BX, y1: py + sy * BOCA, x2: px + sx * (BX - PROF), y2: py + sy * (BOCA - PROF) });   // banda corta
+  QUIJADAS.push({ x1: px + sx * BOCA, y1: py + sy * BY, x2: px + sx * (BOCA - PROF), y2: py + sy * (BY - PROF) });   // banda larga
 }
-for (const [py, sy] of [[TT, 1], [TB, -1]]) PUNTAS.push({ x: TL + TW / 2 - BOCA_M, y: py + sy * BY }, { x: TL + TW / 2 + BOCA_M, y: py + sy * BY });
-// sin quijadas (como el Yahoo): las bandas son rectas y solo rebotan sus puntas (segmentos de largo 0)
-const QUIJADAS = PUNTAS.map(t => ({ x1: t.x, y1: t.y, x2: t.x, y2: t.y }));
-// en la boca no hay banda recta: la bola puede pasar la linea (entre las quijadas) y caer
-// (la banda corta llega hasta FIN_X de la linea de las troneras y la larga hasta FIN_Y: ahi las corta el agujero)
-const FIN_X = Math.sqrt(BOCA * BOCA - BX * BX), FIN_Y = Math.sqrt(BOCA * BOCA - BY * BY);
-const enBocaLado = (x, y) => y < TT + FIN_X || y > TB - FIN_X;                                                   // bandas cortas
-const enBocaLargo = (x, y) => x < TL + FIN_Y || x > TR - FIN_Y || Math.abs(x - (TL + TW / 2)) < BOCA_M;          // bandas largas
+for (const [py, sy] of [[TT, 1], [TB, -1]]) for (const s of [-1, 1]) {
+  QUIJADAS.push({ x1: TL + TW / 2 + s * BOCA_M, y1: py + sy * BY, x2: TL + TW / 2 + s * BISEL_M, y2: py + sy * (BY - PROF) });
+}
+const PUNTAS = QUIJADAS.map(q => ({ x: q.x1, y: q.y1 }));
+// en la boca no hay banda recta: la bola puede pasar la linea (entre los biseles) y caer
+const enBocaLado = (x, y) => y < TT + BOCA || y > TB - BOCA;                                                     // bandas cortas
+const enBocaLargo = (x, y) => x < TL + BOCA || x > TR - BOCA || Math.abs(x - (TL + TW / 2)) < BOCA_M;            // bandas largas
 
 // ── La mesa ──
 function rack() {

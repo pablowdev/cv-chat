@@ -16,7 +16,7 @@
   // ── La mesa (las mismas medidas que pool-motor.js: las del Yahoo, medidas en los videos) ──
   const W = 1000, H = 500, TL = 50, TR = 950, TT = 54.5, TB = 445.5, TW = TR - TL, TH = TB - TT;
   const R = 16, D = R * 2, POCKET_R = 25, HEAD_X = TL + TW / 4;
-  const MEDIO_AFUERA = 22, BX = 10, BY = 10, BOCA = POCKET_R, BOCA_M = 26;
+  const MEDIO_AFUERA = 22, BX = 10, BY = 10, PROF = 15, BOCA = PROF + Math.sqrt(POCKET_R * POCKET_R - (PROF - BX) ** 2), BOCA_M = 35, BISEL_M = 27;
   const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY - R;
   const POCKETS = [{ x: TL, y: TT }, { x: TL + TW / 2, y: TT - MEDIO_AFUERA }, { x: TR, y: TT }, { x: TL, y: TB }, { x: TL + TW / 2, y: TB + MEDIO_AFUERA }, { x: TR, y: TB }];
   const COLOR = {
@@ -35,20 +35,30 @@
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
   let fondoMesa = null;
-  // El paño y las bandas igual que la fisica (pool-motor.js), como el Yahoo: las bandas son rectas hasta el agujero
-  // (en las esquinas las corta el agujero) y en las del medio se cortan a BOCA_M del centro, con un bisel corto hasta
-  // el agujero. d: cuanto se corre el contorno hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda)
+  // El paño y las bandas igual que la fisica (pool-motor.js): las bandas son rectas y en cada boca terminan con un
+  // bisel corto hasta el agujero (en las esquinas a 45°, en las del medio mas parado). d: cuanto se corre el contorno
+  // hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda); el contorno sigue el bisel
   const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS;
-  // el bisel de las del medio: de la punta (a BOCA_M, sobre la banda) al borde del agujero
-  const BISEL = { x0: BOCA_M, y0: BY + MEDIO_AFUERA, x1: POCKET_R - 2, y1: 0 };
-  const bisel = (d) => { const y = BISEL.y0 - d, t = (BISEL.y0 - y) / (BISEL.y0 - BISEL.y1); return BISEL.x0 + (BISEL.x1 - BISEL.x0) * t; };
+  const BISEL = { x0: BOCA_M, x1: BISEL_M };
   function contornoPano(c, afuera) {
     const d = afuera === true ? BANDA_VIS : afuera || 0;
-    const x0 = TL + BX - d, x1 = TR - BX + d, y0 = TT + BY - d, y1 = TB - BY + d, m = TL + TW / 2, a = bisel(d);
-    const mt = TT - MEDIO_AFUERA, mb = TB + MEDIO_AFUERA, h = BISEL.x1;
+    const m = TL + TW / 2, mt = TT - MEDIO_AFUERA, mb = TB + MEDIO_AFUERA, h = POCKET_R - 2;
+    const em = BOCA_M - (BOCA_M - BISEL_M) * d / PROF; // el bisel del medio a esa profundidad
+    const pts = [];
+    // en cada esquina: la punta corrida por el bisel, el fondo del bisel, el centro del agujero (tapado) y la otra banda
+    const medio = (yb, yp, sy) => {
+      const y = yb - sy * d, yf = yb - sy * PROF;
+      return [[m - em, y], [m - BISEL_M, yf], [m - h, yp], [m + h, yp], [m + BISEL_M, yf], [m + em, y]];
+    };
+    // arriba a la izquierda (de la banda corta a la larga), el medio de arriba, arriba a la derecha, y asi
+    pts.push([TL + BX - d, TT + BOCA - d], [TL + BX - PROF, TT + BOCA - PROF], [TL, TT], [TL + BOCA - PROF, TT + BY - PROF], [TL + BOCA - d, TT + BY - d]);
+    pts.push(...medio(TT + BY, mt, 1));
+    pts.push([TR - BOCA + d, TT + BY - d], [TR - BOCA + PROF, TT + BY - PROF], [TR, TT], [TR - BX + PROF, TT + BOCA - PROF], [TR - BX + d, TT + BOCA - d]);
+    pts.push([TR - BX + d, TB - BOCA + d], [TR - BX + PROF, TB - BOCA + PROF], [TR, TB], [TR - BOCA + PROF, TB - BY + PROF], [TR - BOCA + d, TB - BY + d]);
+    pts.push(...medio(TB - BY, mb, -1).reverse());
+    pts.push([TL + BOCA - d, TB - BY + d], [TL + BOCA - PROF, TB - BY + PROF], [TL, TB], [TL + BX - PROF, TB - BOCA + PROF], [TL + BX - d, TB - BOCA + d]);
     c.beginPath();
-    c.moveTo(x0, y0); c.lineTo(m - a, y0); c.lineTo(m - h, mt); c.lineTo(m + h, mt); c.lineTo(m + a, y0); c.lineTo(x1, y0);
-    c.lineTo(x1, y1); c.lineTo(m + a, y1); c.lineTo(m + h, mb); c.lineTo(m - h, mb); c.lineTo(m - a, y1); c.lineTo(x0, y1);
+    pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
     c.closePath();
   }
   function pintarMesa(c) {
@@ -160,11 +170,14 @@
     // el filo de las bandas
     contornoPano(c);
     c.lineJoin = 'round'; c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
-    // el filo del bisel de las del medio, de la punta al agujero
+    // el filo de cada bisel, de la punta al agujero
     {
       const seg = [];
       const m = TL + TW / 2;
-      for (const [yb, yp] of [[TT + BY, TT - MEDIO_AFUERA], [TB - BY, TB + MEDIO_AFUERA]]) for (const s of [-1, 1]) seg.push([m + s * BOCA_M, yb, m + s * BISEL.x1, yp]);
+      for (const [yb, sy] of [[TT + BY, 1], [TB - BY, -1]]) for (const s of [-1, 1]) seg.push([m + s * BOCA_M, yb, m + s * BISEL_M, yb - sy * PROF]);
+      for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
+        seg.push([px + sx * BOCA, py + sy * BY, px + sx * (BOCA - PROF), py + sy * (BY - PROF)], [px + sx * BX, py + sy * BOCA, px + sx * (BX - PROF), py + sy * (BOCA - PROF)]);
+      }
       c.lineCap = 'round';
       for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
