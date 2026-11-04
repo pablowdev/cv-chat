@@ -25,44 +25,96 @@
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  function dibujarMesa(c) {
-    c.clearRect(0, 0, W, H);
-    const rail = c.createLinearGradient(0, 0, 0, H);
-    rail.addColorStop(0, '#a3201c'); rail.addColorStop(0.5, '#8c1714'); rail.addColorStop(1, '#6e100e');
-    c.fillStyle = rail; c.fillRect(0, 0, W, H);
-    c.strokeStyle = '#4a0a08'; c.lineWidth = 2; c.strokeRect(1, 1, W - 2, H - 2);
-    // el paño hasta la linea de las troneras, y adentro las bandas (verde mas oscuro) con sus bocas cortadas
-    c.fillStyle = '#1f5a1d'; c.fillRect(TL - 4, TT - 4, TW + 8, TH + 8);
-    const felt = c.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, W * 0.55);
-    felt.addColorStop(0, '#3a8a35'); felt.addColorStop(1, '#2c7429');
-    c.fillStyle = felt;
+  // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
+  // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
+  let fondoMesa = null;
+  function contornoPano(c) {
     const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX);
+    // la parte jugable: las bandas por dentro, y en cada boca un corte en diagonal hacia la tronera
     c.beginPath();
-    // el contorno de la parte jugable: las bandas por dentro, y en cada boca un corte en diagonal hacia la tronera
-    c.moveTo(TL + cx, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M + 8, TT - 8); c.lineTo(TL + TW / 2 + BOCA_M - 8, TT - 8); c.lineTo(TL + TW / 2 + BOCA_M, TT + BY);
-    c.lineTo(TR - cx, TT + BY); c.lineTo(TR - 6, TT - 6); c.lineTo(TR - BX, TT + cy);
-    c.lineTo(TR - BX, TB - cy); c.lineTo(TR - 6, TB + 6); c.lineTo(TR - cx, TB - BY);
-    c.lineTo(TL + TW / 2 + BOCA_M, TB - BY); c.lineTo(TL + TW / 2 + BOCA_M - 8, TB + 8); c.lineTo(TL + TW / 2 - BOCA_M + 8, TB + 8); c.lineTo(TL + TW / 2 - BOCA_M, TB - BY);
-    c.lineTo(TL + cx, TB - BY); c.lineTo(TL + 6, TB + 6); c.lineTo(TL + BX, TB - cy);
-    c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 6, TT - 6); c.closePath();
-    c.fill();
-    c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 1.5; c.stroke();
-    // las chapas de las troneras
-    for (const p of POCKETS) {
-      const esquina = p.x !== TL + TW / 2;
-      const g = c.createLinearGradient(p.x - 46, p.y - 46, p.x + 46, p.y + 46);
-      g.addColorStop(0, '#f6b860'); g.addColorStop(1, '#d8892e');
-      c.fillStyle = g;
-      if (esquina) { const q = 62, x0 = p.x < W / 2 ? 0 : W - q, y0 = p.y < H / 2 ? 0 : H - q; c.fillRect(x0, y0, q, q); }
-      else { const s = 44, arriba = p.y < H / 2; c.fillRect(p.x - s / 2 - 6, arriba ? 0 : p.y, s + 12, arriba ? p.y : H - p.y); }
+    c.moveTo(TL + cx, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M + 9, TT - 6); c.lineTo(TL + TW / 2 + BOCA_M - 9, TT - 6); c.lineTo(TL + TW / 2 + BOCA_M, TT + BY);
+    c.lineTo(TR - cx, TT + BY); c.lineTo(TR - 8, TT - 8); c.lineTo(TR - BX, TT + cy);
+    c.lineTo(TR - BX, TB - cy); c.lineTo(TR - 8, TB + 8); c.lineTo(TR - cx, TB - BY);
+    c.lineTo(TL + TW / 2 + BOCA_M, TB - BY); c.lineTo(TL + TW / 2 + BOCA_M - 9, TB + 6); c.lineTo(TL + TW / 2 - BOCA_M + 9, TB + 6); c.lineTo(TL + TW / 2 - BOCA_M, TB - BY);
+    c.lineTo(TL + cx, TB - BY); c.lineTo(TL + 8, TB + 8); c.lineTo(TL + BX, TB - cy);
+    c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 8, TT - 8); c.closePath();
+  }
+  function pintarMesa(c) {
+    // la madera (bordo oscuro), con luz arriba y sombra abajo, y un filo claro por fuera
+    const mad = c.createLinearGradient(0, 0, 0, H);
+    mad.addColorStop(0, '#9a1a16'); mad.addColorStop(0.12, '#7d120f'); mad.addColorStop(0.88, '#6a0e0c'); mad.addColorStop(1, '#4e0907');
+    c.fillStyle = mad; c.fillRect(0, 0, W, H);
+    // el canto interior de la madera: mas oscuro hacia el paño
+    const canto = 14;
+    for (const [x, y, w, h, dir] of [[0, TT - 30, W, canto, 'abajo'], [0, TB + 16, W, canto, 'arriba'], [TL - 34, 0, canto, H, 'der'], [TR + 20, 0, canto, H, 'izq']]) {
+      const g = dir === 'abajo' ? c.createLinearGradient(0, y, 0, y + h) : dir === 'arriba' ? c.createLinearGradient(0, y + h, 0, y) : dir === 'der' ? c.createLinearGradient(x, 0, x + w, 0) : c.createLinearGradient(x + w, 0, x, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)');
+      c.fillStyle = g; c.fillRect(x, y, w, h);
     }
+    c.strokeStyle = 'rgba(255,190,170,0.25)'; c.lineWidth = 2; c.strokeRect(2, 2, W - 4, H - 4);
+    c.strokeStyle = '#2e0504'; c.lineWidth = 2; c.strokeRect(0.5, 0.5, W - 1, H - 1);
+    // las bandas (verde mas oscuro) entre la madera y el paño
+    c.fillStyle = '#21611e';
+    c.fillRect(TL - 20, TT - 16, TW + 40, TH + 32);
+    // las esquineras y las del medio (bronce), con su borde
+    const bronce = (x0, y0, x1, y1) => { const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, '#f7c06a'); g.addColorStop(0.55, '#e19a3c'); g.addColorStop(1, '#b8731f'); return g; };
     for (const p of POCKETS) {
-      const g = c.createRadialGradient(p.x, p.y, 4, p.x, p.y, POCKET_R + 2);
-      g.addColorStop(0, '#000'); g.addColorStop(0.8, '#060606'); g.addColorStop(1, '#262626');
+      const medio = p.x === TL + TW / 2;
+      c.save();
+      c.beginPath();
+      if (!medio) {
+        const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 64;
+        const x0 = p.x < W / 2 ? 0 : W, y0 = p.y < H / 2 ? 0 : H;
+        // una esquinera con el lado de adentro redondeado alrededor de la tronera
+        c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 18);
+        c.quadraticCurveTo(p.x + sx * 30, p.y - sy * 4, p.x + sx * 20, p.y + sy * 22);
+        c.lineTo(x0 + sx * 18, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
+        c.fillStyle = bronce(x0, y0, x0 + sx * q, y0 + sy * q);
+      } else {
+        const arriba = p.y < H / 2, yb = arriba ? 0 : H, s = arriba ? 1 : -1;
+        c.moveTo(p.x - 38, yb); c.lineTo(p.x + 38, yb); c.lineTo(p.x + 26, p.y + s * 8); c.lineTo(p.x - 26, p.y + s * 8); c.closePath();
+        c.fillStyle = bronce(p.x - 38, yb, p.x + 38, p.y);
+      }
+      c.fill();
+      c.strokeStyle = 'rgba(90,45,5,0.7)'; c.lineWidth = 1.5; c.stroke();
+      c.restore();
+    }
+    // el paño, con una textura de fieltro (puntitos claros y oscuros) y apenas mas oscuro en los bordes
+    c.save();
+    contornoPano(c);
+    c.clip();
+    c.fillStyle = '#2f7d2b'; c.fillRect(0, 0, W, H);
+    const tex = document.createElement('canvas'); tex.width = tex.height = 96;
+    const tc = tex.getContext('2d'), td = tc.createImageData(96, 96);
+    let sem = 7; const rnd = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < td.data.length; i += 4) { const v = rnd(), k = (v - 0.5) * 34; td.data[i] = 47 + k; td.data[i + 1] = 125 + k * 1.3; td.data[i + 2] = 43 + k; td.data[i + 3] = 255; }
+    tc.putImageData(td, 0, 0);
+    c.fillStyle = c.createPattern(tex, 'repeat'); c.fillRect(0, 0, W, H);
+    const vin = c.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, W * 0.6);
+    vin.addColorStop(0, 'rgba(255,255,255,0.05)'); vin.addColorStop(1, 'rgba(0,0,0,0.22)');
+    c.fillStyle = vin; c.fillRect(0, 0, W, H);
+    // la sombra de las bandas sobre el paño
+    contornoPano(c);
+    c.strokeStyle = 'rgba(0,0,0,0.38)'; c.lineWidth = 9; c.stroke();
+    c.restore();
+    // el filo de las bandas, iluminado
+    contornoPano(c);
+    c.strokeStyle = 'rgba(120,200,105,0.55)'; c.lineWidth = 1.5; c.stroke();
+    // las troneras: el agujero con su borde de cuero
+    for (const p of POCKETS) {
+      c.fillStyle = '#2a1608'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI * 2); c.fill();
+      const g = c.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, POCKET_R);
+      g.addColorStop(0, '#000'); g.addColorStop(0.75, '#050505'); g.addColorStop(1, '#1c1c1c');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
     }
-    c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1;
+    // la linea de cabecera
+    c.strokeStyle = 'rgba(230,240,200,0.4)'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(HEAD_X + 0.5, TT + BY); c.lineTo(HEAD_X + 0.5, TB - BY); c.stroke();
+  }
+  function dibujarMesa(c) {
+    if (!fondoMesa) { fondoMesa = document.createElement('canvas'); fondoMesa.width = W; fondoMesa.height = H; pintarMesa(fondoMesa.getContext('2d')); }
+    c.clearRect(0, 0, W, H);
+    c.drawImage(fondoMesa, 0, 0);
   }
 
   // ── Las bolas en 3D ──
@@ -214,7 +266,8 @@
       if (tipo === 'bola') { if (t - this.ultimo < 0.02) return; this.ultimo = t; this.sonar('bola', 0.25 + k * 0.9); }
       else if (tipo === 'banda') this.sonar('bola', 0.12 + k * 0.45, 0.62);
       else if (tipo === 'taco') this.sonar('taco', 0.35 + k * 0.75);
-      else if (tipo === 'tronera') { this.sonar('tronera', 0.9); this.sonar('tunel', 0.9, 1, 0.78); }
+      else if (tipo === 'tronera') this.sonar('tronera', 0.9);
+      else if (tipo === 'tunel') this.sonar('tunel', 0.9);
       else if (tipo === 'campana') this.sonar('campana', 0.8);
     },
   };
@@ -406,7 +459,9 @@
     M.cv = el('canvas', 'pl-lienzo'); M.cv.width = W; M.cv.height = H;
     M.cv.setAttribute('role', 'img'); M.cv.setAttribute('aria-label', 'Mesa de pool');
     M.ctx = M.cv.getContext('2d');
-    M.bandeja = el('div', 'pl-bandeja'); M.bolasBandeja = el('div', 'pl-bolas'); M.bandeja.appendChild(M.bolasBandeja);
+    M.bandeja = el('div', 'pl-bandeja');
+    M.bjCv = el('canvas', 'pl-tunel'); M.bjCv.width = BJ_W; M.bjCv.height = BJ_H; M.bjCtx = M.bjCv.getContext('2d');
+    M.bandeja.appendChild(M.bjCv);
     M.fin = el('div', 'pl-fin'); M.fin.hidden = true;
     centro.append(M.msg, barra, M.cv, M.bandeja, M.fin);
     const der = el('div', 'pl-der');
@@ -552,21 +607,42 @@
     if (s.teToca) return s.enMano ? 'Podés mover la blanca antes de tirar.' : s.ultima && s.ultima.mio ? '¡Tirá de nuevo!' : '¡Tirá!';
     return `Esperando a ${s.rival ? s.rival.nombre : 'el rival'}…`;
   }
+  // La bandeja (el tunel): las bolas metidas, en 3D como en la mesa. La primera queda a la derecha y las
+  // nuevas entran por la izquierda y ruedan hasta su lugar, girando lo que recorren; al llegar, el golpe del final
+  const BJ_W = 900, BJ_H = D + 8;
   function bandeja(lista) {
-    const box = M.bolasBandeja;
-    const ya = box.children.length;
-    if (ya === lista.length && box.dataset.k === lista.join(',')) return;
-    box.textContent = '';
-    lista.forEach((n, i) => {
-      const m = el('span', 'pl-mini');
-      const c = COLOR[n];
-      m.style.background = n >= 9
-        ? `radial-gradient(circle at 50% 50%, #fff 0 22%, transparent 23%), linear-gradient(#f4f4f4 0 25%, ${c} 25% 75%, #f4f4f4 75%)`
-        : `radial-gradient(circle at 50% 50%, #fff 0 22%, transparent 23%), ${c}`;
-      if (i >= ya) m.classList.add('entra');
-      box.appendChild(m);
-    });
-    box.dataset.k = lista.join(',');
+    const ahora = performance.now();
+    if (!M.tray || lista.length < M.tray.length || lista.some((n, i) => M.tray[i] && M.tray[i].n !== n)) {
+      // otra lista (partida nueva, o se abre la mesa): se ponen en su lugar sin animar
+      M.tray = lista.map((n, i) => ({ n, x: lugarBandeja(i), m: (M.giros.get(n) || {}).m || giroInicial(n), llego: true }));
+      return;
+    }
+    for (let i = M.tray.length; i < lista.length; i++) {
+      const n = lista[i];
+      M.tray.push({ n, x: -R, desde: -R, hasta: lugarBandeja(i), t0: ahora, m: (M.giros.get(n) || {}).m || giroInicial(n), llego: false });
+    }
+  }
+  const lugarBandeja = (i) => BJ_W - 10 - R - i * (D + 1);
+  function dibujarBandeja() {
+    const c = M.bjCtx; if (!c) return;
+    c.clearRect(0, 0, BJ_W, BJ_H);
+    // el tunel: negro, redondeado, con un poco de brillo arriba
+    const g = c.createLinearGradient(0, 0, 0, BJ_H);
+    g.addColorStop(0, '#1a1a1a'); g.addColorStop(0.35, '#050505'); g.addColorStop(1, '#000');
+    c.fillStyle = g; c.beginPath(); c.roundRect(0, 0, BJ_W, BJ_H, BJ_H / 2); c.fill();
+    const ahora = performance.now();
+    for (const b of M.tray || []) {
+      if (!b.llego) {
+        // entra rodando y se frena al llegar (dura segun la distancia, como mucho un segundo)
+        const dur = Math.min(1000, (b.hasta - b.desde) / 1.1);
+        const u = Math.min(1, (ahora - b.t0) / dur), e = 1 - (1 - u) * (1 - u);
+        const x = b.desde + (b.hasta - b.desde) * e, dx = x - b.x;
+        if (dx > 0) b.m = girar(b.m, [0, dx, 0], dx / R);
+        b.x = x;
+        if (u >= 1) { b.llego = true; audio.play('tunel'); }
+      }
+      dibujarBola(c, b.n, b.x, BJ_H / 2, b.m);
+    }
   }
   function pie() {
     const s = M.s;
@@ -597,6 +673,7 @@
   function dibujar() {
     if (!M || !M.ctx) return;
     avanzarAnim();
+    dibujarBandeja();
     const c = M.ctx, s = M.s;
     dibujarMesa(c);
     if (!s) return;

@@ -26,7 +26,9 @@
 .puente-jg .pl-grupo.rayadas { visibility: visible; background: linear-gradient(#f4f4f4 0 25%, #f6d31a 25% 75%, #f4f4f4 75%); }
 .puente-jg .pl-reloj { font: 13px 'Courier New', monospace; background: #b9d0ca; border: 1px solid #5d7d77; padding: 1px 12px; }
 .puente-jg .pl-lienzo { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: none; background: #7a1818; }
-.puente-jg .pl-bandeja { padding: 6px 8%; }
+.puente-jg .pl-bandeja { padding: 6px 5%; }
+/* el tunel: un lienzo con las bolas en 3D (juego.js: dibujarBandeja), a la misma escala que la mesa */
+.puente-jg .pl-tunel { display: block; width: 100%; height: auto; }
 .puente-jg .pl-bolas { height: 24px; border-radius: 12px; background: #050505; display: flex; flex-direction: row-reverse; align-items: center; gap: 1px; padding: 0 6px; overflow: hidden; }
 .puente-jg .pl-mini { width: 20px; height: 20px; border-radius: 50%; flex: none; box-shadow: inset -2px -3px 4px rgba(0,0,0,0.45); }
 .puente-jg .pl-mini.entra { animation: pl-rueda 0.9s cubic-bezier(.2,.7,.3,1); }
