@@ -2076,7 +2076,7 @@ function leido(sc) {
     for (const c of app.channels || []) if (c && !c.is_dm && STATS.test(String(c.category || ''))) s.add(c.code);
     return s;
   }
-  window.puenteClub = { oculto: (code) => { if (!app) app = window.app; return !!(app && Array.isArray(app.channels) && ocultos().has(code)); } };
+  window.puenteClub = { cerrar: () => cerrar(), oculto: (code) => { if (!app) app = window.app; return !!(app && Array.isArray(app.channels) && ocultos().has(code)); } };
 
   // ── La lista ──
   function pintar() {
@@ -2179,8 +2179,6 @@ function leido(sc) {
   function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }
   function abrirHoja(que, titulo, icono) {
     cerrar();
-    // (en el celular, el panel de los canales queda por encima de todo: se cierra)
-    try { app && app._closeMobilePanels && app._closeMobilePanels(); } catch { /* sigue */ }
     hoja = el('div', 'puente-hoja-fondo');
     hoja.dataset.que = que;
     const h = el('div', 'puente-hoja');
@@ -13887,10 +13885,13 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   const body = () => byId('app-body');
   const drawerOpen = () => !!(body() && body().classList.contains('mobile-sidebar-open'));
   const rightOpen = () => !!(body() && body().classList.contains('mobile-right-open'));
+  // Al cerrar del todo el foro, Juegos o el Marketplace (se abren desde el panel de canales): de vuelta ahi
+  const alCanales = () => { if (mobile() && !drawerOpen()) byId('mobile-menu-btn')?.click(); };
 
   // Lo que se puede cerrar, de lo mas "arriba" a lo mas "abajo": [esta abierto, cerrarlo]
   const LAYERS = [
     [() => byId('puente-medalla-globo'), () => byId('puente-medalla-globo').remove()],
+    [() => document.querySelector('.puente-hoja-fondo'), () => window.puenteClub && window.puenteClub.cerrar()], // la Guia, El club hoy
     [() => byId('puente-who-sheet'), () => { byId('puente-who-sheet')?.remove(); byId('puente-who-backdrop')?.remove(); }], // quien reacciono
     [() => shown(byId('image-lightbox')), (app) => app._closeLightbox ? app._closeLightbox() : (byId('image-lightbox').style.display = 'none')],
     [() => byId('puente-tema-hoja'), () => { byId('puente-tema-hoja')?.remove(); byId('puente-tema-fondo')?.remove(); }],
@@ -13899,8 +13900,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     [() => byId('puente-historia-capa'), () => byId('puente-historia-capa').remove()],
     [() => byId('puente-vincular-capa'), () => byId('puente-vincular-capa').querySelector('.pv-luego')?.click()],
     [() => window.puenteAdjuntar && window.puenteAdjuntar.abierto(), () => window.puenteAdjuntar.cerrar()],
-    [() => window.puenteJuegos && window.puenteJuegos.abierto() && !shown(byId('profile-popup')), () => window.puenteJuegos.atras()],
-    [() => window.puenteMercado && window.puenteMercado.abierto() && !shown(byId('profile-popup')) && !shown(byId('image-lightbox')), () => window.puenteMercado.atras()],
+    [() => window.puenteJuegos && window.puenteJuegos.abierto() && !shown(byId('profile-popup')), () => { window.puenteJuegos.atras(); if (!window.puenteJuegos.abierto()) alCanales(); }],
+    [() => window.puenteMercado && window.puenteMercado.abierto() && !shown(byId('profile-popup')) && !shown(byId('image-lightbox')), () => { window.puenteMercado.atras(); if (!window.puenteMercado.abierto()) alCanales(); }],
+    [() => window.puenteForo && window.puenteForo.abierto() && !shown(byId('profile-popup')), () => { window.puenteForo.cerrar(); alCanales(); }],
     [() => window.puenteLupa && window.puenteLupa.abierta() && !shown(byId('profile-popup')), () => window.puenteLupa.cerrar()],
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
     [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],
@@ -13984,8 +13986,10 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const later = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; arm(); }); };
     new MutationObserver(later).observe(body(), { attributes: true, attributeFilter: ['class'] });
     new MutationObserver(later).observe(document.body, { childList: true, subtree: false, attributes: true, attributeFilter: ['style', 'class'] });
-    document.addEventListener('click', () => setTimeout(arm, 50), true);
-    document.addEventListener('pointerdown', () => setTimeout(arm, 50), true);
+    // (lo que abre un toque puede tardar en aparecer: se vuelve a mirar, mientras dure el permiso del toque)
+    const despues = () => { setTimeout(arm, 50); setTimeout(arm, 400); setTimeout(arm, 1500); };
+    document.addEventListener('click', despues, true);
+    document.addEventListener('pointerdown', despues, true);
     arm();
   })();
 })();
