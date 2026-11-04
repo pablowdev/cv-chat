@@ -101,47 +101,16 @@
   .puente-jg .pl-fino { width: 96px; height: 40px; cursor: ew-resize; background: repeating-linear-gradient(to right, #d6e5e1 0 6px, #7d9a94 6px 8px); }
 }
 
-/* ── El marco de la mesa, como la portada (web/pool/tapa.jpg): paño verde muy oscuro con rombos apenas
-   marcados, filete dorado, el aviso en un cartel de madera con letras doradas ── */
-.puente-jg .pl-juego {
-  --pl-oro: #e9b43f; --pl-oro-claro: #ffe7a0; --pl-oro-osc: #a8701c; --pl-texto: #f3ead0;
-  color: var(--pl-texto);
-  border: 2px solid var(--pl-oro); border-radius: 8px;
-  box-shadow: 0 0 0 4px #061209, 0 0 0 5px rgba(233,180,63,0.45), 0 10px 28px rgba(0,0,0,0.55);
+/* La sala: la portada arriba, como el Truco y GlobalSiege */
+.puente-jg .pl-hero.jg-con-banner { background: #0c2416; }
+.puente-jg .pl-hero .jg-hero-s { color: #e9d9a6; }
+/* Detras de la mesa, el mismo fondo de la portada (web/pool/tapa.jpg): paño verde muy oscuro con rombos apenas marcados */
+.puente-jg .pl-mesa {
+  padding: 16px; border-radius: 10px;
   background:
     radial-gradient(ellipse at 50% 40%, rgba(60,140,80,0.18), rgba(0,0,0,0.5) 75%),
     repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 34px),
     repeating-linear-gradient(-45deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 34px),
     #0c2416;
-  margin: 5px;
 }
-.puente-jg .pl-msg {
-  background: linear-gradient(#2c1a10, #170c06); color: #ffd45a; border-bottom: 2px solid var(--pl-oro);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8); letter-spacing: 0.5px;
-}
-.puente-jg .pl-barra { background: rgba(0,0,0,0.28); border-bottom: 1px solid rgba(233,180,63,0.35); color: var(--pl-texto); }
-.puente-jg .pl-flecha { color: var(--pl-oro); }
-.puente-jg .pl-jug.activo .pl-cara > * { box-shadow: 0 0 0 2px var(--pl-oro), 0 0 8px rgba(233,180,63,0.8); }
-.puente-jg .pl-jug.activo .pl-nombre { color: var(--pl-oro-claro); }
-.puente-jg .pl-reloj { color: #ffe7a0; background: #08140c; border-color: rgba(233,180,63,0.6); }
-.puente-jg .pl-der { background: rgba(0,0,0,0.22); border-left: 1px solid rgba(233,180,63,0.35); }
-.puente-jg .pl-etq { color: #e9d9a6; }
-.puente-jg .pl-tubo { border-color: var(--pl-oro-osc); background: #08140c; box-shadow: inset 0 1px 4px rgba(0,0,0,0.7); }
-.puente-jg .pl-lleno { background: linear-gradient(to top, #6f9a3f 0 55%, #cde05a 55%); }
-.puente-jg .pl-marcas { background: repeating-linear-gradient(to bottom, transparent 0 11px, rgba(233,180,63,0.6) 11px 12px); }
-.puente-jg .pl-fino { border-color: var(--pl-oro-osc); background: repeating-linear-gradient(to bottom, #2a4a34 0 6px, #0a1a10 6px 8px); }
-.puente-jg .pl-sonido { background: #08140c; border: 1px solid rgba(233,180,63,0.5); color: var(--pl-texto); }
-.puente-jg .pl-lienzo { box-shadow: 0 6px 16px rgba(0,0,0,0.55); }
-/* el cartel de fin del juego, con la misma terminacion */
-.puente-jg .pl-fin { background: linear-gradient(#2c1a10, #170c06); border: 2px solid var(--pl-oro); color: var(--pl-texto); box-shadow: 0 8px 24px rgba(0,0,0,0.7); border-radius: 6px; overflow: hidden; }
-.puente-jg .pl-fin-t { background: linear-gradient(#ffe7a0, #e9b43f 45%, #a8701c); color: #2a1406; text-shadow: none; }
-/* la sala: la portada arriba, como el Truco y GlobalSiege */
-.puente-jg .pl-hero.jg-con-banner { background: #0c2416; }
-.puente-jg .pl-hero .jg-hero-s { color: #e9d9a6; }
-@media (max-width: 640px) {
-  .puente-jg .pl-juego { margin: 3px; }
-  .puente-jg .pl-der { border-left: 0; border-top: 1px solid rgba(233,180,63,0.35); }
-  .puente-jg .pl-lleno { background: linear-gradient(90deg, #6f9a3f 0 55%, #cde05a 55%); }
-  .puente-jg .pl-marcas { background: repeating-linear-gradient(to right, transparent 0 11px, rgba(233,180,63,0.6) 11px 12px); }
-  .puente-jg .pl-fino { background: repeating-linear-gradient(to right, #2a4a34 0 6px, #0a1a10 6px 8px); }
-}
+@media (max-width: 640px) { .puente-jg .pl-mesa { padding: 6px; } }
