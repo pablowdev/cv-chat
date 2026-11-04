@@ -1890,8 +1890,8 @@ html body #right-sidebar #online-users .user-group-label.offline-label { margin-
 #puente-atajos .puente-miembros-btn { flex: 1 1 auto; min-width: 0; width: auto; min-height: 0; margin: 0; padding: 0.3125rem 0.25rem; justify-content: center; gap: 0.3125rem; font-size: 0.8125rem; line-height: 1.25rem; text-align: center; }
 #puente-atajos .puente-miembros-btn svg { width: 1rem; height: 1rem; }
 #puente-atajos .puente-miembros-btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* si la columna es angosta, sin los iconos: que entren los nombres enteros */
-@container (max-width: 16rem) { #puente-atajos .puente-miembros-btn svg { display: none; } }
+/* si la columna es angosta, el icono arriba del nombre: que entren los dos enteros */
+@container (max-width: 16rem) { #puente-atajos .puente-miembros-btn { flex-direction: column; gap: 0.125rem; padding: 0.3125rem 0.125rem; } }
 #puente-miembros-btn { order: 1; }
 #puente-actividad-btn { order: 2; }
 #puente-guardados-btn { order: 3; }
