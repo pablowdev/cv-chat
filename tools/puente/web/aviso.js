@@ -2016,6 +2016,32 @@ function leido(sc) {
   })();
 })();
 
+// En el celular, abrir la app no abre el teclado. Si se salio de la app con el teclado abierto, la caja
+// de escribir quedaba elegida y al volver Android lo volvia a abrir solo, tapando media pantalla. Al irse
+// de la app (o al volver, sin haber tocado nada todavia) se suelta la caja: lo escrito queda, y el
+// teclado sale al tocarla, como en Discord. En la PC no cambia nada.
+(function () {
+  'use strict';
+  const tactil = () => matchMedia('(pointer: coarse)').matches;
+  const escribiendo = () => {
+    const a = document.activeElement;
+    return a && a !== document.body && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !/^(button|checkbox|radio|range|submit|file|color)$/i.test(a.type)) || a.isContentEditable) ? a : null;
+  };
+  let toco = 0;
+  for (const t of ['pointerdown', 'touchstart', 'keydown']) document.addEventListener(t, () => { toco = Date.now(); }, { capture: true, passive: true });
+  const soltar = () => { if (!tactil()) return; const a = escribiendo(); if (a) try { a.blur(); } catch { /* sigue */ } };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { soltar(); return; }
+    const vuelta = Date.now();
+    // (al volver, Android puede elegirla de nuevo un instante despues)
+    for (const ms of [0, 150, 500]) setTimeout(() => { if (toco < vuelta) soltar(); }, ms);
+  });
+  addEventListener('pagehide', soltar);
+  // Al abrir la app desde cero, lo mismo durante el primer momento
+  const inicio = Date.now();
+  for (const ms of [300, 1000, 2500]) setTimeout(() => { if (toco < inicio) soltar(); }, ms);
+})();
+
 // Candadito en el # de los canales cerrados, como en Discord: los de Discord que
 // @everyone no ve y los privados propios de Haven (el puente sabe cuales,
 // /puente/api/canales-cerrados). Se vuelve a poner cada vez que Haven redibuja
