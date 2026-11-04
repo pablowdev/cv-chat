@@ -40,75 +40,116 @@
     c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 8, TT - 8); c.closePath();
   }
   function pintarMesa(c) {
-    // la madera (bordo oscuro), con luz arriba y sombra abajo, y un filo claro por fuera
-    const mad = c.createLinearGradient(0, 0, 0, H);
-    mad.addColorStop(0, '#9a1a16'); mad.addColorStop(0.12, '#7d120f'); mad.addColorStop(0.88, '#6a0e0c'); mad.addColorStop(1, '#4e0907');
-    c.fillStyle = mad; c.fillRect(0, 0, W, H);
-    // el canto interior de la madera: mas oscuro hacia el paño
-    const canto = 14;
-    for (const [x, y, w, h, dir] of [[0, TT - 30, W, canto, 'abajo'], [0, TB + 16, W, canto, 'arriba'], [TL - 34, 0, canto, H, 'der'], [TR + 20, 0, canto, H, 'izq']]) {
-      const g = dir === 'abajo' ? c.createLinearGradient(0, y, 0, y + h) : dir === 'arriba' ? c.createLinearGradient(0, y + h, 0, y) : dir === 'der' ? c.createLinearGradient(x, 0, x + w, 0) : c.createLinearGradient(x + w, 0, x, 0);
-      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)');
+    // ── El aspecto de la imagen del dueño: madera de caoba con vetas, esquineras de madera clara con el
+    // corte a inglete, bandas y paño verde oscuro, troneras negras. Las medidas son las de siempre. ──
+    let sem = 11; const rnd = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
+    // madera con vetas: un degradé de base y muchas lineas finas onduladas, a lo largo de la pieza
+    const madera = (x, y, w, h, acostada, tonos, vetas) => {
+      c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+      const g = acostada ? c.createLinearGradient(0, y, 0, y + h) : c.createLinearGradient(x, 0, x + w, 0);
+      tonos.forEach(([p, col]) => g.addColorStop(p, col));
       c.fillStyle = g; c.fillRect(x, y, w, h);
-    }
-    c.strokeStyle = 'rgba(255,190,170,0.25)'; c.lineWidth = 2; c.strokeRect(2, 2, W - 4, H - 4);
-    c.strokeStyle = '#2e0504'; c.lineWidth = 2; c.strokeRect(0.5, 0.5, W - 1, H - 1);
-    // las bandas (verde mas oscuro) entre la madera y el paño
-    c.fillStyle = '#21611e';
-    c.fillRect(TL - 20, TT - 16, TW + 40, TH + 32);
-    // las esquineras y las del medio (bronce), con su borde
-    const bronce = (x0, y0, x1, y1) => { const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, '#f7c06a'); g.addColorStop(0.55, '#e19a3c'); g.addColorStop(1, '#b8731f'); return g; };
+      const largo = acostada ? w : h, ancho = acostada ? h : w;
+      for (let k = 0; k < vetas.n; k++) {
+        const pos = rnd() * ancho, amp = 0.6 + rnd() * 2.4, frec = 0.004 + rnd() * 0.012, fase = rnd() * 6.28;
+        c.strokeStyle = rnd() < 0.5 ? vetas.oscura : vetas.clara;
+        c.globalAlpha = 0.18 + rnd() * 0.35; c.lineWidth = 0.6 + rnd() * 1.4;
+        c.beginPath();
+        for (let t = 0; t <= largo; t += 6) {
+          const d = pos + Math.sin(t * frec + fase) * amp + Math.sin(t * frec * 3.1 + fase) * amp * 0.3;
+          if (acostada) (t ? c.lineTo(x + t, y + d) : c.moveTo(x + t, y + d)); else (t ? c.lineTo(x + d, y + t) : c.moveTo(x + d, y + t));
+        }
+        c.stroke();
+      }
+      c.globalAlpha = 1; c.restore();
+    };
+    const CAOBA = [[0, '#6e2a1c'], [0.25, '#5a1e14'], [0.6, '#4a170f'], [1, '#33100a']];
+    const VETA_CAOBA = { n: 70, oscura: '#2a0b06', clara: '#8a3a26' };
+    const CLARA = [[0, '#e2b986'], [0.5, '#d6a671'], [1, '#c48f58']];
+    const VETA_CLARA = { n: 26, oscura: '#a87442', clara: '#f0cfa0' };
+    // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
+    c.fillStyle = '#3a120b'; c.fillRect(0, 0, W, H);
+    const ARR = TT - 28, ABA = TB + 28, IZQ = TL - 30, DER = TR + 30; // donde la madera se junta con las bandas
+    madera(0, 0, W, ARR, true, CAOBA, VETA_CAOBA);
+    madera(0, ABA, W, H - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
+    madera(0, 0, IZQ, H, false, CAOBA, VETA_CAOBA);
+    madera(DER, 0, W - DER, H, false, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
+    // el canto de la madera hacia adentro: un filo claro y una sombra
+    c.strokeStyle = 'rgba(255,200,170,0.22)'; c.lineWidth = 2; c.strokeRect(IZQ + 1, ARR + 1, DER - IZQ - 2, ABA - ARR - 2);
+    c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(2, 2, W - 4, H - 4);
+    // las bandas: verde un poco mas claro que el paño, con luz en el filo de arriba
+    c.save();
+    c.beginPath(); c.rect(IZQ, ARR, DER - IZQ, ABA - ARR); c.clip();
+    c.fillStyle = '#1d6b2c'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
+    const banda = c.createLinearGradient(0, ARR, 0, ARR + 30);
+    banda.addColorStop(0, 'rgba(255,255,255,0.10)'); banda.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = banda; c.fillRect(IZQ, ARR, DER - IZQ, 30);
+    c.restore();
+    // las esquineras de madera clara, con el corte a inglete en diagonal y el lado de adentro curvo alrededor de la tronera
     for (const p of POCKETS) {
-      const medio = p.x === TL + TW / 2;
+      if (p.x === TL + TW / 2) continue;
+      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 78;
+      const x0 = p.x < W / 2 ? 0 : W, y0 = p.y < H / 2 ? 0 : H;
       c.save();
       c.beginPath();
-      if (!medio) {
-        const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 64;
-        const x0 = p.x < W / 2 ? 0 : W, y0 = p.y < H / 2 ? 0 : H;
-        // una esquinera con el lado de adentro redondeado alrededor de la tronera
-        c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 18);
-        c.quadraticCurveTo(p.x + sx * 30, p.y - sy * 4, p.x + sx * 20, p.y + sy * 22);
-        c.lineTo(x0 + sx * 18, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
-        c.fillStyle = bronce(x0, y0, x0 + sx * q, y0 + sy * q);
-      } else {
-        const arriba = p.y < H / 2, yb = arriba ? 0 : H, s = arriba ? 1 : -1;
-        c.moveTo(p.x - 38, yb); c.lineTo(p.x + 38, yb); c.lineTo(p.x + 26, p.y + s * 8); c.lineTo(p.x - 26, p.y + s * 8); c.closePath();
-        c.fillStyle = bronce(p.x - 38, yb, p.x + 38, p.y);
-      }
-      c.fill();
-      c.strokeStyle = 'rgba(90,45,5,0.7)'; c.lineWidth = 1.5; c.stroke();
+      c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
+      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
+      c.lineTo(x0 + sx * 22, y0 + sy * q); c.lineTo(x0, y0 + sy * q); c.closePath();
+      c.clip();
+      madera(Math.min(x0, x0 + sx * q), Math.min(y0, y0 + sy * q), q, q, true, CLARA, VETA_CLARA);
+      // el inglete: la junta en diagonal entre las dos maderas de la esquinera
+      c.strokeStyle = 'rgba(110,70,30,0.55)'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0 + sy * q); c.stroke();
+      c.restore();
+      c.save();
+      c.beginPath();
+      c.moveTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
+      c.quadraticCurveTo(p.x + sx * 34, p.y - sy * 6, p.x + sx * 22, p.y + sy * 24);
+      c.lineTo(x0 + sx * 22, y0 + sy * q);
+      c.strokeStyle = 'rgba(80,45,15,0.6)'; c.lineWidth = 1.5; c.stroke();
       c.restore();
     }
-    // el paño, con una textura de fieltro (puntitos claros y oscuros) y apenas mas oscuro en los bordes
+    // las del medio: una pieza de madera clara alrededor de la tronera, con dos cortes en diagonal
+    for (const p of POCKETS) {
+      if (p.x !== TL + TW / 2) continue;
+      const arriba = p.y < H / 2, yb = arriba ? 0 : H, s = arriba ? 1 : -1;
+      c.save();
+      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
+      c.clip();
+      madera(p.x - 52, Math.min(yb, p.y + s * 14), 104, Math.abs(p.y + s * 14 - yb), true, CLARA, VETA_CLARA);
+      c.restore();
+      c.strokeStyle = 'rgba(80,45,15,0.6)'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x - 30, p.y + s * 14); c.moveTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.stroke();
+    }
+    // el paño: verde oscuro parejo, con una textura fina de fieltro y apenas mas oscuro en los bordes
     c.save();
     contornoPano(c);
     c.clip();
-    c.fillStyle = '#2f7d2b'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#17652a'; c.fillRect(0, 0, W, H);
     const tex = document.createElement('canvas'); tex.width = tex.height = 96;
     const tc = tex.getContext('2d'), td = tc.createImageData(96, 96);
-    let sem = 7; const rnd = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < td.data.length; i += 4) { const v = rnd(), k = (v - 0.5) * 34; td.data[i] = 47 + k; td.data[i + 1] = 125 + k * 1.3; td.data[i + 2] = 43 + k; td.data[i + 3] = 255; }
+    for (let i = 0; i < td.data.length; i += 4) { const k = (rnd() - 0.5) * 16; td.data[i] = 23 + k * 0.6; td.data[i + 1] = 101 + k; td.data[i + 2] = 42 + k * 0.7; td.data[i + 3] = 255; }
     tc.putImageData(td, 0, 0);
     c.fillStyle = c.createPattern(tex, 'repeat'); c.fillRect(0, 0, W, H);
-    const vin = c.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, W * 0.6);
-    vin.addColorStop(0, 'rgba(255,255,255,0.05)'); vin.addColorStop(1, 'rgba(0,0,0,0.22)');
+    const vin = c.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, W * 0.62);
+    vin.addColorStop(0, 'rgba(255,255,255,0.04)'); vin.addColorStop(1, 'rgba(0,0,0,0.2)');
     c.fillStyle = vin; c.fillRect(0, 0, W, H);
-    // la sombra de las bandas sobre el paño
+    // la sombra que hacen las bandas sobre el paño
     contornoPano(c);
-    c.strokeStyle = 'rgba(0,0,0,0.38)'; c.lineWidth = 9; c.stroke();
+    c.strokeStyle = 'rgba(0,0,0,0.42)'; c.lineWidth = 8; c.stroke();
     c.restore();
-    // el filo de las bandas, iluminado
+    // el filo de las bandas
     contornoPano(c);
-    c.strokeStyle = 'rgba(120,200,105,0.55)'; c.lineWidth = 1.5; c.stroke();
-    // las troneras: el agujero con su borde de cuero
+    c.strokeStyle = 'rgba(110,190,110,0.45)'; c.lineWidth = 1.3; c.stroke();
+    // las troneras: negras, con un borde apenas mas claro y la sombra adentro
     for (const p of POCKETS) {
-      c.fillStyle = '#2a1608'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI * 2); c.fill();
-      const g = c.createRadialGradient(p.x - 4, p.y - 4, 2, p.x, p.y, POCKET_R);
-      g.addColorStop(0, '#000'); g.addColorStop(0.75, '#050505'); g.addColorStop(1, '#1c1c1c');
+      c.fillStyle = '#141414'; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 2.5, 0, Math.PI * 2); c.fill();
+      const g = c.createRadialGradient(p.x - 5, p.y - 5, 2, p.x, p.y, POCKET_R);
+      g.addColorStop(0, '#000'); g.addColorStop(0.7, '#030303'); g.addColorStop(1, '#202020');
       c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
     }
-    // la linea de cabecera
-    c.strokeStyle = 'rgba(230,240,200,0.4)'; c.lineWidth = 1;
+    // la linea de cabecera: fina, amarillo verdosa
+    c.strokeStyle = 'rgba(200,210,60,0.7)'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(HEAD_X + 0.5, TT + BY); c.lineTo(HEAD_X + 0.5, TB - BY); c.stroke();
   }
   function dibujarMesa(c) {
@@ -209,7 +250,7 @@
     c.save(); c.globalAlpha = alfa; c.lineCap = 'butt';
     c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 7; c.beginPath(); c.moveTo(sx + 2, sy + 3); c.lineTo(ex + 2, ey + 3); c.stroke();
     const g = c.createLinearGradient(sx, sy, ex, ey);
-    g.addColorStop(0, '#d9c9a0'); g.addColorStop(0.5, '#9a5a2a'); g.addColorStop(1, '#5a2a10');
+    g.addColorStop(0, '#f2f0ea'); g.addColorStop(0.015, '#f2f0ea'); g.addColorStop(0.02, '#d9b07a'); g.addColorStop(0.6, '#b98049'); g.addColorStop(1, '#7a4a22');
     c.strokeStyle = g; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
     c.restore();
   }
@@ -700,9 +741,9 @@
     if (mio && !M.arrastra) {
       const g = guia(M.bolas, cue.x, cue.y, M.ang);
       // la guia punteada hasta el circulo de donde va a pegar (como en el video de referencia)
-      c.save(); c.setLineDash([3, 4]); c.strokeStyle = 'rgba(230,220,120,0.8)'; c.lineWidth = 1;
+      c.save(); c.strokeStyle = 'rgba(240,225,20,0.9)'; c.lineWidth = 1.5;
       c.beginPath(); c.moveTo(cue.x, cue.y); c.lineTo(g.x, g.y); c.stroke();
-      c.setLineDash([2, 3]); c.strokeStyle = '#e8e050'; c.lineWidth = 1.5;
+      c.strokeStyle = '#f0dc14'; c.lineWidth = 2;
       c.beginPath(); c.arc(g.x, g.y, R, 0, Math.PI * 2); c.stroke(); c.restore();
       dibujarTaco(c, cue.x, cue.y, M.ang, M.apuntando ? M.fuerza : 0);
     } else if (!s.teToca && M.rival && performance.now() - M.rival.t < 4000) {
