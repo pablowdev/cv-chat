@@ -1023,6 +1023,8 @@ async function handle(req, res) {
       disponible: !!(clientId && clientSecret),
       // Para el menu lateral del celular (como Discord): miembros y avatar propio
       miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial'").get().n,
+      // y los de Discord (club.js: el numero del canal contador de alla), para "4.342 en Discord · 288 en CV Chat"
+      enDiscord: (() => { try { return require('./club.js').enDiscord(db); } catch { return null; } })(),
       avatar: (db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id) || {}).avatar || null,
       // Sin vincular: cuantos canales de Discord (de los que ve cualquiera) veria al vincular.
       // Si las cuentas sin vincular ya ven esos canales (PUENTE_SIN_VINCULAR_VEN=publicos), ninguno:
@@ -1276,6 +1278,11 @@ async function handle(req, res) {
   // La pantalla de entrar para los que no tienen cuenta: lo que esta pasando en el club (portada.js)
   if (p === '/puente/api/portada') {
     const r = await require('./portada.js').handle(req, res, p, u, { json, db, io, warn });
+    if (r !== false) return;
+  }
+  // "Ahora en el club" y "El club hoy", arriba de la lista de canales (club.js)
+  if (p === '/puente/api/club') {
+    const r = await require('./club.js').handle(req, res, p, u, { sessionUser, json, db, io, warn });
     if (r !== false) return;
   }
   if (p === '/puente/api/medir') {

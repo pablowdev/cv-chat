@@ -488,17 +488,18 @@ function sheetDrag(sheet, opts) {
   }
 
   function pick(app) {
-    const has = (code) => app.channels.some(c => c && c.code === code);
+    const fuera = (code) => !!(window.puenteClub && window.puenteClub.oculto(code)); // (club: la Guia y SERVER STATS)
+    const has = (code) => app.channels.some(c => c && c.code === code) && !fuera(code);
     const last = store(s => s.getItem(KEY));
     // Nunca una conversacion privada: en ese caso, el canal de inicio
     if (last && has(last) && !isPrivateChat(app, last)) return last;
     if (START && START.indexOf('__PUENTE') !== 0) {
       for (const name of START.split(',')) {
-        const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name));
+        const ch = app.channels.find(c => c && !c.is_dm && norm(c.name) === norm(name) && !fuera(c.code));
         if (ch) return ch.code;
       }
     }
-    const first = app.channels.find(c => c && !c.is_dm && !c.is_group);
+    const first = app.channels.find(c => c && !c.is_dm && !c.is_group && !fuera(c.code)) || app.channels.find(c => c && !c.is_dm && !c.is_group);
     return first ? first.code : null;
   }
 
@@ -2040,6 +2041,355 @@ function leido(sc) {
   // Al abrir la app desde cero, lo mismo durante el primer momento
   const inicio = Date.now();
   for (const ms of [300, 1000, 2500]) setTimeout(() => { if (toco < inicio) soltar(); }, ms);
+})();
+
+// Arriba de la lista de canales: la "Guía del club" y la tarjeta "Ahora en el club" (club.js).
+//  - #bienvenida y #das-deglas salen de la lista: sus mensajes se ven en la Guía, los mismos (con sus
+//    reacciones, que se pueden tocar como en el chat; el enlace al mensaje de las reglas con su
+//    tarjeta, que lleva al original). Los canales siguen existiendo: para cambiar la bienvenida o las
+//    reglas se edita el mensaje ahi (los administradores tienen el atajo en la Guía). Si hay algo
+//    nuevo en esos canales, la fila de la Guía lo marca con un puntito.
+//  - La Guía se abre sola la primera vez que alguien entra a CV Chat en ese dispositivo.
+//  - La categoria "SERVER STATS" (canales que solo mostraban un numero en el nombre) sale de la lista:
+//    la tarjeta muestra quienes estan conectados y alguna mesa esperando rival; tocandola se abre
+//    "El club hoy" (mensajes de hoy, cuantos hay en Discord y en CV Chat, mesas, los que se sumaron).
+(function () {
+  'use strict';
+  const GUIA = [{ canal: 'bienvenida', titulo: 'Bienvenida' }, { canal: 'das-deglas', titulo: 'Reglas' }];
+  const STATS = /server\s*stats/i;
+  const BIENVENIDA_EN = 'cosas'; // a donde lleva "Darles la bienvenida"
+  const ICONO = { truco: '🃏', pool: '🎱', ajedrez: '♟️', funball: '⚽', globalsiege: '🌍' };
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^#/, '').trim();
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const num = (n) => Number(n || 0).toLocaleString('es-AR');
+  // Primera vez en este dispositivo (antes de que se anote el primer canal abierto)
+  let primeraVez = false;
+  try { primeraVez = !localStorage.getItem('puente_ultimo_canal') && !localStorage.getItem('puente_guia_vista'); } catch { /* sin almacenamiento */ }
+
+  let app = null, datos = null, arriba = null, fila = null, tarjeta = null, hoja = null;
+
+  const canalDe = (nombre) => (app.channels || []).find(c => c && !c.is_dm && !c.is_group && norm(c.name) === norm(nombre));
+  const guia = () => GUIA.map(g => { const c = canalDe(g.canal); return c ? { ...g, code: c.code, ch: c } : null; }).filter(Boolean);
+  function ocultos() {
+    const s = new Set(guia().map(g => g.code));
+    for (const c of app.channels || []) if (c && !c.is_dm && STATS.test(String(c.category || ''))) s.add(c.code);
+    return s;
+  }
+  window.puenteClub = { oculto: (code) => { if (!app) app = window.app; return !!(app && Array.isArray(app.channels) && ocultos().has(code)); } };
+
+  // ── La lista ──
+  function pintar() {
+    const list = document.getElementById('channel-list');
+    if (!list) return;
+    const fuera = ocultos();
+    const porCat = new Map();
+    for (const it of list.querySelectorAll('.channel-item[data-code]')) {
+      const o = fuera.has(it.dataset.code);
+      if (it.classList.contains('puente-oculto') !== o) it.classList.toggle('puente-oculto', o);
+      const cat = it.dataset.catGroup;
+      if (cat != null) { const v = porCat.get(cat) || { todos: 0, fuera: 0 }; v.todos++; if (o) v.fuera++; porCat.set(cat, v); }
+    }
+    for (const h of list.querySelectorAll('.category-label[data-category]')) {
+      const v = porCat.get(h.dataset.category);
+      const o = !!(v && v.todos && v.todos === v.fuera);
+      if (h.classList.contains('puente-oculto') !== o) h.classList.toggle('puente-oculto', o);
+    }
+    if (!guia().length && !datos) return;
+    if (!arriba) armarArriba();
+    if (list.firstElementChild !== arriba) list.insertBefore(arriba, list.firstChild);
+    // Algo nuevo en la bienvenida o las reglas: el puntito
+    const nuevo = guia().some(g => (app.unreadCounts && app.unreadCounts[g.code]) > 0);
+    fila.classList.toggle('puente-guia-nuevo', nuevo);
+    fila.hidden = !guia().length;
+  }
+
+  function armarArriba() {
+    arriba = el('div', 'puente-club-arriba');
+    fila = el('button', 'puente-guia-fila');
+    fila.type = 'button';
+    fila.append(el('span', 'puente-guia-icono', '📖'), el('span', 'puente-guia-nombre', 'Guía del club'), el('span', 'puente-guia-sub', 'bienvenida y reglas'), el('span', 'puente-guia-punto'));
+    fila.addEventListener('click', abrirGuia);
+    tarjeta = el('div', 'puente-club-tarjeta');
+    tarjeta.setAttribute('role', 'button'); tarjeta.tabIndex = 0; tarjeta.hidden = true;
+    tarjeta.addEventListener('click', (e) => { if (e.target instanceof Element && e.target.closest('a[href]')) return; abrirHoy(); });
+    tarjeta.addEventListener('keydown', (e) => { if (e.key === 'Enter') abrirHoy(); });
+    arriba.append(fila, tarjeta);
+  }
+
+  function foto(p, cls) {
+    const c = el('span', 'puente-club-foto' + (cls ? ' ' + cls : ''));
+    if (p && p.foto) { const i = el('img'); i.src = p.foto; i.alt = ''; i.loading = 'lazy'; i.onerror = () => { i.remove(); c.textContent = inicial(p); }; c.append(i); }
+    else c.textContent = inicial(p);
+    if (p && p.nombre) c.title = p.nombre;
+    return c;
+  }
+  const inicial = (p) => String((p && p.nombre) || '?').trim().charAt(0).toUpperCase() || '?';
+  const mesaTexto = (m) => m.quien + (m.juego === 'truco' || m.juego === 'pool' || m.juego === 'ajedrez' || m.juego === 'funball' ? ' espera rival' : ' espera jugadores');
+  function entrar(m) { const a = el('a', 'puente-club-entrar', 'Entrar'); a.href = m.enlace; return a; }
+
+  function pintarTarjeta() {
+    if (!tarjeta || !datos) return;
+    tarjeta.replaceChildren();
+    const cab = el('div', 'puente-club-cab');
+    const n = el('span', 'puente-club-n');
+    n.append(el('span', 'puente-club-punto'), document.createTextNode(datos.conectados === 1 ? '1 conectado' : num(datos.conectados) + ' conectados'));
+    cab.append(el('span', 'puente-club-titulo', 'AHORA EN EL CLUB'), el('span', 'puente-club-flecha', '›'));
+    tarjeta.append(cab);
+    const fotos = el('div', 'puente-club-fotos');
+    tarjeta.append(fotos);
+    if (datos.fotos && datos.fotos.length) {
+      const MAX = 6;
+      datos.fotos.slice(0, MAX).forEach(p => fotos.append(foto(p)));
+      const resto = datos.conectados - Math.min(MAX, datos.fotos.length);
+      if (resto > 0) fotos.append(el('span', 'puente-club-foto puente-club-mas', '+' + resto));
+    }
+    fotos.append(n);
+    const m = (datos.abiertas || [])[0];
+    if (m) {
+      const r = el('div', 'puente-club-mesa');
+      const t = el('span', 'puente-club-mesa-txt');
+      t.append(el('b', '', m.nombre + ':'), document.createTextNode(' ' + mesaTexto(m)));
+      r.append(el('span', 'puente-club-mesa-ico', ICONO[m.juego] || '🎲'), t, entrar(m));
+      tarjeta.append(r);
+    }
+    tarjeta.hidden = false;
+  }
+
+  let pidiendo = false;
+  async function traerDatos() {
+    const tk = token();
+    if (!tk || pidiendo) return;
+    pidiendo = true;
+    try {
+      const r = await fetch('/puente/api/club', { headers: { Authorization: 'Bearer ' + tk } });
+      if (r.ok) { datos = await r.json(); pintar(); pintarTarjeta(); if (hoja && hoja.dataset.que === 'hoy') llenarHoy(); }
+    } catch { /* la proxima */ }
+    pidiendo = false;
+  }
+
+  // ── Las hojas (la Guía y "El club hoy"): toda la pantalla en el celular, una ventana en la PC ──
+  function cerrar() {
+    if (!hoja) return;
+    hoja.remove(); hoja = null;
+    document.removeEventListener('keydown', tecla, true);
+  }
+  function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }
+  function abrirHoja(que, titulo, icono) {
+    cerrar();
+    hoja = el('div', 'puente-hoja-fondo');
+    hoja.dataset.que = que;
+    const h = el('div', 'puente-hoja');
+    h.id = que === 'guia' ? 'puente-guia' : 'puente-club-hoy';
+    h.setAttribute('role', 'dialog'); h.setAttribute('aria-label', titulo);
+    const cab = el('div', 'puente-hoja-cab');
+    if (icono) cab.append(el('span', 'puente-hoja-icono', icono));
+    cab.append(el('span', 'puente-hoja-titulo', titulo));
+    const x = el('button', 'puente-hoja-x', '✕'); x.type = 'button'; x.title = 'Cerrar'; x.addEventListener('click', cerrar);
+    cab.append(x);
+    const cuerpo = el('div', 'puente-hoja-cuerpo');
+    h.append(cab, cuerpo);
+    hoja.append(h);
+    hoja.addEventListener('click', (e) => { if (e.target === hoja) cerrar(); });
+    document.body.append(hoja);
+    document.addEventListener('keydown', tecla, true);
+    return cuerpo;
+  }
+  // Lo que lleva a otro lado (un canal, un mensaje, una mesa): se cierra la hoja y el panel de canales del celular
+  document.addEventListener('click', (e) => {
+    const t = e.target instanceof Element ? e.target : null;
+    if (!t) return;
+    const enHoja = hoja && hoja.contains(t), enTarjeta = tarjeta && tarjeta.contains(t);
+    if (!enHoja && !enTarjeta) return;
+    if (!t.closest('a[href], .puente-vista-chat, [data-ir]')) return;
+    setTimeout(() => { if (enHoja) cerrar(); try { app && app._closeMobilePanels && app._closeMobilePanels(); } catch { /* sigue */ } }, 0);
+  }, true);
+
+  // ── La Guía ──
+  // Los mensajes de un canal, como los manda Haven (con sus reacciones y autores)
+  function traer(code, actual) {
+    return new Promise((res) => {
+      const s = app.socket;
+      if (!s) return res(null);
+      let t = null;
+      const on = (d) => { if (!d || d.channelCode !== code || d.around) return; s.off('message-history', on); clearTimeout(t); res(Array.isArray(d.messages) ? d.messages : []); };
+      s.on('message-history', on);
+      t = setTimeout(() => { s.off('message-history', on); res(null); }, 8000);
+      // (si justo es el canal abierto, se pide como lo pide Haven: le llega lo mismo)
+      s.emit('get-messages', actual ? { code } : { code, limit: 20 });
+    });
+  }
+  function marcarLeido(g) {
+    const ch = g.ch;
+    if (!ch || !(app.unreadCounts && app.unreadCounts[g.code] > 0) || !ch.latestMessageId) return;
+    try { app.socket.emit('mark-read', { code: g.code, messageId: ch.latestMessageId }); } catch { return; }
+    app.unreadCounts[g.code] = 0;
+    try { app._updateBadge && app._updateBadge(g.code); } catch { /* sigue */ }
+    pintar();
+  }
+  async function abrirGuia() {
+    try { localStorage.setItem('puente_guia_vista', '1'); } catch { /* sin almacenamiento */ }
+    const cuerpo = abrirHoja('guia', 'Guía del club', '📖');
+    const lista = guia();
+    const cajas = lista.map(g => {
+      const sec = el('section', 'puente-guia-sec');
+      sec.dataset.code = g.code;
+      const cab = el('div', 'puente-guia-sec-cab');
+      cab.append(el('span', 'puente-guia-sec-titulo', g.titulo.toUpperCase()));
+      if (app.user && app.user.isAdmin) {
+        const ed = el('button', 'puente-guia-editar', 'Editar en #' + g.ch.name); ed.type = 'button'; ed.dataset.ir = '1';
+        ed.addEventListener('click', () => { cerrar(); app.switchChannel(g.code); });
+        cab.append(ed);
+      }
+      const msgs = el('div', 'puente-guia-msgs', 'Cargando…');
+      sec.append(cab, msgs);
+      cuerpo.append(sec);
+      return { g, msgs };
+    });
+    const listo = el('button', 'puente-guia-listo', 'Listo, a charlar'); listo.type = 'button'; listo.addEventListener('click', cerrar);
+    const pie = el('div', 'puente-guia-pie', 'La volvés a ver tocando "Guía del club", arriba de los canales');
+    cuerpo.append(listo, pie);
+    for (const { g, msgs } of cajas) {
+      const lista = await traer(g.code, app.currentChannel === g.code);
+      if (!hoja || !msgs.isConnected) return;
+      msgs.replaceChildren();
+      if (!lista) { msgs.textContent = 'No se pudo cargar. Probá de nuevo en un momento.'; continue; }
+      const orden = lista.slice().sort((a, b) => a.id - b.id);
+      let prev = null;
+      for (const m of orden) {
+        try { msgs.append(app._createMessageEl(m, prev)); prev = m; } catch (err) { console.warn('[puente] guia: mensaje', err); }
+      }
+      if (!orden.length) msgs.textContent = 'Todavía no hay nada acá.';
+      try { app._fetchLinkPreviews && app._fetchLinkPreviews(msgs); } catch { /* sin vistas previas */ }
+      marcarLeido(g);
+    }
+  }
+  // Las reacciones de la Guía: tocarlas suma o saca la propia, como en el chat
+  function reaccionesDe(id, reacciones) {
+    if (!hoja || hoja.dataset.que !== 'guia') return;
+    const m = hoja.querySelector('.message[data-msg-id="' + id + '"], .message-compact[data-msg-id="' + id + '"]');
+    if (!m) return;
+    const viejo = m.querySelector('.reactions-row'); if (viejo) viejo.remove();
+    let html = '';
+    try { html = app._renderReactions(id, reacciones || []); } catch { return; }
+    const cont = m.querySelector('.message-content');
+    if (html && cont) cont.insertAdjacentHTML('afterend', html);
+  }
+  document.addEventListener('click', (e) => {
+    const b = hoja && hoja.dataset.que === 'guia' && e.target instanceof Element && e.target.closest('#puente-guia .reaction-badge');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const m = b.closest('.message, .message-compact');
+    const id = m && parseInt(m.dataset.msgId, 10), emoji = b.dataset.emoji;
+    if (!id || !emoji) return;
+    app.socket.emit(b.classList.contains('own') ? 'remove-reaction' : 'add-reaction', { messageId: id, emoji });
+    // (la respuesta llega con "reactions-updated"; si no llega, se vuelve a pedir el canal)
+    const sec = b.closest('.puente-guia-sec');
+    const code = sec && sec.dataset.code;
+    setTimeout(async () => {
+      if (!code || !hoja) return;
+      const lista = await traer(code, app.currentChannel === code);
+      const msg = lista && lista.find(x => x.id === id);
+      if (msg) reaccionesDe(id, msg.reactions);
+    }, 900);
+  }, true);
+
+  // ── El club hoy ──
+  function caja(titulo) { const c = el('div', 'puente-club-caja'); c.append(el('div', 'puente-club-caja-tit', titulo)); return c; }
+  function dato(titulo, valor, punto) {
+    const c = el('div', 'puente-club-dato');
+    c.append(el('div', 'puente-club-caja-tit', titulo));
+    const v = el('div', 'puente-club-valor');
+    if (punto) v.append(el('span', 'puente-club-punto'));
+    v.append(document.createTextNode(num(valor)));
+    c.append(v);
+    return c;
+  }
+  function llenarHoy() {
+    const cuerpo = hoja && hoja.querySelector('.puente-hoja-cuerpo');
+    if (!cuerpo || !datos) return;
+    cuerpo.replaceChildren();
+    const grilla = el('div', 'puente-club-datos');
+    grilla.append(dato('CONECTADOS', datos.conectados, true), dato('MENSAJES HOY', datos.mensajesHoy));
+    if (datos.discord) grilla.append(dato('EN DISCORD', datos.discord));
+    grilla.append(dato('EN CV CHAT', datos.cuentas));
+    cuerpo.append(grilla);
+    if (datos.fotos && datos.fotos.length) {
+      const c = caja('CONECTADOS AHORA');
+      const g = el('div', 'puente-club-gente');
+      for (const p of datos.fotos) { const x = el('span', 'puente-club-persona'); x.append(foto(p, 'chica'), el('span', '', p.nombre)); g.append(x); }
+      if (datos.conectados > datos.fotos.length) g.append(el('span', 'puente-club-persona puente-club-gris', 'y ' + num(datos.conectados - datos.fotos.length) + ' más'));
+      c.append(g); cuerpo.append(c);
+    }
+    const mesas = caja('ESPERANDO RIVAL');
+    if (datos.abiertas && datos.abiertas.length) {
+      for (const m of datos.abiertas) {
+        const r = el('div', 'puente-club-mesa');
+        const t = el('span', 'puente-club-mesa-txt');
+        t.append(el('b', '', m.nombre), document.createTextNode((m.detalle ? ' ' + m.detalle : '') + ' · ' + m.quien));
+        r.append(el('span', 'puente-club-mesa-ico', ICONO[m.juego] || '🎲'), t, entrar(m));
+        mesas.append(r);
+      }
+    } else {
+      const r = el('div', 'puente-club-gris', 'Ninguna mesa esperando ahora. ');
+      const a = el('a', 'puente-club-link', 'Armar una partida ›'); a.href = '/app?juegos';
+      r.append(a); mesas.append(r);
+    }
+    cuerpo.append(mesas);
+    if (datos.nuevos && datos.nuevos.length) {
+      const c = caja(datos.nuevos.length === 1 ? 'SE SUMÓ HOY' : 'SE SUMARON HOY');
+      const g = el('div', 'puente-club-gente');
+      for (const p of datos.nuevos) { const x = el('span', 'puente-club-persona'); x.append(foto(p, 'chica'), el('span', '', p.nombre)); g.append(x); }
+      c.append(g);
+      const destino = canalDe(BIENVENIDA_EN);
+      if (destino) {
+        const b = el('button', 'puente-club-link', (datos.nuevos.length === 1 ? 'Darle' : 'Darles') + ' la bienvenida en #' + destino.name + ' ›');
+        b.type = 'button'; b.dataset.ir = '1';
+        b.addEventListener('click', () => { cerrar(); app.switchChannel(destino.code); });
+        c.append(b);
+      }
+      cuerpo.append(c);
+    }
+  }
+  function abrirHoy() {
+    abrirHoja('hoy', 'El club hoy');
+    llenarHoy();
+    traerDatos();
+  }
+
+  let tries = 0;
+  (function wait() {
+    app = window.app;
+    if (!app || !app.socket || typeof app.switchChannel !== 'function' || typeof app._createMessageEl !== 'function' || !Array.isArray(app.channels) || !app.channels.length || !document.getElementById('channel-list')) {
+      if (++tries < 240) setTimeout(wait, 500); return;
+    }
+    if (app.user && app.user.isGuest) return; // (los invitados del Truco no ven canales)
+    const list = document.getElementById('channel-list');
+    let pend = false;
+    new MutationObserver(() => { if (!pend) { pend = true; requestAnimationFrame(() => { pend = false; pintar(); }); } }).observe(list, { childList: true });
+    // Los numeritos de sin leer cambian sin redibujar la lista
+    if (typeof app._updateBadge === 'function') {
+      const orig = app._updateBadge;
+      app._updateBadge = function (...a) { const r = orig.apply(this, a); try { if (fila) fila.classList.toggle('puente-guia-nuevo', guia().some(g => (this.unreadCounts && this.unreadCounts[g.code]) > 0)); } catch { /* sigue */ } return r; };
+    }
+    app.socket.on('reactions-updated', (d) => { if (d && d.messageId) reaccionesDe(d.messageId, d.reactions); });
+    pintar();
+    traerDatos();
+    setInterval(() => { if (document.visibilityState === 'visible') traerDatos(); }, 60e3);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDatos(); });
+    document.getElementById('mobile-menu-btn')?.addEventListener('click', () => traerDatos());
+    // La primera vez en este dispositivo, la Guía sola
+    // (espera a que no haya otra ventana abierta, como el aviso de las notificaciones, hasta medio minuto)
+    if (primeraVez && guia().length) {
+      let n = 0;
+      const probar = () => {
+        const otra = [...document.querySelectorAll('.modal-overlay, .modal')].some(m => m.offsetParent !== null && getComputedStyle(m).display !== 'none');
+        if (!otra && !hoja) { abrirGuia(); return; }
+        if (++n < 30) setTimeout(probar, 1000);
+      };
+      setTimeout(probar, 1500);
+    }
+  })();
 })();
 
 // Candadito en el # de los canales cerrados, como en Discord: los de Discord que
@@ -4988,7 +5338,7 @@ document.addEventListener('pointerdown', (ev) => {
   const vistas = new Map();
   function vista(a, p, r) {
     const cont = a.closest('.message-content, .thread-msg-content');
-    if (!cont || !cont.closest('#messages, #thread-panel') || cont.dataset.puenteVista) return;
+    if (!cont || !cont.closest('#messages, #thread-panel, #puente-guia') || cont.dataset.puenteVista) return;
     cont.dataset.puenteVista = '1';
     const tk = token();
     if (!tk) return;
@@ -6039,7 +6389,8 @@ document.addEventListener('pointerdown', (ev) => {
     if (!st) return false;
     const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
     if (brand && typeof st.miembros === 'number' && !document.getElementById('puente-server-info')) {
-      const info = el('div', 'puente-server-info', st.miembros.toLocaleString('es-AR') + ' miembros');
+      const info = el('div', 'puente-server-info', typeof st.enDiscord === 'number' ? '' : st.miembros.toLocaleString('es-AR') + ' miembros');
+      if (typeof st.enDiscord === 'number') info.append(el('b', '', st.enDiscord.toLocaleString('es-AR')), ' en Discord · ', el('b', '', st.miembros.toLocaleString('es-AR')), ' en CV Chat');
       info.id = 'puente-server-info';
       brand.insertAdjacentElement('afterend', info);
     }
