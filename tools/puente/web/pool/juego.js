@@ -520,7 +520,7 @@
     const b = el('div', 'jg-cuerpo jg-reglas pl-ui'); page.appendChild(b);
     const sec = (t, x) => { b.appendChild(el('div', 'jg-sub', t)); b.appendChild(el('p', null, x)); };
     sec('El objetivo', 'Pool de 8 bolas: uno se queda con las lisas (1 a 7) y el otro con las rayadas (9 a 15). Gana el que mete todas las suyas y después la 8.');
-    sec('Tirar', 'Apuntás con el mouse (la línea muestra hasta dónde va la blanca). La fuerza la elegís en la barra de la derecha y tirás con la barra espaciadora. También podés apretar sobre la mesa, arrastrar hacia atrás y soltar: cuanto más arrastrás, más fuerte. En el celular, tocá y arrastrá hacia atrás.');
+    sec('Tirar', 'Apuntás con el mouse (la línea muestra hasta dónde va la blanca). La fuerza la elegís en la barra de la derecha y tirás con la barra espaciadora. También podés apretar sobre la mesa, arrastrar hacia atrás y soltar: cuanto más arrastrás, más fuerte. En el celular o la tablet: arrastrá el dedo sobre la mesa para apuntar, afiná con la rueda y arrastrá la barra de fuerza; al soltarla, tirás.');
     sec('El efecto', 'En la bola de arriba a la derecha elegís dónde le pega el taco a la blanca. Arriba: después del choque la blanca sigue de largo. Abajo: vuelve para atrás. A un costado: sale más abierta o más cerrada de la primera banda. Doble clic la vuelve al centro.');
     sec('La salida', 'El que rompe tiene la bola en mano detrás de la línea: arrastrá la blanca adonde quieras antes de tirar. Si entra la 8 en la salida, se rearma el triángulo y rompe de nuevo.');
     sec('Los grupos', 'Mientras la mesa está abierta podés pegarle a cualquier bola menos a la 8. El primero que mete una bola sin falta se queda con ese grupo (lisas o rayadas).');
@@ -566,7 +566,12 @@
     M.medidor = el('div', 'pl-fuerza'); const tubo = el('div', 'pl-tubo'); M.lleno = el('div', 'pl-lleno'); tubo.appendChild(M.lleno); M.medidor.append(tubo, el('div', 'pl-marcas'));
     M.sonidoBtn = btn(audio.on() ? '🔊' : '🔇', 'jg-suave pl-sonido', () => { try { localStorage.setItem('pool-sonido', audio.on() ? '0' : '1'); } catch { /* sin almacenamiento */ } M.sonidoBtn.textContent = audio.on() ? '🔊' : '🔇'; audio.init(); });
     M.sonidoBtn.title = 'Sonido';
-    der.append(M.efectoEl, el('div', 'pl-etq', 'Efecto'), M.medidor, el('div', 'pl-etq', 'Fuerza'), M.sonidoBtn);
+    // la rueda para afinar la punteria (solo se ve con pantalla tactil)
+    M.fino = el('div', 'pl-fino'); M.fino.title = 'Afinar: arrastrá para girar el taco de a poquito';
+    const afinar = el('div', 'pl-afinar'); afinar.append(M.fino, el('div', 'pl-etq', 'Afinar'));
+    der.append(M.efectoEl, el('div', 'pl-etq', 'Efecto'), M.medidor, el('div', 'pl-etq', 'Fuerza'), afinar, M.sonidoBtn);
+    M.mesaEl = b;
+    try { if (matchMedia('(pointer: coarse)').matches) tactil(); } catch { /* sin matchMedia */ }
     juego.append(centro, der);
     b.appendChild(juego);
     M.pie = el('div', 'pl-pie');
@@ -754,6 +759,7 @@
     }
     const ult = (s.log || []).slice(-3);
     if (ult.length) { const l = el('div', 'pl-log'); for (const x of ult) l.appendChild(el('div', null, x)); M.pie.appendChild(l); }
+    if (M.tactil && s.estado === 'jugando' && s.soyJugador) M.pie.appendChild(el('div', 'jg-ayuda', 'Apuntá arrastrando el dedo sobre la mesa y afiná con la rueda. Para tirar, arrastrá la barra de fuerza y soltá (si volvés al principio antes de soltar, no tira).'));
     if (s.compu && s.nivel) M.pie.appendChild(el('div', 'jg-ayuda', `Contra la compu (${s.nivel.toLowerCase()}).`));
     else if (s.amistosa) M.pie.appendChild(el('div', 'jg-ayuda', 'Partida amistosa: no suma al ranking.'));
   }
@@ -804,7 +810,7 @@
       c.beginPath(); c.moveTo(cue.x, cue.y); c.lineTo(g.x, g.y); c.stroke();
       c.strokeStyle = '#f0dc14'; c.lineWidth = 2;
       c.beginPath(); c.arc(g.x, g.y, R, 0, Math.PI * 2); c.stroke(); c.restore();
-      dibujarTaco(c, cue.x, cue.y, M.ang, M.apuntando ? M.fuerza : 0);
+      dibujarTaco(c, cue.x, cue.y, M.ang, M.apuntando || M.cargando ? M.fuerza : 0);
     } else if (!s.teToca && M.rival && performance.now() - M.rival.t < 4000) {
       // como apunta el rival (y donde pone la blanca si tiene bola en mano)
       const x = M.rival.x != null ? M.rival.x : cue.x, y = M.rival.y != null ? M.rival.y : cue.y;
@@ -812,7 +818,7 @@
       dibujarTaco(c, x, y, M.rival.ang, M.rival.fuerza || 0, 0.85);
     }
     // la barra de fuerza (en el celular va acostada)
-    const pc = ((M.apuntando ? M.fuerza : M.barra) * 100) + '%';
+    const pc = ((M.apuntando || M.cargando ? M.fuerza : M.barra) * 100) + '%';
     if (M.medidor.offsetWidth > M.medidor.offsetHeight) { M.lleno.style.width = pc; M.lleno.style.height = ''; } else { M.lleno.style.height = pc; M.lleno.style.width = ''; }
     if (s.inicio) { const sg = Math.max(0, Math.floor((Date.now() - s.inicio) / 1000)); M.reloj.textContent = `${Math.floor(sg / 60)}:${String(sg % 60).padStart(2, '0')}`; }
   }
@@ -822,13 +828,14 @@
     const cv = M.cv;
     const punto = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (CW / r.width) - OX, y: (e.clientY - r.top) * (CH / r.height) - OY }; };
     const apuntarA = (x, y) => { const cue = blanca(); if (!cue) return; const dx = x - cue.x, dy = y - cue.y; if (Math.hypot(dx, dy) > 1) M.ang = Math.atan2(dy, dx); };
+    const apuntarDedo = (p) => { const cue = blanca(); if (cue && Math.hypot(p.x - cue.x, p.y - cue.y) > R * 2) apuntarA(p.x, p.y); };
     const contar = () => {
       // la mira, para que el rival la vea (pool.js la reparte; como mucho 12 por segundo)
       const now = performance.now();
       if (now - M.ultimoApunta < 85 || !M.s || M.s.compu) return;
       M.ultimoApunta = now;
       const cue = blanca();
-      A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y }).catch(() => {});
+      A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando || M.cargando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y }).catch(() => {});
     };
     cv.addEventListener('pointermove', (e) => {
       if (!puedoTirar()) return;
@@ -839,6 +846,8 @@
         if (M.valido) { const cue = blanca(); cue.x = q.x; cue.y = q.y; cue.on = true; }
         contar(); return;
       }
+      if (M.dedo) { apuntarDedo(p); contar(); return; }
+      if (e.pointerType === 'touch') return;
       if (M.apuntando) {
         // arrastrar hacia atras (en contra del tiro) carga la fuerza
         const pull = (M.desde.x - p.x) * Math.cos(M.ang) + (M.desde.y - p.y) * Math.sin(M.ang);
@@ -852,20 +861,23 @@
       const p = punto(e);
       try { cv.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
       const cue = blanca();
-      if (M.s.enMano && cue && Math.hypot(p.x - cue.x, p.y - cue.y) < R * 2.2) { M.arrastra = true; M.valido = true; return; }
-      if (e.pointerType === 'touch') apuntarA(p.x, p.y);
+      const toque = e.pointerType === 'touch';
+      if (toque) tactil();
+      if (M.s.enMano && cue && Math.hypot(p.x - cue.x, p.y - cue.y) < R * (toque ? 3.2 : 2.2)) { M.arrastra = true; M.valido = true; return; }
+      if (toque) { M.dedo = true; apuntarDedo(p); contar(); return; }
       M.apuntando = true; M.fuerza = 0; M.desde = p;
     });
     const soltar = (e) => {
       try { cv.releasePointerCapture(e.pointerId); } catch { /* ya suelto */ }
       if (M.arrastra) { M.arrastra = false; M.valido = true; return; }
+      if (M.dedo) { M.dedo = false; return; }
       if (!M.apuntando) return;
       M.apuntando = false;
       if (M.fuerza > 0.02) { M.barra = M.fuerza; tirar(M.fuerza); }
       M.fuerza = 0;
     };
     cv.addEventListener('pointerup', soltar);
-    cv.addEventListener('pointercancel', () => { M.apuntando = false; M.arrastra = false; M.fuerza = 0; });
+    cv.addEventListener('pointercancel', () => { M.apuntando = false; M.arrastra = false; M.dedo = false; M.fuerza = 0; });
     // espacio: tira con la fuerza de la barra (si no se esta escribiendo en el chat)
     M.teclas = (e) => {
       if (e.code !== 'Space' || e.repeat || !M) return;
@@ -883,8 +895,52 @@
       const r = M.medidor.querySelector('.pl-tubo').getBoundingClientRect();
       M.barra = clamp(r.width > r.height ? (e.clientX - r.left) / r.width : 1 - (e.clientY - r.top) / r.height, 0.03, 1);
     };
-    M.medidor.addEventListener('pointerdown', (e) => { try { M.medidor.setPointerCapture(e.pointerId); } catch { /* sin captura */ } desdeBarra(e); });
-    M.medidor.addEventListener('pointermove', (e) => { if (e.buttons) desdeBarra(e); });
+    M.medidor.addEventListener('pointerdown', (e) => {
+      try { M.medidor.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+      if (e.pointerType === 'touch') {
+        tactil(); audio.init();
+        if (!puedoTirar() || M.arrastra) return;
+        const r = M.medidor.querySelector('.pl-tubo').getBoundingClientRect();
+        M.cargando = { x: e.clientX, y: e.clientY, largo: Math.max(60, r.width > r.height ? r.width : r.height), acostada: r.width > r.height };
+        M.fuerza = 0; return;
+      }
+      desdeBarra(e);
+    });
+    M.medidor.addEventListener('pointermove', (e) => {
+      if (M.cargando) {
+        const k = M.cargando, d = k.acostada ? Math.abs(e.clientX - k.x) : Math.abs(e.clientY - k.y);
+        M.fuerza = clamp(d / (k.largo * 0.9), 0, 1); contar(); return;
+      }
+      if (e.buttons && e.pointerType !== 'touch') desdeBarra(e);
+    });
+    const soltarBarra = (tira) => {
+      if (!M.cargando) return;
+      M.cargando = null;
+      if (tira && M.fuerza > 0.03 && puedoTirar()) { M.barra = M.fuerza; tirar(M.fuerza); }
+      M.fuerza = 0;
+    };
+    M.medidor.addEventListener('pointerup', () => soltarBarra(true));
+    M.medidor.addEventListener('pointercancel', () => soltarBarra(false));
+    // la rueda para afinar: arrastrarla gira el taco de a poquito (unos 0,07 grados por pixel)
+    let finoDesde = null, finoPos = 0;
+    M.fino.addEventListener('pointerdown', (e) => {
+      try { M.fino.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+      finoDesde = { x: e.clientX, y: e.clientY };
+    });
+    M.fino.addEventListener('pointermove', (e) => {
+      if (!finoDesde) return;
+      const r = M.fino.getBoundingClientRect(), acostada = r.width > r.height;
+      const d = acostada ? e.clientX - finoDesde.x : e.clientY - finoDesde.y;
+      finoDesde = { x: e.clientX, y: e.clientY };
+      finoPos += d;
+      M.fino.style.backgroundPosition = acostada ? finoPos + 'px 0' : '0 ' + finoPos + 'px';
+      if (!puedoTirar() || M.arrastra || M.cargando) return;
+      M.ang += d * 0.0012;
+      contar();
+    });
+    const finoFin = () => { finoDesde = null; };
+    M.fino.addEventListener('pointerup', finoFin);
+    M.fino.addEventListener('pointercancel', finoFin);
     // el efecto
     const ponerEfecto = (x, y) => { const d = Math.hypot(x, y); if (d > 0.8) { x *= 0.8 / d; y *= 0.8 / d; } M.efecto = { x, y }; M.punto.style.left = (50 + x * 50) + '%'; M.punto.style.top = (50 + y * 50) + '%'; };
     const desdeEfecto = (e) => { const r = M.efectoEl.getBoundingClientRect(); ponerEfecto((e.clientX - r.left) / r.width * 2 - 1, (e.clientY - r.top) / r.height * 2 - 1); };
@@ -892,6 +948,12 @@
     M.efectoEl.addEventListener('pointermove', (e) => { if (e.buttons) desdeEfecto(e); });
     M.efectoEl.addEventListener('dblclick', () => ponerEfecto(0, 0));
     M.ponerEfecto = ponerEfecto;
+  }
+  function tactil() {
+    if (!M || M.tactil) return;
+    M.tactil = true;
+    if (M.mesaEl) M.mesaEl.classList.add('pl-tactil');
+    if (M.s) pie();
   }
   async function tirar(fuerza) {
     const s = M.s, cue = blanca();

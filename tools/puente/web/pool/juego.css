@@ -63,6 +63,17 @@
 .puente-jg .pl-log { font-size: 13px; color: var(--text-muted, #b5bac1); flex: 1; min-width: 200px; }
 .puente-jg .pl-chat { margin-top: 6px; }
 
+/* Con pantalla tactil (clase pl-tactil, la pone juego.js): controles mas grandes y la rueda para afinar */
+.puente-jg .pl-afinar { display: none; flex-direction: column; align-items: center; gap: 4px; margin-top: 10px; }
+.puente-jg .pl-fino { width: 40px; height: 110px; border: 1px solid #4f6f69; border-radius: 8px; touch-action: none; cursor: ns-resize; background: repeating-linear-gradient(to bottom, #d6e5e1 0 6px, #7d9a94 6px 8px); box-shadow: inset 0 0 10px rgba(0,0,0,0.45); }
+.puente-jg .pl-tactil .pl-afinar { display: flex; }
+.puente-jg .pl-tactil .pl-juego { grid-template-columns: minmax(0, 1fr) 86px; }
+.puente-jg .pl-tactil .pl-der { padding: 10px 8px; gap: 6px; }
+.puente-jg .pl-tactil .pl-efecto { width: 58px; height: 58px; }
+.puente-jg .pl-tactil .pl-fuerza { width: 46px; min-height: 150px; max-height: 230px; }
+.puente-jg .pl-tactil .pl-tubo { width: 32px; border-radius: 4px; }
+.puente-jg .pl-tactil .pl-sonido { padding: 6px 12px; }
+
 /* En el celular: el efecto y la fuerza van debajo de la mesa, en fila */
 @media (max-width: 640px) {
   .puente-jg .pl-mesa, .puente-jg .pl-juego, .puente-jg .pl-der { min-width: 0; }
@@ -79,4 +90,13 @@
   .puente-jg .pl-cara, .puente-jg .pl-cara > * { width: 24px !important; height: 24px !important; min-width: 24px; flex-basis: 24px; }
   .puente-jg .pl-reloj { font-size: 15px; padding: 2px 8px; min-width: 60px; }
   .puente-jg .pl-msg { font-size: 13px; }
+  .puente-jg .pl-tactil .pl-juego { grid-template-columns: minmax(0, 1fr); }
+  .puente-jg .pl-tactil .pl-der { padding: 8px; gap: 10px; align-items: center; }
+  .puente-jg .pl-tactil .pl-efecto { width: 48px; height: 48px; }
+  .puente-jg .pl-tactil .pl-fuerza { width: auto; min-height: 0; height: 44px; max-height: none; }
+  .puente-jg .pl-tactil .pl-tubo { width: 100%; height: 30px; }
+  .puente-jg .pl-tactil .pl-afinar { margin: 0; }
+  .puente-jg .pl-tactil .pl-der > .pl-etq { display: none; }
+  .puente-jg .pl-tactil .pl-sonido { padding: 6px 8px; flex: none; }
+  .puente-jg .pl-fino { width: 96px; height: 40px; cursor: ew-resize; background: repeating-linear-gradient(to right, #d6e5e1 0 6px, #7d9a94 6px 8px); }
 }
