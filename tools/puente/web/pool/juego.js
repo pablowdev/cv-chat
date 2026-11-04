@@ -132,10 +132,11 @@
     // las del medio: una pieza dorada alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x !== TL + TW / 2) continue;
-      // las del medio: un arco dorado que envuelve el agujero del lado de la madera
-      const arriba = p.y < H / 2, rr = POCKET_R + 13, yb = arriba ? FY0 : FY1;
-      const forma = () => { c.beginPath(); c.moveTo(p.x - rr, yb); c.lineTo(p.x - rr, p.y); c.arc(p.x, p.y, rr, Math.PI, 0, arriba); c.lineTo(p.x + rr, yb); c.closePath(); };
-      dorado(forma, p.x - rr, Math.min(yb, p.y - rr), rr * 2, Math.abs(yb - p.y) + rr);
+      // las del medio: una pieza dorada con los costados en diagonal (45°), angosta a la altura del centro del
+      // agujero y abriendose hacia el borde de afuera
+      const arriba = p.y < H / 2, a = POCKET_R + 4, yb = arriba ? FY0 : FY1, alto = Math.abs(yb - p.y), b = a + alto;
+      const forma = () => { c.beginPath(); c.moveTo(p.x - a, p.y); c.lineTo(p.x - b, yb); c.lineTo(p.x + b, yb); c.lineTo(p.x + a, p.y); c.closePath(); };
+      dorado(forma, p.x - b, Math.min(yb, p.y), b * 2, alto);
     }
     // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
     c.save();
