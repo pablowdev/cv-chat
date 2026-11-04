@@ -32,16 +32,26 @@
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
   let fondoMesa = null;
+  // El paño: hasta las bandas, y en cada boca (donde no hay banda) llega hasta la madera y entra derecho en la
+  // tronera. Cada banda termina en su punta con un corte corto en angulo. (La madera llega hasta WX/WY de la
+  // linea de las troneras: queda una banda verde finita.)
+  const WX = BX - 9, WY = BY - 8, CH_ = 8;
   function contornoPano(c) {
-    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX);
-    // la parte jugable: las bandas por dentro, y en cada boca un corte en diagonal hacia la tronera
+    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX), m = TL + TW / 2;
+    const pts = [
+      // arriba a la izquierda -> arriba al medio -> arriba a la derecha
+      [TL + cx, TT + BY], [m - BOCA_M, TT + BY], [m - BOCA_M + CH_, TT + WY], [m + BOCA_M - CH_, TT + WY], [m + BOCA_M, TT + BY],
+      [TR - cx, TT + BY], [TR - cx + CH_, TT + WY], [TR - WX, TT + WY], [TR - WX, TT + cy - CH_], [TR - BX, TT + cy],
+      // la derecha, abajo
+      [TR - BX, TB - cy], [TR - WX, TB - cy + CH_], [TR - WX, TB - WY], [TR - cx + CH_, TB - WY], [TR - cx, TB - BY],
+      [m + BOCA_M, TB - BY], [m + BOCA_M - CH_, TB - WY], [m - BOCA_M + CH_, TB - WY], [m - BOCA_M, TB - BY],
+      [TL + cx, TB - BY], [TL + cx - CH_, TB - WY], [TL + WX, TB - WY], [TL + WX, TB - cy + CH_], [TL + BX, TB - cy],
+      // la izquierda, arriba
+      [TL + BX, TT + cy], [TL + WX, TT + cy - CH_], [TL + WX, TT + WY], [TL + cx - CH_, TT + WY],
+    ];
     c.beginPath();
-    c.moveTo(TL + cx, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M + 9, TT - 6); c.lineTo(TL + TW / 2 + BOCA_M - 9, TT - 6); c.lineTo(TL + TW / 2 + BOCA_M, TT + BY);
-    c.lineTo(TR - cx, TT + BY); c.lineTo(TR - 8, TT - 8); c.lineTo(TR - BX, TT + cy);
-    c.lineTo(TR - BX, TB - cy); c.lineTo(TR - 8, TB + 8); c.lineTo(TR - cx, TB - BY);
-    c.lineTo(TL + TW / 2 + BOCA_M, TB - BY); c.lineTo(TL + TW / 2 + BOCA_M - 9, TB + 6); c.lineTo(TL + TW / 2 - BOCA_M + 9, TB + 6); c.lineTo(TL + TW / 2 - BOCA_M, TB - BY);
-    c.lineTo(TL + cx, TB - BY); c.lineTo(TL + 8, TB + 8); c.lineTo(TL + BX, TB - cy);
-    c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 8, TT - 8); c.closePath();
+    pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
+    c.closePath();
   }
   function pintarMesa(c) {
     // ── El aspecto: madera roja con volumen (oscura afuera y adentro, brillante al medio), esquineras doradas
@@ -74,7 +84,7 @@
     // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
     c.fillStyle = '#4e0505'; c.fillRect(FX0, FY0, CW, CH);
     // donde la madera se junta con las bandas: pegada al verde, como en el diseño
-    const ARR = TT + BY - 8, ABA = TB - BY + 8, IZQ = TL + BX - 9, DER = TR - BX + 9;
+    const ARR = TT + WY, ABA = TB - WY, IZQ = TL + WX, DER = TR - WX;
     madera(FX0, FY0, CW, ARR - FY0, true, CAOBA, VETA_CAOBA);
     madera(FX0, ABA, CW, FY1 - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
     madera(FX0, FY0, IZQ - FX0, CH, false, CAOBA, VETA_CAOBA);
