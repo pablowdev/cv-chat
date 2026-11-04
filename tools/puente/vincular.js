@@ -754,14 +754,15 @@ async function handle(req, res) {
     return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
-  // Pool (pool.js): su pantalla (juego.js y juego.css) y su tapa, en web/pool/. Con huella, como aviso.js
-  const plArch = req.method === 'GET' && /^\/puente\/pool\/(juego\.js|juego\.css|tapa\.jpg)$/.exec(p);
+  // Pool (pool.js): su pantalla (juego.js y juego.css), su tapa y sus sonidos (taco, bola, tronera, tunel y
+  // campana .wav, propios del servidor: no van al repositorio), en web/pool/. Con huella, como aviso.js
+  const plArch = req.method === 'GET' && /^\/puente\/pool\/(juego\.js|juego\.css|tapa\.jpg|(?:taco|bola|tronera|tunel|campana)\.wav)$/.exec(p);
   if (plArch) {
     const file = path.join(STATIC, 'pool', plArch[1]);
     let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
     const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
     if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
-    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg' }[plArch[1].split('.').pop()];
+    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg', wav: 'audio/wav' }[plArch[1].split('.').pop()];
     let body = fs.readFileSync(file);
     if (plArch[1] === 'juego.js') body = body.toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });

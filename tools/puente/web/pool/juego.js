@@ -13,10 +13,12 @@
   const accion = async (d) => { const r = await A.emit('pool:accion', { id: M && M.id, ...d }); if (r.error) A.toast(r.error, 'error'); return r; };
   const esInvitado = () => !!(window.app && window.app.user && window.app.user.isGuest);
 
-  // ── La mesa (las mismas medidas que pool-motor.js) ──
-  const W = 1000, H = 500, TL = 50, TR = 950, TT = 50, TB = 450, TW = TR - TL, TH = TB - TT;
-  const R = 10, D = R * 2, POCKET_R = 24, HEAD_X = TL + TW / 4;
-  const POCKETS = [{ x: TL, y: TT }, { x: TL + TW / 2, y: TT }, { x: TR, y: TT }, { x: TL, y: TB }, { x: TL + TW / 2, y: TB }, { x: TR, y: TB }];
+  // ── La mesa (las mismas medidas que pool-motor.js: las del Yahoo, medidas en los videos) ──
+  const W = 1000, H = 500, TL = 50, TR = 950, TT = 54.5, TB = 445.5, TW = TR - TL, TH = TB - TT;
+  const R = 16, D = R * 2, POCKET_R = 25, HEAD_X = TL + TW / 4;
+  const MEDIO_AFUERA = 22, BX = 21, BY = 12, BOCA = 75, BOCA_M = 31;
+  const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY - R;
+  const POCKETS = [{ x: TL, y: TT }, { x: TL + TW / 2, y: TT - MEDIO_AFUERA }, { x: TR, y: TT }, { x: TL, y: TB }, { x: TL + TW / 2, y: TB + MEDIO_AFUERA }, { x: TR, y: TB }];
   const COLOR = {
     1: '#f6d31a', 2: '#2a6fe8', 3: '#e8231c', 4: '#8a3ad8', 5: '#f28a1e', 6: '#3cc43a', 7: '#e2389e', 8: '#0c0c0c',
     9: '#f6d31a', 10: '#2a6fe8', 11: '#e8231c', 12: '#8a3ad8', 13: '#f28a1e', 14: '#3cc43a', 15: '#e2389e',
@@ -29,52 +31,134 @@
     rail.addColorStop(0, '#a3201c'); rail.addColorStop(0.5, '#8c1714'); rail.addColorStop(1, '#6e100e');
     c.fillStyle = rail; c.fillRect(0, 0, W, H);
     c.strokeStyle = '#4a0a08'; c.lineWidth = 2; c.strokeRect(1, 1, W - 2, H - 2);
-    c.fillStyle = '#2f7a2c'; c.fillRect(TL - 14, TT - 14, TW + 28, TH + 28);
+    // el paño hasta la linea de las troneras, y adentro las bandas (verde mas oscuro) con sus bocas cortadas
+    c.fillStyle = '#1f5a1d'; c.fillRect(TL - 4, TT - 4, TW + 8, TH + 8);
     const felt = c.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, W * 0.55);
     felt.addColorStop(0, '#3a8a35'); felt.addColorStop(1, '#2c7429');
-    c.fillStyle = felt; c.fillRect(TL, TT, TW, TH);
-    c.fillStyle = '#1f5a1d';
-    const gc = POCKET_R + 6, gm = POCKET_R - 2;
-    for (const [x, y, w, h] of [
-      [TL + gc, TT - 14, TW / 2 - gc - gm, 14], [TL + TW / 2 + gm, TT - 14, TW / 2 - gc - gm, 14],
-      [TL + gc, TB, TW / 2 - gc - gm, 14], [TL + TW / 2 + gm, TB, TW / 2 - gc - gm, 14],
-      [TL - 14, TT + gc, 14, TH - gc * 2], [TR, TT + gc, 14, TH - gc * 2]]) c.fillRect(x, y, w, h);
+    c.fillStyle = felt;
+    const cx = Math.sqrt(BOCA * BOCA - BY * BY), cy = Math.sqrt(BOCA * BOCA - BX * BX);
+    c.beginPath();
+    // el contorno de la parte jugable: las bandas por dentro, y en cada boca un corte en diagonal hacia la tronera
+    c.moveTo(TL + cx, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M, TT + BY); c.lineTo(TL + TW / 2 - BOCA_M + 8, TT - 8); c.lineTo(TL + TW / 2 + BOCA_M - 8, TT - 8); c.lineTo(TL + TW / 2 + BOCA_M, TT + BY);
+    c.lineTo(TR - cx, TT + BY); c.lineTo(TR - 6, TT - 6); c.lineTo(TR - BX, TT + cy);
+    c.lineTo(TR - BX, TB - cy); c.lineTo(TR - 6, TB + 6); c.lineTo(TR - cx, TB - BY);
+    c.lineTo(TL + TW / 2 + BOCA_M, TB - BY); c.lineTo(TL + TW / 2 + BOCA_M - 8, TB + 8); c.lineTo(TL + TW / 2 - BOCA_M + 8, TB + 8); c.lineTo(TL + TW / 2 - BOCA_M, TB - BY);
+    c.lineTo(TL + cx, TB - BY); c.lineTo(TL + 6, TB + 6); c.lineTo(TL + BX, TB - cy);
+    c.lineTo(TL + BX, TT + cy); c.lineTo(TL + 6, TT - 6); c.closePath();
+    c.fill();
+    c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 1.5; c.stroke();
+    // las chapas de las troneras
     for (const p of POCKETS) {
       const esquina = p.x !== TL + TW / 2;
       const g = c.createLinearGradient(p.x - 46, p.y - 46, p.x + 46, p.y + 46);
       g.addColorStop(0, '#f6b860'); g.addColorStop(1, '#d8892e');
       c.fillStyle = g;
-      if (esquina) { const q = 66, x0 = p.x < W / 2 ? 0 : W - q, y0 = p.y < H / 2 ? 0 : H - q; c.fillRect(x0, y0, q, q); }
-      else { const s = 40, arriba = p.y < H / 2; c.fillRect(p.x - s / 2 - 6, arriba ? 0 : p.y, s + 12, arriba ? p.y : H - p.y); }
+      if (esquina) { const q = 62, x0 = p.x < W / 2 ? 0 : W - q, y0 = p.y < H / 2 ? 0 : H - q; c.fillRect(x0, y0, q, q); }
+      else { const s = 44, arriba = p.y < H / 2; c.fillRect(p.x - s / 2 - 6, arriba ? 0 : p.y, s + 12, arriba ? p.y : H - p.y); }
     }
     for (const p of POCKETS) {
-      c.fillStyle = '#060606'; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = '#2a2a2a'; c.lineWidth = 2; c.beginPath(); c.arc(p.x, p.y, POCKET_R - 1, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+      const g = c.createRadialGradient(p.x, p.y, 4, p.x, p.y, POCKET_R + 2);
+      g.addColorStop(0, '#000'); g.addColorStop(0.8, '#060606'); g.addColorStop(1, '#262626');
+      c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
     }
     c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1;
-    c.beginPath(); c.moveTo(HEAD_X + 0.5, TT); c.lineTo(HEAD_X + 0.5, TB); c.stroke();
+    c.beginPath(); c.moveTo(HEAD_X + 0.5, TT + BY); c.lineTo(HEAD_X + 0.5, TB - BY); c.stroke();
   }
-  function dibujarBola(c, n, x, y, alfa = 1) {
+
+  // ── Las bolas en 3D ──
+  // Cada bola tiene su orientacion (una matriz de giro) y, al moverse, gira lo que rodo (distancia / radio)
+  // alrededor del eje perpendicular al movimiento. Se dibuja pixel por pixel: la normal de cada punto de la
+  // esfera, girada a la bola, dice de que color es (la franja, el circulo del numero) y la luz le da el volumen.
+  const LUZ = (() => { const l = [-0.45, -0.6, 0.66], n = Math.hypot(...l); return l.map(v => v / n); })();
+  const MEDIO = (() => { const h = [LUZ[0], LUZ[1], LUZ[2] + 1], n = Math.hypot(...h); return h.map(v => v / n); })();
+  const LADO = D + 2;
+  const NORMALES = (() => {
+    const out = [];
+    for (let py = 0; py < LADO; py++) for (let px = 0; px < LADO; px++) {
+      const dx = (px + 0.5 - LADO / 2) / R, dy = (py + 0.5 - LADO / 2) / R, r2 = dx * dx + dy * dy;
+      if (r2 > 1.0) continue;
+      const nz = Math.sqrt(Math.max(0, 1 - r2));
+      const dif = Math.max(0, dx * LUZ[0] + dy * LUZ[1] + nz * LUZ[2]);
+      const spec = Math.pow(Math.max(0, dx * MEDIO[0] + dy * MEDIO[1] + nz * MEDIO[2]), 40);
+      const borde = clamp((1 - Math.sqrt(r2)) * R * 1.2, 0, 1); // el borde suavizado
+      out.push({ i: (py * LADO + px) * 4, n: [dx, dy, nz], luz: 0.28 + 0.8 * dif, spec, borde });
+    }
+    return out;
+  })();
+  const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const COLOR_RGB = Object.fromEntries(Object.entries(COLOR).map(([k, v]) => [k, rgb(v)]));
+  const BLANCO = [244, 243, 236];
+  const lienzos = new Map();
+  function giroInicial(n) {
+    // cada bola arranca con el numero mas o menos para arriba, girado distinto
+    let s = (n * 9301 + 49297) % 233280; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    let m = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    m = girar(m, [r() - 0.5, r() - 0.5, 0], 0.5 + r() * 0.7);
+    return girar(m, [0, 0, 1], r() * Math.PI * 2);
+  }
+  // m (columnas = los ejes de la bola en el mundo) girada un angulo alrededor del eje e (en el mundo)
+  function girar(m, e, ang) {
+    const n = Math.hypot(e[0], e[1], e[2]); if (!n || !ang) return m;
+    const x = e[0] / n, y = e[1] / n, z = e[2] / n, c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+    const g = [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x, t * x * z - s * y, t * y * z + s * x, t * z * z + c];
+    const o = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[i * 3 + j] = g[i * 3] * m[j] + g[i * 3 + 1] * m[3 + j] + g[i * 3 + 2] * m[6 + j];
+    // que no se deforme con el tiempo: se vuelve a ortonormalizar
+    const col = (k) => [o[k], o[3 + k], o[6 + k]];
+    let a = col(0), b = col(1);
+    const na = Math.hypot(...a); a = a.map(v => v / na);
+    const d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; b = b.map((v, i) => v - d * a[i]); const nb = Math.hypot(...b); b = b.map(v => v / nb);
+    const cc = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    return [a[0], b[0], cc[0], a[1], b[1], cc[1], a[2], b[2], cc[2]];
+  }
+  function dibujarBola(c, n, x, y, m, alfa = 1) {
+    let L = lienzos.get(n);
+    if (!L) { const cv = document.createElement('canvas'); cv.width = cv.height = LADO; const cx = cv.getContext('2d'); L = { cv, cx, img: cx.createImageData(LADO, LADO) }; lienzos.set(n, L); }
+    const px = L.img.data;
+    px.fill(0);
+    const col = n === 0 ? BLANCO : COLOR_RGB[n], raya = n >= 9;
+    for (const P of NORMALES) {
+      // la normal en los ejes de la bola (la traspuesta de m)
+      const [nx, ny, nz] = P.n;
+      const bx = m[0] * nx + m[3] * ny + m[6] * nz, by = m[1] * nx + m[4] * ny + m[7] * nz, bz = m[2] * nx + m[5] * ny + m[8] * nz;
+      let k = col;
+      if (n > 0) {
+        if (raya && Math.abs(by) > 0.52) k = BLANCO;                 // las tapas blancas de las rayadas
+        if (Math.abs(bz) > 0.9) k = BLANCO;                          // el circulo del numero (de los dos lados)
+      }
+      const l = P.luz;
+      px[P.i] = Math.min(255, k[0] * l + 255 * P.spec * 0.85);
+      px[P.i + 1] = Math.min(255, k[1] * l + 255 * P.spec * 0.85);
+      px[P.i + 2] = Math.min(255, k[2] * l + 255 * P.spec * 0.85);
+      px[P.i + 3] = 255 * P.borde;
+    }
+    L.cx.putImageData(L.img, 0, 0);
     c.save(); c.globalAlpha = alfa;
-    c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.arc(x + 2, y + 2.5, R, 0, Math.PI * 2); c.fill();
-    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.clip();
-    const raya = n >= 9;
-    c.fillStyle = n === 0 || raya ? '#f7f7f2' : COLOR[n]; c.fillRect(x - R, y - R, D, D);
-    if (raya) { c.fillStyle = COLOR[n]; c.fillRect(x - R, y - R * 0.5, D, R); }
-    if (n > 0) { c.fillStyle = '#fff'; c.beginPath(); c.arc(x + R * 0.08, y - R * 0.05, R * 0.42, 0, Math.PI * 2); c.fill(); }
-    const sh = c.createRadialGradient(x - R * 0.35, y - R * 0.45, R * 0.05, x, y, R * 1.05);
-    sh.addColorStop(0, 'rgba(255,255,255,0.75)'); sh.addColorStop(0.25, 'rgba(255,255,255,0.12)'); sh.addColorStop(0.7, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.45)');
-    c.fillStyle = sh; c.fillRect(x - R, y - R, D, D);
+    c.fillStyle = 'rgba(0,0,0,0.32)'; c.beginPath(); c.ellipse(x + 3, y + 4, R * 0.98, R * 0.9, 0, 0, Math.PI * 2); c.fill();
+    c.drawImage(L.cv, x - LADO / 2, y - LADO / 2);
+    // el numero, sobre el circulo que mira para arriba (achicado segun lo de costado que este)
+    if (n > 0) for (const sg of [1, -1]) {
+      const sx = m[2] * sg, sy = m[5] * sg, sz = m[8] * sg;
+      if (sz < 0.45) continue;
+      c.save();
+      c.translate(x + sx * R * 0.92, y + sy * R * 0.92);
+      c.rotate(Math.atan2(sy, sx) + Math.PI / 2);
+      c.scale(1, sz);
+      c.fillStyle = '#111'; c.font = `bold ${n > 9 ? 8 : 9}px Verdana, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(String(n), 0, 0.5);
+      c.restore();
+    }
     c.restore();
   }
+
   function dibujarTaco(c, x, y, ang, fuerza, alfa = 1) {
-    const dx = Math.cos(ang), dy = Math.sin(ang), back = 12 + fuerza * 80;
-    const sx = x - dx * back, sy = y - dy * back, ex = sx - dx * 520, ey = sy - dy * 520;
+    const dx = Math.cos(ang), dy = Math.sin(ang), back = R + 2 + fuerza * 80;
+    const sx = x - dx * back, sy = y - dy * back, ex = sx - dx * 540, ey = sy - dy * 540;
     c.save(); c.globalAlpha = alfa; c.lineCap = 'butt';
-    c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 6; c.beginPath(); c.moveTo(sx + 2, sy + 3); c.lineTo(ex + 2, ey + 3); c.stroke();
+    c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 7; c.beginPath(); c.moveTo(sx + 2, sy + 3); c.lineTo(ex + 2, ey + 3); c.stroke();
     const g = c.createLinearGradient(sx, sy, ex, ey);
     g.addColorStop(0, '#d9c9a0'); g.addColorStop(0.5, '#9a5a2a'); g.addColorStop(1, '#5a2a10');
-    c.strokeStyle = g; c.lineWidth = 5; c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+    c.strokeStyle = g; c.lineWidth = 6; c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
     c.restore();
   }
   // Hasta donde llega la guia: la primera bola o banda en la direccion del tiro
@@ -90,39 +174,48 @@
       best = Math.min(best, t - Math.sqrt(D * D - p2));
     }
     const ws = [];
-    if (dx > 0) ws.push((TR - R - x) / dx); if (dx < 0) ws.push((TL + R - x) / dx);
-    if (dy > 0) ws.push((TB - R - y) / dy); if (dy < 0) ws.push((TT + R - y) / dy);
+    if (dx > 0) ws.push((XMAX - x) / dx); if (dx < 0) ws.push((XMIN - x) / dx);
+    if (dy > 0) ws.push((YMAX - y) / dy); if (dy < 0) ws.push((YMIN - y) / dy);
     best = Math.min(best, ...ws.filter(t => t > 0));
     return { x: x + dx * best, y: y + dy * best };
   }
   function sePuedePoner(bolas, cabecera, x, y) {
-    if (!(x >= TL + R && x <= TR - R && y >= TT + R && y <= TB - R)) return false;
+    if (!(x >= XMIN && x <= XMAX && y >= YMIN && y <= YMAX)) return false;
     if (cabecera && x > HEAD_X) return false;
     for (const b of bolas) if (b.n !== 0 && b.on && (b.x - x) ** 2 + (b.y - y) ** 2 < D * D) return false;
     for (const p of POCKETS) if ((p.x - x) ** 2 + (p.y - y) ** 2 < (POCKET_R + R) ** 2) return false;
     return true;
   }
 
-  // ── Los sonidos (sintetizados, sin archivos: los del pool original del dueño) ──
+  // ── Los sonidos: los propios del dueño (web/pool/*.wav, recortados de su grabacion) ──
+  //   taco: el taco contra la blanca · bola: el choque entre bolas (tambien la banda, mas grave y suave)
+  //   tronera: la bola que cae y recorre el tunel · tunel: el golpe al llegar al final · campana: el cambio de turno
   const audio = {
-    ctx: null, master: null, ultimo: 0,
+    ctx: null, master: null, ultimo: 0, buf: {},
     init() {
       if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
-      try { const AC = window.AudioContext || window.webkitAudioContext; this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = 0.45; this.master.connect(this.ctx.destination); } catch { this.ctx = null; }
+      try { const AC = window.AudioContext || window.webkitAudioContext; this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = 0.9; this.master.connect(this.ctx.destination); } catch { this.ctx = null; return; }
+      for (const k of ['taco', 'bola', 'tronera', 'tunel', 'campana']) {
+        fetch(`/puente/pool/${k}.wav?v=1`).then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))))
+          .then(a => new Promise((ok, mal) => this.ctx.decodeAudioData(a, ok, mal))).then(b => { this.buf[k] = b; }).catch(() => {});
+      }
     },
     on() { try { return localStorage.getItem('pool-sonido') !== '0'; } catch { return true; } },
-    ruido(dur) { const n = Math.max(1, Math.floor(this.ctx.sampleRate * dur)); const b = this.ctx.createBuffer(1, n, this.ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; },
-    tono(tipo, f0, f1, dur, vol, t) { const o = this.ctx.createOscillator(); o.type = tipo; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur * 0.7); const g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.connect(g).connect(this.master); o.start(t); o.stop(t + dur + 0.01); },
-    sopla(dur, vol, filtro, f, t) { const n = this.ctx.createBufferSource(); n.buffer = this.ruido(dur); const q = this.ctx.createBiquadFilter(); q.type = filtro; q.frequency.value = f; const g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); n.connect(q).connect(g).connect(this.master); n.start(t); },
+    sonar(k, vol, vel = 1, cuando = 0) {
+      const b = this.buf[k]; if (!b) return;
+      const s = this.ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = vel;
+      const g = this.ctx.createGain(); g.gain.value = clamp(vol, 0, 1.2);
+      s.connect(g).connect(this.master); s.start(this.ctx.currentTime + cuando);
+    },
     play(tipo, k) {
       if (!this.ctx || !this.on()) return;
-      const t = this.ctx.currentTime; k = clamp(k || 0.5, 0.05, 1);
-      if (tipo === 'bola') { if (t - this.ultimo < 0.018) return; this.ultimo = t; const f = 1400 + Math.random() * 500; this.tono('triangle', f, f * 0.5, 0.09, k * 0.32, t); this.sopla(0.045, k * 0.22, 'bandpass', 2400, t); }
-      else if (tipo === 'banda') { this.tono('sine', 180, 60, 0.14, k * 0.32, t); this.tono('triangle', 800, 400, 0.04, k * 0.14, t); }
-      else if (tipo === 'tronera') { this.tono('sine', 420, 80, 0.32, 0.38, t); this.sopla(0.3, 0.13, 'lowpass', 800, t); }
-      else if (tipo === 'taco') { this.tono('triangle', 300 + k * 400, 120, 0.08, k * 0.38, t); this.sopla(0.03, k * 0.28, 'highpass', 1500, t); }
-      else if (tipo === 'falta') { [520, 340].forEach((f, i) => this.tono('square', f, f, 0.18, 0.12, t + i * 0.13)); }
-      else if (tipo === 'gano') { [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tono('triangle', f, f, 0.45, 0.22, t + i * 0.11)); }
+      k = clamp(k == null ? 0.6 : k, 0.05, 1);
+      const t = this.ctx.currentTime;
+      if (tipo === 'bola') { if (t - this.ultimo < 0.02) return; this.ultimo = t; this.sonar('bola', 0.25 + k * 0.9); }
+      else if (tipo === 'banda') this.sonar('bola', 0.12 + k * 0.45, 0.62);
+      else if (tipo === 'taco') this.sonar('taco', 0.35 + k * 0.75);
+      else if (tipo === 'tronera') { this.sonar('tronera', 0.9); this.sonar('tunel', 0.9, 1, 0.78); }
+      else if (tipo === 'campana') this.sonar('campana', 0.8);
     },
   };
 
@@ -294,7 +387,7 @@
     M = {
       id, s: null, cv: null, ctx: null, bolas: [], ang: 0, fuerza: 0, barra: 0.5, efecto: { x: 0, y: 0 },
       apuntando: false, desde: null, arrastra: false, valido: true, anim: null, visto: undefined, enviando: false,
-      rival: null, raf: 0, ultimoApunta: 0, finVisto: false,
+      rival: null, raf: 0, ultimoApunta: 0, finVisto: false, giros: new Map(),
     };
     const yo = M;
     const salirBtn = el('button', 'jg-btn jg-salir'); salirBtn.type = 'button'; salirBtn.style.visibility = 'hidden';
@@ -376,6 +469,7 @@
     if (nuevo) { M.visto = s.ultima.n; reproducir(s); }
     else if (!M.anim) M.bolas = bolasDe(s);
     if (s.estado === 'jugando' && s.teToca && (!antes || !antes.teToca)) { M.fuerza = 0; M.enviando = false; }
+    if (antes && antes.estado === 'esperando' && s.estado === 'jugando' && s.teToca) audio.play('campana');
     M.enviando = false;
     hud();
     pie();
@@ -410,7 +504,7 @@
       M.bolas = bolasDe(M.s);
       hud(); pie();
       if (M.s.estado === 'terminada') finDeJuego();
-      else if (/^Falta/.test(M.s.texto || '')) audio.play('falta');
+      else if (M.s.teToca && !a.u.mio) audio.play('campana');
       return;
     }
     const A0 = fr[i], A1 = fr[i + 1], k = f - i;
@@ -453,9 +547,10 @@
       const por = s.motivo === 'abandono' ? (s.ganador === 'yo' ? ' (tu rival abandonó)' : ' (abandonaste)') : '';
       return s.soyJugador ? (s.ganador === 'yo' ? `¡Ganaste!${por}` : `Perdiste.${por}`) : 'Terminó la partida.';
     }
-    const antes = s.texto ? s.texto + ' ' : '';
-    if (s.teToca) return antes + (s.enMano ? 'Podés mover la blanca antes de tirar. ' : '') + 'Presioná espacio para tirar.';
-    return antes + `Juega ${s.rival ? s.rival.nombre : 'el rival'}…`;
+    // como en el original: "Shoot!", "Shoot Again!" si metió una suya, la bola en mano despues de una falta,
+    // y mientras juega el otro, "esperando al rival" (lo que paso queda abajo, en el registro)
+    if (s.teToca) return s.enMano ? 'Podés mover la blanca antes de tirar.' : s.ultima && s.ultima.mio ? '¡Tirá de nuevo!' : '¡Tirá!';
+    return `Esperando a ${s.rival ? s.rival.nombre : 'el rival'}…`;
   }
   function bandeja(lista) {
     const box = M.bolasBandeja;
@@ -490,7 +585,7 @@
     const s = M.s;
     if (M.finVisto || !s.soyJugador) return;
     M.finVisto = true;
-    audio.play(s.ganador === 'yo' ? 'gano' : 'falta');
+    audio.play('campana');
     M.fin.textContent = '';
     const ok = btn('Aceptar', '', () => { M.fin.hidden = true; });
     M.fin.append(el('div', 'pl-fin-t', 'Fin del juego'), el('div', 'pl-fin-c', s.ganador === 'yo' ? `¡Ganaste la partida!` : `${s.rival ? s.rival.nombre : 'Tu rival'} ganó la partida.`), el('div', 'pl-fin-a'));
@@ -513,8 +608,17 @@
       c.save(); c.setLineDash([2, 3]); c.strokeStyle = M.valido ? '#e8e050' : '#ff5050'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(cue.x, cue.y, R + 4, 0, Math.PI * 2); c.stroke(); c.restore();
     }
-    for (const b of M.bolas) if (b.on && b.n !== 0) dibujarBola(c, b.n, b.x, b.y);
-    if (cue && cue.on) dibujarBola(c, 0, cue.x, cue.y);
+    // cada bola gira lo que rodo desde el cuadro anterior (eje perpendicular al movimiento, angulo = distancia / radio)
+    for (const b of M.bolas) {
+      if (!b.on) continue;
+      const g = M.giros.get(b.n) || { m: giroInicial(b.n), x: b.x, y: b.y };
+      const dx = b.x - g.x, dy = b.y - g.y, d = Math.hypot(dx, dy);
+      if (d > 0.01 && d < 120) g.m = girar(g.m, [-dy, dx, 0], d / R);
+      g.x = b.x; g.y = b.y;
+      M.giros.set(b.n, g);
+    }
+    for (const b of M.bolas) if (b.on && b.n !== 0) dibujarBola(c, b.n, b.x, b.y, M.giros.get(b.n).m);
+    if (cue && cue.on) dibujarBola(c, 0, cue.x, cue.y, M.giros.get(0).m);
     if (!cue || !cue.on || M.anim || s.estado !== 'jugando') return;
     if (mio && !M.arrastra) {
       const g = guia(M.bolas, cue.x, cue.y, M.ang);
