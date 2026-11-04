@@ -2139,10 +2139,12 @@ function leido(sc) {
     const fotos = el('div', 'puente-club-fotos');
     tarjeta.append(fotos);
     if (datos.fotos && datos.fotos.length) {
-      const MAX = 6;
-      datos.fotos.slice(0, MAX).forEach(p => fotos.append(foto(p)));
+      const caras = el('div', 'puente-club-caras');
+      const MAX = 4;
+      datos.fotos.slice(0, MAX).forEach(p => caras.append(foto(p)));
       const resto = datos.conectados - Math.min(MAX, datos.fotos.length);
-      if (resto > 0) fotos.append(el('span', 'puente-club-foto puente-club-mas', '+' + resto));
+      if (resto > 0) caras.append(el('span', 'puente-club-foto puente-club-mas', '+' + resto));
+      fotos.append(caras);
     }
     fotos.append(n);
     const m = (datos.abiertas || [])[0];
@@ -2177,6 +2179,8 @@ function leido(sc) {
   function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }
   function abrirHoja(que, titulo, icono) {
     cerrar();
+    // (en el celular, el panel de los canales queda por encima de todo: se cierra)
+    try { app && app._closeMobilePanels && app._closeMobilePanels(); } catch { /* sigue */ }
     hoja = el('div', 'puente-hoja-fondo');
     hoja.dataset.que = que;
     const h = el('div', 'puente-hoja');
@@ -6390,7 +6394,12 @@ document.addEventListener('pointerdown', (ev) => {
     const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
     if (brand && typeof st.miembros === 'number' && !document.getElementById('puente-server-info')) {
       const info = el('div', 'puente-server-info', typeof st.enDiscord === 'number' ? '' : st.miembros.toLocaleString('es-AR') + ' miembros');
-      if (typeof st.enDiscord === 'number') info.append(el('b', '', st.enDiscord.toLocaleString('es-AR')), ' en Discord · ', el('b', '', st.miembros.toLocaleString('es-AR')), ' en CV Chat');
+      if (typeof st.enDiscord === 'number') {
+        const l1 = el('span', 'puente-server-linea'), l2 = el('span', 'puente-server-linea');
+        l1.append(el('b', '', st.enDiscord.toLocaleString('es-AR')), ' en Discord');
+        l2.append(el('b', '', st.miembros.toLocaleString('es-AR')), ' en CV Chat');
+        info.append(l1, l2);
+      }
       info.id = 'puente-server-info';
       brand.insertAdjacentElement('afterend', info);
     }
