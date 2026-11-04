@@ -8,8 +8,8 @@
 //    (7 px). El agujero de las troneras, radio 25 (10,6 px); las del medio, 22 mas afuera.
 //  - Las bandas (medidas en una captura del Yahoo en alta: 12 px de 1123 y 13 px de 539) estan 10 adentro
 //    de la linea de las troneras, en los cuatro lados. Son rectas y en cada boca terminan con un bisel corto
-//    hasta el agujero (medido en la mesa de referencia del dueño): en las esquinas la banda llega a 39,5 del
-//    centro de la tronera y el bisel baja a 45° hasta el borde del agujero; en las del medio llega a 35 y el bisel
+//    hasta el agujero (medido en la mesa de referencia del dueño): en las esquinas la banda llega a 34 del
+//    rincon del paño y el bisel baja a 45° hasta el agujero; en las del medio llega a 35 y el bisel
 //    baja mas parado. El bisel y su punta rebotan como la banda.
 //  - Rodando, la bola frena casi parejo: ROCE + ROCE_V * velocidad (ajustado a 9 rodadas limpias:
 //    error medio de 9 unidades). Justo despues de un golpe patina y queda con 5/7 de la velocidad
@@ -32,7 +32,7 @@ const BX = 10, BY = 10;            // cuanto entran las bandas (cortas y largas)
 const PROF = 15;                   // lo que mide la banda de fondo (de la punta a la madera)
 // la boca: en las esquinas la banda recta llega a BOCA del centro de la tronera y de ahi el bisel baja a 45° hasta
 // el agujero (justo donde la banda toca la madera); en las del medio llega a BOCA_M y el bisel baja hasta BISEL_M
-const BOCA = PROF + Math.sqrt(POCKET_R * POCKET_R - (PROF - BX) ** 2), BOCA_M = 35, BISEL_M = 27;
+const BOCA = BY + 34, BOCA_M = 35, BISEL_M = 27; // (en la referencia la banda de la esquina termina a 34 del rincon del paño)
 const MAX_POWER = 8000;
 const CURVA = 2.7;
 const ROCE = 80;                   // frenado rodando (unidades/s²)
@@ -68,6 +68,10 @@ for (const [py, sy] of [[TT, 1], [TB, -1]]) for (const s of [-1, 1]) {
   QUIJADAS.push({ x1: TL + TW / 2 + s * BOCA_M, y1: py + sy * BY, x2: TL + TW / 2 + s * BISEL_M, y2: py + sy * (BY - PROF) });
 }
 const PUNTAS = QUIJADAS.map(q => ({ x: q.x1, y: q.y1 }));
+// el agujero que se ve en cada esquina (juego.js lo dibuja igual): toca de costado los dos biseles y su centro cae 6
+// adentro del rincon del paño. La bola cuyo centro queda encima de ese agujero, cae
+const ESQ_R = (BOCA - BY) / Math.SQRT2;
+const HUECO = POCKETS.map((p, i) => (i === 1 || i === 4 ? null : { x: p.x + Math.sign(TL + TW / 2 - p.x) * (BX + 6), y: p.y + Math.sign(TT + TH / 2 - p.y) * (BY + 6) }));
 // en la boca no hay banda recta: la bola puede pasar la linea (entre los biseles) y caer
 const enBocaLado = (x, y) => y < TT + BOCA || y > TB - BOCA;                                                     // bandas cortas
 const enBocaLargo = (x, y) => x < TL + BOCA || x > TR - BOCA || Math.abs(x - (TL + TW / 2)) < BOCA_M;            // bandas largas
@@ -206,7 +210,8 @@ function simular(bolas, tiro, grabar) {
           const cae = pi === 1 || pi === 4 ? CAE_MEDIO : CAE_ESQ;
           // en las del medio tambien cae la que paso la linea de la banda por la boca y ya esta sobre el borde del agujero
           const enBoca = (pi === 1 && b.y < YMIN - 8 || pi === 4 && b.y > YMAX + 8) && Math.abs(b.x - p.x) < BOCA_M;
-          if (enBoca || (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < cae * cae) {
+          const h = HUECO[pi], sobre = h && (b.x - h.x) ** 2 + (b.y - h.y) ** 2 < ESQ_R * ESQ_R;
+          if (enBoca || sobre || (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < cae * cae) {
             b.on = false; b.vx = 0; b.vy = 0;
             if (b.n === 0) out.blanca = true; else out.metidas.push(b.n);
             sonido('tronera', 1);

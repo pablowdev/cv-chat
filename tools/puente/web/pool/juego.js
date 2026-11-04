@@ -16,7 +16,7 @@
   // ── La mesa (las mismas medidas que pool-motor.js: las del Yahoo, medidas en los videos) ──
   const W = 1000, H = 500, TL = 50, TR = 950, TT = 54.5, TB = 445.5, TW = TR - TL, TH = TB - TT;
   const R = 16, D = R * 2, POCKET_R = 25, HEAD_X = TL + TW / 4;
-  const MEDIO_AFUERA = 22, BX = 10, BY = 10, PROF = 15, BOCA = PROF + Math.sqrt(POCKET_R * POCKET_R - (PROF - BX) ** 2), BOCA_M = 35, BISEL_M = 27;
+  const MEDIO_AFUERA = 22, BX = 10, BY = 10, PROF = 15, BOCA = BY + 34, BOCA_M = 35, BISEL_M = 27;
   const XMIN = TL + BX + R, XMAX = TR - BX - R, YMIN = TT + BY + R, YMAX = TB - BY - R;
   const POCKETS = [{ x: TL, y: TT }, { x: TL + TW / 2, y: TT - MEDIO_AFUERA }, { x: TR, y: TT }, { x: TL, y: TB }, { x: TL + TW / 2, y: TB + MEDIO_AFUERA }, { x: TR, y: TB }];
   const COLOR = {
@@ -40,6 +40,12 @@
   // hacia la madera (0 = el borde del paño; BANDA_VIS = el borde de la banda); el contorno sigue el bisel
   const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS;
   const BISEL = { x0: BOCA_M, x1: BISEL_M };
+  // El agujero que se ve: en las del medio, el de la fisica. En las esquinas, un circulo que toca de costado los
+  // dos biseles (estan a ESQ_LADO de la diagonal), corrido hacia el paño: asi el aro sigue derecho por los biseles
+  // como en la referencia. La bola cae igual que siempre (a CAE_ESQ del centro de la tronera, en pool-motor.js)
+  const ESQ_LADO = (BOCA - BY) / Math.SQRT2, ESQ_R = ESQ_LADO, ESQ_C = BX + 6; // (en la referencia, el centro del agujero cae 6 adentro del rincon del paño)
+  const HUECO = POCKETS.map((p, i) => (i === 1 || i === 4 ? { x: p.x, y: p.y, r: POCKET_R }
+    : { x: p.x + (p.x < W / 2 ? 1 : -1) * ESQ_C, y: p.y + (p.y < H / 2 ? 1 : -1) * ESQ_C, r: ESQ_R }));
   function contornoPano(c, afuera) {
     const d = afuera === true ? BANDA_VIS : afuera || 0;
     const m = TL + TW / 2, mt = TT - MEDIO_AFUERA, mb = TB + MEDIO_AFUERA, h = POCKET_R - 2;
@@ -122,10 +128,9 @@
       forma(); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
     };
     const rectRedondo = (x, y, w, h, r) => () => { c.beginPath(); c.roundRect(x, y, w, h, r); };
-    const Q = 7; // cuanto pasa la esquinera del centro de la tronera (en la referencia, apenas: queda bajo el agujero)
+    const Q = ESQ_C + 6; // cuanto pasa la esquinera del centro de la tronera (en la referencia, apenas pasa el centro del agujero)
     for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
       const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q, w = (sx > 0 ? px + Q : FX1) - x0, h = (sy > 0 ? py + Q : FY1) - y0;
-      // la esquina de adentro (la que da al paño) redondeada
       dorado(rectRedondo(x0, y0, w, h, 0), x0, y0, w, h);
     }
     // las del medio: una pieza dorada alrededor de la tronera
@@ -145,10 +150,10 @@
     c.fillStyle = '#0f5622'; c.fill();
     c.restore();
     // el aro claro de las troneras (del lado de la madera: el paño lo tapa del otro lado)
-    for (const p of POCKETS) {
-      const aro = c.createRadialGradient(p.x, p.y, POCKET_R - 1, p.x, p.y, POCKET_R + 5);
+    for (const p of HUECO) {
+      const aro = c.createRadialGradient(p.x, p.y, p.r - 1, p.x, p.y, p.r + 5);
       aro.addColorStop(0, '#0a0a0a'); aro.addColorStop(0.55, '#2a2622'); aro.addColorStop(0.8, '#4a423a'); aro.addColorStop(1, '#1a1612');
-      c.fillStyle = aro; c.beginPath(); c.arc(p.x, p.y, POCKET_R + 5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = aro; c.beginPath(); c.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2); c.fill();
     }
     // el paño: verde oscuro parejo, con una textura fina de fieltro y apenas mas oscuro en los bordes
     c.save();
@@ -182,32 +187,20 @@
       for (const [x1, y1, x2, y2] of seg) { c.strokeStyle = 'rgba(140,210,140,0.35)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); }
       c.lineCap = 'butt';
     }
-    // las troneras: negras, con un borde apenas mas claro y la sombra adentro. Como en la referencia, el agujero
-    // sigue entre los biseles hasta la banda y lo rodea un aro dorado claro, del lado de la madera y por los biseles
+    // las troneras: negras, con un borde apenas mas claro y la sombra adentro. Como en la referencia, en las del medio
+    // el agujero baja derecho hasta la banda; lo rodea un aro dorado claro, del lado de la madera y por los biseles
     // (dibujado en una esquina o arriba, y espejado para las demas)
     const fondo = TT + BY - PROF;
     for (const p of POCKETS) {
-      const medio = p.x === TL + TW / 2, sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1;
-      c.save(); c.translate(p.x, p.y); c.scale(medio ? 1 : sx, sy);
-      const boca = [];
-      if (medio) {
-        const yf = fondo - (TT - MEDIO_AFUERA); // el fondo de la banda y su punta, desde el centro
-        boca.push([-POCKET_R, 0], [-POCKET_R, yf], [POCKET_R, yf], [POCKET_R, 0]);
-      } else {
-        const nl = [BOCA, BY], ml = [BOCA - PROF, BY - PROF], ns = [BX, BOCA], ms = [BX - PROF, BOCA - PROF];
-        boca.push(ml, nl, ns, ms);
-      }
-      c.fillStyle = '#020202'; c.beginPath();
-      if (medio) boca.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
-      else { const [ml, nl, ns, ms] = boca, k = 45 / Math.SQRT2; c.moveTo(...ml); c.lineTo(...nl); c.quadraticCurveTo(k, k, ...ns); c.lineTo(...ms); }
-      c.closePath(); c.fill();
-      c.restore();
+      if (p.x !== TL + TW / 2) continue;
+      const s = p.y < H / 2 ? 1 : -1, yf = fondo - (TT - MEDIO_AFUERA); // el fondo de la banda, desde el centro
+      c.fillStyle = '#020202'; c.fillRect(p.x - POCKET_R, s > 0 ? p.y : p.y - yf, POCKET_R * 2, yf);
     }
-    for (const p of POCKETS) {
-      const g = c.createRadialGradient(p.x + 4, p.y + 4, 2, p.x, p.y, POCKET_R);
+    for (const p of HUECO) {
+      const g = c.createRadialGradient(p.x + 4, p.y + 4, 2, p.x, p.y, p.r);
       g.addColorStop(0, '#000'); g.addColorStop(0.75, '#020202'); g.addColorStop(1, '#151515');
-      c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, POCKET_R, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1.2; c.beginPath(); c.arc(p.x, p.y, POCKET_R - 1, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
+      c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, p.r, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1.2; c.beginPath(); c.arc(p.x, p.y, p.r - 1, Math.PI * 0.15, Math.PI * 0.85); c.stroke();
     }
     // el aro dorado claro (con un filo mas oscuro de cada lado)
     for (const p of POCKETS) {
@@ -218,8 +211,12 @@
         const yf = fondo - (TT - MEDIO_AFUERA);
         c.moveTo(-BISEL_M, yf); c.lineTo(-ra, 0); c.arc(0, 0, ra, Math.PI, 0, false); c.lineTo(BISEL_M, yf);
       } else {
-        const a1 = Math.atan2(BY - PROF, BOCA - PROF), a2 = Math.atan2(BOCA - PROF, BX - PROF);
-        c.moveTo(BOCA, BY); c.lineTo(Math.cos(a1) * ra, Math.sin(a1) * ra); c.arc(0, 0, ra, a1, a2, true); c.lineTo(BX, BOCA);
+        // (en ejes de la diagonal: u hacia el paño, v hacia la banda larga; la punta de cada bisel esta en u = PU)
+        const rr = ESQ_R + 2.2, q = Math.SQRT1_2, PU = (BOCA + BY) * q, cu = ESQ_C / q;
+        const pt = (u, v) => [(u + v) * q, (u - v) * q];
+        c.moveTo(...pt(PU, rr)); c.lineTo(...pt(cu, rr));
+        c.arc(ESQ_C, ESQ_C, rr, -Math.PI / 4, Math.PI * 3 / 4, true);
+        c.lineTo(...pt(PU, -rr));
       }
       c.lineJoin = 'round'; c.lineCap = 'round';
       c.strokeStyle = '#9a6a3a'; c.lineWidth = 6.5; c.stroke();
@@ -817,7 +814,7 @@
     // bola en mano: la zona de la cabecera y un aro alrededor de la blanca
     if (s.estado === 'jugando' && s.enMano && !M.anim && cue) {
       // (sin pintar encima de las troneras)
-      if (s.cabecera) { c.save(); c.beginPath(); c.rect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); for (const p of POCKETS) { c.moveTo(p.x + POCKET_R + 1, p.y); c.arc(p.x, p.y, POCKET_R + 1, 0, Math.PI * 2); } c.clip('evenodd'); c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); c.restore(); }
+      if (s.cabecera) { c.save(); c.beginPath(); c.rect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); for (const p of HUECO) { c.moveTo(p.x + p.r + 1, p.y); c.arc(p.x, p.y, p.r + 1, 0, Math.PI * 2); } c.clip('evenodd'); c.fillStyle = 'rgba(255,255,255,0.05)'; c.fillRect(TL + BX, TT + BY, HEAD_X - TL - BX, TH - 2 * BY); c.restore(); }
       c.save(); c.setLineDash([2, 3]); c.strokeStyle = M.valido ? '#e8e050' : '#ff5050'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(cue.x, cue.y, R + 4, 0, Math.PI * 2); c.stroke(); c.restore();
     }
