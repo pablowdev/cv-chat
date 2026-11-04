@@ -26,7 +26,8 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   // El marco de madera: como en el diseño del dueño, la madera que se ve ocupa un 6,3% del largo de la mesa a
   // cada lado. La mesa de juego no cambia: el lienzo crece alrededor
-  const MARCO = 52, OX = MARCO - TL, OY = MARCO - TT, CW = W + 2 * OX, CH = H + 2 * OY;
+  // (arriba y abajo un poco mas ancho: las troneras del medio estan corridas hacia afuera y necesitan madera alrededor)
+  const MARCO = 52, MARCO_Y = 68, OX = MARCO - TL, OY = MARCO_Y - TT, CW = W + 2 * OX, CH = H + 2 * OY;
   const FX0 = -OX, FY0 = -OY, FX1 = W + OX, FY1 = H + OY;
 
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
