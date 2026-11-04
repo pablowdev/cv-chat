@@ -5513,6 +5513,16 @@ document.addEventListener('pointerdown', (ev) => {
     app.socket.on('puente-embeds', (d) => {
       if (!d || !d.messageId || !Array.isArray(d.embeds)) return;
       const id = String(d.messageId);
+      // Discord no armo nada (pasa con los enlaces a X): la vista previa de Haven, como en los que no estan en Discord
+      if (d.haven) {
+        known.delete(id); sinDiscord.add(id);
+        document.querySelectorAll('[data-msg-id="' + id + '"]').forEach(m => {
+          m.querySelectorAll('.puente-embeds').forEach(n => n.remove());
+          defer(m, false);
+          if (!m.querySelector('.link-preview')) { try { app._fetchLinkPreviews(m); } catch (err) { console.warn('[puente] vista previa:', err); } }
+        });
+        return;
+      }
       known.set(id, d.embeds);
       document.querySelectorAll('[data-msg-id="' + id + '"]').forEach(m => { defer(m, true); render(app, m, d.embeds); });
     });

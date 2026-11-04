@@ -80,11 +80,13 @@ function store(havenMessageId, embeds) {
 
 const sinVista = (id) => !!db.prepare('SELECT 1 FROM puente_sin_vista WHERE haven_message_id = ?').get(id);
 // Avisar a los que tienen el canal abierto (sin vista previa: una lista vacia, que la saca)
+// (Discord sin embed, sin que la hayan quitado: haven = true, y queda la vista previa de Haven)
 function emit(havenMessageId, list) {
-  if (sinVista(havenMessageId)) list = [];
+  const quitada = sinVista(havenMessageId);
+  if (quitada) list = [];
   try {
     const ch = db.prepare('SELECT c.code FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(havenMessageId);
-    if (ch) io.to(`channel:${ch.code}`).emit('puente-embeds', { channelCode: ch.code, messageId: havenMessageId, embeds: list });
+    if (ch) io.to(`channel:${ch.code}`).emit('puente-embeds', { channelCode: ch.code, messageId: havenMessageId, embeds: list, haven: !quitada && !list.length });
   } catch (err) { warn('embeds:', err.message); }
 }
 
@@ -173,8 +175,9 @@ async function forUser(user, ids) {
     if (!(memberQ.get(m.cid, user.id) || (admin && !m.is_dm))) continue;
     if (sinVista(m.id)) { out[id] = []; continue; }
     const s = storedQ.get(id);
-    if (s) { try { out[id] = JSON.parse(s.embeds); } catch { /* se vuelve a pedir */ } continue; }
-    if (m.discord_message_id && /https?:\/\//i.test(m.content || '')) waits.push(fetchLater(m).then(list => { if (list) out[m.id] = list; }));
+    // (Discord sin embed, como pasa con X: no va, y queda la vista previa de Haven)
+    if (s) { try { const l = JSON.parse(s.embeds); if (l.length) out[id] = l; } catch { /* se vuelve a pedir */ } continue; }
+    if (m.discord_message_id && /https?:\/\//i.test(m.content || '')) waits.push(fetchLater(m).then(list => { if (list && list.length) out[m.id] = list; }));
   }
   // Se espera un poco a los viejos; los que tarden mas llegan despues por el socket
   if (waits.length) await Promise.race([Promise.all(waits), new Promise(r => setTimeout(r, MAX_WAIT_MS))]);
@@ -195,7 +198,13 @@ function paraHistorial(messages) {
   const embeds = {}, sin = [];
   for (const r of rows) {
     if (r.sv) { embeds[r.id] = []; continue; }
-    if (r.embeds != null) { try { embeds[r.id] = JSON.parse(r.embeds); continue; } catch { /* se vuelve a pedir */ } }
+    if (r.embeds != null) {
+      try {
+        const l = JSON.parse(r.embeds);
+        if (l.length) embeds[r.id] = l; else sin.push(r.id); // Discord sin embed: la vista previa de Haven
+        continue;
+      } catch { /* se vuelve a pedir */ }
+    }
     if (r.discord_message_id) fetchLater(r).catch(() => {});
     else sin.push(r.id);
   }
