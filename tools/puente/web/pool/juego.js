@@ -24,6 +24,10 @@
     9: '#f6d31a', 10: '#2a6fe8', 11: '#e8231c', 12: '#8a3ad8', 13: '#f28a1e', 14: '#3cc43a', 15: '#e2389e',
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // El marco de madera: como en el diseño del dueño, la madera ocupa un 7% del largo de la mesa a cada lado
+  // (del centro de las troneras al borde de afuera). La mesa de juego no cambia: el lienzo crece alrededor
+  const MARCO = 63, OX = MARCO - TL, OY = MARCO - TT, CW = W + 2 * OX, CH = H + 2 * OY;
+  const FX0 = -OX, FY0 = -OY, FX1 = W + OX, FY1 = H + OY;
 
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
   // esquineras, las bandas con su borde iluminado, el paño con textura y las troneras con su borde
@@ -68,15 +72,16 @@
     const CLARA = [[0, '#f6b53a'], [0.5, '#eaa52a'], [1, '#d88f1c']];
     const VETA_CLARA = { n: 0, oscura: '#c07a10', clara: '#ffd070' };
     // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
-    c.fillStyle = '#4e0505'; c.fillRect(0, 0, W, H);
-    const ARR = TT - 28, ABA = TB + 28, IZQ = TL - 30, DER = TR + 30; // donde la madera se junta con las bandas
-    madera(0, 0, W, ARR, true, CAOBA, VETA_CAOBA);
-    madera(0, ABA, W, H - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
-    madera(0, 0, IZQ, H, false, CAOBA, VETA_CAOBA);
-    madera(DER, 0, W - DER, H, false, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
+    c.fillStyle = '#4e0505'; c.fillRect(FX0, FY0, CW, CH);
+    // donde la madera se junta con las bandas: pegada al verde, como en el diseño
+    const ARR = TT - 8, ABA = TB + 8, IZQ = TL - 8, DER = TR + 8;
+    madera(FX0, FY0, CW, ARR - FY0, true, CAOBA, VETA_CAOBA);
+    madera(FX0, ABA, CW, FY1 - ABA, true, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
+    madera(FX0, FY0, IZQ - FX0, CH, false, CAOBA, VETA_CAOBA);
+    madera(DER, FY0, FX1 - DER, CH, false, CAOBA.map(([p, col]) => [1 - p, col]), VETA_CAOBA);
     // el canto de la madera hacia adentro: un filo claro y una sombra
     c.strokeStyle = 'rgba(255,200,170,0.22)'; c.lineWidth = 2; c.strokeRect(IZQ + 1, ARR + 1, DER - IZQ - 2, ABA - ARR - 2);
-    c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(2, 2, W - 4, H - 4);
+    c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.strokeRect(FX0 + 2, FY0 + 2, CW - 4, CH - 4);
     // las bandas: verde un poco mas claro que el paño, con luz en el filo de arriba
     c.save();
     c.beginPath(); c.rect(IZQ, ARR, DER - IZQ, ABA - ARR); c.clip();
@@ -88,8 +93,8 @@
     // las esquineras de madera clara, con el corte a inglete en diagonal y el lado de adentro curvo alrededor de la tronera
     for (const p of POCKETS) {
       if (p.x === TL + TW / 2) continue;
-      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 78;
-      const x0 = p.x < W / 2 ? 0 : W, y0 = p.y < H / 2 ? 0 : H;
+      const sx = p.x < W / 2 ? 1 : -1, sy = p.y < H / 2 ? 1 : -1, q = 92;
+      const x0 = p.x < W / 2 ? FX0 : FX1, y0 = p.y < H / 2 ? FY0 : FY1;
       c.save();
       c.beginPath();
       c.moveTo(x0, y0); c.lineTo(x0 + sx * q, y0); c.lineTo(x0 + sx * q, y0 + sy * 22);
@@ -112,7 +117,7 @@
     // las del medio: una pieza de madera clara alrededor de la tronera, con dos cortes en diagonal
     for (const p of POCKETS) {
       if (p.x !== TL + TW / 2) continue;
-      const arriba = p.y < H / 2, yb = arriba ? 0 : H, s = arriba ? 1 : -1;
+      const arriba = p.y < H / 2, yb = arriba ? FY0 : FY1, s = arriba ? 1 : -1;
       c.save();
       c.beginPath(); c.moveTo(p.x - 52, yb); c.lineTo(p.x + 52, yb); c.lineTo(p.x + 30, p.y + s * 14); c.lineTo(p.x - 30, p.y + s * 14); c.closePath();
       c.clip();
@@ -153,9 +158,10 @@
     c.beginPath(); c.moveTo(HEAD_X + 0.5, TT + BY); c.lineTo(HEAD_X + 0.5, TB - BY); c.stroke();
   }
   function dibujarMesa(c) {
-    if (!fondoMesa) { fondoMesa = document.createElement('canvas'); fondoMesa.width = W; fondoMesa.height = H; pintarMesa(fondoMesa.getContext('2d')); }
-    c.clearRect(0, 0, W, H);
-    c.drawImage(fondoMesa, 0, 0);
+    if (!fondoMesa) { fondoMesa = document.createElement('canvas'); fondoMesa.width = CW; fondoMesa.height = CH; const fc = fondoMesa.getContext('2d'); fc.translate(OX, OY); pintarMesa(fc); }
+    c.setTransform(1, 0, 0, 1, OX, OY);
+    c.clearRect(FX0, FY0, CW, CH);
+    c.drawImage(fondoMesa, FX0, FY0);
   }
 
   // ── Las bolas en 3D ──
@@ -497,7 +503,7 @@
     M.j0 = jugador(); M.j1 = jugador(true);
     M.reloj = el('div', 'pl-reloj', '0:00');
     barra.append(M.j0.w, M.reloj, M.j1.w);
-    M.cv = el('canvas', 'pl-lienzo'); M.cv.width = W; M.cv.height = H;
+    M.cv = el('canvas', 'pl-lienzo'); M.cv.width = CW; M.cv.height = CH;
     M.cv.setAttribute('role', 'img'); M.cv.setAttribute('aria-label', 'Mesa de pool');
     M.ctx = M.cv.getContext('2d');
     M.bandeja = el('div', 'pl-bandeja');
@@ -761,7 +767,7 @@
   // ── Los controles ──
   function controles() {
     const cv = M.cv;
-    const punto = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) }; };
+    const punto = (e) => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * (CW / r.width) - OX, y: (e.clientY - r.top) * (CH / r.height) - OY }; };
     const apuntarA = (x, y) => { const cue = blanca(); if (!cue) return; const dx = x - cue.x, dy = y - cue.y; if (Math.hypot(dx, dy) > 1) M.ang = Math.atan2(dy, dx); };
     const contar = () => {
       // la mira, para que el rival la vea (pool.js la reparte; como mucho 12 por segundo)
