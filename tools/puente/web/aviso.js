@@ -10414,7 +10414,8 @@ document.addEventListener('pointerdown', (ev) => {
     // El rival: sus cartas boca abajo y lo que grita
     const top = el('div', 'jg-rival');
     const backs = el('div', 'jg-dorsos');
-    const reparte = s.estado === 'jugando' && (!prev || prev.manos !== s.manos) && s.bazas.every(z => !z.yo && !z.rival);
+    // El reparto se ve una sola vez por mano: al volver a una partida (o al recargar) la mano que ya se vio no se reparte de nuevo
+    const reparte = s.estado === 'jugando' && s.bazas.every(z => !z.yo && !z.rival) && repartida(s.id, s.manos);
     for (let k = 0; k < s.rivalCartas; k++) { const x = card(null, 'rival'); if (reparte) { x.classList.add('jg-reparte'); x.style.setProperty('--d', (k * 2 + (s.mano ? 1 : 0)) * 0.14 + 's'); } backs.appendChild(x); }
     top.appendChild(backs);
     if (s.grito && !s.grito.mio) top.appendChild(el('div', 'jg-globo', s.grito.text));
@@ -10530,6 +10531,17 @@ document.addEventListener('pointerdown', (ev) => {
       else if (prev.manos === s.manos && JSON.stringify(prev.bazas) !== JSON.stringify(s.bazas)) sonCarta('tira');
     }
     if (reparte) for (let k = 0; k < 6; k++) setTimeout(() => sonCarta('reparte'), 80 + k * 140);
+  }
+  // Las manos ya repartidas a la vista, por partida (en el navegador, para que tampoco se repita al recargar)
+  const REPARTIDAS = 'puente-truco-repartidas';
+  let repartidasMem = null;
+  function repartida(id, manos) {
+    if (!repartidasMem) { try { repartidasMem = JSON.parse(localStorage.getItem(REPARTIDAS) || '{}') || {}; } catch { repartidasMem = {}; } }
+    if (repartidasMem[id] === manos) return false;
+    delete repartidasMem[id]; repartidasMem[id] = manos;
+    const ids = Object.keys(repartidasMem); if (ids.length > 50) ids.slice(0, ids.length - 50).forEach(k => delete repartidasMem[k]);
+    try { localStorage.setItem(REPARTIDAS, JSON.stringify(repartidasMem)); } catch { /* sin guardar: igual en esta sesion */ }
+    return true;
   }
   // El sonido de las cartas (armado en el momento): un chasquido de naipe al repartir y un
   // golpe seco sobre el paño al tirar una
