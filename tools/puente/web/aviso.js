@@ -10383,6 +10383,9 @@ document.addEventListener('pointerdown', (ev) => {
     // La mesa es la parte de la izquierda (se arma de nuevo en cada cambio); el costado con el
     // tanteador de fosforos y el chat se arma una sola vez, asi no se pierde lo que se esta escribiendo
     const b0 = page.querySelector('.jg-mesa');
+    // Si lo unico que cambio es el chat, la mesa queda como esta (si se arma de nuevo, parpadea y repite sus animaciones)
+    const sinChat = (x) => { const { chat, ...r } = x || {}; return JSON.stringify(r); };
+    if (prev && prev.id === s.id && s.estado !== 'esperando' && b0.querySelector('.jg-juego') && sinChat(prev) === sinChat(s)) { lateral(b0, s, prev); return; }
     const vieja = b0.querySelector('.jg-juego'); if (vieja) vieja.remove();
     b0.querySelector('.jg-estado')?.remove();
     const b = el('div', 'jg-juego'); b0.prepend(b);
