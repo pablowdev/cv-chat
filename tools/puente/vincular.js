@@ -382,7 +382,7 @@ function injectScript(req, res, src) {
         // Un enlace al Marketplace sin la sesion del chat: al Marketplace de la web, que se ve sin cuenta; uno
         // de los juegos: a jugar como invitado (afuera.js, antes que Haven; origen.js primero, para que cuente de
         // donde llego)
-        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?(?:mercado|juegos|truco|funball|ajedrez|globalsiege)(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
+        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?(?:mercado|juegos|truco|funball|ajedrez|globalsiege|pool)(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
         // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
         // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
         if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
@@ -725,7 +725,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg, propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|juegos)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|juegos)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -752,6 +752,19 @@ async function handle(req, res) {
     const file = path.join(STATIC, 'funball', 'sonidos', fbSon[1] + '.mp3');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin sonido');
     return send(res, 200, 'audio/mpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
+  }
+
+  // Pool (pool.js): su pantalla (juego.js y juego.css) y su tapa, en web/pool/. Con huella, como aviso.js
+  const plArch = req.method === 'GET' && /^\/puente\/pool\/(juego\.js|juego\.css|tapa\.jpg)$/.exec(p);
+  if (plArch) {
+    const file = path.join(STATIC, 'pool', plArch[1]);
+    let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
+    const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
+    if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    const tipo = { js: 'application/javascript', css: 'text/css', jpg: 'image/jpeg' }[plArch[1].split('.').pop()];
+    let body = fs.readFileSync(file);
+    if (plArch[1] === 'juego.js') body = body.toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
+    return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
   // GlobalSiege (misionrisk.js): su pantalla (juego.js, juego.css y mapa.js) y el arte del juego
@@ -1330,11 +1343,12 @@ async function handle(req, res) {
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
 // muestran la tapa del juego en vez del logo.
 const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez y GlobalSiege para jugar con la gente del chat.' },
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege y Pool para jugar con la gente del chat.' },
   truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
   globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
+  pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
 };
 function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;

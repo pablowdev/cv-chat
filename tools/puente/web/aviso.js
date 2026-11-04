@@ -3103,8 +3103,8 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege'];
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
@@ -9893,7 +9893,7 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
   window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
@@ -9937,7 +9937,9 @@ document.addEventListener('pointerdown', (ev) => {
     page.textContent = '';
     fbMesa = null; ajM = null;
     if (window.puenteMR) window.puenteMR.salir();
+    if (window.puentePool) window.puentePool.salir();
     if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
+    if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
     if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
     try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
@@ -10017,6 +10019,40 @@ document.addEventListener('pointerdown', (ev) => {
     }).catch(() => toast('No se pudo abrir GlobalSiege. Probá de nuevo.', 'error'));
   }
 
+  // ── Pool (pool.js) ──
+  // Su pantalla esta aparte (/puente/pool/juego.js y juego.css) y se baja recien la primera vez que se abre
+  let plCarga = null;
+  const plVisto = new Map();
+  function pl(vista, arg) {
+    const top = stack[stack.length - 1];
+    if (!plCarga) {
+      if (!document.querySelector('link[data-pl]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/pool/juego.css?v=1'; css.dataset.pl = '1'; document.head.appendChild(css); }
+      plCarga = (window.puentePool ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/pool/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
+        .then(() => window.puentePool.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, chat: chatPartida, desafio: desafioDM, page: () => page, stack: () => stack }))
+        .catch((e) => { plCarga = null; throw e; });
+    }
+    if (!page.firstChild) { page.appendChild(head('Pool')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
+    plCarga.then(() => {
+      if (!page || stack[stack.length - 1] !== top) return;
+      page.textContent = '';
+      window.puentePool[vista](arg);
+    }).catch(() => toast('No se pudo abrir el Pool. Probá de nuevo.', 'error'));
+  }
+  // Mensaje directo al desafiado, con el enlace ya escrito (sin mandar)
+  function desafioDM(p, text) {
+    const a = app();
+    let done = false;
+    const fill = () => {
+      if (done) return; done = true;
+      setTimeout(() => { const box = byId('message-input'); if (!box) return; box.value = text; box.dispatchEvent(new Event('input', { bubbles: true })); box.focus(); }, 900);
+    };
+    a.socket.once('dm-opened', fill);
+    setTimeout(() => { if (!done) a.socket.off('dm-opened', fill); }, 8000);
+    toast('Mandale el mensaje para que entre a la mesa', 'success');
+    close();
+    a.socket.emit('start-dm', { targetUserId: p.id });
+  }
+
   // ── Sala ──
   // La biblioteca, como la de Steam: cada juego es una tarjeta con su tapa. Para sumar un juego
   // nuevo alcanza con agregarlo aca (id = la vista de su sala, evento = el que da sus partidas)
@@ -10025,6 +10061,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
+    { id: 'pool', nombre: 'Pool', sub: '8 bolas, 1 contra 1', evento: 'pool:inicio', tapa: () => '/puente/pool/tapa.jpg?v=1', fondo: '#2f7a2c', mesa: 'plMesa' },
   ];
   async function biblioteca() {
     // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
@@ -10112,6 +10149,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (which === 'funball') return fbInicio();
     if (which === 'ajedrez') return ajInicio();
     if (which === 'globalsiege') return mr('inicio');
+    if (which === 'pool') return pl('inicio');
     if (which !== 'truco') return biblioteca();
     page.appendChild(head('Truco', botonEnlace('/app?juegos=truco', 'Truco · __PUENTE_APP__')));
     const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
@@ -12520,8 +12558,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   function refreshBadge() {
     clearTimeout(badgeT);
     badgeT = setTimeout(async () => {
-      const [d, f, aj, gs] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio')]);
-      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length) + (gs.error || !gs.mias ? 0 : gs.mias.filter(m => m.teToca).length);
+      const [d, f, aj, gs, po] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio')]);
+      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length) + (gs.error || !gs.mias ? 0 : gs.mias.filter(m => m.teToca).length) + (po.error || !po.mias ? 0 : po.mias.filter(m => m.teToca).length);
       setBadge(n);
     }, 400);
   }
@@ -12562,10 +12600,18 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (mrVisto.get(s.id) !== k) { mrVisto.set(s.id, k); refreshBadge(); }
     });
     a.socket.on('mr:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'globalsiege')) show('inicio', t[1]); });
+    a.socket.on('pool:estado', (s) => {
+      if (page && window.puentePool) window.puentePool.estado(s);
+      const k = s.estado + ':' + !!s.teToca;
+      if (plVisto.get(s.id) !== k) { plVisto.set(s.id, k); refreshBadge(); }
+    });
+    a.socket.on('pool:apunta', (m) => { if (page && window.puentePool) window.puentePool.apunta(m); });
+    a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
     a.socket.on('connect', () => {
       if (page && fbMesa) emit('funball:ver', { id: fbMesa.id }).then(d => d.partida && fbRender(d.partida, true));
       else if (page && ajM) emit('ajedrez:ver', { id: ajM.id }).then(d => d.partida && ajRender(d.partida));
       else if (page && window.puenteMR && window.puenteMR.abierta()) emit('mr:ver', { id: window.puenteMR.abierta() }).then(d => d.partida && window.puenteMR.estado(d.partida));
+      else if (page && window.puentePool && window.puentePool.abierta()) emit('pool:ver', { id: window.puentePool.abierta() }).then(d => d.partida && window.puentePool.estado(d.partida));
       else if (page && mesa) emit('truco:ver', { id: mesa.id }).then(d => d.partida && render(d.partida));
     });
     if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
@@ -12589,6 +12635,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (aid && /^[a-f0-9]{6,20}$/.test(aid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('ajMesa', aid); return; }
       const gid = ok && u.searchParams.get('globalsiege');
       if (gid && /^[a-f0-9]{6,20}$/.test(gid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('mrMesa', gid); return; }
+      const pid = ok && u.searchParams.get('pool');
+      if (pid && /^[a-f0-9]{6,20}$/.test(pid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('plMesa', pid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; go('mesa', id);
@@ -12603,6 +12651,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (ap && /^[a-f0-9]{6,20}$/.test(ap)) setTimeout(() => { stack = []; go('ajMesa', ap); }, 1500);
     const gp = new URLSearchParams(location.search).get('globalsiege');
     if (gp && /^[a-f0-9]{6,20}$/.test(gp)) setTimeout(() => { stack = [['inicio']]; go('mrMesa', gp); }, 1500);
+    const pp = new URLSearchParams(location.search).get('pool');
+    if (pp && /^[a-f0-9]{6,20}$/.test(pp)) setTimeout(() => { stack = [['inicio']]; go('plMesa', pp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();

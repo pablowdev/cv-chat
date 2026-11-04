@@ -14,6 +14,7 @@ const RANGOS = { '7d': { dias: 7, paso: 'dia' }, '4s': { dias: 28, paso: 'dia' }
 const JUEGOS = [
   { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
   { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
+  { id: 'pool', nombre: 'Pool' },
 ];
 const COMPU = -1;
 const TOPE_PARTIDA = 2 * 3600 * 1000; // una partida que quedo abierta dias (el truco por turnos) no cuenta como horas jugando
@@ -41,6 +42,10 @@ function partidas() {
   for (const r of filas('SELECT id, blancas, negras, ganador, resultado, motivo, jugadas, ritmo, inicio, fin, compu FROM puente_ajedrez_partidas')) {
     out.push({ juego: 'ajedrez', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.blancas, r.negras].filter(x => x > 0), ganador: r.resultado === '1/2-1/2' ? null : r.ganador,
       motivo: r.motivo || '', detalle: [r.ritmo && r.ritmo !== 'libre' ? 'Con reloj (' + r.ritmo + ')' : 'Sin reloj'], jugadas: r.jugadas, empate: r.resultado === '1/2-1/2' });
+  }
+  for (const r of filas('SELECT id, j1, j2, ganador, motivo, tiros, inicio, fin, compu FROM puente_pool_partidas')) {
+    out.push({ juego: 'pool', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
+      detalle: ['8 bolas'], jugadas: r.tiros });
   }
   // GlobalSiege: los asientos (0 = la compu) y quien gano cada uno (puente_mr_resultados)
   const res = new Map();

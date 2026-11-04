@@ -16,6 +16,7 @@ const JUEGOS = [
   { tabla: 'puente_funball_mesas', juego: 'funball', nombre: 'Funball', param: 'funball', detalle: () => '' },
   { tabla: 'puente_ajedrez_mesas', juego: 'ajedrez', nombre: 'Ajedrez', param: 'ajedrez', detalle: g => (g.ritmo && g.ritmo !== 'libre' ? g.ritmo : 'sin reloj') },
   { tabla: 'puente_mr_mesas', juego: 'globalsiege', nombre: 'GlobalSiege', param: 'globalsiege', detalle: g => `${(g.asientos || []).filter(a => a.uid).length} en la mesa` },
+  { tabla: 'puente_pool_mesas', juego: 'pool', nombre: 'Pool', param: 'pool', detalle: () => '8 bolas' },
 ];
 
 let hecha = { at: 0, datos: null, pidiendo: null };

@@ -190,7 +190,7 @@ function calcular(rango) {
   const reacciones = reac(sqlIni, sqlFin);
   const reaccionesAnt = reac(sqlIniAnt, sqlIni);
   const msIni = Date.parse(ini + 'T03:00:00Z'), msIniAnt = Date.parse(iniAnt + 'T03:00:00Z');
-  const partidasDe = (a, b) => ['puente_truco_partidas', 'puente_ajedrez_partidas', 'puente_funball_partidas']
+  const partidasDe = (a, b) => ['puente_truco_partidas', 'puente_ajedrez_partidas', 'puente_funball_partidas', 'puente_pool_partidas']
     .reduce((s, t) => s + contar(`SELECT COUNT(*) n FROM ${t} WHERE fin >= ? AND fin < ?`, a, b), 0);
   const partidas = partidasDe(msIni, 9e15), partidasAnt = partidasDe(msIniAnt, msIni);
   const publicaciones = contar("SELECT COUNT(*) n FROM puente_mercado WHERE creado >= ? AND creado < ? AND IFNULL(origen, '') != 'foro'", msIni, 9e15);
@@ -227,7 +227,7 @@ function calcular(rango) {
   try {
     const U = require('./uso.js');
     const a = U.entre(ini, fin), b = U.entre(iniAnt, finAnt);
-    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege' };
+    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege', pool: 'Pool' };
     const nombreSec = (k) => k.startsWith('c:') ? (nombres.has(Number(k.slice(2))) ? '#' + nombres.get(Number(k.slice(2))).name : 'Otro canal')
       : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? (juegos[k.slice(2)] ? 'Juegos · ' + juegos[k.slice(2)] : 'Juegos (el menú)') : k === 'mercado' ? 'Marketplace'
         : k === 'foro' ? 'Foro' : k === 'miembros' ? 'Panel de administradores' : 'Otras pantallas';
