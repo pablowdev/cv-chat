@@ -67,9 +67,9 @@
       }
       c.globalAlpha = 1; c.restore();
     };
-    const CAOBA = [[0, '#4e0505'], [0.35, '#a01414'], [0.6, '#8a0e0e'], [1, '#560606']];
-    const VETA_CAOBA = { n: 18, oscura: '#5a0707', clara: '#b52020' };
-    const CLARA = [[0, '#f6b53a'], [0.5, '#eaa52a'], [1, '#d88f1c']];
+    const CAOBA = [[0, '#3f0303'], [0.3, '#8e0c0c'], [0.55, '#9c1010'], [1, '#4a0404']];
+    const VETA_CAOBA = { n: 22, oscura: '#4a0505', clara: '#a81818' };
+    const CLARA = [[0, '#f4a62c'], [0.5, '#ec9a1e'], [1, '#d98612']];
     const VETA_CLARA = { n: 0, oscura: '#c07a10', clara: '#ffd070' };
     // el fondo (lo que queda detras de todo) y la madera de los cuatro lados
     c.fillStyle = '#4e0505'; c.fillRect(FX0, FY0, CW, CH);
@@ -85,7 +85,7 @@
     // las bandas: verde un poco mas claro que el paño, con luz en el filo de arriba
     c.save();
     c.beginPath(); c.rect(IZQ, ARR, DER - IZQ, ABA - ARR); c.clip();
-    c.fillStyle = '#0c6a22'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
+    c.fillStyle = '#0d5f22'; c.fillRect(IZQ, ARR, DER - IZQ, ABA - ARR);
     const banda = c.createLinearGradient(0, ARR, 0, ARR + 30);
     banda.addColorStop(0, 'rgba(255,255,255,0.10)'); banda.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = banda; c.fillRect(IZQ, ARR, DER - IZQ, 30);
@@ -130,10 +130,10 @@
     c.save();
     contornoPano(c);
     c.clip();
-    c.fillStyle = '#0d7428'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#18682a'; c.fillRect(0, 0, W, H);
     const tex = document.createElement('canvas'); tex.width = tex.height = 96;
     const tc = tex.getContext('2d'), td = tc.createImageData(96, 96);
-    for (let i = 0; i < td.data.length; i += 4) { const k = (rnd() - 0.5) * 16; td.data[i] = 14 + k * 0.5; td.data[i + 1] = 112 + k; td.data[i + 2] = 40 + k * 0.6; td.data[i + 3] = 255; }
+    for (let i = 0; i < td.data.length; i += 4) { const k = (rnd() - 0.5) * 26; td.data[i] = 24 + k * 0.5; td.data[i + 1] = 104 + k; td.data[i + 2] = 42 + k * 0.6; td.data[i + 3] = 255; }
     tc.putImageData(td, 0, 0);
     c.fillStyle = c.createPattern(tex, 'repeat'); c.fillRect(0, 0, W, H);
     const vin = c.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, W * 0.62);
