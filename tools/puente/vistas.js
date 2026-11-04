@@ -221,8 +221,23 @@ function pedacitoDatos(ch, msgId) {
   return filas.map(r => { const l = leer(r.content); return { id: r.id, autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at), marcado: r.id === marcado }; });
 }
 // Los ultimos n mensajes de un canal publico (canalPublico), sin dibujo: la pantalla de entrar (portada.js)
+// (con los emojis del club que aparecen en el texto, :cv1: -> su imagen, para dibujarlos como en el chat)
 function ultimosDatos(ch, n = 6) {
-  return pedacito(ch, null, n).filas.map(r => { const l = leer(r.content); return { autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at) }; });
+  return pedacito(ch, null, n).filas.map(r => { const l = leer(r.content); return { autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, emojis: emojisDe(l.texto), imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at) }; });
+}
+// Los emojis propios del servidor (custom_emojis) que aparecen en un texto: { nombre: url }
+function emojisDe(texto) {
+  const out = {};
+  const nombres = [...new Set((String(texto || '').match(/:([A-Za-z0-9_]{1,40}):/g) || []).map(x => x.slice(1, -1)))].slice(0, 30);
+  if (!nombres.length) return out;
+  try {
+    const q = db.prepare('SELECT filename FROM custom_emojis WHERE name = ?');
+    for (const n of nombres) {
+      const r = q.get(n);
+      if (r && /^[A-Za-z0-9._\/-]+\.(?:png|gif|webp|jpe?g)$/i.test(r.filename) && !r.filename.includes('..')) out[n] = publicUrl + '/uploads/' + r.filename;
+    }
+  } catch (err) { warn('vistas: emojis:', err.message); }
+  return out;
 }
 function fotoUrl(r) {
   const f = fotoDe(r);

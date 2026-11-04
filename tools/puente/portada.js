@@ -70,7 +70,7 @@ async function armar(db, io, warn) {
     const pub = ch && vistas.canalPublico(ch.code);
     if (pub) {
       const filas = vistas.ultimosDatos(pub, 6).filter(r => r.texto || r.imagen);
-      if (filas.length) datos.chat = { canal: pub.name, mensajes: filas.map(r => ({ autor: r.autor, foto: r.foto, texto: r.texto, imagen: r.imagen, hora: r.hora })) };
+      if (filas.length) datos.chat = { canal: pub.name, mensajes: filas.map(r => ({ autor: r.autor, foto: r.foto, texto: r.texto, emojis: r.emojis, imagen: r.imagen, hora: r.hora })) };
     }
   } catch (err) { warn('portada: chat:', err.message); }
   // El Marketplace y el foro

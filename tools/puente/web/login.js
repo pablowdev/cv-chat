@@ -243,7 +243,7 @@
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
       p.append(mk('b', '', cual ? '🎮 ' + cual + ': elegí tu nombre' : tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
-        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Funball, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
+        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
           + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
       if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
@@ -306,7 +306,7 @@
     const j = mk('button', 'puente-visita-btn');
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
-    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Funball, Ajedrez y GlobalSiege'));
+    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez y GlobalSiege'));
     j.addEventListener('click', aLosJuegos);
     const m = mk('a', 'puente-visita-btn');
     m.href = mercado;
@@ -390,7 +390,16 @@
         const cuerpo = mk('div', 'puente-chat-cuerpo');
         const cab = mk('div', 'puente-chat-cab'); cab.append(mk('b', '', m.autor), mk('span', '', m.hora || ''));
         cuerpo.appendChild(cab);
-        if (m.texto) cuerpo.appendChild(mk('div', 'puente-chat-txt', m.texto));
+        if (m.texto) {
+          // Los emojis del club (:cv1:) con su imagen, como en el chat
+          const tx = mk('div', 'puente-chat-txt'), em = (m.emojis && typeof m.emojis === 'object') ? m.emojis : {};
+          String(m.texto).split(/(:[A-Za-z0-9_]{1,40}:)/).forEach((parte) => {
+            const n = /^:([A-Za-z0-9_]{1,40}):$/.exec(parte), u = n && em[n[1]];
+            if (u && /^https?:\/\//.test(u)) { const i = mk('img', 'puente-chat-emoji'); i.src = u; i.alt = parte; i.title = parte; i.loading = 'lazy'; tx.appendChild(i); }
+            else if (parte) tx.appendChild(document.createTextNode(parte));
+          });
+          cuerpo.appendChild(tx);
+        }
         if (m.imagen) { const i = mk('img', 'puente-chat-img'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; cuerpo.appendChild(i); }
         li.append(av, cuerpo);
         ul.appendChild(li);
@@ -413,7 +422,7 @@
         li.append(t, b);
         ul.appendChild(li);
       }
-      if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', 'Truco, Funball, Ajedrez y GlobalSiege contra la compu, o armá una mesa y que se sume alguien del club.'));
+      if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', 'Truco, Pool, Ajedrez y GlobalSiege contra la compu, o armá una mesa y que se sume alguien del club.'));
       else p.appendChild(ul);
       const b = mk('button', 'puente-panel-btn', 'Ver todos los juegos'); b.type = 'button';
       b.addEventListener('click', aLosJuegos);

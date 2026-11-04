@@ -183,6 +183,7 @@ html.puente-dos.puente-volvio .puente-pasando { order: 3; }
 .puente-chat-cab b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f2f3f5; font-size: 0.875rem; }
 .puente-chat-cab span { flex: 0 0 auto; color: #80848e; font-size: 0.75rem; }
 .puente-chat-txt { color: #dbdee1; font-size: 0.875rem; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.puente-chat-txt .puente-chat-emoji { width: 1.375em; height: 1.375em; object-fit: contain; vertical-align: -0.3em; margin: 0 0.05em; }
 .puente-chat-img { display: block; max-width: 100%; max-height: 90px; margin-top: 4px; border-radius: 6px; object-fit: cover; }
 .puente-mesa { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .puente-mesa-txt { display: flex; flex-direction: column; min-width: 0; }
