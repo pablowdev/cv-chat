@@ -118,20 +118,49 @@
     // las esquineras: un cuadrado dorado prolijo en cada esquina (hasta un poco pasando la tronera), con bisel
     // y un filo claro donde se juntan con la madera roja
     // una pieza dorada con la forma que se le pase (un camino), con bisel y su filo claro
-    const dorado = (forma, x, y, w, h) => {
-      c.save(); forma(); c.clip();
+    // pts: el contorno (convexo). Como en la referencia, el borde esta biselado (BISEL_D de ancho): cada cara se
+    // aclara u oscurece segun mire hacia la luz (arriba a la izquierda), con una linea en cada inglete
+    const BISEL_D = 4.5, LUZ = [-0.6, -0.8];
+    const dorado = (pts) => {
+      const camino = (p) => { c.beginPath(); p.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); };
+      const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+      const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+      const cx = xs.reduce((a, b) => a + b) / pts.length, cy = ys.reduce((a, b) => a + b) / pts.length;
+      // el contorno de adentro del bisel: cada lado corrido BISEL_D hacia el centro
+      const lados = pts.map((a, i) => {
+        const b = pts[(i + 1) % pts.length], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy);
+        let nx = -dy / l, ny = dx / l;
+        if ((cx - a[0]) * nx + (cy - a[1]) * ny < 0) { nx = -nx; ny = -ny; } // la normal hacia adentro
+        return { a, b, nx, ny };
+      });
+      const corte = (L1, L2) => {
+        const p1 = [L1.a[0] + L1.nx * BISEL_D, L1.a[1] + L1.ny * BISEL_D], d1 = [L1.b[0] - L1.a[0], L1.b[1] - L1.a[1]];
+        const p2 = [L2.a[0] + L2.nx * BISEL_D, L2.a[1] + L2.ny * BISEL_D], d2 = [L2.b[0] - L2.a[0], L2.b[1] - L2.a[1]];
+        const den = d1[0] * d2[1] - d1[1] * d2[0], t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den;
+        return [p1[0] + d1[0] * t, p1[1] + d1[1] * t];
+      };
+      const adentro = lados.map((L, i) => corte(lados[(i + lados.length - 1) % lados.length], L)); // adentro[i]: la esquina i
+      c.save(); camino(pts); c.clip();
       madera(x, y, w, h, true, CLARA, VETA_CLARA);
-      c.lineJoin = 'round';
-      forma(); c.strokeStyle = 'rgba(255,225,160,0.7)'; c.lineWidth = 8; c.stroke();
-      forma(); c.strokeStyle = 'rgba(170,95,10,0.35)'; c.lineWidth = 2.5; c.stroke();
+      // las caras del bisel
+      lados.forEach((L, i) => {
+        const k = -(L.nx * LUZ[0] + L.ny * LUZ[1]); // la normal hacia afuera, contra la luz
+        const i2 = (i + 1) % pts.length;
+        camino([L.a, L.b, adentro[i2], adentro[i]]);
+        c.fillStyle = k > 0 ? `rgba(255,236,190,${(0.18 + 0.4 * k).toFixed(2)})` : `rgba(120,62,8,${(0.12 - 0.38 * k).toFixed(2)})`;
+        c.fill();
+      });
+      // los ingletes y el borde de la cara
+      c.strokeStyle = 'rgba(150,85,15,0.45)'; c.lineWidth = 0.8;
+      pts.forEach((p, i) => { c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(adentro[i][0], adentro[i][1]); c.stroke(); });
+      camino(adentro); c.strokeStyle = 'rgba(160,95,20,0.35)'; c.lineWidth = 0.8; c.stroke();
       c.restore();
-      forma(); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
+      camino(pts); c.lineJoin = 'round'; c.strokeStyle = '#f3c99a'; c.lineWidth = 2; c.stroke();
     };
-    const rectRedondo = (x, y, w, h, r) => () => { c.beginPath(); c.roundRect(x, y, w, h, r); };
     const Q = ESQ_C + 6; // cuanto pasa la esquinera del centro de la tronera (en la referencia, apenas pasa el centro del agujero)
     for (const [px, py, sx, sy] of [[TL, TT, 1, 1], [TR, TT, -1, 1], [TL, TB, 1, -1], [TR, TB, -1, -1]]) {
       const x0 = sx > 0 ? FX0 : px - Q, y0 = sy > 0 ? FY0 : py - Q, w = (sx > 0 ? px + Q : FX1) - x0, h = (sy > 0 ? py + Q : FY1) - y0;
-      dorado(rectRedondo(x0, y0, w, h, 0), x0, y0, w, h);
+      dorado([[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]]);
     }
     // las del medio: una pieza dorada alrededor de la tronera
     for (const p of POCKETS) {
@@ -139,8 +168,7 @@
       // las del medio: un trapecio dorado desde el borde de afuera (56 a cada lado) que baja a 45° hasta 28 a cada
       // lado; de ahi sigue el aro del agujero hasta la banda
       const arriba = p.y < H / 2, s = arriba ? 1 : -1, yb = arriba ? FY0 : FY1, alto = 28, a = 28, b = a + alto;
-      const forma = () => { c.beginPath(); c.moveTo(p.x - b, yb); c.lineTo(p.x + b, yb); c.lineTo(p.x + a, yb + s * alto); c.lineTo(p.x - a, yb + s * alto); c.closePath(); };
-      dorado(forma, p.x - b, Math.min(yb, yb + s * alto), b * 2, alto);
+      dorado([[p.x - b, yb], [p.x + b, yb], [p.x + a, yb + s * alto], [p.x - a, yb + s * alto]]);
     }
     // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
     c.save();
