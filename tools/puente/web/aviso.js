@@ -1885,6 +1885,36 @@ function leido(sc) {
     sc.addEventListener('scroll', () => { if (app._suppressCoupleCheck) { st = sc.scrollTop; return; } record(); }, { passive: true });
     addEventListener('resize', record);
     record();
+    app._puenteAnclaje = true; // (lo usa el de abajo)
+  })();
+})();
+
+// Subir a leer sin que el chat te devuelva a un mensaje. Al cargar mensajes viejos (al llegar arriba de
+// todo), Haven se anota el mensaje que se veia y, durante 15 segundos, cada vez que algo cambia adentro de
+// los que agrego (llega una vista previa, termina de cargar una imagen, una reaccion) lo vuelve a poner
+// donde estaba en ese momento. Si la persona siguio subiendo, eso la tiraba de vuelta a ese mensaje, por
+// mas rapido que subiera. Esas vueltas se apagan: lo que crece ya lo acomoda el anclaje de arriba, con el
+// mensaje que se esta leyendo ahora. Lo que Haven acomoda en el momento de agregarlos queda igual.
+// (Si Haven cambia y su codigo ya no se reconoce, queda todo como era.)
+(function () {
+  'use strict';
+  const deHaven = (fn) => { try { return typeof fn === 'function' && /\brealign\(\)/.test(String(fn)); } catch { return false; } };
+  let tries = 0;
+  (function wait() {
+    const app = window.app;
+    if (!app || typeof app._prependMessages !== 'function' || !app._puenteAnclaje) { if (++tries < 120) setTimeout(wait, 500); return; }
+    const orig = app._prependMessages;
+    app._prependMessages = function (...a) {
+      const MO = window.MutationObserver, add = EventTarget.prototype.addEventListener;
+      try {
+        window.MutationObserver = class extends MO { constructor(cb) { super(deHaven(cb) ? () => {} : cb); } };
+        EventTarget.prototype.addEventListener = function (type, fn, opts) {
+          if (this instanceof HTMLImageElement && (type === 'load' || type === 'error') && deHaven(fn)) return;
+          return add.call(this, type, fn, opts);
+        };
+      } catch { window.MutationObserver = MO; EventTarget.prototype.addEventListener = add; }
+      try { return orig.apply(this, a); } finally { window.MutationObserver = MO; EventTarget.prototype.addEventListener = add; }
+    };
   })();
 })();
 
