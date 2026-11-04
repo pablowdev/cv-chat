@@ -26,8 +26,10 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   // El marco de madera: como en el diseño del dueño, la madera que se ve ocupa un 6,3% del largo de la mesa a
   // cada lado. La mesa de juego no cambia: el lienzo crece alrededor
-  // (arriba y abajo un poco mas ancho: las troneras del medio estan corridas hacia afuera y necesitan madera alrededor)
-  const MARCO = 52, MARCO_Y = 68, OX = MARCO - TL, OY = MARCO_Y - TT, CW = W + 2 * OX, CH = H + 2 * OY;
+  // Medido en la imagen de referencia del dueño: la madera mide 58 y la banda verde 15, igual en los cuatro lados
+  // (74 y 19 px sobre un paño de 1099 px). MARCO es del centro de las troneras al borde de afuera
+  const BANDA_VIS = 15, MADERA = 58;
+  const MARCO = MADERA + BANDA_VIS - BX, MARCO_Y = MADERA + BANDA_VIS - BY, OX = MARCO - TL, OY = MARCO_Y - TT, CW = W + 2 * OX, CH = H + 2 * OY;
   const FX0 = -OX, FY0 = -OY, FX1 = W + OX, FY1 = H + OY;
 
   // La mesa se dibuja una sola vez (en un lienzo aparte) y cada cuadro se copia: la madera con volumen, las
@@ -37,10 +39,11 @@
   // termina en una quijada a 45° que apunta al agujero; el paño entra derecho en la tronera.
   // afuera = false: el borde del paño (la linea de las bandas); afuera = true: el borde de las bandas contra la madera.
   // (La fisica no cambia: en la boca no hay banda, la quijada es solo el dibujo)
-  const WX = BX - 9, WY = BY - 8, CH_ = 8;
+  const WX = BX - BANDA_VIS, WY = BY - BANDA_VIS, CH_ = 8;
   const QE = 34, QM = 36; // donde empieza la quijada: en las esquinas, a QE del centro de la tronera; en las del medio, a QM
   function contornoPano(c, afuera) {
-    const m = TL + TW / 2, ox = afuera ? BX - WX : 0, oy = afuera ? BY - WY : 0; // las bandas, corridas hasta la madera
+    const d = afuera === true ? BANDA_VIS : afuera || 0;
+    const m = TL + TW / 2, ox = d, oy = d; // corrido d hacia la madera
     const pts = [];
     const esq = (px, py, sx, sy, primero) => {
       // la quijada de la banda larga y la de la corta, de la linea de las bandas hasta dentro del agujero
@@ -138,7 +141,9 @@
     // las bandas: la franja verde finita entre la madera y el paño (con su quijada en cada boca)
     c.save();
     contornoPano(c, true);
-    c.fillStyle = '#0d5f22'; c.fill();
+    c.fillStyle = '#1c7a2e'; c.fill();
+    contornoPano(c, BANDA_VIS * 10 / 19);
+    c.fillStyle = '#0f5622'; c.fill();
     c.restore();
     // el aro claro de las troneras (del lado de la madera: el paño lo tapa del otro lado)
     for (const p of POCKETS) {
