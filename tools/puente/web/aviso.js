@@ -2251,9 +2251,8 @@ function leido(sc) {
       cuerpo.append(sec);
       return { g, msgs };
     });
-    const listo = el('button', 'puente-guia-listo', 'Listo, a charlar'); listo.type = 'button'; listo.addEventListener('click', cerrar);
     const pie = el('div', 'puente-guia-pie', 'La volvés a ver tocando "Guía del club", arriba de los canales');
-    cuerpo.append(listo, pie);
+    cuerpo.append(pie);
     for (const { g, msgs } of cajas) {
       const lista = await traer(g.code, app.currentChannel === g.code);
       if (!hoja || !msgs.isConnected) return;

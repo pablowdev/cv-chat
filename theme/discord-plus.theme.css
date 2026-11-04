@@ -3576,12 +3576,7 @@ html body .puente-guia-msgs { color: #949ba4; font-size: 0.875rem; }
 html body #puente-guia .message, html body #puente-guia .message-compact { margin: 0; padding-left: 0; padding-right: 0; background: none; }
 html body #puente-guia .message.pinned { border-left: 0; }
 html body #puente-guia .msg-toolbar, html body #puente-guia .msg-dots-btn, html body #puente-guia .message-actions { display: none !important; }
-html body .puente-guia-listo {
-  display: block; width: 100%; margin-top: 1.25rem; padding: 0.75rem; border: 0; border-radius: 0.5rem;
-  background: #ee2d6f; color: #fff; font: inherit; font-weight: 700; font-size: 0.9375rem; cursor: pointer;
-}
-html body .puente-guia-listo:hover { background: #d4245f; }
-html body .puente-guia-pie { margin-top: 0.5rem; text-align: center; font-size: 0.75rem; color: #949ba4; }
+html body .puente-guia-pie { margin-top: 1.25rem; text-align: center; font-size: 0.75rem; color: #949ba4; }
 /* El club hoy */
 html body .puente-club-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
 html body .puente-club-dato, html body .puente-club-caja { padding: 0.75rem; background: #232228; border-radius: 0.625rem; }
