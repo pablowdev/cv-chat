@@ -41,7 +41,8 @@
 .puente-jg .pl-etq { color: #10302c; }
 .puente-jg .pl-fuerza { margin-top: 18px; width: 26px; flex: 1; min-height: 120px; max-height: 190px; display: flex; cursor: pointer; touch-action: none; }
 .puente-jg .pl-tubo { width: 14px; border: 1px solid #4f6f69; background: #c9dbd6; position: relative; overflow: hidden; }
-.puente-jg .pl-lleno { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(#e33, #fc3 50%, #3c3); }
+/* la fuerza: un bloque macizo, verde abajo y amarillo arriba (como se ve en el video al tirar) */
+.puente-jg .pl-lleno { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(to top, #6f9a3f 0 55%, #cde05a 55%); }
 .puente-jg .pl-marcas { width: 10px; margin-left: 2px; background: repeating-linear-gradient(to bottom, transparent 0 11px, #4f6f69 11px 12px); }
 .puente-jg .pl-sonido { margin-top: 8px; padding: 2px 8px; min-height: 0; }
 
@@ -65,7 +66,7 @@
   .puente-jg .pl-fuerza { margin: 0; flex: 1 1 90px; min-width: 70px; max-width: 200px; min-height: 0; height: 26px; width: auto; transform: none; }
   .puente-jg .pl-fuerza { flex-direction: column; }
   .puente-jg .pl-tubo { width: 100%; height: 14px; }
-  .puente-jg .pl-lleno { top: 0; bottom: 0; height: 100% !important; width: 0; right: auto; background: linear-gradient(90deg, #3c3, #fc3 50%, #e33); }
+  .puente-jg .pl-lleno { top: 0; bottom: 0; height: 100% !important; width: 0; right: auto; background: linear-gradient(90deg, #6f9a3f 0 55%, #cde05a 55%); }
   .puente-jg .pl-marcas { width: 100%; height: 8px; margin: 2px 0 0; background: repeating-linear-gradient(to right, transparent 0 11px, #4f6f69 11px 12px); }
   .puente-jg .pl-barra { font-size: 12px; padding: 3px 6px; }
   .puente-jg .pl-msg { font-size: 12px; }

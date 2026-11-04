@@ -403,6 +403,9 @@
     // los sonidos hasta este cuadro
     while (a.sonado < a.u.sonidos.length && a.u.sonidos[a.sonado][0] <= i) { const [, tipo, k] = a.u.sonidos[a.sonado++]; if (tipo !== 'taco') audio.play(tipo, k); }
     if (i >= fr.length - 1) {
+      // quietas: medio segundo con la mesa asi y recien ahi cambia el turno
+      if (!a.quietas) { a.quietas = performance.now(); M.bolas = bolasDe(M.s); return; }
+      if (performance.now() - a.quietas < 500) return;
       M.anim = null;
       M.bolas = bolasDe(M.s);
       hud(); pie();
@@ -515,7 +518,8 @@
     if (!cue || !cue.on || M.anim || s.estado !== 'jugando') return;
     if (mio && !M.arrastra) {
       const g = guia(M.bolas, cue.x, cue.y, M.ang);
-      c.save(); c.strokeStyle = 'rgba(230,220,120,0.75)'; c.lineWidth = 1;
+      // la guia punteada hasta el circulo de donde va a pegar (como en el video de referencia)
+      c.save(); c.setLineDash([3, 4]); c.strokeStyle = 'rgba(230,220,120,0.8)'; c.lineWidth = 1;
       c.beginPath(); c.moveTo(cue.x, cue.y); c.lineTo(g.x, g.y); c.stroke();
       c.setLineDash([2, 3]); c.strokeStyle = '#e8e050'; c.lineWidth = 1.5;
       c.beginPath(); c.arc(g.x, g.y, R, 0, Math.PI * 2); c.stroke(); c.restore();

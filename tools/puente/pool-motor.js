@@ -1,9 +1,14 @@
 // Motor del Pool (8 bolas): la fisica y las reglas, sin pantalla. Lo usa pool.js: el servidor
 // simula cada tiro de punta a punta y les manda a los dos jugadores el recorrido de las bolas
 // cuadro por cuadro, asi los dos ven exactamente lo mismo y nadie puede hacer trampa.
-// La fisica es la del pool que hizo el dueño del servidor (un paso fijo de 1/180 s, roce
-// constante, rebotes con perdida y choques elasticos entre bolas), mas el efecto:
-// arriba/abajo despues del primer choque y al costado en la primera banda.
+// La fisica es la del pool que hizo el dueño del servidor (un paso fijo de 1/180 s, rebotes con
+// perdida y choques elasticos entre bolas), mas el efecto: arriba/abajo despues del primer
+// choque y al costado en la primera banda.
+// La velocidad y el roce estan medidos del video de referencia (Yahoo Pool League): a toda
+// fuerza la blanca cruza media mesa en una decima; un tiro suave (la barra por la mitad) se
+// frena enseguida; la salida tarda unos 3 segundos en quedar quieta. Por eso la fuerza
+// no es pareja (fuerza^3.2: los tiros suaves se controlan mejor) y el roce frena mas cuanto
+// mas rapido va la bola (ROCE + ROCE_V * velocidad).
 //
 // La mesa mide 1000 x 500; el paño va de (50, 50) a (950, 450).
 
@@ -13,8 +18,11 @@ const W = 1000, H = 500;
 const TL = 50, TR = 950, TT = 50, TB = 450;
 const TW = TR - TL, TH = TB - TT;
 const R = 10, D = R * 2, POCKET_R = 24;
-const MAX_POWER = 1700;
-const FRICTION = 450;
+const MAX_POWER = 8000;
+const CURVA = 3.2;
+const ROCE = 150;                  // frenado fijo (unidades/s²)
+const ROCE_V = 1.0;                // y el que crece con la velocidad (1/s)
+const MAX_PASO = 4;                // a mucha velocidad el paso se parte para que nada se atraviese
 const MIN_SPEED = 8;
 const WALL_REST = 0.85;
 const BALL_REST = 0.96;
@@ -71,7 +79,7 @@ function simular(bolas, tiro, grabar) {
   const B = bolas.map(b => ({ n: b.n, x: b.x, y: b.y, vx: 0, vy: 0, on: b.on }));
   const cue = B.find(b => b.n === 0);
   const dir = { x: Math.cos(tiro.ang), y: Math.sin(tiro.ang) };
-  const v0 = Math.max(0.03, Math.min(1, tiro.fuerza)) * MAX_POWER;
+  const v0 = Math.pow(Math.max(0.03, Math.min(1, tiro.fuerza)), CURVA) * MAX_POWER;
   cue.vx = dir.x * v0; cue.vy = dir.y * v0;
   const ef = { x: tiro.efecto.x, y: tiro.efecto.y, bola: false, banda: false };
   const out = { primera: null, metidas: [], blanca: false, bandas: 0, frames: [], sonidos: [] };
@@ -116,22 +124,28 @@ function simular(bolas, tiro, grabar) {
   };
 
   for (let paso = 1; paso <= MAX_STEPS; paso++) {
-    for (const b of B) {
-      if (!b.on) continue;
-      b.x += b.vx * STEP; b.y += b.vy * STEP;
-      const sp = Math.hypot(b.vx, b.vy);
-      if (sp > 0) { const ns = sp - FRICTION * STEP; if (ns < MIN_SPEED) { b.vx = 0; b.vy = 0; } else { b.vx = b.vx / sp * ns; b.vy = b.vy / sp * ns; } }
-    }
-    for (const b of B) if (b.on) pared(b);
-    for (let i = 0; i < B.length; i++) { if (!B[i].on) continue; for (let k = i + 1; k < B.length; k++) if (B[k].on) choque(B[i], B[k]); }
-    for (const b of B) {
-      if (!b.on) continue;
-      for (const p of POCKETS) {
-        if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < POCKET_R * POCKET_R) {
-          b.on = false; b.vx = 0; b.vy = 0;
-          if (b.n === 0) out.blanca = true; else out.metidas.push(b.n);
-          sonido('tronera', 1);
-          break;
+    // si alguna va muy rapido, el paso se parte en pedazos (que ninguna avance mas de MAX_PASO por pedazo)
+    let vmax = 0;
+    for (const b of B) if (b.on) vmax = Math.max(vmax, Math.abs(b.vx), Math.abs(b.vy));
+    const partes = Math.max(1, Math.ceil(vmax * STEP / MAX_PASO)), dt = STEP / partes;
+    for (let k = 0; k < partes; k++) {
+      for (const b of B) {
+        if (!b.on) continue;
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        const sp = Math.hypot(b.vx, b.vy);
+        if (sp > 0) { const ns = sp - (ROCE + ROCE_V * sp) * dt; if (ns < MIN_SPEED) { b.vx = 0; b.vy = 0; } else { b.vx = b.vx / sp * ns; b.vy = b.vy / sp * ns; } }
+      }
+      for (const b of B) if (b.on) pared(b);
+      for (let i = 0; i < B.length; i++) { if (!B[i].on) continue; for (let j = i + 1; j < B.length; j++) if (B[j].on) choque(B[i], B[j]); }
+      for (const b of B) {
+        if (!b.on) continue;
+        for (const p of POCKETS) {
+          if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < POCKET_R * POCKET_R) {
+            b.on = false; b.vx = 0; b.vy = 0;
+            if (b.n === 0) out.blanca = true; else out.metidas.push(b.n);
+            sonido('tronera', 1);
+            break;
+          }
         }
       }
     }
@@ -258,12 +272,13 @@ function compu(S, nivel, rnd = Math.random) {
     p += rnd() * 3;
     if (!mejor || p > mejor.p) mejor = { p, L, ang, fuerza };
   };
-  for (const t of tiros.slice(0, 18)) for (const f of [0.35, 0.55, 0.8]) probar(t.L, t.ang, Math.min(1, f + t.dist / 4000));
+  // la fuerza segun la distancia (con la curva de la fuerza, la mitad de la barra es un tiro suave)
+  for (const t of tiros.slice(0, 18)) for (const f of [-0.06, 0.02, 0.12]) probar(t.L, t.ang, Math.max(0.4, Math.min(1, 0.5 + t.dist / 2400 + f)));
   if (!mejor || mejor.p < 0) {
     // ningun tiro bueno: le pega derecho a la bola propia mas cercana
-    for (const o of objetivos.slice(0, 8)) for (const L of lugares.slice(0, 3)) probar(L, Math.atan2(o.y - L.y, o.x - L.x), 0.45);
+    for (const o of objetivos.slice(0, 8)) for (const L of lugares.slice(0, 3)) probar(L, Math.atan2(o.y - L.y, o.x - L.x), 0.6);
   }
-  if (!mejor) mejor = { L: { x: c.x, y: c.y }, ang: rnd() * Math.PI * 2, fuerza: 0.6 };
+  if (!mejor) mejor = { L: { x: c.x, y: c.y }, ang: rnd() * Math.PI * 2, fuerza: 0.7 };
   const err = ERROR[nivel] || ERROR[2];
   return { ang: mejor.ang + (rnd() * 2 - 1) * err, fuerza: mejor.fuerza, efecto: { x: 0, y: 0 }, blanca: S.enMano ? { x: mejor.L.x, y: mejor.L.y } : null };
 }
