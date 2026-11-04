@@ -376,6 +376,11 @@
     const hero = el('div', 'jg-hero pl-hero');
     const dib = el('div', 'pl-hero-dibujo'); dib.innerHTML = tapaSvg();
     hero.append(dib, el('div', 'jg-hero-t', 'Pool'), el('div', 'jg-hero-s', '8 bolas, 1 contra 1'));
+    // la portada (web/pool/tapa.jpg, solo en el servidor): la mesa con el cartel; si no esta, el dibujo de siempre
+    const ban = el('img', 'jg-banner'); ban.alt = 'Pool'; ban.src = '/puente/pool/tapa.jpg?v=2';
+    ban.addEventListener('load', () => { dib.remove(); hero.querySelector('.jg-hero-t')?.remove(); hero.classList.add('jg-con-banner'); });
+    ban.addEventListener('error', () => ban.remove());
+    hero.prepend(ban);
     const acc = el('div', 'jg-acciones');
     acc.append(
       btn('Crear partida', 'jg-primario', () => A.go('plCrear')),
