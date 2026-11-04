@@ -2300,12 +2300,13 @@ function leido(sc) {
 
   // ── El club hoy ──
   function caja(titulo) { const c = el('div', 'puente-club-caja'); c.append(el('div', 'puente-club-caja-tit', titulo)); return c; }
-  function dato(titulo, valor, punto) {
+  function dato(titulo, valor, punto, unidad) {
     const c = el('div', 'puente-club-dato');
     c.append(el('div', 'puente-club-caja-tit', titulo));
     const v = el('div', 'puente-club-valor');
     if (punto) v.append(el('span', 'puente-club-punto'));
     v.append(document.createTextNode(num(valor)));
+    if (unidad) v.append(el('span', 'puente-club-unidad', unidad)); // (que se entienda que son personas, no mensajes)
     c.append(v);
     return c;
   }
@@ -2315,8 +2316,8 @@ function leido(sc) {
     cuerpo.replaceChildren();
     const grilla = el('div', 'puente-club-datos');
     grilla.append(dato('CONECTADOS', datos.conectados, true), dato('MENSAJES HOY', datos.mensajesHoy));
-    if (datos.discord) grilla.append(dato('EN DISCORD', datos.discord));
-    grilla.append(dato('EN CV CHAT', datos.cuentas));
+    if (datos.discord) grilla.append(dato('EN DISCORD', datos.discord, false, 'miembros'));
+    grilla.append(dato('EN CV CHAT', datos.cuentas, false, datos.cuentas === 1 ? 'miembro' : 'miembros'));
     cuerpo.append(grilla);
     if (datos.fotos && datos.fotos.length) {
       const c = caja('CONECTADOS AHORA');
