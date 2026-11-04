@@ -2173,7 +2173,10 @@ function leido(sc) {
   // ── Las hojas (la Guía y "El club hoy"): toda la pantalla en el celular, una ventana en la PC ──
   function cerrar() {
     if (!hoja) return;
-    hoja.remove(); hoja = null;
+    // (se va con un fundido corto: si desaparece de golpe debajo del dedo, Android pinta un destello)
+    const h = hoja; hoja = null;
+    h.classList.add('puente-hoja-saliendo');
+    setTimeout(() => h.remove(), matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160);
     document.removeEventListener('keydown', tecla, true);
   }
   function tecla(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } }

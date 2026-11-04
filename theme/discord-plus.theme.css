@@ -3549,6 +3549,12 @@ html body a.puente-club-entrar {
 html body a.puente-club-entrar:hover { background: #d4245f; }
 /* Las hojas: una ventana en la PC, toda la pantalla en el celular */
 html body .puente-hoja-fondo { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
+html body .puente-hoja-fondo { animation: puente-hoja-entra 0.14s ease-out; }
+html body .puente-hoja-fondo.puente-hoja-saliendo { opacity: 0; transition: opacity 0.14s ease-in; pointer-events: none; }
+@keyframes puente-hoja-entra { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html body .puente-hoja-fondo { animation: none; } }
+/* Sin el resaltado que Android pinta al tocar (se veia como un destello) */
+html body .puente-club-arriba, html body .puente-club-arriba *, html body .puente-hoja-fondo, html body .puente-hoja-fondo * { -webkit-tap-highlight-color: transparent; }
 html body .puente-hoja {
   display: flex; flex-direction: column; width: min(32.5rem, calc(100vw - 2rem)); max-height: 88vh; box-sizing: border-box;
   background: #1a1a1e; border-radius: 0.75rem; color: #dbdee1; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
