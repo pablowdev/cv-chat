@@ -10061,7 +10061,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
-    { id: 'pool', nombre: 'Pool', sub: '8 bolas, 1 contra 1', evento: 'pool:inicio', tapa: () => '/puente/pool/tapa.jpg?v=1', fondo: '#2f7a2c', mesa: 'plMesa' },
+    { id: 'pool', nombre: 'Pool', sub: '8 bolas, 1 contra 1', evento: 'pool:inicio', tapa: () => '/puente/pool/tapa.jpg?v=2', fondo: '#2f7a2c', mesa: 'plMesa' },
   ];
   async function biblioteca() {
     // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
