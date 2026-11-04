@@ -6393,17 +6393,7 @@ document.addEventListener('pointerdown', (ev) => {
     const st = await r.json().catch(() => null);
     if (!st) return false;
     const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
-    if (brand && typeof st.miembros === 'number' && !document.getElementById('puente-server-info')) {
-      const info = el('div', 'puente-server-info', typeof st.enDiscord === 'number' ? '' : st.miembros.toLocaleString('es-AR') + ' miembros');
-      if (typeof st.enDiscord === 'number') {
-        const l1 = el('span', 'puente-server-linea'), l2 = el('span', 'puente-server-linea');
-        l1.append(el('b', '', st.enDiscord.toLocaleString('es-AR')), ' en Discord');
-        l2.append(el('b', '', st.miembros.toLocaleString('es-AR')), ' en CV Chat');
-        info.append(l1, l2);
-      }
-      info.id = 'puente-server-info';
-      brand.insertAdjacentElement('afterend', info);
-    }
+    // (debajo del nombre del servidor ya no va cuantos miembros hay: esta en El club hoy, club.js)
     const account = document.querySelector('[data-haven-region="account"]');
     if (account && !account.querySelector('.puente-account-avatar')) {
       const av = el('div', 'puente-account-avatar');
