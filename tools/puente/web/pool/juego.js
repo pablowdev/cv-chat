@@ -1,9 +1,9 @@
 // Pool (8 bolas) en la seccion Juegos: la sala, crear una partida, las reglas y la mesa. Lo carga
 // aviso.js (el marco de Juegos) la primera vez que se abre el juego; el servidor es pool.js y la
 // fisica, pool-motor.js (el servidor simula cada tiro y aca se ve el recorrido, cuadro por cuadro).
-// La mesa es la del pool que hizo el dueño del servidor: apuntar con el mouse, la fuerza con la
-// barra (y espacio para tirar) o arrastrando hacia atras, el efecto con la bola de la derecha y la
-// bola en mano arrastrando la blanca.
+// Los controles de la PC son los de Yahoo Pool: el boton izquierdo apunta, el derecho apretado y el mouse
+// tirado para atras dan la fuerza (al soltarlo, tira), las flechas afinan; tambien la barra y el espacio.
+// El efecto con la bola de la derecha y la bola en mano arrastrando la blanca.
 (function () {
   'use strict';
   let A = null; // lo que presta el marco de Juegos (aviso.js)
@@ -575,7 +575,7 @@
     const b = el('div', 'jg-cuerpo jg-reglas pl-ui'); page.appendChild(b);
     const sec = (t, x) => { b.appendChild(el('div', 'jg-sub', t)); b.appendChild(el('p', null, x)); };
     sec('El objetivo', 'Pool de 8 bolas: uno se queda con las lisas (1 a 7) y el otro con las rayadas (9 a 15). Gana el que mete todas las suyas y después la 8.');
-    sec('Tirar', 'Para apuntar, hacé clic sobre la mesa y arrastrá: el taco sigue al mouse mientras lo tenés apretado (la línea muestra hasta dónde va la blanca). La fuerza la elegís en la barra de la derecha y tirás con la barra espaciadora. En el celular o la tablet: arrastrá el dedo sobre la mesa para apuntar, afiná con la rueda y arrastrá la barra de fuerza; al soltarla, tirás.');
+    sec('Tirar', 'Como en Yahoo Pool. Para apuntar, apretá el botón izquierdo sobre la mesa y mové el mouse: el taco gira alrededor de la blanca (la línea muestra hasta dónde va). Con las flechas del teclado afinás de a poquito (con Shift, más rápido). Para tirar, apretá el botón derecho y tirá el mouse para atrás: cuanto más lo tirás, más fuerza (se ve en la barra de la derecha). Al soltar el botón, tirás; si volvés al principio antes de soltar, o apretás Escape, no tira. También podés elegir la fuerza en la barra y tirar con la barra espaciadora. En el celular o la tablet: arrastrá el dedo sobre la mesa para apuntar, afiná con la rueda y arrastrá la barra de fuerza; al soltarla, tirás.');
     sec('El efecto', 'En la bola de arriba a la derecha elegís dónde le pega el taco a la blanca. Arriba: después del choque la blanca sigue de largo. Abajo: vuelve para atrás. A un costado: sale más abierta o más cerrada de la primera banda. Doble clic la vuelve al centro.');
     sec('La salida', 'El que rompe tiene la bola en mano detrás de la línea: arrastrá la blanca adonde quieras antes de tirar. Si entra la 8 en la salida, se rearma el triángulo y rompe de nuevo.');
     sec('Los grupos', 'Mientras la mesa está abierta podés pegarle a cualquier bola menos a la 8. El primero que mete una bola sin falta se queda con ese grupo (lisas o rayadas).');
@@ -893,9 +893,29 @@
       const cue = blanca();
       A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando || M.cargando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y }).catch(() => {});
     };
+    // Como en Yahoo Pool (PC): el boton izquierdo mueve el taco alrededor de la blanca; se aprieta el
+    // derecho y se tira el mouse para atras (la fuerza se ve en la barra) y al soltarlo, tira
+    const TIRON = 230; // lo que hay que tirar el mouse para atras (en unidades de la mesa) para la fuerza maxima
+    const cargarRaton = (p) => {
+      const k = M.cargando, dx = Math.cos(M.ang), dy = Math.sin(M.ang);
+      M.fuerza = clamp(((k.x - p.x) * dx + (k.y - p.y) * dy) / TIRON, 0, 1);
+    };
+    const soltarRaton = (tira) => {
+      const k = M.cargando;
+      if (!k || !k.raton) return false;
+      M.cargando = null;
+      const f = M.fuerza; M.fuerza = 0;
+      if (tira && f > 0.03 && puedoTirar()) { M.barra = f; tirar(f); }
+      return true;
+    };
+    cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('pointermove', (e) => {
       if (!puedoTirar()) return;
       const p = punto(e);
+      if (M.cargando && M.cargando.raton) {
+        if (!(e.buttons & 2)) { soltarRaton(true); return; }
+        cargarRaton(p); contar(); return;
+      }
       if (M.arrastra) {
         const q = { x: clamp(p.x, TL + R, TR - R), y: clamp(p.y, TT + R, TB - R) };
         M.valido = sePuedePoner(M.bolas, M.s.cabecera, q.x, q.y);
@@ -913,22 +933,40 @@
       const cue = blanca();
       const toque = e.pointerType === 'touch';
       if (toque) tactil();
+      // boton derecho: cargar la fuerza tirando el mouse para atras
+      if (!toque && e.button === 2) {
+        e.preventDefault();
+        if (M.arrastra) return;
+        M.dedo = false; M.cargando = { raton: true, x: p.x, y: p.y }; M.fuerza = 0; contar(); return;
+      }
+      if (M.cargando && M.cargando.raton) return;
       if (M.s.enMano && cue && Math.hypot(p.x - cue.x, p.y - cue.y) < R * (toque ? 3.2 : 2.2)) { M.arrastra = true; M.valido = true; return; }
       M.dedo = true; apuntarDedo(p); contar();
     });
     const soltar = (e) => {
       try { cv.releasePointerCapture(e.pointerId); } catch { /* ya suelto */ }
+      if (soltarRaton(true)) return;
       if (M.arrastra) { M.arrastra = false; M.valido = true; return; }
       M.dedo = false;
     };
     cv.addEventListener('pointerup', soltar);
-    cv.addEventListener('pointercancel', () => { M.apuntando = false; M.arrastra = false; M.dedo = false; M.fuerza = 0; });
-    // espacio: tira con la fuerza de la barra (si no se esta escribiendo en el chat)
+    cv.addEventListener('pointercancel', () => { M.apuntando = false; M.arrastra = false; M.dedo = false; soltarRaton(false); M.fuerza = 0; });
+    // el teclado (si no se esta escribiendo en el chat): las flechas afinan la punteria (con Shift, mas
+    // rapido), Escape suelta el taco sin tirar y el espacio tira con la fuerza de la barra
     M.teclas = (e) => {
-      if (e.code !== 'Space' || e.repeat || !M) return;
+      if (!M) return;
       const a = document.activeElement;
       if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
       if (!document.body.contains(M.cv)) return;
+      const giro = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.code];
+      if (giro) {
+        e.preventDefault();
+        if (!puedoTirar() || M.arrastra) return;
+        M.ang += giro * (e.shiftKey ? 0.01 : 0.0015);
+        contar(); return;
+      }
+      if (e.code === 'Escape' && M.cargando && M.cargando.raton) { soltarRaton(false); return; }
+      if (e.code !== 'Space' || e.repeat) return;
       e.preventDefault();
       audio.init();
       if (!puedoTirar() || M.apuntando || M.arrastra) return;
