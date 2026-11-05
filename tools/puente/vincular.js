@@ -728,9 +728,9 @@ async function handle(req, res) {
     return send(res, 200, 'image/webp', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=604800' });
   }
 
-  // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg, propias
+  // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|juegos)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -1395,6 +1395,8 @@ function shareTags(html, url) {
   let title = appName();
   let desc = server ? `El chat de ${server}. Entrá y creá tu cuenta.` : 'Entrá y creá tu cuenta.';
   let image = '/puente/logo-carga.png', grande = false, enlace = '/';
+  // La tarjeta del chat, apaisada (1200x630, propia de cada servidor): si no esta, va el logo cuadrado
+  if (fs.existsSync(path.join(STATIC, 'tapas', 'chat.jpg'))) { image = '/puente/tapas/chat.jpg'; grande = true; }
   const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
   const juego = q && JUEGOS_ENLACE[q[1] || 'juegos'];
   if (juego && fs.existsSync(path.join(STATIC, 'tapas', (q[1] || 'juegos') + '.jpg'))) {
