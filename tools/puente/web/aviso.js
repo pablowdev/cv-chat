@@ -6429,7 +6429,13 @@ document.addEventListener('pointerdown', (ev) => {
     const st = await r.json().catch(() => null);
     if (!st) return false;
     const brand = document.querySelector('[data-haven-region="navigation-sidebar"] .sidebar-header .brand');
-    // (debajo del nombre del servidor ya no va cuantos miembros hay: esta en El club hoy, club.js)
+    // Debajo del nombre del servidor (en el celular): cuantos miembros hay en CV Chat, de un vistazo
+    if (brand && typeof st.miembros === 'number' && !document.getElementById('puente-server-info')) {
+      const info = el('div', 'puente-server-info');
+      info.append(el('b', '', st.miembros.toLocaleString('es-AR')), ' miembros en CV Chat');
+      info.id = 'puente-server-info';
+      brand.insertAdjacentElement('afterend', info);
+    }
     const account = document.querySelector('[data-haven-region="account"]');
     if (account && !account.querySelector('.puente-account-avatar')) {
       const av = el('div', 'puente-account-avatar');
