@@ -3752,3 +3752,12 @@ html body #puente-franja-nuevos button:active { opacity: 0.75; }
   .ppz-img.sticker { width: 4.5rem; height: 4.5rem; }
   .ppz-ops .puente-prop-btn { flex: 1 1 0; }
 }
+
+/* PC: la hora que aparece al pasar el mouse por un mensaje seguido, dentro de la columna de la foto y
+   alineada a la derecha con un margen: con letra grande ("04:54 p.m.") quedaba pegada a la imagen */
+@media (hover: hover) {
+  html body .message-compact .compact-time {
+    left: 0; width: var(--msg-gutter); box-sizing: border-box; padding-right: 0.5rem;
+    text-align: right; white-space: nowrap; overflow: hidden; text-overflow: clip;
+  }
+}
