@@ -4154,7 +4154,7 @@ function leido(sc) {
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
     const anio = anioVisible();
-    if (tab === 'anio' && !anio) tab = 'ultimo';
+    tab = 'ultimo'; // siempre abre en "Lo ultimo"
     const pestanas = [['ultimo', 'Lo último'], ['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']];
     if (anio) pestanas.push(['anio', 'Tu ' + anio]);
     for (const [v, label] of pestanas) {
