@@ -1,10 +1,12 @@
 // "Actividad" para todos (el boton arriba de los canales, web/aviso.js):
+//  - Lo ultimo: los mensajes mas nuevos de los canales de la persona, del mas nuevo al mas viejo.
 //  - Lo mejor de la semana: los mensajes con mas reacciones de los ultimos 7 dias, por canal, solo
 //    de los canales que la persona puede ver.
 //  - Ranking del mes: quien escribio mas y quien recibio mas reacciones, entre las cuentas de CV
 //    Chat, solo en los canales abiertos (los que ve cualquiera), asi no deja ver nada de los cerrados.
 //  - "Tu resumen" usa lo de "Tu historia" (logros.js), no esta aca.
 //
+//  GET /puente/api/actividad/ultimos?antes=ID    (sesion; 40 por vez)
 //  GET /puente/api/actividad/destacados          (sesion)
 //  GET /puente/api/actividad/ranking?mes=YYYY-MM (sesion; el mes actual si no se dice)
 //  GET /puente/api/actividad/canal?code=         (sesion; hora pico del canal, si esta en el)
@@ -97,6 +99,38 @@ function destacados(userId) {
     }),
   }));
   return { canales: out, personalizados: usados };
+}
+
+// Lo ultimo que se escribio en los canales de la persona (sin los mensajes directos, los avisos
+// automaticos, los que se autodestruyen ni los marcados como sensibles), del mas nuevo al mas viejo.
+// "antes" = id del ultimo que ya tiene, para traer los anteriores
+const POR_PAGINA = 40;
+function ultimos(userId, antes) {
+  const mios = db.prepare('SELECT m.channel_id id FROM channel_members m JOIN channels c ON c.id = m.channel_id WHERE m.user_id = ? AND c.is_dm = 0').all(userId).map(r => r.id);
+  if (!mios.length) return { mensajes: [], personalizados: {}, mas: false };
+  const canales = new Map(db.prepare(`SELECT id, name, code FROM channels WHERE id IN (${mios.join(',')})`).all().map(c => [c.id, c]));
+  const filas = db.prepare(`SELECT id, channel_id, user_id, content, webhook_username, persona_username, webhook_avatar, created_at, thread_id
+                            FROM messages
+                            WHERE channel_id IN (${mios.join(',')}) AND id < ?
+                              AND IFNULL(is_webhook, 0) = 0 AND IFNULL(type, 'user') = 'user'
+                              AND IFNULL(burn_seconds, 0) = 0 AND destruct_at IS NULL AND IFNULL(nsfw, 0) = 0
+                            ORDER BY id DESC LIMIT ?`).all(Number(antes) > 0 ? Number(antes) : Number.MAX_SAFE_INTEGER, POR_PAGINA + 1);
+  const mas = filas.length > POR_PAGINA;
+  const pers = personalizados();
+  const usados = {};
+  const mensajes = filas.slice(0, POR_PAGINA).map(m => {
+    const c = canales.get(m.channel_id);
+    const foto = (/(\/uploads\/[^\s)"']+\.(?:png|jpe?g|gif|webp))/i.exec(String(m.content || '')) || [])[1] || null;
+    let texto = plano(m.content).slice(0, 220);
+    if (foto && /^(\[(foto|archivo)\]\s*)+$/.test(texto)) texto = '';
+    for (const k of texto.matchAll(/:([\w~-]+):/g)) if (pers.has(k[1])) usados[k[1]] = pers.get(k[1]);
+    return {
+      id: m.id, canal: c.name, code: c.code, autor: persona(m), texto, foto,
+      fecha: m.created_at.replace(' ', 'T') + 'Z',
+      url: `${publicUrl}/app?channel=${c.code}&message=${m.id}${m.thread_id ? '&thread=' + m.thread_id : ''}`,
+    };
+  });
+  return { mensajes, personalizados: usados, mas };
 }
 
 // Ranking del mes: mensajes (del resumen por persona y mes) y reacciones recibidas
@@ -195,11 +229,12 @@ function anio(uid, a) {
 }
 
 async function handle(req, res, p, u, h) {
-  if (p === '/puente/api/actividad/canal' || p === '/puente/api/actividad/perfil' || p === '/puente/api/actividad/anio') {
+  if (p === '/puente/api/actividad/canal' || p === '/puente/api/actividad/perfil' || p === '/puente/api/actividad/anio' || p === '/puente/api/actividad/ultimos') {
     if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
     const user = h.sessionUser(req);
     if (!user) return h.json(res, 401, { error: 'sin sesion' });
     try {
+      if (p === '/puente/api/actividad/ultimos') return h.json(res, 200, ultimos(user.id, u.searchParams.get('antes')));
       if (p === '/puente/api/actividad/canal') return h.json(res, 200, canal(u.searchParams.get('code'), user.id));
       if (p === '/puente/api/actividad/perfil') return h.json(res, 200, perfil(u.searchParams.get('u')) || {});
       const hoy = new Date(Date.now() - AR).getUTCFullYear();

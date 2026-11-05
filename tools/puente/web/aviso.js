@@ -3853,8 +3853,8 @@ function leido(sc) {
 })();
 
 // "Actividad" para todos (actividad.js y "Tu historia" de logros.js): arriba de los canales, al lado
-// de "Miembros". Tres pestañas: lo mejor de la semana (los mensajes con mas reacciones, de los
-// canales que ve cada uno), tu resumen (lo de "Tu historia", en corto) y el ranking del mes. En
+// de "Miembros". Cuatro pestañas: lo ultimo (los mensajes mas nuevos de tus canales, la primera),
+// lo mejor de la semana (los mensajes con mas reacciones, de los canales que ve cada uno), tu resumen (lo de "Tu historia", en corto) y el ranking del mes. En
 // diciembre (y hasta el 21 de enero) se suma "Tu año": el año entero de cada uno.
 // En la PC va al lado de los canales; en el celular ocupa la pantalla y el "atras" la cierra.
 (function () {
@@ -3892,7 +3892,7 @@ function leido(sc) {
     return av;
   }
 
-  let page = null, pushed = false, tab = 'mejor', mesRanking = null;
+  let page = null, pushed = false, tab = 'ultimo', mesRanking = null;
   function close(fromBack) {
     if (!page) return;
     page.remove(); page = null; document.removeEventListener('keydown', onKey, true);
@@ -3901,6 +3901,41 @@ function leido(sc) {
   addEventListener('popstate', () => { if (page && pushed) { pushed = false; close(true); } });
   function onKey(e) { if (e.key === 'Escape' && page) { e.stopPropagation(); close(); } }
   function ir(url) { close(); if (!(window.puenteEnlaces && window.puenteEnlaces.abrir(url))) location.href = url; }
+
+  // ── Lo ultimo: los mensajes mas nuevos de tus canales, del mas nuevo al mas viejo ──
+  function itemUltimo(m, pers) {
+    const it = el('button', 'pa-msg'); it.type = 'button';
+    it.appendChild(avatar(m.autor));
+    const cuerpo = el('div', 'pa-msg-c');
+    const cab = el('div', 'pa-msg-cab');
+    cab.append(el('span', 'pa-msg-n', m.autor.nombre), el('span', 'pa-ult-canal', '#' + m.canal), el('span', 'pa-msg-f', ago(m.fecha)));
+    cuerpo.appendChild(cab);
+    if (m.texto || !m.foto) { const tx = el('div', 'pa-msg-t'); tx.appendChild(conEmojis(m.texto || '[sin texto]', pers)); cuerpo.appendChild(tx); }
+    if (m.foto) { const foto = el('img', 'pa-foto'); foto.src = m.foto; foto.alt = ''; foto.loading = 'lazy'; cuerpo.appendChild(foto); }
+    it.appendChild(cuerpo);
+    it.addEventListener('click', () => ir(m.url));
+    return it;
+  }
+  function pintarUltimo(box, d) {
+    box.textContent = '';
+    if (!d.mensajes.length) { box.appendChild(el('div', 'pm-sin', 'Todavía no hay mensajes en tus canales.')); return; }
+    box.appendChild(el('div', 'pa-intro', 'Lo último que se escribió en tus canales.'));
+    const lista = el('div', 'pe-caja pa-ultimo');
+    for (const m of d.mensajes) lista.appendChild(itemUltimo(m, d.personalizados || {}));
+    box.appendChild(lista);
+    if (!d.mas) return;
+    const mas = el('button', 'pa-boton pa-ult-mas', 'Ver más'); mas.type = 'button';
+    mas.addEventListener('click', () => {
+      mas.disabled = true; mas.textContent = 'Cargando…';
+      pedir('/puente/api/actividad/ultimos?antes=' + d.mensajes[d.mensajes.length - 1].id).then(d2 => {
+        if (!page || tab !== 'ultimo') return;
+        for (const m of d2.mensajes) lista.appendChild(itemUltimo(m, d2.personalizados || {}));
+        d.mensajes = d.mensajes.concat(d2.mensajes);
+        if (d2.mas && d2.mensajes.length) { mas.disabled = false; mas.textContent = 'Ver más'; } else mas.remove();
+      }).catch(() => { mas.disabled = false; mas.textContent = 'Ver más'; });
+    });
+    box.appendChild(mas);
+  }
 
   // ── Lo mejor de la semana ──
   // Los canales encajan como ladrillos: cada tarjeta ocupa las filas chiquitas (4 px) que mide, asi la de
@@ -4101,7 +4136,8 @@ function leido(sc) {
     box.classList.remove('pa-ladrillos');
     box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…'));
     const fallo = () => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar. Probá de nuevo en un rato.')); } };
-    if (tab === 'mejor') pedir('/puente/api/actividad/destacados').then(d => { if (page && tab === 'mejor') pintarMejor(box, d); }).catch(fallo);
+    if (tab === 'ultimo') pedir('/puente/api/actividad/ultimos').then(d => { if (page && tab === 'ultimo') pintarUltimo(box, d); }).catch(fallo);
+    else if (tab === 'mejor') pedir('/puente/api/actividad/destacados').then(d => { if (page && tab === 'mejor') pintarMejor(box, d); }).catch(fallo);
     else if (tab === 'resumen') pedir('/puente/api/logros/historia').then(d => { if (page && tab === 'resumen') pintarResumen(box, d); }).catch(fallo);
     else if (tab === 'anio') pedir('/puente/api/actividad/anio?anio=' + anioVisible()).then(d => { if (page && tab === 'anio') pintarAnio(box, d); }).catch(fallo);
     else pedir('/puente/api/actividad/ranking' + (mesRanking ? '?mes=' + mesRanking : '')).then(d => { if (page && tab === 'ranking') pintarRanking(box, d); }).catch(fallo);
@@ -4118,8 +4154,8 @@ function leido(sc) {
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
     const anio = anioVisible();
-    if (tab === 'anio' && !anio) tab = 'mejor';
-    const pestanas = [['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']];
+    if (tab === 'anio' && !anio) tab = 'ultimo';
+    const pestanas = [['ultimo', 'Lo último'], ['mejor', 'Lo mejor de la semana'], ['resumen', 'Tu resumen'], ['ranking', 'Ranking del mes']];
     if (anio) pestanas.push(['anio', 'Tu ' + anio]);
     for (const [v, label] of pestanas) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
