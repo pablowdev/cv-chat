@@ -17061,11 +17061,14 @@ var puenteSinUbicacion = (function () {
       const head = rp.querySelector('.puente-rp-head');
       const input = rp.querySelector('.puente-rp-search input');
       if (head && input && input.placeholder !== 'Buscá la reacción perfecta') {
-        head.classList.add('puente-prop-con');
-        head.appendChild(boton(() => {
+        const b = boton(() => {
           const m = rp.querySelector('.puente-rp-modo.actual');
           return m && m.textContent === 'Stickers' ? 'sticker' : 'emoji';
-        }));
+        });
+        // en la fila de Stickers / Emoji, a la derecha (no suma alto); si no hay stickers, abajo del buscador
+        const modos = rp.querySelector('.puente-rp-modos');
+        if (modos) { b.classList.add('en-fila'); modos.appendChild(b); }
+        else { head.classList.add('puente-prop-con'); head.appendChild(b); }
       }
     }
     // El de Haven (celular)
