@@ -15737,21 +15737,41 @@ var puenteSinUbicacion = (function () {
     + '.puente-espera .pe-msj{display:flex;gap:8px;align-items:flex-start;margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.18);color:#dbdee1;font-size:14px;white-space:pre-wrap;word-break:break-word}'
     + '.puente-espera .pe-msj span{flex:1}.puente-espera .pe-x{border:0;background:none;color:#96969e;font-size:16px;cursor:pointer;padding:0 2px}'
     + '.puente-llave-aviso{margin:8px 16px;padding:10px 14px;border-radius:8px;border-left:3px solid #5865f2;background:#222327;color:#b5bac1;font-size:13px;line-height:1.45}'
-    + '.puente-llave-aviso button{margin-top:6px;border:0;background:none;padding:0;color:#949cf7;font:inherit;text-decoration:underline;cursor:pointer}';
+    + '.puente-llave-aviso button{margin-top:6px;border:0;background:none;padding:0;color:#949cf7;font:inherit;text-decoration:underline;cursor:pointer}'
+    // (la ventana "Contraseña requerida" de Haven no se muestra nunca: ver "Sin la contraseña", abajo)
+    + '#e2e-password-modal{display:none!important}';
   document.head.appendChild(st);
 
   // ── Las claves ──
+  // bloqueado: este dispositivo tiene claves viejas (distintas de las del servidor) y Haven iba a pedir
+  // la contraseña para bajar las nuevas. Hasta que llegan, nada se manda con las viejas.
+  let bloqueado = false;
+  async function coinciden() {
+    const a = app();
+    try {
+      const probe = await new window.HavenE2E()._fetchBackupWithState(a.socket);
+      if (probe.status !== 'present' || !probe.serverPublicKey) return true;
+      const mia = await crypto.subtle.exportKey('jwk', a.e2e._keyPair.publicKey);
+      return !mia || mia.x === probe.serverPublicKey.x;
+    } catch { return true; }
+  }
   async function iniciar(secretoHex) {
     try { sessionStorage.setItem('haven_e2e_wrap', secretoHex); } catch { /* sin almacenamiento */ }
+    const antes = bloqueado;
+    bloqueado = false;
     try { await app()._initE2E(); } catch (err) { console.warn('[puente] cifrado:', err); }
-    if (listo()) { ls.set('haven_sync_key', secretoHex); quitarAvisoLlave(); setTimeout(mandarEsperando, 500); }
-    return listo();
+    if (listo() && antes && !bloqueado && !(await coinciden())) bloqueado = true;
+    const ok = listo() && !bloqueado;
+    if (ok) { ls.set('haven_sync_key', secretoHex); esperandoOtro = false; quitarAvisoLlave(); setTimeout(mandarEsperando, 500); }
+    else if (antes) bloqueado = true;
+    return ok;
   }
   let asegurando = false, esperandoOtro = false;
   async function asegurar() {
     const a = app();
     if (asegurando || !a || !a.socket || !a.socket.connected || typeof a._initE2E !== 'function' || typeof window.HavenE2E === 'undefined') return;
-    if (listo()) { esperandoOtro = false; return; }
+    if (listo() && !bloqueado) { esperandoOtro = false; return; }
+    if (bloqueado) { esperandoOtro = true; await pedirLlave().catch(() => {}); mostrarAvisoLlave(); return; }
     asegurando = true;
     try {
       // Este dispositivo ya tenia el secreto
@@ -15783,7 +15803,7 @@ var puenteSinUbicacion = (function () {
   }
   async function alPedido(d) {
     const s = secreto();
-    if (!listo() || !s || !d || !d.de || !d.pub) return;
+    if (!listo() || bloqueado || !s || !d || !d.de || !d.pub) return;
     try {
       const mia = await crypto.subtle.generateKey(ECDH, true, ['deriveKey']);
       const k = await claveCon(mia.privateKey, d.pub, 'encrypt');
@@ -15808,7 +15828,7 @@ var puenteSinUbicacion = (function () {
   function mostrarAvisoLlave() {
     const a = app(), msgs = byId('messages');
     const ch = a && chans().find(c => c && c.code === a.currentChannel);
-    if (!esperandoOtro || listo() || !msgs || !ch || !ch.is_dm || msgs.querySelector('.puente-llave-aviso')) return;
+    if (!esperandoOtro || (listo() && !bloqueado) || !msgs || !ch || !ch.is_dm || msgs.querySelector('.puente-llave-aviso')) return;
     const box = el('div', 'puente-llave-aviso', '🔐 Para ver tus mensajes privados acá, abrí CV Chat un momento en otro celular o compu donde ya lo usás (o entrá con tu contraseña de CV Chat). Se pasan solos.');
     const cero = el('button', null, '¿Ya no tenés otro? Empezar de cero en este');
     cero.type = 'button';
@@ -15846,7 +15866,7 @@ var puenteSinUbicacion = (function () {
   }
   async function mandarEsperando() {
     const a = app();
-    if (!a || !a.socket || !a.socket.connected || !listo()) return;
+    if (!a || !a.socket || !a.socket.connected || !listo() || bloqueado) return;
     const l = leerEspera();
     if (!l.length) return;
     const quedan = [];
@@ -15882,6 +15902,30 @@ var puenteSinUbicacion = (function () {
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  // ── Sin la contraseña: Haven nunca muestra "Contraseña requerida" (quien entra con Discord, el foro
+  // o la pagina no la sabe). Cuando la iba a pedir, el secreto se pide a los otros dispositivos de la
+  // cuenta, como en un dispositivo nuevo, y en los mensajes privados queda el aviso de siempre.
+  // Tampoco sus avisos que piden la contraseña.
+  function sinContrasena(a) {
+    a._e2ePwPendingAction = null; a._e2eResetPending = false;
+    bloqueado = true; esperandoOtro = true;
+    if (a.socket && a.socket.connected) pedirLlave().catch(() => {});
+    setTimeout(mostrarAvisoLlave, 300);
+  }
+  let tc = 0;
+  (function tapar() {
+    const a = app();
+    if (!a || typeof a._showE2EPasswordModal !== 'function') { if (++tc < 2400) setTimeout(tapar, 50); return; }
+    a._showE2EPasswordModal = function () { try { sinContrasena(this); } catch (err) { console.warn('[puente] cifrado:', err); } };
+    const tx = (k) => { try { return typeof window.t === 'function' ? window.t(k) : null; } catch { return null; } };
+    const callar = ['platform.e2e.keys_changed', 'platform.e2e.errors.bad_password', 'platform.e2e.errors.no_password'].map(tx).filter(Boolean);
+    const toast = a._showToast;
+    if (typeof toast === 'function') a._showToast = function (msg) { if (typeof msg === 'string' && callar.includes(msg)) return; return toast.apply(this, arguments); };
+    // Si ya se habia abierto antes de esto
+    const m = byId('e2e-password-modal');
+    if (m && m.style.display === 'flex') { m.style.display = 'none'; sinContrasena(a); }
+  })();
+
   let t = 0;
   (function enganchar() {
     const a = app();
@@ -15889,17 +15933,17 @@ var puenteSinUbicacion = (function () {
     // Nada sale sin cifrar: sin la clave de la otra persona (o sin las propias todavia), el texto espera
     const preguntar = a._dmSendGateAsk;
     a._dmSendGateAsk = async function (ch) {
-      const p = ch ? await socio(ch) : null;
+      const p = ch && !bloqueado ? await socio(ch) : null;
       if (p) return preguntar.apply(this, arguments);
       if (ch && !ch.is_group && captura && captura.code === ch.code && captura.texto) {
         const l = leerEspera();
         l.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), code: ch.code, texto: captura.texto, reply: captura.reply, t: Date.now() });
         guardarEspera(l);
         encolado = true;
-        if (!listo()) asegurar(); else this.socket.emit('puente-pm-espera', { code: ch.code }, () => {});
+        if (!listo() || bloqueado) asegurar(); else this.socket.emit('puente-pm-espera', { code: ch.code }, () => {});
         setTimeout(pintarEspera, 50);
       } else if (typeof this._showToast === 'function') {
-        this._showToast(listo() ? 'Las fotos y archivos se pueden mandar cuando la otra persona entre a CV Chat (sus mensajes privados son cifrados).' : 'Un momento: se están preparando tus mensajes cifrados en este dispositivo.', 'info');
+        this._showToast(listo() && !bloqueado ? 'Las fotos y archivos se pueden mandar cuando la otra persona entre a CV Chat (sus mensajes privados son cifrados).' : 'Un momento: se están preparando tus mensajes cifrados en este dispositivo.', 'info');
       }
       return null;
     };
@@ -15915,7 +15959,7 @@ var puenteSinUbicacion = (function () {
     };
     a.socket.on('puente-llave-pedido', alPedido);
     a.socket.on('puente-llave-recibida', alRecibir);
-    a.socket.on('connect', () => setTimeout(() => { asegurar(); if (esperandoOtro && !listo()) pedirLlave().catch(() => {}); mandarEsperando(); }, 2500));
+    a.socket.on('connect', () => setTimeout(() => { asegurar(); if (esperandoOtro && (!listo() || bloqueado)) pedirLlave().catch(() => {}); mandarEsperando(); }, 2500));
     // Al cambiar de conversacion: lo que espera y el aviso
     const cambiar = a.switchChannel;
     a.switchChannel = function () { const r = cambiar.apply(this, arguments); setTimeout(() => { pintarEspera(); quitarAvisoLlave(); mostrarAvisoLlave(); }, 300); return r; };
