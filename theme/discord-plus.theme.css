@@ -3761,3 +3761,7 @@ html body #puente-franja-nuevos button:active { opacity: 0.75; }
     text-align: right; white-space: nowrap; overflow: hidden; text-overflow: clip;
   }
 }
+
+/* Aviso de la copia de seguridad en la pagina "Miembros" de Admin (aviso.js, /puente/api/respaldo) */
+html body .pm-respaldo { margin: 0 0 0.75rem; padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(242, 63, 67, 0.14); border: 1px solid rgba(242, 63, 67, 0.45); color: #f2f3f5; font-size: 0.875rem; line-height: 1.4; }
+html body .pm-respaldo.leve { background: rgba(240, 178, 50, 0.12); border-color: rgba(240, 178, 50, 0.45); }

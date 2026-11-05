@@ -19,7 +19,7 @@ STAMP=$(date -u +%Y-%m-%d_%H%M)
 REMOTE=${BACKUP_REMOTE:-personal:CV-respaldo}
 ESTADO=/opt/haven/haven-data/puente-respaldo.json
 # Si algo falla, queda anotado (el estado se pisa con "ok" al final)
-trap 'r=$?; [ $r -eq 0 ] || printf "{\"ok\":false,\"fecha\":\"%s\",\"error\":\"la copia termino con error %s (ver tools/backup.log)\"}\n" "$(date -u +%FT%TZ)" "$r" > "$ESTADO"' EXIT
+trap 'r=$?; [ $r -eq 0 ] || printf "{\"ok\":false,\"fecha\":\"%s\",\"error\":\"la copia termino con error %s (ver tools/backup.log)\"}\n" "$(date -u +%FT%TZ)" "$r" > "$ESTADO"; chmod 644 "$ESTADO" 2>/dev/null || true' EXIT
 OUT=/opt/haven/backup-local
 TMPDB=haven-data/backup-en-curso.db
 
@@ -49,5 +49,14 @@ rclone delete "$REMOTE" --min-age 30d --exclude "uploads/**" --config /opt/haven
 # Los archivos subidos (fotos, videos, el historial de Discord): solo los que faltan
 timeout 80m rclone copy haven-data/uploads "$REMOTE/uploads" --config /opt/haven/tools/rclone.conf \
   --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part"
-printf '{"ok":true,"fecha":"%s"}\n' "$(date -u +%FT%TZ)" > "$ESTADO"
+# Segunda copia, solo la base de datos y 7 dias, en la cuenta del club (BACKUP_REMOTE2, por defecto
+# gdrive:Haven-backups, 15 GB): si falla, la principal ya esta y solo queda anotado
+REMOTE2=${BACKUP_REMOTE2:-gdrive:Haven-backups}
+AVISO2=""
+if ! { timeout 30m rclone copy "$OUT" "$REMOTE2" --include "haven-db_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5 \
+       && rclone delete "$REMOTE2" --min-age 7d --config /opt/haven/tools/rclone.conf; }; then
+  AVISO2=',"aviso":"la segunda copia (cuenta del club) no se pudo subir"'
+fi
+printf '{"ok":true,"fecha":"%s"%s}\n' "$(date -u +%FT%TZ)" "$AVISO2" > "$ESTADO"
+chmod 644 "$ESTADO" # (lo lee el chat, que no corre como root)
 echo "== $(date -u '+%F %T') ok: $(du -h "$OUT"/haven-db_$STAMP.db.zst | cut -f1) base de datos, $(du -h "$OUT"/haven-config_$STAMP.tar.zst | cut -f1) configuracion$( [ -f "$OUT/foro-db_$STAMP.sql.zst" ] && echo ", foro $(du -h "$OUT"/foro-db_$STAMP.sql.zst | cut -f1)")"

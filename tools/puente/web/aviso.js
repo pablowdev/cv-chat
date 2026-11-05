@@ -3756,6 +3756,16 @@ function leido(sc) {
     x.addEventListener('click', close);
     head.append(title, x);
     const card = el('div', 'pm-card');
+    // Si la copia de seguridad de la noche fallo (o hace mas de un dia y medio que no hay): un aviso arriba
+    const avisoRespaldo = el('div', 'pm-respaldo'); avisoRespaldo.hidden = true; card.appendChild(avisoRespaldo);
+    fetch('/puente/api/respaldo', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('haven_token') || '') } })
+      .then(r => (r.ok ? r.json() : null)).then(d => {
+        if (!d || (d.ok && !d.aviso)) return;
+        const cuando = d.fecha ? new Date(d.fecha).toLocaleString('es-AR', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+        avisoRespaldo.textContent = d.ok ? `⚠️ La copia de seguridad principal está bien, pero ${d.aviso}.` : `⚠️ La copia de seguridad no salió bien${cuando ? ' (última: ' + cuando + ')' : ''}: ${d.error || 'revisá tools/backup.log en el servidor'}.`;
+        avisoRespaldo.classList.toggle('leve', !!d.ok);
+        avisoRespaldo.hidden = false;
+      }).catch(() => {});
     const bar = el('div', 'pm-bar');
     const h = el('div', 'pm-sub'); h.append(el('span', '', 'Miembros recientes'), el('span', 'pm-total', ''));
     const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre, usuario o email';

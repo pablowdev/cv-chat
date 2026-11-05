@@ -861,6 +861,19 @@ async function handle(req, res) {
     return json(res, r.ok ? 200 : 400, r);
   }
 
+  // Como salio la ultima copia de seguridad (tools/backup.sh la anota en haven-data/puente-respaldo.json):
+  // solo administradores, para el aviso de la pagina "Miembros" si fallo o hace mas de un dia y medio que no hay
+  if (p === '/puente/api/respaldo' && req.method === 'GET') {
+    const user = sessionUser(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
+    let r = null;
+    try { r = JSON.parse(fs.readFileSync('/data/puente-respaldo.json', 'utf8')); } catch { /* todavia no hay */ }
+    const vieja = !r || !r.fecha || Date.now() - Date.parse(r.fecha) > 36 * 3600e3;
+    return json(res, 200, { ok: !!(r && r.ok) && !vieja, fecha: r && r.fecha || null, error: r && r.error || (vieja ? 'No hay una copia de seguridad de las últimas 36 horas.' : null), aviso: r && r.aviso || null });
+  }
+
   // Los emails de las cuentas, en una planilla (CSV con ";", se abre directo en Excel o
   // Google Sheets): solo administradores, desde la pagina "Miembros"
   if (p === '/puente/api/miembros/emails.csv' && req.method === 'GET') {
