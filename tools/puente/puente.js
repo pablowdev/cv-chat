@@ -153,6 +153,8 @@ function start(deps) {
   require('./informe.js').setup({ db, log, warn, publicUrl });
   require('./actividad.js').setup({ db, io, log, warn });
   require('./guardados.js').setup({ db, io, log, warn });
+  // Emojis y stickers que propone la gente (se votan en #que-paso, los aprueba un admin)
+  require('./propuestas.js').setup({ db, io, log, warn });
   require('./truco.js').setup({ db, io, log, warn });
   require('./funball.js').setup({ db, io, log, warn });
   require('./ajedrez.js').setup({ db, io, log, warn });
@@ -665,6 +667,8 @@ function onHavenEmit(event, p) {
     if (p.messageId) setImmediate(() => outboundEdit(p.messageId));
   } else if (event === 'reactions-updated') {
     if (p.messageId) setImmediate(() => enqueue('react:' + p.messageId, () => reacciones.onHavenReactions(p, m => discordTarget(m))));
+    // los votos de las propuestas de emojis y stickers (propuestas.js)
+    if (p.messageId) setImmediate(() => { try { require('./propuestas.js').onReactions(p.messageId); } catch (err) { warn('propuestas:', err.message); } });
   } else if (event === 'message-deleted') {
     if (p.messageId) setImmediate(() => outboundDelete(p.messageId));
   }

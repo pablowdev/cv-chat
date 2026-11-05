@@ -3666,3 +3666,83 @@ html body #puente-franja-nuevos button:active { opacity: 0.75; }
   html body #puente-franja-nuevos .puente-franja-x { height: 2rem; }
   html body #puente-franja-nuevos .puente-franja-ir:hover { text-decoration: underline; }
 }
+
+/* ── Propuestas de emojis y stickers (propuestas.js; aviso.js: "Proponer" en el selector y Admin → Propuestas) ── */
+.puente-prop-abrir { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; padding: 0.25rem 0.625rem; border: 1px solid #3a3940; border-radius: 0.375rem; background: transparent; color: #b5bac1; font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+.puente-prop-abrir:hover { background: #2e2d32; color: #fbfbfb; border-color: #5865f2; }
+.puente-prop-abrir.en-fila { margin: 0 0 0 auto; flex: 0 0 auto; align-self: center; border: 0; }
+#emoji-picker > .puente-prop-abrir:not(.en-fila) { margin: 0.375rem; align-self: flex-end; }
+.puente-prop-fondo { position: fixed; inset: 0; z-index: 100040; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0, 0, 0, 0.6); animation: puente-fade 0.14s ease-out; }
+.puente-prop-caja { box-sizing: border-box; width: 100%; max-width: 26rem; max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1rem 1.125rem; border-radius: 0.75rem; background: #1a1a1e; color: #dbdee1; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+.puente-prop-cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.75rem; }
+.puente-prop-titulo { font-size: 1.125rem; font-weight: 700; color: #fbfbfb; }
+.puente-prop-x { display: inline-flex; padding: 0.25rem; border: 0; border-radius: 0.375rem; background: transparent; color: #b5bac1; cursor: pointer; }
+.puente-prop-x:hover { background: #2e2d32; color: #fbfbfb; }
+.puente-prop-modos { display: flex; gap: 0.25rem; padding: 0.25rem; margin-bottom: 0.75rem; border-radius: 0.5rem; background: #252429; }
+.puente-prop-modo { flex: 1 1 0; padding: 0.375rem 0.5rem; border: 0; border-radius: 0.375rem; background: transparent; color: #b5bac1; font: inherit; font-weight: 600; cursor: pointer; }
+.puente-prop-modo.actual { background: #5865f2; color: #fff; }
+.puente-prop-estado { margin-bottom: 0.75rem; font-size: 0.875rem; color: #b5bac1; }
+.puente-prop-estado.mal { padding: 0.5rem 0.625rem; border-radius: 0.375rem; background: rgba(233, 30, 99, 0.12); color: #f48fb1; }
+.puente-prop-estado[hidden] { display: none; }
+.puente-prop-zona { display: flex; align-items: center; gap: 0.875rem; margin-bottom: 0.875rem; }
+.puente-prop-vista { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 4rem; height: 4rem; border-radius: 0.5rem; background: #252429; overflow: hidden; }
+.puente-prop-vista.sticker { width: 7.5rem; height: 7.5rem; }
+.puente-prop-vista img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.puente-prop-vista img[hidden], .puente-prop-vacio[hidden] { display: none; }
+.puente-prop-vacio { font-size: 0.75rem; color: #80848e; text-align: center; padding: 0.25rem; }
+.puente-prop-lado { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0.375rem; }
+.puente-prop-elegir { padding: 0.5rem 0.875rem; border: 0; border-radius: 0.375rem; background: #2e2d32; color: #fbfbfb; font: inherit; font-weight: 600; cursor: pointer; }
+.puente-prop-elegir:hover { background: #3a3940; }
+.puente-prop-info { font-size: 0.8125rem; color: #949ba4; }
+.puente-prop-info.mal { color: #f48fb1; }
+.puente-prop-label { display: block; margin-bottom: 0.375rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #b5bac1; }
+.puente-prop-nombre { display: flex; align-items: center; gap: 0.125rem; padding: 0 0.625rem; border-radius: 0.375rem; background: #252429; border: 1px solid #3a3940; }
+.puente-prop-nombre:focus-within { border-color: #5865f2; }
+.puente-prop-nombre input { flex: 1 1 auto; min-width: 0; padding: 0.625rem 0; border: 0; outline: 0; background: transparent; color: #fbfbfb; font: inherit; font-size: 1rem; }
+.puente-prop-dos { color: #80848e; font-weight: 700; }
+.puente-prop-dos[hidden] { display: none; }
+.puente-prop-ayuda { margin-top: 0.625rem; font-size: 0.8125rem; color: #949ba4; }
+.puente-prop-error { min-height: 1.25rem; margin-top: 0.5rem; font-size: 0.875rem; color: #f48fb1; }
+.puente-prop-error:empty { min-height: 0; margin: 0; }
+.puente-prop-pie { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.875rem; }
+.puente-prop-btn { padding: 0.5rem 1rem; border: 0; border-radius: 0.375rem; background: #2e2d32; color: #fbfbfb; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+.puente-prop-btn:hover { background: #3a3940; }
+.puente-prop-btn:disabled { opacity: 0.55; cursor: default; }
+.puente-prop-azul { background: #5865f2; color: #fff; }
+.puente-prop-azul:hover { background: #4752c4; }
+.puente-prop-rojo { background: transparent; color: #f48fb1; box-shadow: inset 0 0 0 1px rgba(233, 30, 99, 0.5); }
+.puente-prop-rojo:hover { background: rgba(233, 30, 99, 0.15); }
+@media (max-width: 480px) {
+  .puente-prop-fondo { align-items: flex-end; padding: 0; }
+  .puente-prop-caja { max-width: none; border-radius: 0.75rem 0.75rem 0 0; max-height: 92vh; max-height: 92dvh; padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+  .puente-prop-pie .puente-prop-btn { flex: 1 1 0; padding: 0.625rem; }
+}
+/* Admin → Propuestas */
+.ppz-vista { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 1.25rem; scrollbar-width: thin; scrollbar-color: #3a3940 transparent; }
+.ppz-vista[hidden] { display: none !important; }
+.pm-celular .ppz-vista { padding: 0.75rem; }
+.ppz-lista { display: flex; flex-direction: column; gap: 0.625rem; margin-top: 0.75rem; }
+.ppz-item { display: flex; gap: 0.875rem; padding: 0.75rem; border-radius: 0.5rem; background: #252429; border: 1px solid transparent; }
+.ppz-item.lista { border-color: #5865f2; }
+.ppz-img { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 0.375rem; background: #1a1a1e; overflow: hidden; font-size: 1.5rem; }
+.ppz-img.sticker { width: 6rem; height: 6rem; }
+.ppz-img img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ppz-datos { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.ppz-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; }
+.ppz-nombre { font-weight: 700; color: #fbfbfb; overflow-wrap: anywhere; }
+.ppz-chip { padding: 0.0625rem 0.5rem; border-radius: 1rem; background: #2e2d32; color: #b5bac1; font-size: 0.75rem; font-weight: 600; }
+.ppz-chip-lista { background: #5865f2; color: #fff; }
+.ppz-chip-aprobada { background: rgba(35, 165, 90, 0.2); color: #7ee2a8; }
+.ppz-chip-rechazada { background: rgba(233, 30, 99, 0.15); color: #f48fb1; }
+.ppz-meta { font-size: 0.8125rem; color: #949ba4; overflow-wrap: anywhere; }
+.ppz-votos { font-size: 0.875rem; color: #dbdee1; white-space: pre-wrap; }
+.ppz-ops { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.375rem; }
+.ppz-ops[hidden], .ppz-motivo[hidden] { display: none; }
+.ppz-motivo { display: flex; flex-direction: column; gap: 0.375rem; margin-top: 0.375rem; }
+.ppz-motivo textarea { box-sizing: border-box; width: 100%; padding: 0.5rem; border: 1px solid #3a3940; border-radius: 0.375rem; background: #1a1a1e; color: #fbfbfb; font: inherit; font-size: 0.875rem; resize: vertical; }
+.ppz-motivo textarea:focus { outline: 0; border-color: #5865f2; }
+@media (max-width: 480px) {
+  .ppz-item { gap: 0.625rem; padding: 0.625rem; }
+  .ppz-img.sticker { width: 4.5rem; height: 4.5rem; }
+  .ppz-ops .puente-prop-btn { flex: 1 1 0; }
+}

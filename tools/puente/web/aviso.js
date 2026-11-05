@@ -3229,6 +3229,9 @@ function leido(sc) {
     const jg = page.querySelector('.pj-vista'); if (jg) jg.hidden = v !== 'juegos';
     if (v === 'juegos' && !page.querySelector('.pj-cuerpo').childNodes.length) cargarJuegosEst();
     if (v === 'mudanza') cargarMudanza();
+    // Propuestas de emojis y stickers (la arma el bloque de las propuestas, al final)
+    const pp = page.querySelector('.ppz-vista'); if (pp) pp.hidden = v !== 'propuestas';
+    if (v === 'propuestas' && pp && window.puentePropuestas) window.puentePropuestas.admin(pp);
     if (v === 'marketplace') cargarMarketplace();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
@@ -3742,7 +3745,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['marketplace', 'Marketplace'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -3807,7 +3810,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaMarketplace(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     document.addEventListener('keydown', onKey, true);
@@ -16889,4 +16892,273 @@ var puenteSinUbicacion = (function () {
       }, { passive: true });
     })(0);
   })();
+})();
+
+// Proponer emojis y stickers (propuestas.js): un boton "Proponer" en el selector de emojis (el del
+// puente en la PC, #puente-rp, y el de Haven en el celular, #emoji-picker), con una ventanita para
+// elegir la imagen, el tipo y el nombre. La propuesta se vota en #que-paso con 👍 o 👎 y la aprueba
+// un admin desde Admin → Propuestas (window.puentePropuestas.admin, lo llama esa pagina).
+(function () {
+  'use strict';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const toast = (t, tipo) => { const app = window.app; if (app && app._showToast) app._showToast(t, tipo || 'info'); };
+  async function api(url, body) {
+    const r = await fetch(url, body
+      ? { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      : { headers: { Authorization: 'Bearer ' + token() } });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((d && d.error) || (r.status === 413 ? 'La imagen es muy pesada.' : 'No se pudo. Probá de nuevo.'));
+    return d;
+  }
+  const MAX = { emoji: 30, sticker: 40 };
+  // Nombre como en Haven: [a-z0-9_-], sin tildes
+  const sanear = (t, tipo) => String(t || '').replace(/\.[a-z0-9]{2,5}$/i, '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[\s.]+/g, '_').replace(/[^a-z0-9_-]/g, '').replace(/_+/g, '_').replace(/^[_-]+|[_-]+$/g, '').slice(0, MAX[tipo] || 30);
+  const kb = (n) => Math.ceil(n / 1024);
+
+  // ── La ventanita ──
+  let abierta = null;
+  function cerrar() {
+    if (!abierta) return;
+    abierta.remove(); abierta = null;
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); cerrar(); } }
+
+  function abrir(tipoInicial) {
+    cerrar();
+    let tipo = tipoInicial === 'sticker' ? 'sticker' : 'emoji';
+    let imagen = null, bytes = 0, nombreTocado = false, estado = null, mandando = false;
+    const fondo = el('div', 'puente-prop-fondo');
+    fondo.id = 'puente-prop';
+    const caja = el('div', 'puente-prop-caja');
+    caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true');
+    fondo.appendChild(caja);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(); });
+    caja.addEventListener('click', (e) => e.stopPropagation());
+
+    const titulo = el('div', 'puente-prop-titulo');
+    const x = el('button', 'puente-prop-x'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4Z"/></svg>';
+    x.addEventListener('click', cerrar);
+    const cab = el('div', 'puente-prop-cab'); cab.append(titulo, x);
+
+    const modos = el('div', 'puente-prop-modos');
+    const bModo = (t, label) => { const b = el('button', 'puente-prop-modo', label); b.type = 'button'; b.dataset.t = t; b.addEventListener('click', () => { tipo = t; pintar(); }); modos.appendChild(b); return b; };
+    bModo('emoji', 'Emoji'); bModo('sticker', 'Sticker');
+
+    const estadoBox = el('div', 'puente-prop-estado', 'Fijándome si podés proponer…');
+
+    const zona = el('div', 'puente-prop-zona');
+    const vista = el('div', 'puente-prop-vista');
+    const img = el('img'); img.alt = ''; img.hidden = true;
+    const vacio = el('span', 'puente-prop-vacio', 'Sin imagen');
+    vista.append(img, vacio);
+    const elegir = el('button', 'puente-prop-elegir', 'Elegí la imagen'); elegir.type = 'button';
+    const archivo = el('input'); archivo.type = 'file'; archivo.accept = 'image/png,image/gif,image/webp,image/jpeg'; archivo.hidden = true;
+    elegir.addEventListener('click', () => archivo.click());
+    const info = el('div', 'puente-prop-info');
+    const lado = el('div', 'puente-prop-lado'); lado.append(elegir, info);
+    zona.append(vista, lado, archivo);
+
+    const etiqueta = el('label', 'puente-prop-label', 'Nombre');
+    const fila = el('div', 'puente-prop-nombre');
+    const pre = el('span', 'puente-prop-dos', ':'), post = el('span', 'puente-prop-dos', ':');
+    const nombre = el('input'); nombre.type = 'text'; nombre.autocomplete = 'off'; nombre.spellcheck = false; nombre.setAttribute('autocapitalize', 'off');
+    fila.append(pre, nombre, post);
+    nombre.addEventListener('input', () => {
+      nombreTocado = true;
+      const s = nombre.value.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_-]/g, '').slice(0, MAX[tipo]);
+      if (s !== nombre.value) nombre.value = s;
+      error.textContent = '';
+    });
+    const ayuda = el('div', 'puente-prop-ayuda', 'Se vota en #que-paso con 👍 o 👎. Si a la gente le gusta, un admin la aprueba.');
+    const error = el('div', 'puente-prop-error');
+    const pie = el('div', 'puente-prop-pie');
+    const cancelar = el('button', 'puente-prop-btn', 'Cancelar'); cancelar.type = 'button'; cancelar.addEventListener('click', cerrar);
+    const mandar = el('button', 'puente-prop-btn puente-prop-azul', 'Mandar propuesta'); mandar.type = 'button';
+    pie.append(cancelar, mandar);
+
+    caja.append(cab, modos, estadoBox, zona, etiqueta, fila, ayuda, error, pie);
+
+    const limite = () => (estado ? (tipo === 'sticker' ? estado.stickerKb : estado.emojiKb) : (tipo === 'sticker' ? 512 : 256));
+    function pintar() {
+      titulo.textContent = tipo === 'sticker' ? 'Proponé un sticker' : 'Proponé un emoji';
+      modos.querySelectorAll('.puente-prop-modo').forEach(b => b.classList.toggle('actual', b.dataset.t === tipo));
+      vista.classList.toggle('sticker', tipo === 'sticker');
+      pre.hidden = post.hidden = tipo === 'sticker';
+      nombre.maxLength = MAX[tipo];
+      nombre.placeholder = tipo === 'sticker' ? 'nombre-del-sticker' : 'nombre_del_emoji';
+      if (nombre.value.length > MAX[tipo]) nombre.value = nombre.value.slice(0, MAX[tipo]);
+      let t = 'PNG, GIF, WebP o JPG, hasta ' + limite() + ' KB.';
+      if (imagen) t = kb(bytes) + ' KB' + (bytes > limite() * 1024 ? ' · pesa más de ' + limite() + ' KB' : ' · ' + t);
+      info.textContent = t;
+      info.classList.toggle('mal', !!imagen && bytes > limite() * 1024);
+      mandar.disabled = mandando || !estado || !estado.puede;
+      error.textContent = '';
+    }
+    archivo.addEventListener('change', () => {
+      const f = archivo.files && archivo.files[0];
+      archivo.value = '';
+      if (!f) return;
+      if (!/^image\/(png|gif|webp|jpeg)$/.test(f.type)) { error.textContent = 'La imagen tiene que ser PNG, GIF, WebP o JPG.'; return; }
+      if (f.size > 4 * 1024 * 1024) { error.textContent = 'Esa imagen es muy pesada.'; return; }
+      const lector = new FileReader();
+      lector.onload = () => {
+        imagen = String(lector.result || ''); bytes = f.size;
+        img.src = imagen; img.hidden = false; vacio.hidden = true;
+        if (!nombreTocado || !nombre.value) nombre.value = sanear(f.name, tipo);
+        pintar();
+      };
+      lector.onerror = () => { error.textContent = 'No pude leer la imagen.'; };
+      lector.readAsDataURL(f);
+    });
+    mandar.addEventListener('click', async () => {
+      if (mandando) return;
+      if (!imagen) { error.textContent = 'Elegí la imagen.'; return; }
+      if (bytes > limite() * 1024) { error.textContent = 'La imagen pesa ' + kb(bytes) + ' KB: el máximo es ' + limite() + ' KB.'; return; }
+      const n = nombre.value.trim();
+      if (n.length < 2) { error.textContent = 'Poné un nombre (al menos 2 letras).'; nombre.focus(); return; }
+      mandando = true; mandar.disabled = true; mandar.textContent = 'Mandando…';
+      try {
+        await api('/puente/api/propuestas/proponer', { tipo, nombre: n, imagen });
+        cerrar();
+        toast('¡Listo! Tu propuesta ya está en #que-paso para que la voten.', 'success');
+      } catch (e) {
+        mandando = false; mandar.textContent = 'Mandar propuesta'; mandar.disabled = false;
+        error.textContent = e.message;
+      }
+    });
+
+    pintar();
+    document.body.appendChild(fondo);
+    abierta = fondo;
+    document.addEventListener('keydown', onKey, true);
+    api('/puente/api/propuestas/estado').then(d => {
+      if (abierta !== fondo) return;
+      estado = d;
+      estadoBox.textContent = d.puede ? (d.pendientes ? 'Tenés ' + d.pendientes + ' de ' + d.maxPendientes + ' propuestas esperando.' : '') : d.motivo;
+      estadoBox.classList.toggle('mal', !d.puede);
+      estadoBox.hidden = !estadoBox.textContent;
+      pintar();
+    }).catch(e => { if (abierta === fondo) { estadoBox.textContent = e.message; estadoBox.classList.add('mal'); } });
+  }
+
+  // ── El boton en los selectores ──
+  function boton(tipoDe) {
+    const b = el('button', 'puente-prop-abrir', '＋ Proponer');
+    b.type = 'button';
+    b.title = 'Proponé un emoji o un sticker para el club';
+    b.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); abrir(tipoDe()); });
+    return b;
+  }
+  function decorar() {
+    if (!token()) return;
+    // El del puente (PC): solo el de escribir, no el de reaccionar
+    const rp = document.getElementById('puente-rp');
+    if (rp && !rp.querySelector('.puente-prop-abrir')) {
+      const head = rp.querySelector('.puente-rp-head');
+      const input = rp.querySelector('.puente-rp-search input');
+      if (head && input && input.placeholder !== 'Buscá la reacción perfecta') {
+        head.classList.add('puente-prop-con');
+        head.appendChild(boton(() => {
+          const m = rp.querySelector('.puente-rp-modo.actual');
+          return m && m.textContent === 'Stickers' ? 'sticker' : 'emoji';
+        }));
+      }
+    }
+    // El de Haven (celular)
+    const hp = document.getElementById('emoji-picker');
+    if (hp && hp.style.display === 'flex' && !hp.querySelector('.puente-prop-abrir')) {
+      const row = hp.querySelector(':scope > .emoji-section-row');
+      const b = boton(() => {
+        const g = hp.querySelector('.sticker-grid');
+        return g && g.offsetParent !== null ? 'sticker' : 'emoji';
+      });
+      if (row) { b.classList.add('en-fila'); row.appendChild(b); } else hp.appendChild(b);
+    }
+  }
+  const luego = () => { setTimeout(decorar, 60); setTimeout(decorar, 300); };
+  document.addEventListener('click', luego, true);
+  document.addEventListener('input', (e) => { if (e.target instanceof Element && e.target.closest('#puente-rp, #emoji-picker')) luego(); }, true);
+  (function esperar(n) {
+    if (!document.body) { if (n < 100) setTimeout(() => esperar(n + 1), 200); return; }
+    new MutationObserver(() => { if (document.getElementById('puente-rp') || document.getElementById('emoji-picker')) decorar(); }).observe(document.body, { childList: true });
+  })(0);
+
+  // ── Admin → Propuestas ──
+  const fecha = (ms) => new Date(ms).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' });
+  const ESTADOS = { pendiente: 'Esperando', aprobada: 'Aprobada', rechazada: 'Rechazada' };
+  let ver = 'pendientes';
+  function admin(box) {
+    if (!box) return;
+    box.textContent = '';
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'Propuestas de emojis y stickers'));
+    const filtros = el('div', 'pe-rangos');
+    for (const [k, label] of [['pendientes', 'Esperando'], ['todas', 'Todas']]) {
+      const b = el('button', 'pe-rango' + (ver === k ? ' actual' : ''), label); b.type = 'button';
+      b.addEventListener('click', () => { ver = k; admin(box); });
+      filtros.appendChild(b);
+    }
+    const act = el('button', 'pe-rango', 'Actualizar'); act.type = 'button'; act.addEventListener('click', () => admin(box));
+    filtros.appendChild(act);
+    barra.appendChild(filtros);
+    const cuerpo = el('div', 'ppz-lista');
+    cuerpo.appendChild(el('div', 'pm-sin', 'Cargando…'));
+    box.append(barra, cuerpo);
+    api('/puente/api/propuestas/admin' + (ver === 'todas' ? '?ver=todas' : '')).then(d => {
+      cuerpo.textContent = '';
+      const l = (d && d.propuestas) || [];
+      if (!l.length) { cuerpo.appendChild(el('div', 'pm-sin', ver === 'todas' ? 'Todavía no hay propuestas.' : 'No hay propuestas esperando.')); return; }
+      for (const p of l) cuerpo.appendChild(tarjeta(p, d.votosMin || 5, () => admin(box)));
+    }).catch(e => { cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', e.message)); });
+  }
+  function tarjeta(p, votosMin, recargar) {
+    const t = el('div', 'ppz-item' + (p.lista ? ' lista' : '') + ' ppz-' + p.estado);
+    const fig = el('div', 'ppz-img' + (p.tipo === 'sticker' ? ' sticker' : ''));
+    if (p.imagen) { const i = el('img'); i.src = p.imagen; i.alt = p.nombre; i.loading = 'lazy'; fig.appendChild(i); } else fig.appendChild(el('span', '', p.tipo === 'sticker' ? '🖼️' : '🙂'));
+    const datos = el('div', 'ppz-datos');
+    const top = el('div', 'ppz-top');
+    top.append(el('span', 'ppz-nombre', p.tipo === 'sticker' ? p.nombre : ':' + p.nombre + ':'), el('span', 'ppz-chip', p.tipo === 'sticker' ? 'Sticker' : 'Emoji'));
+    if (p.estado !== 'pendiente') top.appendChild(el('span', 'ppz-chip ppz-chip-' + p.estado, ESTADOS[p.estado] || p.estado));
+    else if (p.lista) top.appendChild(el('span', 'ppz-chip ppz-chip-lista', 'Lista para aprobar'));
+    else if (!p.enPlazo) top.appendChild(el('span', 'ppz-chip', 'Votación cerrada'));
+    datos.appendChild(top);
+    datos.appendChild(el('div', 'ppz-meta', 'De ' + p.quien.nombre + (p.quien.usuario ? ' (@' + p.quien.usuario + ')' : '') + ' · ' + fecha(p.creado)));
+    datos.appendChild(el('div', 'ppz-votos', '👍 ' + p.si + '   👎 ' + p.no + (p.estado === 'pendiente' && !p.lista ? '   (hacen falta ' + votosMin + ' 👍 y más 👍 que 👎)' : '')));
+    if (p.motivo) datos.appendChild(el('div', 'ppz-meta', 'Motivo: ' + p.motivo));
+    if (p.estado === 'pendiente') {
+      const ops = el('div', 'ppz-ops');
+      const err = el('div', 'puente-prop-error');
+      const aprobar = el('button', 'puente-prop-btn puente-prop-azul', 'Aprobar'); aprobar.type = 'button';
+      const rechazar = el('button', 'puente-prop-btn puente-prop-rojo', 'Rechazar'); rechazar.type = 'button';
+      aprobar.addEventListener('click', () => {
+        if (!p.lista && !confirm('Todavía no llegó a ' + votosMin + ' 👍 (o tiene más 👎). ¿La aprobás igual?')) return;
+        aprobar.disabled = rechazar.disabled = true; err.textContent = '';
+        api('/puente/api/propuestas/aprobar', { id: p.id }).then(() => { toast('Aprobada: ' + p.nombre, 'success'); recargar(); })
+          .catch(e => { err.textContent = e.message; aprobar.disabled = rechazar.disabled = false; });
+      });
+      // El motivo, ahi mismo (sin ventanas del navegador)
+      const motivoBox = el('div', 'ppz-motivo'); motivoBox.hidden = true;
+      const motivo = el('textarea'); motivo.rows = 2; motivo.maxLength = 300; motivo.placeholder = 'Motivo (opcional): se lo contamos a quien la propuso';
+      const confirmar = el('button', 'puente-prop-btn puente-prop-rojo', 'Rechazar propuesta'); confirmar.type = 'button';
+      const volver = el('button', 'puente-prop-btn', 'Cancelar'); volver.type = 'button';
+      const filaM = el('div', 'ppz-ops'); filaM.append(volver, confirmar);
+      motivoBox.append(motivo, filaM);
+      rechazar.addEventListener('click', () => { ops.hidden = true; motivoBox.hidden = false; motivo.focus(); });
+      volver.addEventListener('click', () => { ops.hidden = false; motivoBox.hidden = true; });
+      confirmar.addEventListener('click', () => {
+        confirmar.disabled = true; err.textContent = '';
+        api('/puente/api/propuestas/rechazar', { id: p.id, motivo: motivo.value }).then(() => { toast('Rechazada: ' + p.nombre, 'info'); recargar(); })
+          .catch(e => { err.textContent = e.message; confirmar.disabled = false; });
+      });
+      ops.append(aprobar, rechazar);
+      datos.append(ops, motivoBox, err);
+    }
+    t.append(fig, datos);
+    return t;
+  }
+  window.puentePropuestas = { abrir, admin };
 })();
