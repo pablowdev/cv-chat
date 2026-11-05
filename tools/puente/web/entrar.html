@@ -19,6 +19,20 @@
       <p class="puente-login-sub" id="bajada"></p>
     </div>
 
+    <!-- Un Discord nuevo con el mail de una cuenta que ya existe (entrar.js, yaTenes) -->
+    <div id="ya-tenes" class="auth-form" hidden>
+      <div class="puente-discord-perfil">
+        <img id="ya-avatar" alt="">
+        <div>
+          <div class="nombre" id="ya-nombre"></div>
+          <div class="usuario" id="ya-usuario"></div>
+        </div>
+      </div>
+      <p class="puente-nota-chica" id="ya-texto" style="text-align:left;margin:0 0 1rem"></p>
+      <button type="button" class="btn-primary puente-btn-discord" id="ya-entrar">Entrar a mi cuenta</button>
+      <div class="auth-recovery-links"><a href="#" id="ya-otra" onclick="return false">No soy yo: crear una cuenta nueva</a></div>
+    </div>
+
     <form id="crear" class="auth-form" hidden>
       <div class="puente-discord-perfil">
         <img id="avatar" alt="">

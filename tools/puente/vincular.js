@@ -1151,7 +1151,31 @@ async function handle(req, res) {
   if (p === '/puente/api/entrar/nuevo' && req.method === 'GET') {
     const sg = signups.get(u.searchParams.get('codigo') || '');
     if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
-    return json(res, 200, { nombre: sg.me.global_name || sg.me.username, discord: sg.me.username, avatar: discordAvatarUrl(sg.me), usuario: proposeUsername(sg.me), app: appName() });
+    const ya = cuentaConMismoMail(sg.me);
+    return json(res, 200, { nombre: sg.me.global_name || sg.me.username, discord: sg.me.username, avatar: discordAvatarUrl(sg.me), usuario: proposeUsername(sg.me), app: appName(),
+      ...(ya ? { existente: { usuario: ya.username, nombre: ya.display_name || ya.username, avatar: ya.avatar || null } } : {}) });
+  }
+  // Un Discord nuevo con el mismo mail que una cuenta que ya existe (la persona borro o cambio su Discord):
+  // en vez de una cuenta vacia, entra a la suya y el Discord nuevo queda unido a ella. Discord confirmo
+  // ese mail y es el mismo que la cuenta tiene confirmado (el mismo que sirve para "¿Olvidaste tu
+  // contraseña?"); igual, en un dispositivo nuevo llega el codigo por mail (dospasos.js).
+  if (p === '/puente/api/entrar/existente' && req.method === 'POST') {
+    const body = await readJson(req);
+    const code = body && typeof body.codigo === 'string' ? body.codigo : '';
+    const sg = signups.get(code);
+    if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
+    if (db.prepare('SELECT 1 FROM puente_vinculos WHERE discord_user_id = ?').get(sg.me.id)) { signups.delete(code); return json(res, 409, { error: 'Ese Discord ya tiene una cuenta. Volvé a tocar "Entrar con Discord".' }); }
+    const ya = cuentaConMismoMail(sg.me);
+    if (!ya) return json(res, 404, { error: 'No encontramos una cuenta con el mail de este Discord.' });
+    signups.delete(code);
+    const me = sg.me;
+    const antes = db.prepare('SELECT discord_username FROM puente_vinculos WHERE haven_user_id = ?').get(ya.id);
+    const moved = link(ya.id, me);
+    try { await onLinked(me.id); } catch (err) { warn('accesos al vincular:', err.message); }
+    log(`entro con un Discord nuevo a su cuenta (mismo mail): ${ya.username} (Haven #${ya.id}) <-> Discord ${me.username} (${me.id})${antes ? '; antes era ' + antes.discord_username : ''}; ${moved} mensajes historicos`);
+    const hc = crypto.randomBytes(24).toString('hex');
+    handoffs.set(hc, { ...sessionFor(ya.id), exp: Date.now() + HANDOFF_TTL_MS });
+    return json(res, 200, { listo: hc });
   }
   if (p === '/puente/api/entrar/crear' && req.method === 'POST') {
     const body = await readJson(req);
@@ -1563,6 +1587,21 @@ function loginWithDiscord(me) {
   handoffs.set(code, { ...sessionFor(user.id), exp: now + HANDOFF_TTL_MS });
   log(`entro con Discord: ${user.username} (Haven #${user.id})`);
   return { listo: code };
+}
+// La cuenta que tiene confirmado el mismo mail que Discord confirmo (o null). Con las mismas reglas que
+// "Entrar con Discord": sin las suspendidas, y sin admins ni cuentas con codigos si no hay codigo por mail
+function cuentaConMismoMail(me) {
+  try {
+    if (!email.on() || !me || !me.verified || !me.email) return null;
+    const addr = String(me.email).trim().toLowerCase();
+    const u = db.prepare(`SELECT u.id, u.username, u.display_name, u.avatar, u.is_admin, u.totp_enabled
+                          FROM puente_emails e JOIN users u ON u.id = e.haven_user_id
+                          WHERE lower(e.email) = ? AND e.confirmado = 1`).get(addr);
+    if (!u) return null;
+    if (!dospasos.on() && (u.is_admin || u.totp_enabled)) return null;
+    if (db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(u.id)) return null;
+    return u;
+  } catch (err) { warn('entrar: mismo mail:', err.message); return null; }
 }
 // La sesion de Haven para una cuenta (como la da su inicio de sesion)
 function sessionFor(userId) {

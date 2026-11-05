@@ -71,6 +71,32 @@
     box.querySelector('p').textContent = texto;
   }
 
+  // El mail de este Discord ya es el de una cuenta: entrar a esa (el Discord nuevo queda unido), o crear otra
+  function yaTenes(c, app) {
+    const box = $('ya-tenes');
+    $('ya-nombre').textContent = c.nombre;
+    $('ya-usuario').textContent = '@' + c.usuario;
+    if (c.avatar) $('ya-avatar').src = c.avatar; else $('ya-avatar').hidden = true;
+    $('ya-texto').textContent = `El mail de este Discord es el de tu cuenta de ${app}. Entrá a esa: tus mensajes, tu foto y tus insignias siguen ahí, y desde ahora "Entrar con Discord" te lleva a ella.`;
+    title('Ya tenés una cuenta', '');
+    box.hidden = false;
+    $('crear').hidden = true;
+    $('ya-otra').addEventListener('click', () => { box.hidden = true; $('crear').hidden = false; title('Crear tu cuenta en ' + app, 'Con tu cuenta de Discord, en un paso.'); });
+    $('ya-entrar').addEventListener('click', () => {
+      const b = $('ya-entrar');
+      b.disabled = true; note('');
+      post(API + 'existente', { codigo: q.get('nuevo') || code0 }).then(({ ok, d }) => {
+        if (!ok || !d.listo) { b.disabled = false; return note(d.error || 'No se pudo. Probá de nuevo.', true); }
+        title('Entrando…');
+        return post('/puente/api/entrar/sesion', { codigo: d.listo }).then(({ ok, d }) => {
+          if (ok && d.token) return enter(d);
+          b.disabled = false; note(d.error || 'No se pudo entrar. Volvé a tocar "Entrar con Discord".', true);
+        });
+      }).catch(() => { b.disabled = false; note('No hay conexión. Probá de nuevo.', true); });
+    });
+  }
+  const code0 = q.get('nuevo');
+
   if (q.get('nuevo')) {
     const code = q.get('nuevo');
     title('Crear tu cuenta', '');
@@ -88,6 +114,7 @@
       $('crear').hidden = false;
       if (foro && d.historial) avisoDiscord(`Tu nombre (${d.cuenta}) está en el historial de Discord de la comunidad. Si sos vos, entrá con Discord: así tus mensajes de Discord quedan asociados al historial de tu cuenta. Después unís el foro desde "Mi cuenta".`);
       $('otras').hidden = foro;
+      if (!foro && d.existente) yaTenes(d.existente, d.app);
       // Las condiciones: las mismas que muestra Haven al registrarse
       $('terminos').addEventListener('click', (e) => { e.preventDefault(); window.open('/?terminos=1', '_blank', 'noopener'); });
     }).catch(() => { title('No hay conexión', 'Recargá la página.'); backToLogin(); });
