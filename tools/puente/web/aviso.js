@@ -10541,6 +10541,7 @@ document.addEventListener('pointerdown', (ev) => {
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
     const copaBox = el('div'); b.appendChild(copaBox); copaMudanza(copaBox);
+    const mesasBox = el('div'); b.appendChild(mesasBox); // las mesas que esperan rival, de todos los juegos (pintarMesas)
     b.appendChild(el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.length})`));
     const grilla = el('div', 'jg-tapas'); b.appendChild(grilla);
     const tarjetas = {};
@@ -10578,6 +10579,7 @@ document.addEventListener('pointerdown', (ev) => {
       if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
       for (const m of mias) curso.push({ j, m });
     });
+    pintarMesas(mesasBox, datos);
     if (!curso.length) return;
     curso.sort((a, z) => (z.m.teToca ? 1 : 0) - (a.m.teToca ? 1 : 0));
     seguir.appendChild(el('div', 'jg-bib-titulo', 'Seguir jugando'));
@@ -10592,6 +10594,27 @@ document.addEventListener('pointerdown', (ev) => {
       r.addEventListener('click', () => go(j.mesa || 'mesa', m.id));
       l.appendChild(r);
     }
+  }
+  // Las mesas que esperan rival en cualquier juego, como "Esperando rival" de El club hoy: primero los
+  // desafios para vos. Tocar una entra a jugar (truco, funball y ajedrez) o abre la sala de ese juego.
+  function pintarMesas(box, datos) {
+    const lista = [];
+    JUEGOS.forEach((j, i) => { const d = datos[i]; if (d && !d.error) for (const a of d.abiertas || []) lista.push({ j, a }); });
+    lista.sort((x, y) => (y.a.paraVos ? 1 : 0) - (x.a.paraVos ? 1 : 0));
+    box.appendChild(el('div', 'jg-bib-titulo', 'Mesas esperando rival'));
+    if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
+    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null };
+    const l = el('div', 'jg-seguir'); box.appendChild(l);
+    for (const { j, a } of lista.slice(0, 8)) {
+      const quien = a.creador || { nombre: '?' };
+      const r = el('button', 'jg-fila'); r.type = 'button';
+      const tx = el('div', 'jg-ftexto');
+      tx.append(el('div', 'jg-fnombre', a.paraVos ? `${quien.nombre} te desafía` : quien.nombre), el('div', 'jg-fmeta', j.nombre));
+      r.append(avatar(quien), tx, el('span', 'jg-chip ' + (a.paraVos ? 'amarillo' : 'azul'), 'Jugar'));
+      r.addEventListener('click', () => { const f = unirse[j.id]; if (f) f(a.id); else go('inicio', j.id); });
+      l.appendChild(r);
+    }
+    if (lista.length > 8) box.appendChild(el('div', 'jg-fmeta jg-mesas-mas', `y ${lista.length - 8} más: entrá a cada juego para verlas`));
   }
   // La Copa Mudanza (mudanza-plan.js): la tabla, del anuncio al corte y dos semanas despues
   async function copaMudanza(box) {
