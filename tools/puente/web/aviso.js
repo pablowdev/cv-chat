@@ -16823,4 +16823,70 @@ var puenteSinUbicacion = (function () {
       if (i && b && !i.value && escrito === 0) poner(app, i, b.t);
     }, 1500);
   })();
+  // ── Franja azul "N mensajes nuevos desde las HH:MM" (como la de Discord) ──
+  // Aparece arriba del canal cuando Haven pone la linea "Mensajes nuevos" al abrirlo. Tocarla lleva a esa
+  // linea; la X la cierra; se va sola al bajar hasta el final o al cambiar de canal. (Haven ya marca leido
+  // el canal al abrirlo, asi que cerrarla no tiene que avisar nada al servidor.)
+  (function franjaNuevos() {
+    let franja = null, divisor = null, bajo = false;
+    const fecha = (s) => {
+      if (!s) return null;
+      let t = String(s);
+      if (/^\d{4}-\d\d-\d\d \d/.test(t)) t = t.replace(' ', 'T');
+      if (!/[zZ]|[+-]\d\d:?\d\d$/.test(t)) t += 'Z';
+      const d = new Date(t);
+      return isNaN(d) ? null : d;
+    };
+    const hora = (d) => d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    function desde(d) {
+      if (!d) return '';
+      const hoy = new Date(), ayer = new Date(); ayer.setDate(hoy.getDate() - 1);
+      const mismo = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      if (mismo(d, hoy)) return ' desde las ' + hora(d);
+      if (mismo(d, ayer)) return ' desde ayer a las ' + hora(d);
+      return ' desde el ' + d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' }) + ' a las ' + hora(d);
+    }
+    function sacar() { if (franja) franja.remove(); franja = null; divisor = null; bajo = false; }
+    function poner(div) {
+      sacar();
+      const lista = document.getElementById('messages');
+      const area = lista && lista.parentElement;
+      if (!area) return;
+      const msgs = [];
+      for (let x = div.nextElementSibling; x; x = x.nextElementSibling) {
+        if (x.dataset && x.dataset.msgId && x.dataset.type !== 'welcome' && x.dataset.type !== 'notice') msgs.push(x);
+      }
+      if (!msgs.length) return;
+      const n = msgs.length;
+      divisor = div;
+      franja = document.createElement('div');
+      franja.id = 'puente-franja-nuevos';
+      const ir = document.createElement('button');
+      ir.type = 'button'; ir.className = 'puente-franja-ir';
+      ir.textContent = n + (n === 1 ? ' mensaje nuevo' : ' mensajes nuevos') + desde(fecha(msgs[0].dataset.time));
+      ir.addEventListener('click', () => { if (divisor && divisor.isConnected) divisor.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+      const x = document.createElement('button');
+      x.type = 'button'; x.className = 'puente-franja-x'; x.setAttribute('aria-label', 'Cerrar');
+      x.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z"/></svg>';
+      x.addEventListener('click', sacar);
+      franja.append(ir, x);
+      area.appendChild(franja);
+    }
+    (function esperar(n) {
+      const lista = document.getElementById('messages');
+      if (!lista) { if (n < 240) setTimeout(() => esperar(n + 1), 500); return; }
+      new MutationObserver(() => {
+        const div = document.getElementById('new-messages-divider');
+        if (div && div !== divisor) setTimeout(() => { if (div.isConnected) poner(div); }, 50);
+        else if (!div && franja) sacar();
+      }).observe(lista, { childList: true });
+      // Se va sola cuando bajas hasta el ultimo mensaje (despues de haberte movido: si entra todo en pantalla, queda)
+      lista.addEventListener('scroll', () => {
+        if (!franja) return;
+        const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 40;
+        if (!abajo) bajo = true;
+        else if (bajo) sacar();
+      }, { passive: true });
+    })(0);
+  })();
 })();
