@@ -5,7 +5,7 @@
   'use strict';
   if (window.__puenteCodigo) return;
   window.__puenteCodigo = true;
-  const RUTAS = /\/api\/auth\/(login|totp\/validate)(\?|$)|\/puente\/api\/entrar\/sesion(\?|$)/;
+  const RUTAS = /\/api\/auth\/(login|totp\/validate)(\?|$)|\/puente\/api\/entrar\/(sesion|codigo)(\?|$)/;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const st = el('style');
   st.textContent = '#puente-codigo{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.65);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}'
@@ -33,7 +33,10 @@
       function codigo(email) {
         box.textContent = '';
         box.append(el('h2', null, 'Revisá tu email'),
-          el('p', null, `Por seguridad, la primera vez que entrás desde este dispositivo te pedimos un código. Te lo mandamos a ${email || 'tu email'}${paso.noSalio ? ' (si no llega, tocá "Mandar otro")' : ''}.`));
+          el('p', null, paso.motivo === 'mail'
+            // Entrar con un codigo por mail (clave.js): no se dice si la cuenta existe
+            ? `Si la cuenta tiene un email confirmado, te mandamos un código${email ? ' a ' + email : ''}. Ponelo acá para entrar.`
+            : `Por seguridad, la primera vez que entrás desde este dispositivo te pedimos un código. Te lo mandamos a ${email || 'tu email'}${paso.noSalio ? ' (si no llega, tocá "Mandar otro")' : ''}.`));
         const i = el('input'); i.inputMode = 'numeric'; i.autocomplete = 'one-time-code'; i.maxLength = 7; i.placeholder = '000000';
         const b = el('button', null, 'Entrar'); b.type = 'button';
         const otro = el('button', 'pc-sec', 'Mandar otro código'); otro.type = 'button';

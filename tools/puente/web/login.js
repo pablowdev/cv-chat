@@ -160,6 +160,69 @@
   }
 })();
 
+// "Entrar con un código por mail" (clave.js): sin contraseña, con un codigo que llega al email
+// confirmado de la cuenta. El paso del codigo es el de codigo.js (la ruta esta en su RUTAS); con el
+// codigo bien, la sesion se guarda como en entrar.js
+(function () {
+  'use strict';
+  const form = document.getElementById('login-form');
+  const foro = form && form.querySelector('.puente-btn-foro');
+  if (!form || !foro || document.getElementById('puente-btn-mail')) return;
+  const MAIL = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 4.24V18h16V8.24l-8 5-8-5ZM5.1 6 12 10.32 18.9 6H5.1Z"/></svg>';
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const btn = el('button', 'btn-primary puente-btn-foro puente-btn-mail');
+  btn.type = 'button'; btn.id = 'puente-btn-mail';
+  btn.innerHTML = MAIL + '<span></span>';
+  btn.querySelector('span').textContent = 'Entrar con un código por mail';
+  const box = el('div', 'puente-mail-box'); box.hidden = true;
+  const group = el('div', 'form-group');
+  const label = el('label', null, 'Tu usuario o tu mail'); label.htmlFor = 'puente-mail-usuario';
+  const input = el('input');
+  input.type = 'text'; input.id = 'puente-mail-usuario'; input.autocomplete = 'username'; input.maxLength = 200;
+  input.setAttribute('autocapitalize', 'off'); input.spellcheck = false;
+  group.append(label, input);
+  const error = el('div', 'puente-mail-error'); error.setAttribute('role', 'alert');
+  const ir = el('button', 'btn-primary puente-mail-ir', 'Mandarme el código'); ir.type = 'button';
+  box.append(group, error, ir);
+  foro.insertAdjacentElement('afterend', btn);
+  btn.insertAdjacentElement('afterend', box);
+  btn.addEventListener('click', () => {
+    box.hidden = !box.hidden;
+    if (box.hidden) return;
+    const u = document.getElementById('login-username');
+    if (u && u.value && !input.value) input.value = u.value;
+    input.focus();
+  });
+  function enter(d) {
+    try {
+      localStorage.setItem('haven_token', d.token);
+      localStorage.setItem('haven_user', JSON.stringify(d.user));
+    } catch {
+      error.textContent = 'Tu navegador no deja guardar la sesión (¿modo privado?).';
+      return false;
+    }
+    location.replace('/app');
+    return true;
+  }
+  async function pedir() {
+    const usuario = input.value.trim();
+    if (!usuario) { error.textContent = 'Escribí tu usuario o tu mail.'; input.focus(); return; }
+    ir.disabled = true; error.textContent = '';
+    try {
+      // codigo.js ataja la respuesta, pide el codigo y devuelve la sesion
+      const r = await fetch('/puente/api/entrar/codigo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ usuario }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d && d.token && d.user) { if (enter(d)) return; }
+      else if (r.ok && d && d.puenteCodigo) error.textContent = 'Recargá la página y probá de nuevo.';
+      else error.textContent = (d && d.error) || 'No se pudo. Probá de nuevo.';
+    } catch { error.textContent = 'No hay conexión. Probá de nuevo.'; }
+    ir.disabled = false;
+  }
+  ir.addEventListener('click', pedir);
+  // Enter en el campo: el codigo, no el inicio de sesion de Haven
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); pedir(); } });
+})();
+
 // Invitaciones (invitaciones.js): quien entra por el enlace de alguien
 // (/?invita=<usuario>) ve "<nombre> te invitó" arriba, y se recuerda en el
 // navegador hasta que se crea la cuenta (aviso.js lo anota al entrar).

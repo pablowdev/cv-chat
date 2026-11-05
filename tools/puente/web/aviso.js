@@ -13955,8 +13955,20 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     [() => shown(byId('message-context-menu')), (app) => app._hideMessageContextMenu && app._hideMessageContextMenu()],
     [() => shown(byId('user-context-menu')), (app) => app._hideUserContextMenu && app._hideUserContextMenu()],
     [() => shown(byId('profile-popup')), (app) => app._closeProfilePopup && app._closeProfilePopup()],
-    [() => shown(byId('gif-picker')), (app) => app._closeGifPicker ? app._closeGifPicker() : (byId('gif-picker').style.display = 'none')],
-    [() => shown(byId('emoji-picker')), (app) => (app._toggleEmojiPicker ? app._toggleEmojiPicker() : (byId('emoji-picker').style.display = 'none'))],
+    // (las hojas de GIFs y de emojis del celular: se reconocen tambien por su fondo oscuro, y si Haven no las
+    // cierra del todo, se esconden igual; si no, atras abria los canales y la hoja quedaba encima)
+    [() => shown(byId('gif-picker')) || !!byId('puente-gif-backdrop'), (app) => {
+      const g = byId('gif-picker');
+      if (shown(g)) { if (app._closeGifPicker) app._closeGifPicker(); else g.style.display = 'none'; }
+      if (shown(g)) g.style.display = 'none';
+      byId('puente-gif-backdrop')?.remove();
+    }],
+    [() => shown(byId('emoji-picker')) || !!byId('puente-emoji-backdrop'), (app) => {
+      const p = byId('emoji-picker');
+      if (shown(p) && app._toggleEmojiPicker) app._toggleEmojiPicker();
+      if (shown(p)) p.style.display = 'none';
+      byId('puente-emoji-backdrop')?.remove();
+    }],
     [() => window.puenteAjustes && window.puenteAjustes.enDetalle(), () => window.puenteAjustes.volver()], // configuracion: de una categoria a la lista
     [() => [...document.querySelectorAll('.modal-overlay')].find(shown), () => { const m = [...document.querySelectorAll('.modal-overlay')].find(shown); if (m) m.style.display = 'none'; }],
     [() => shown(byId('search-panel')), () => { byId('search-panel').style.display = 'none'; }],
@@ -17164,4 +17176,166 @@ var puenteSinUbicacion = (function () {
     return t;
   }
   window.puentePropuestas = { abrir, admin };
+})();
+
+// "Poné una contraseña" (clave.js): las cuentas que se crearon con Discord o con el foro tienen una
+// contraseña al azar que nunca supieron, y el "Cambiar contraseña" de Haven pide la actual. En
+// Ajustes -> Contraseña, a esas se les saca el campo de la actual y la nueva se pone con un codigo que
+// llega a su email confirmado. El boton se ataja antes que Haven (en la captura); con la contraseña
+// puesta queda todo como era. Haven y "Mi cuenta" (textosCuenta) vuelven a poner sus textos al abrir:
+// se mira el boton y la ventana, y se vuelve a acomodar
+(function () {
+  'use strict';
+  if (window.__puenteSinClave) return;
+  window.__puenteSinClave = true;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
+  const usuario = () => { try { return (JSON.parse(localStorage.getItem('haven_user') || 'null') || {}).username || ''; } catch { return ''; } };
+  const BOTON = 'Poné una contraseña', BOTON_HAVEN = 'Cambiar contraseña';
+  let estado = null, pidiendo = null, ultimo = 0, enviando = false, botonVisto = null;
+
+  function api(p, body) {
+    const h = { Authorization: 'Bearer ' + token() };
+    const opts = body === undefined ? { headers: h } : { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, h), body: JSON.stringify(body) };
+    return fetch('/puente/api/clave/' + p, opts).then(r => r.json().catch(() => ({})).then(d => ({ ok: r.ok, status: r.status, d: d || {} })))
+      .catch(() => ({ ok: false, status: 0, d: { error: 'No hay conexión. Probá de nuevo.' } }));
+  }
+  // El estado, como mucho una vez por minuto (o ya, si se pide)
+  function cargar(ya) {
+    if (!token()) return Promise.resolve(null);
+    if (pidiendo) return pidiendo;
+    if (!ya && Date.now() - ultimo < 60000) return Promise.resolve(estado);
+    pidiendo = api('estado').then(r => { pidiendo = null; ultimo = Date.now(); if (r.ok) estado = r.d; return estado; });
+    return pidiendo;
+  }
+  function decir(t, tipo) {
+    const s = $('password-status');
+    if (!s) return;
+    s.textContent = t || '';
+    s.className = 'settings-hint' + (tipo ? ' ' + tipo : '');
+  }
+  function zona() {
+    let z = $('puente-sinclave-zona');
+    if (!z) {
+      const btn = $('change-password-btn');
+      if (!btn) return null;
+      z = el('div'); z.id = 'puente-sinclave-zona'; z.style.marginTop = '8px';
+      btn.insertAdjacentElement('afterend', z);
+    }
+    z.textContent = '';
+    return z;
+  }
+
+  // Pone o saca lo de "sin contraseña" segun el estado
+  function aplicar() {
+    const btn = $('change-password-btn'), cur = $('current-password');
+    if (!btn || !cur) return;
+    if (botonVisto !== btn) { botonVisto = btn; new MutationObserver(aplicar).observe(btn, { childList: true, characterData: true, subtree: true }); }
+    const grupo = cur.closest('.form-group') || cur;
+    if (estado && estado.sinClave) {
+      if (grupo.style.display !== 'none') { grupo.style.display = 'none'; grupo.dataset.puenteSinClave = '1'; }
+      if (btn.textContent !== BOTON) btn.textContent = BOTON;
+      if (!$('puente-sinclave-hint')) {
+        const hint = el('small', 'settings-hint', `Tu cuenta se creó con ${estado.via === 'foro' ? 'el foro' : 'Discord'}: todavía no tiene contraseña.`);
+        hint.id = 'puente-sinclave-hint'; hint.style.display = 'block'; hint.style.marginBottom = '6px';
+        const form = btn.closest('.password-change-form') || btn.parentElement;
+        form.insertBefore(hint, form.firstChild);
+      }
+    } else {
+      if (grupo.dataset.puenteSinClave) { grupo.style.display = ''; delete grupo.dataset.puenteSinClave; }
+      if (btn.textContent === BOTON) btn.textContent = BOTON_HAVEN;
+      const hint = $('puente-sinclave-hint'); if (hint) hint.remove();
+      const z = $('puente-sinclave-zona'); if (z) z.remove();
+    }
+  }
+
+  function validar() {
+    const np = ($('new-password') || {}).value || '', conf = ($('confirm-password') || {}).value || '';
+    if (!np) return 'Escribí la contraseña nueva.';
+    if (np.length < 8) return 'La contraseña tiene que tener 8 caracteres o más.';
+    if (np.length > 128) return 'La contraseña puede tener hasta 128 caracteres.';
+    if (np !== conf) return 'Las dos contraseñas no coinciden.';
+    const u = usuario();
+    if (u && np.toLowerCase().includes(u.toLowerCase())) return 'La contraseña no puede tener tu nombre de usuario adentro.';
+    return null;
+  }
+  async function mandar() {
+    const problema = validar();
+    if (problema) return decir(problema, 'error');
+    if (enviando) return;
+    enviando = true;
+    const btn = $('change-password-btn'); if (btn) btn.disabled = true;
+    decir('Mandando el código…');
+    const r = await api('codigo', {});
+    enviando = false; if (btn) btn.disabled = false;
+    if (!r.ok) {
+      if (r.status === 409) { estado = Object.assign({}, estado, { sinClave: false }); aplicar(); cargar(true).then(aplicar); }
+      decir(r.d.error || 'No se pudo. Probá de nuevo.', 'error');
+      if (r.d.sinEmail && window.puenteEmail) {
+        const z = zona();
+        if (z) { const b = el('button', 'btn-sm btn-full', 'Agregar mi email'); b.type = 'button'; b.addEventListener('click', () => window.puenteEmail.open()); z.appendChild(b); }
+      }
+      return;
+    }
+    decir(`Te mandamos un código a ${r.d.email || 'tu email'}. Ponelo acá abajo.`);
+    mostrarCodigo();
+  }
+  function mostrarCodigo() {
+    const z = zona();
+    if (!z) return;
+    const g = el('div', 'form-group compact');
+    const i = el('input'); i.type = 'text'; i.inputMode = 'numeric'; i.autocomplete = 'one-time-code'; i.maxLength = 7; i.placeholder = 'El código de 6 números';
+    g.appendChild(i);
+    const ok = el('button', 'btn-sm btn-full', 'Confirmar'); ok.type = 'button';
+    const otro = el('button', 'btn-sm btn-full', 'Mandar otro código'); otro.type = 'button'; otro.style.marginTop = '6px';
+    z.append(g, ok, otro);
+    setTimeout(() => i.focus(), 50);
+    const confirmar = async () => {
+      const c = i.value.replace(/\D/g, '');
+      if (c.length !== 6) return decir('El código tiene 6 números.', 'error');
+      const problema = validar();
+      if (problema) return decir(problema, 'error');
+      ok.disabled = true;
+      const r = await api('poner', { codigo: c, password: $('new-password').value });
+      ok.disabled = false;
+      if (!r.ok) return decir(r.d.error || 'No se pudo. Probá de nuevo.', 'error');
+      listo();
+    };
+    ok.addEventListener('click', confirmar);
+    i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmar(); } });
+    otro.addEventListener('click', async () => {
+      otro.disabled = true;
+      const r = await api('codigo', {});
+      if (r.ok) decir(`Listo: te mandamos otro a ${r.d.email || 'tu email'}.`); else decir(r.d.error || 'No se pudo.', 'error');
+      setTimeout(() => { otro.disabled = false; }, 20000);
+    });
+  }
+  function listo() {
+    estado = Object.assign({}, estado, { sinClave: false }); ultimo = Date.now();
+    for (const id of ['new-password', 'confirm-password']) { const x = $(id); if (x) x.value = ''; }
+    aplicar();
+    decir('✅ Listo, ya podés entrar con tu usuario y esta contraseña.', 'success');
+    cargar(true).then(aplicar);
+  }
+
+  // El boton, antes que el de Haven
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('#change-password-btn') : null;
+    if (!b || !estado || !estado.sinClave) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    mandar();
+  }, true);
+
+  // Al abrir Ajustes (la ventana cambia de estilo): el estado y acomodar
+  let intentos = 0;
+  function enganchar() {
+    const m = $('settings-modal');
+    if (!m) { if (++intentos < 30) setTimeout(enganchar, 1000); return; }
+    const mirar = () => { if (m.style.display === 'none') return; aplicar(); cargar().then(aplicar); };
+    new MutationObserver(mirar).observe(m, { attributes: true, attributeFilter: ['style', 'class'] });
+    mirar();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enganchar); else enganchar();
 })();

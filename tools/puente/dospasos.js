@@ -10,6 +10,8 @@
 //   POST /puente/api/auth/codigo            { ticket, codigo }  -> la sesion que se estaba abriendo
 //   POST /puente/api/auth/codigo/reenviar   { ticket }
 //   POST /puente/api/auth/codigo/email      { ticket, email }   (cuenta sin email: se manda ahi, y queda confirmado)
+// "Entrar con un codigo por mail" (clave.js) usa el mismo paso, con tickets fijos (el mail no se cambia)
+// y señuelos para las cuentas que no existen o no pueden entrar asi.
 // Una cuenta nueva (registrarse) deja recordado el dispositivo donde se creo.
 
 const crypto = require('crypto');
@@ -82,8 +84,10 @@ async function mandarCodigo(t) {
 
 // Abrir una sesion en un dispositivo nuevo: en vez de la sesion, el paso del codigo.
 // final: lo que se devuelve cuando el codigo esta bien ({ token, user } o lo que tocara)
-async function pedir(req, userId, final) {
-  const t = { userId, final, exp: Date.now() + CODIGO_MS, enviados: 0 };
+// opts.fijo: el codigo va solo al email confirmado (no se puede cambiar) y se reenvia una vez.
+// opts.alListo: se llama con el codigo bien
+async function pedir(req, userId, final, opts = {}) {
+  const t = { userId, final, exp: Date.now() + CODIGO_MS, enviados: 0, fijo: !!opts.fijo, alListo: opts.alListo || null };
   const ticket = crypto.randomBytes(24).toString('base64url');
   tickets.set(ticket, t);
   const em = email.status(userId);
@@ -94,6 +98,13 @@ async function pedir(req, userId, final) {
   const ok = await mandarCodigo(t);
   return { puenteCodigo: true, ticket, email: tapar(em.email), ...(ok ? {} : { noSalio: true }) };
 }
+// Un paso que no abre nada (clave.js): para la cuenta que no existe o no puede entrar con un codigo,
+// la misma respuesta que una de verdad. Ningun codigo le sirve y "Mandar otro" no manda nada
+function senuelo() {
+  const ticket = crypto.randomBytes(24).toString('base64url');
+  tickets.set(ticket, { userId: 0, final: null, falso: true, fijo: true, exp: Date.now() + CODIGO_MS, hash: sha(crypto.randomBytes(32).toString('hex')), intentos: 0, para: '-', enviados: 1 });
+  return ticket;
+}
 
 async function handle(req, res, p, h) {
   const { json, readJson } = h;
@@ -103,11 +114,14 @@ async function handle(req, res, p, h) {
   if (!t || t.exp < Date.now()) return json(res, 404, { error: 'Se venció el paso: volvé a iniciar sesión.' });
   if (p === '/puente/api/auth/codigo/reenviar') {
     if (!t.para) return json(res, 400, { error: 'Poné tu email primero.' });
-    if (t.enviados >= 4) return json(res, 429, { error: 'Ya te mandamos varios códigos: revisá tu correo (y la carpeta de spam), o volvé a iniciar sesión en un rato.' });
+    if (t.enviados >= (t.fijo ? 2 : 4)) return json(res, 429, { error: 'Ya te mandamos varios códigos: revisá tu correo (y la carpeta de spam), o volvé a iniciar sesión en un rato.' });
+    if (t.falso) { t.enviados++; return json(res, 200, { ok: true }); }
     const ok = await mandarCodigo(t);
     return json(res, ok ? 200 : 502, ok ? { ok: true } : { error: 'No se pudo mandar el mail. Probá de nuevo en un momento.' });
   }
   if (p === '/puente/api/auth/codigo/email') {
+    // Entrar con un codigo por mail: va solo al email confirmado de la cuenta
+    if (t.fijo) return json(res, 403, { error: 'Para entrar con un código, la cuenta necesita un email confirmado.' });
     // Cuentas sin email: se manda a ese (y queda confirmado al poner el codigo)
     const e = String(body.email || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) || e.length > 200) return json(res, 400, { error: 'Ese email no parece válido.' });
@@ -126,6 +140,7 @@ async function handle(req, res, p, h) {
   if (t.nuevoEmail && email.confirmarDirecto) email.confirmarDirecto(t.userId, t.nuevoEmail);
   res.setHeader('Set-Cookie', [].concat(res.getHeader('Set-Cookie') || [], recordar(req, t.userId)));
   log(`dos pasos: dispositivo nuevo verificado para Haven #${t.userId}`);
+  if (t.alListo) { try { t.alListo(); } catch (err) { warn('dos pasos:', err.message); } }
   return json(res, 200, t.final);
 }
 
@@ -178,4 +193,4 @@ function alRegistrar(req, res) {
   envolver(req, res, (d, status) => (status < 300 && d && d.token && d.user && d.user.id ? { cookie: recordar(req, d.user.id) } : null));
 }
 
-module.exports = { setup, on, handle, confiable, recordar, pedir, alEntrar, alTotp, alRegistrar, tieneTotp, envolver };
+module.exports = { setup, on, handle, confiable, recordar, pedir, senuelo, alEntrar, alTotp, alRegistrar, tieneTotp, envolver };

@@ -753,7 +753,13 @@ html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name { visib
    flecha despues, canales sin leer en blanco y negrita con un puntito (sin el
    numero rojo), y abajo solo la tarjeta del usuario. Colores medidos sobre
    capturas de la app de Discord. */
-.puente-rail, #puente-server-info, .puente-account-avatar { display: none; }
+.puente-rail, .puente-account-avatar { display: none; }
+/* Cuantos miembros hay en CV Chat, debajo del nombre del servidor (en la PC tambien; aviso.js) */
+@media (min-width: 769px) {
+  html body [data-haven-region="navigation-sidebar"] .sidebar-header:has(> #puente-server-info) { flex-wrap: wrap; row-gap: 0; }
+  html body #puente-server-info { order: 5; flex: 0 0 100%; margin: -0.125rem 0 0; padding-left: var(--puente-info-sangria, 2.5rem); color: #96969e; font-size: 0.8125rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html body #puente-server-info b { color: #dbdee1; font-weight: 600; }
+}
 @media (max-width: 768px) {
   html body [data-haven-region="navigation-sidebar"] { background: #121214; padding-left: 4.5rem !important; }
   .puente-rail {

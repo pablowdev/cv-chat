@@ -9,6 +9,8 @@
 //  /puente/login.js            enlace "¿Olvidaste tu contraseña?" que se inyecta en el login
 //  /puente/juegos              la pagina de los juegos para los que no tienen cuenta (juegos.<dominio>, Caddy)
 //  /puente/api/recuperar/*     recuperar la contraseña iniciando sesion con Discord
+//  /puente/api/clave/*         "Poné una contraseña" para las cuentas creadas con Discord o el foro (clave.js)
+//  /puente/api/entrar/codigo   entrar con un codigo por mail, sin contraseña (clave.js)
 //  /puente/tema-fijo.js        el tema y el diseño del servidor para todos (tema-fijo.js)
 //  /puente/api/ui-fija         POST -> un administrador publica su diseño (tema-fijo.js)
 //  /manifest.webmanifest       app instalable con el nombre e icono del servidor (instalable.js)
@@ -38,6 +40,7 @@ const temaFijo = require('./tema-fijo.js');
 const llave = require('./llave.js');
 const email = require('./email.js');
 const dospasos = require('./dospasos.js');
+const clave = require('./clave.js');
 const nombres = require('./nombres.js');
 const foro = require('./foro.js');
 const cuenta = require('./cuenta.js');
@@ -126,6 +129,8 @@ function setup(ctx) {
   foroLector.setup({ db, log, warn, helpers: { json, sessionUser } });
   campana.setup({ db, io, log, warn, publicUrl });
   dospasos.setup({ db, log, warn, email, dominio: () => cuenta.dominio(), appName });
+  // Las cuentas sin contraseña conocida y entrar con un codigo por mail (despues del foro: lee puente_foro)
+  clave.setup({ db, log, warn, email, appName, dominio: () => cuenta.dominio() });
   require('./cifrado.js').setup({ db, io, log, warn, publicUrl, email, campana, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a) });
   foroServicio.setup({ db, log, warn, helpers: { io, json, sessionUser, avisarUsuario: (...a) => require('./avisos.js').avisarUsuario(...a), campana } });
   require('./foro-mercado.js').setup({ db, log, warn, publicUrl });
@@ -1148,6 +1153,11 @@ async function handle(req, res) {
     if (dospasos.on() && !dospasos.confiable(req, h.user.id)) return json(res, 200, await dospasos.pedir(req, h.user.id, { token: h.token, user: h.user }));
     return json(res, 200, { token: h.token, user: h.user });
   }
+  // Entrar con un codigo por mail (clave.js): siempre con el codigo, aunque el dispositivo sea conocido
+  if (p === '/puente/api/entrar/codigo' && req.method === 'POST') {
+    if (!generateToken) return json(res, 503, { error: 'Entrar con un código no está disponible ahora. Entrá con tu usuario y contraseña.' });
+    return clave.entrar(req, res, { json, readJson, sessionFor, dospasos });
+  }
   if (p === '/puente/api/entrar/nuevo' && req.method === 'GET') {
     const sg = signups.get(u.searchParams.get('codigo') || '');
     if (!sg || sg.exp < Date.now()) return json(res, 404, { error: 'El paso caducó. Volvé a tocar "Entrar con Discord".' });
@@ -1298,6 +1308,10 @@ async function handle(req, res) {
   }
   if (p.startsWith('/puente/api/actividad/')) {
     const r = await require('./actividad.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
+  if (p.startsWith('/puente/api/clave/')) {
+    const r = await clave.handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
   if (p.startsWith('/puente/api/propuestas/')) {
@@ -1464,6 +1478,7 @@ async function setPassword(user, password, how) {
   db.prepare(`UPDATE users SET password_hash = ?, password_version = ?, temp_password_hash = NULL, must_change_password = 0,
                 public_key = NULL, encrypted_private_key = NULL, e2e_key_salt = NULL, e2e_secret = NULL, e2e_passphrase = 0
               WHERE id = ?`).run(hash, (user.password_version || 1) + 1, user.id);
+  clave.desmarcar(user.id); // ya tiene una contraseña que sabe
   try {
     for (const so of io.of('/').sockets.values()) {
       if (so.user && so.user.id === user.id) { so.emit('force-logout', { reason: 'password_changed' }); so.disconnect(true); }
@@ -1653,7 +1668,8 @@ async function registerThroughHaven(req, username) {
       signal: AbortSignal.timeout(20000),
     });
     const data = await r.json().catch(() => ({}));
-    if (r.ok && data.user && data.user.id) return { ok: true, user: data.user };
+    // Con una contraseña que la persona no sabe: "Poné una contraseña" (clave.js)
+    if (r.ok && data.user && data.user.id) { clave.marcar(data.user.id); return { ok: true, user: data.user }; }
     if (data.code === 'username_unavailable') return { ok: false, error: 'Ese nombre de usuario ya existe: elegí otro.' };
     if (r.status === 429) return { ok: false, error: 'Hubo demasiados intentos. Esperá un rato y probá de nuevo.' };
     if (r.status === 403) return { ok: false, error: 'El registro de cuentas nuevas está cerrado ahora. Pedile ayuda a un administrador.' };
