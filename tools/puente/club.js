@@ -51,9 +51,9 @@ function armar(db, io, warn) {
       vis.push(u);
     }
     d.conectados = vis.length;
-    // Primero los que tienen foto
+    // Primero los que tienen foto; van todos (El club hoy los muestra a todos, la tarjeta solo algunos)
     vis.sort((a, b) => (b.avatar ? 1 : 0) - (a.avatar ? 1 : 0));
-    d.fotos = vis.slice(0, 8).map(u => ({ nombre: u.n, foto: u.avatar || null }));
+    d.fotos = vis.slice(0, 60).map(u => ({ nombre: u.n, foto: u.avatar || null }));
   } catch (err) { warn('club: conectados:', err.message); }
   try {
     d.mensajesHoy = db.prepare(`SELECT COUNT(*) n FROM messages m JOIN channels c ON c.id = m.channel_id
