@@ -5877,7 +5877,7 @@ document.addEventListener('pointerdown', (ev) => {
 
   // Los tuits con video: Discord guarda solo la foto, asi que el video se busca aparte (la vista previa de
   // tuits del puente, vincular.js) y va en la tarjeta en lugar de la foto, para verlo aca mismo
-  const TUIT = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com|(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx)\.com)\/[A-Za-z0-9_]{1,20}\/status(?:es)?\/\d+/i;
+  const TUIT = /^https?:\/\/(?:(?:www\.|mobile\.)?(?:twitter|x)\.com|(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx|faggotx)\.com)\/[A-Za-z0-9_]{1,20}\/status(?:es)?\/\d+/i;
   const tuits = new Map(); // enlace -> promesa con la vista previa
   function conVideo(app, c, e) {
     const u = okUrl(e.url);

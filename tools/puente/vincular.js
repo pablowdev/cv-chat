@@ -236,10 +236,10 @@ function hookHttp() {
 
 // Haven arma una tarjeta completa (autor, texto, video, estadisticas) para los
 // enlaces de x.com / twitter.com, pero no reconoce los dominios que se usan en
-// Discord para que los tuits se vean bien (fixupx, fxtwitter, vxtwitter, fixvx...).
+// Discord para que los tuits se vean bien (fixupx, fxtwitter, vxtwitter, fixvx, faggotx...).
 // Para esos usa un lector generico con un resultado pobre. Antes de que Haven
 // pida la vista previa, se traduce el enlace al de x.com equivalente.
-const TWITTER_PROXY = /^https?:\/\/(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx|twittpr)\.com\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
+const TWITTER_PROXY = /^https?:\/\/(?:[a-z0-9-]+\.)?(?:fxtwitter|fixupx|vxtwitter|fixvx|twittpr|faggotx)\.com\/([A-Za-z0-9_]{1,20})\/status(?:es)?\/(\d+)/i;
 function twitterProxyToX(reqUrl) {
   try {
     const u = new URL(reqUrl, 'http://x');
@@ -307,9 +307,14 @@ function tweetPreview(req, res, next) {
         const tw = r.ok ? (await r.json())?.tweet : null;
         if (tw) {
           const a = tw.author || {};
-          const photos = (tw.media?.photos || []).map(p => p.url).filter(Boolean);
-          const vid = tw.media?.videos?.[0] || null;
-          const text = tw.text || '';
+          // (si el tuit no trae nada propio, va lo del tuit que cita: el video o las fotos del citado)
+          const q = tw.quote || null;
+          const propias = tw.media?.photos?.length || tw.media?.videos?.length;
+          const media = propias ? tw.media : (q?.media || {});
+          const photos = (media.photos || []).map(p => p.url).filter(Boolean);
+          const vid = media.videos?.[0] || null;
+          const qa = q?.author?.screen_name;
+          const text = (tw.text || '') + (q && q.text ? `\n\n↪ ${qa ? '@' + qa : 'Cita'}: ${q.text}` : '');
           const data = {
             kind: 'twitter', siteName: 'X / Twitter', accentColor: '#1d9bf0',
             author: a.name || null, handle: a.screen_name ? `@${a.screen_name}` : null, avatar: a.avatar_url || null,
