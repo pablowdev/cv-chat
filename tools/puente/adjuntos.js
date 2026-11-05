@@ -63,20 +63,26 @@ async function localize(a) {
   } catch { /* no existe todavia */ }
   if (!a.url || (a.size && a.size > MAX_BYTES) || freeBytes() - (a.size || 0) < MIN_FREE_BYTES) return fallback(a);
   const tmp = dest + '.part';
-  try {
-    const res = await fetch(a.url, { signal: AbortSignal.timeout(180000) });
-    if (!res.ok || !res.body) return fallback(a);
-    const len = Number(res.headers.get('content-length') || 0);
-    if (len > MAX_BYTES) return fallback(a);
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length || buf.length > MAX_BYTES) return fallback(a);
-    fs.writeFileSync(tmp, buf);
-    fs.renameSync(tmp, dest);
-    return lineFor(a, file, buf.length);
-  } catch {
-    try { fs.unlinkSync(tmp); } catch { /* */ }
-    return fallback(a);
+  // Hasta 3 intentos: si Discord no contesta un momento, la foto no queda como enlace pelado
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      const res = await fetch(a.url, { signal: AbortSignal.timeout(intento === 3 ? 120000 : 30000) });
+      if (res.status === 404 || res.status === 403) return fallback(a); // ya no esta (o vencio): no tiene sentido reintentar
+      if (!res.ok || !res.body) throw new Error('Discord contesto ' + res.status);
+      const len = Number(res.headers.get('content-length') || 0);
+      if (len > MAX_BYTES) return fallback(a);
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (!buf.length || buf.length > MAX_BYTES) return fallback(a);
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, dest);
+      return lineFor(a, file, buf.length);
+    } catch (err) {
+      try { fs.unlinkSync(tmp); } catch { /* */ }
+      if (intento === 3) { console.warn('[puente] adjunto sin bajar (queda el enlace):', a.filename, err.message); return fallback(a); }
+      await new Promise(ok => setTimeout(ok, intento * 3000));
+    }
   }
+  return fallback(a);
 }
 
 // Lineas de todos los adjuntos de un mensaje (incluidos los del mensaje
