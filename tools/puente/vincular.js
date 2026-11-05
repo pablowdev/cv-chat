@@ -1397,6 +1397,9 @@ function shareTags(html, url) {
   let image = '/puente/logo-carga.png', grande = false, enlace = '/';
   // La tarjeta del chat, apaisada (1200x630, propia de cada servidor): si no esta, va el logo cuadrado
   if (fs.existsSync(path.join(STATIC, 'tapas', 'chat.jpg'))) { image = '/puente/tapas/chat.jpg'; grande = true; }
+  // La portada con algo mas (/?v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
+  const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x)) : [];
+  if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
   const juego = q && JUEGOS_ENLACE[q[1] || 'juegos'];
   if (juego && fs.existsSync(path.join(STATIC, 'tapas', (q[1] || 'juegos') + '.jpg'))) {
