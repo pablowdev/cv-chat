@@ -143,13 +143,15 @@ function avisar(content) {
   } catch (err) { warn(`propuestas: aviso en #${CANAL()}:`, err.message); return null; }
 }
 // Cambia el aviso de la propuesta: la imagen que esperaba ya no esta, y la votacion se cerro
-const VOTAR = 'Votá con 👍 o 👎 en este mensaje (hay 72 horas).';
+const VOTAR = `Votá con 👍 o 👎 en este mensaje. Si en 72 horas llega a ${VOTOS_MIN} 👍 (y tiene más 👍 que 👎), pasa a aprobación.`;
+// (el texto de los primeros avisos, del 5/11: tambien se cierra)
+const VOTAR_VIEJO = 'Votá con 👍 o 👎 en este mensaje (hay 72 horas).';
 function editarAviso(p, buscar, poner, cierre) {
   try {
     if (!p.mensaje_id) return;
     const m = db.prepare('SELECT m.content, c.code FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.id = ?').get(p.mensaje_id);
     if (!m || !m.content.includes(buscar)) return;
-    const content = m.content.split(buscar).join(poner).split(VOTAR).join(cierre);
+    const content = m.content.split(buscar).join(poner).split(VOTAR).join(cierre).split(VOTAR_VIEJO).join(cierre);
     db.prepare("UPDATE messages SET content = ? WHERE id = ?").run(content, p.mensaje_id);
     io.to(`channel:${m.code}`).emit('message-edited', { channelCode: m.code, messageId: p.mensaje_id, content, editedAt: null, fromPuente: true });
   } catch (err) { warn('propuestas: editar aviso:', err.message); }
