@@ -7,14 +7,19 @@
 #    certificados de Caddy y archivos subidos a Haven.
 #  - Foro (/opt/foro, vBulletin) y sitio principal (/opt/sitio), si estan en este
 #    servidor: la base del foro en caliente (mariadb-dump) y su configuracion y codigo.
-# Guarda las 3 ultimas en el servidor y 14 dias en Google Drive.
-# No incluye uploads/discord: los adjuntos copiados de Discord ocupan mucho y se
-# pueden volver a descargar (sincronizar-discord.js --rehacer).
+# Guarda las 3 ultimas en el servidor y 30 dias en Google Drive.
+# Ademas, todos los archivos subidos (uploads/, con el historial de Discord) van a
+# <remoto>/uploads y se suman cada noche solo los nuevos: rclone copy, que nunca borra
+# alla lo que ya subio. La primera vez son unos 70 GB.
+# Como salio la ultima copia: haven-data/puente-respaldo.json ({ ok, fecha, error }).
 set -eu
 umask 077
 cd /opt/haven
 STAMP=$(date -u +%Y-%m-%d_%H%M)
-REMOTE=${BACKUP_REMOTE:-gdrive:Haven-backups}
+REMOTE=${BACKUP_REMOTE:-personal:CV-respaldo}
+ESTADO=/opt/haven/haven-data/puente-respaldo.json
+# Si algo falla, queda anotado (el estado se pisa con "ok" al final)
+trap 'r=$?; [ $r -eq 0 ] || printf "{\"ok\":false,\"fecha\":\"%s\",\"error\":\"la copia termino con error %s (ver tools/backup.log)\"}\n" "$(date -u +%FT%TZ)" "$r" > "$ESTADO"' EXIT
 OUT=/opt/haven/backup-local
 TMPDB=haven-data/backup-en-curso.db
 
@@ -40,5 +45,9 @@ fi
 for p in haven-db_ haven-config_ foro-db_ foro-config_; do ls -1t "$OUT"/$p* 2>/dev/null | tail -n +4 | xargs -r rm -f; done
 
 timeout 1h rclone copy "$OUT" "$REMOTE" --include "*_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5
-rclone delete "$REMOTE" --min-age 14d --config /opt/haven/tools/rclone.conf
+rclone delete "$REMOTE" --min-age 30d --exclude "uploads/**" --config /opt/haven/tools/rclone.conf
+# Los archivos subidos (fotos, videos, el historial de Discord): solo los que faltan
+timeout 80m rclone copy haven-data/uploads "$REMOTE/uploads" --config /opt/haven/tools/rclone.conf \
+  --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part"
+printf '{"ok":true,"fecha":"%s"}\n' "$(date -u +%FT%TZ)" > "$ESTADO"
 echo "== $(date -u '+%F %T') ok: $(du -h "$OUT"/haven-db_$STAMP.db.zst | cut -f1) base de datos, $(du -h "$OUT"/haven-config_$STAMP.tar.zst | cut -f1) configuracion$( [ -f "$OUT/foro-db_$STAMP.sql.zst" ] && echo ", foro $(du -h "$OUT"/foro-db_$STAMP.sql.zst | cut -f1)")"
