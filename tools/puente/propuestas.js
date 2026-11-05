@@ -188,7 +188,10 @@ function proponer(userId, body) {
   const archivo = `${userId}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
   try {
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(path.join(DIR, archivo), buf);
+    // sin los datos de la camara ni la ubicacion (lo mismo que hace Haven con lo que se sube: src/imageMetadata.js)
+    let limpio = buf;
+    try { const r = require('/app/src/imageMetadata').stripImageBuffer(buf); if (r && r.length) limpio = r; } catch { /* sin el modulo de Haven: va como llego */ }
+    fs.writeFileSync(path.join(DIR, archivo), limpio);
   } catch (err) { warn('propuestas: guardar imagen:', err.message); return { status: 500, error: 'No se pudo guardar la imagen.' }; }
   let id;
   try {

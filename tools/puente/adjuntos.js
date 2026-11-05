@@ -51,6 +51,17 @@ function lineFor(a, file, size) {
   return IMAGE_EXTS.has(ext) ? rel : `[file:${safeName(a.filename)}](${rel}|${human(size)})`;
 }
 
+// La limpieza de fotos y videos de Haven (src/privacyPass.js) y su carpeta que no se muestra, o null
+let pp0;
+function privacidad() {
+  if (pp0 !== undefined) return pp0;
+  try {
+    const pp = require('/app/src/privacyPass'), { UNPROCESSED_DIR } = require('/app/src/paths');
+    pp0 = typeof pp.admitFile === 'function' && UNPROCESSED_DIR ? { admitFile: pp.admitFile, dir: UNPROCESSED_DIR } : null;
+  } catch { pp0 = null; }
+  return pp0;
+}
+
 // Devuelve la linea de Haven para un adjunto, descargandolo si hace falta.
 async function localize(a) {
   if (!a || !a.id || !/^\d+$/.test(String(a.id))) return fallback(a);
@@ -73,6 +84,16 @@ async function localize(a) {
       if (len > MAX_BYTES) return fallback(a);
       const buf = Buffer.from(await res.arrayBuffer());
       if (!buf.length || buf.length > MAX_BYTES) return fallback(a);
+      // Como lo que se sube en CV Chat: pasa por la limpieza de Haven (src/privacyPass.js: sin la ubicacion
+      // ni los datos de la camara en fotos y videos) en una carpeta que no se muestra, y recien despues va
+      // a uploads/. Si la limpieza no lo acepta, queda el enlace de Discord.
+      const pp = privacidad();
+      if (pp) {
+        const sucio = path.join(pp.dir, `discord-${file}`);
+        fs.writeFileSync(sucio, buf);
+        try { await pp.admitFile(sucio, dest); } catch (err) { console.warn('[puente] adjunto sin limpiar (queda el enlace):', a.filename, err.message); return fallback(a); }
+        return lineFor(a, file, fs.statSync(dest).size);
+      }
       fs.writeFileSync(tmp, buf);
       fs.renameSync(tmp, dest);
       return lineFor(a, file, buf.length);
