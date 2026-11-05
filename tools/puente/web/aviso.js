@@ -6911,11 +6911,12 @@ document.addEventListener('pointerdown', (ev) => {
 
   let tries = 0;
   (function wait() {
-    const app = window.app;
     const account = document.querySelector('[data-haven-region="account"]');
-    if (!app || !account) { if (++tries < 120) setTimeout(wait, 500); return; }
+    if (!window.app || !account) { if (++tries < 120) setTimeout(wait, 500); return; }
     account.addEventListener('click', (e) => {
-      if (!(e.target instanceof Element) || !e.target.closest('.user-names, .puente-account-avatar')) return;
+      // (window.app se lee al tocar: al cargar puede ser todavia el elemento #app de la pagina, no Haven)
+      const app = window.app;
+      if (!app || !(e.target instanceof Element) || !e.target.closest('.user-names, .puente-account-avatar')) return;
       // En el celular: tu perfil (con Tu historia, tus medallas, Editar perfil e Invitar gente), como dice la bienvenida
       if (!pc()) {
         const id = app.user && app.user.id;
