@@ -89,7 +89,7 @@ function destacados(userId) {
       // La primera foto del mensaje (se muestra en chiquito); si el mensaje era solo eso, sin texto
       const foto = (/(\/uploads\/[^\s)"']+\.(?:png|jpe?g|gif|webp))/i.exec(String(m.content || '')) || [])[1] || null;
       let texto = plano(m.content).slice(0, 220);
-      if (foto && /^(\[(foto|archivo)\]\s*)+$/.test(texto)) texto = '';
+      if (foto) texto = texto.replace(/\s*\[(foto|archivo)\]/g, '').trim(); // la foto ya se muestra abajo
       for (const k of texto.matchAll(/:([\w~-]+):/g)) if (pers.has(k[1])) usados[k[1]] = pers.get(k[1]);
       return {
         id: m.id, autor: persona(m), texto, foto, n: m.n, reacciones,
@@ -122,7 +122,7 @@ function ultimos(userId, antes) {
     const c = canales.get(m.channel_id);
     const foto = (/(\/uploads\/[^\s)"']+\.(?:png|jpe?g|gif|webp))/i.exec(String(m.content || '')) || [])[1] || null;
     let texto = plano(m.content).slice(0, 220);
-    if (foto && /^(\[(foto|archivo)\]\s*)+$/.test(texto)) texto = '';
+    if (foto) texto = texto.replace(/\s*\[(foto|archivo)\]/g, '').trim(); // la foto ya se muestra abajo
     for (const k of texto.matchAll(/:([\w~-]+):/g)) if (pers.has(k[1])) usados[k[1]] = pers.get(k[1]);
     return {
       id: m.id, canal: c.name, code: c.code, autor: persona(m), texto, foto,
