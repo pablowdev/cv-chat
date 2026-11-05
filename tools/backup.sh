@@ -46,9 +46,14 @@ for p in haven-db_ haven-config_ foro-db_ foro-config_; do ls -1t "$OUT"/$p* 2>/
 
 timeout 1h rclone copy "$OUT" "$REMOTE" --include "*_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5
 rclone delete "$REMOTE" --min-age 30d --exclude "uploads/**" --config /opt/haven/tools/rclone.conf
-# Los archivos subidos (fotos, videos, el historial de Discord): solo los que faltan
-timeout 80m rclone copy haven-data/uploads "$REMOTE/uploads" --config /opt/haven/tools/rclone.conf \
-  --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part"
+# Los archivos subidos (fotos, videos, el historial de Discord): solo los que faltan.
+# Mientras corre la subida inicial (cv-respaldo-inicial) no: dos copias a la vez duplican archivos en Drive
+if systemctl is-active -q cv-respaldo-inicial 2>/dev/null; then
+  echo "archivos subidos: los esta copiando la subida inicial"
+else
+  timeout 80m rclone copy haven-data/uploads "$REMOTE/uploads" --config /opt/haven/tools/rclone.conf \
+    --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part"
+fi
 # Segunda copia, solo la base de datos y 7 dias, en la cuenta del club (BACKUP_REMOTE2, por defecto
 # gdrive:Haven-backups, 15 GB): si falla, la principal ya esta y solo queda anotado
 REMOTE2=${BACKUP_REMOTE2:-gdrive:Haven-backups}
