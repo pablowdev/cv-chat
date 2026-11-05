@@ -6405,7 +6405,17 @@ document.addEventListener('pointerdown', (ev) => {
       if (on && list && list.style.display === 'none') document.getElementById('dm-toggle-header')?.click();
     };
     dm.addEventListener('click', () => showDms(true));
-    srv.addEventListener('click', () => showDms(false));
+    srv.addEventListener('click', () => {
+      showDms(false);
+      // Viendo un mensaje directo: atras de la lista de canales, el ultimo canal donde estabas (como en la PC).
+      // Cambiar de canal en el celular cierra la lista: se vuelve a abrir, para que se vean los canales
+      const app = window.app;
+      if (!app || !isDm(findCh(app.currentChannel))) return;
+      goTo(false);
+      const body = document.getElementById('app-body');
+      const abrir = () => { if (body && !body.classList.contains('mobile-sidebar-open')) document.getElementById('mobile-menu-btn')?.click(); };
+      setTimeout(abrir, 60); setTimeout(abrir, 400);
+    });
     // En la PC, como Discord de escritorio, cambia toda la pantalla: los mensajes
     // directos abren la ultima conversacion privada (o una pantalla con todas) y
     // el servidor vuelve al ultimo canal donde estabas
