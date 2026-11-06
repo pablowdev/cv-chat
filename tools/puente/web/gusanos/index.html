@@ -49,6 +49,8 @@
       <div id="tactilAux">
         <button id="btnSogaTactil" class="tactilBtn tAux" type="button">SOGA</button>
         <button id="btnFinTactil" class="tactilBtn tAux" type="button">FIN</button>
+        <button class="tactilBtn tAux" type="button" data-tecla="salto">SALTO</button>
+        <button class="tactilBtn tAux" type="button" data-tecla="voltereta">VOLTEA</button>
       </div>
       <button id="btnFuegoTactil" class="tactilBtn tFuego" type="button">
         <span>FUEGO</span>
@@ -63,9 +65,9 @@
       <header class="menuHead">
         <div>
           <h1>PROYECTO <span>GUSANOS</span></h1>
-          <p class="sub">Hot-seat · 2 a 5 jugadores · mapas de la comunidad</p>
+          <p class="sub">Shopper · 2 a 5 jugadores · CBA · AFR</p>
         </div>
-        <div class="sello">GUSANOS<br><b>200 HP · 30 s</b></div>
+        <div class="sello">SHOPPER<br><b>200 HP · 30 s</b></div>
       </header>
 
       <div class="menuGrid">
@@ -78,39 +80,42 @@
           <h2>Partida</h2>
 
           <label class="slider">
-            <span>Equipos <output id="oEquipos">2</output></span>
+            <span>Jugadores <output id="oEquipos">2</output></span>
             <input id="iEquipos" type="range" min="2" max="5" step="1" value="2">
-            <small>2 a 5 jugadores</small>
-          </label>
-
-          <label class="slider">
-            <span>Gusanos por equipo <output id="oGusanos">3</output></span>
-            <input id="iGusanos" type="range" min="1" max="5" step="1" value="3">
-            <small>1 a 5 por equipo</small>
-          </label>
-
-          <label class="check">
-            <input id="iCBA" type="checkbox" checked>
-            <span>CBA: hay que recoger una caja antes de atacar</span>
+            <small>2 a 5 jugadores, un gusano cada uno</small>
           </label>
 
           <div class="esquema">
-            <h3>Esquema de partida</h3>
+            <h3>Shopper</h3>
             <ul>
-              <li>200 HP por gusano</li>
-              <li>30 segundos por turno</li>
+              <li>200 HP por gusano · 30 s por turno</li>
+              <li>Un gusano por jugador</li>
+              <li>CBA obligatorio: una caja antes de atacar</li>
+              <li>AFR: podés atacar colgado de la soga</li>
+              <li>Sin bazooka infinita: las armas salen de las cajas</li>
+              <li>Soga de 5 estrellas · terreno indestructible</li>
               <li>Retirada 5 s · con soga 10 s</li>
-              <li>Terreno indestructible</li>
-              <li>Bazooka y soga infinitas</li>
-              <li>Soga de 5 estrellas (462–465 px)</li>
-              <li>Cajas con las 24 armas del juego</li>
             </ul>
           </div>
 
-          <button id="btnStart" class="principal" type="button">JUGAR</button>
-          <p class="nota">Todos juegan en el mismo dispositivo, por turnos.</p>
+          <button id="btnStart" class="principal" type="button">JUGAR LOCAL</button>
+          <button id="btnOnline" class="principal secundario" type="button">JUGAR ONLINE</button>
+          <p class="nota">Local: todos en el mismo dispositivo. Online: una sala por chat.</p>
         </aside>
       </div>
+    </div>
+  </div>
+
+  <div id="online" class="overlay hidden">
+    <div class="panel onlinePanel">
+      <header class="menuHead">
+        <div>
+          <h2>GUSANOS ONLINE</h2>
+          <p class="sub" id="onlineSub">Salas de 2 a 5 personas · Shopper · CBA · AFR</p>
+        </div>
+        <button id="btnOnlineCerrar" class="cerrarPanel" type="button" aria-label="Cerrar">×</button>
+      </header>
+      <div id="onlineCuerpo"></div>
     </div>
   </div>
 
@@ -129,6 +134,8 @@
       <h2 id="finTitulo">—</h2>
       <p id="finTexto" class="sub"></p>
       <button id="btnOtra" class="principal" type="button">JUGAR OTRA VEZ</button>
+      <button id="btnRevancha" class="principal hidden" type="button">REVANCHA</button>
+      <button id="btnSalirOnline" class="hidden" type="button">VOLVER A LA SALA</button>
       <button id="btnMenuFin" type="button">VOLVER AL MENÚ</button>
     </div>
   </div>

@@ -42,6 +42,42 @@ const azar = (a, b) => a + Math.random() * (b - a);
 const azarInt = (a, b) => Math.floor(azar(a, b + 1));
 const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
 const normAng = a => Math.atan2(Math.sin(a), Math.cos(a));
+const DOS_PI = Math.PI * 2;
+
+// La mira de Worms: arriba/abajo cambian la elevación y la dirección la da el
+// lado hacia el que mira el gusano. Guardamos el ángulo del mundo (aim), pero
+// lo pensamos como una elevación entre -90° (arriba) y +90° (abajo).
+function elevacion(w) {
+  if (w.mirando > 0) return clamp(normAng(w.aim), -Math.PI / 2, Math.PI / 2);
+  let a = ((w.aim % DOS_PI) + DOS_PI) % DOS_PI;
+  if (a < Math.PI / 2) a += DOS_PI;
+  return clamp(Math.PI - a, -Math.PI / 2, Math.PI / 2);
+}
+function fijarElevacion(w, e) {
+  e = clamp(e, -Math.PI / 2, Math.PI / 2);
+  let a = w.mirando > 0 ? e : Math.PI - e;
+  if (a > Math.PI) a -= DOS_PI;
+  w.aim = a;
+}
+function ajustarMira(w, delta) {
+  fijarElevacion(w, elevacion(w) + delta);
+}
+function mirarHacia(w, dir) {
+  if (!dir || dir === w.mirando) return;
+  const e = elevacion(w);
+  w.mirando = dir;
+  fijarElevacion(w, e);
+}
+function saltar(w, atras) {
+  if (!w.enPiso || w.muerto) return;
+  const dir = atras ? -w.mirando : w.mirando;
+  w.vy = SALTO * (atras ? 1.04 : 1);
+  w.vx = dir * (atras ? 2.9 : 2.55);
+  w.enPiso = false;
+  w.saltoT = 0;
+  if (atras) w.voltereta = w.volteretaDur;
+  sonido('walk-compress', 0.06, atras ? 1.25 : 1.4);
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Assets
@@ -59,6 +95,14 @@ const EQUIPOS_DEF = [
   { key: 'violeta',  nombre: 'Violeta',  color: '#a45fd6' },
   { key: 'naranja',  nombre: 'Naranja',  color: '#e68a3c' },
 ];
+
+// En online cada equipo es una persona: el marcador y los avisos muestran su nombre.
+function nombreEquipo(eq) {
+  if (G.online && typeof ONLINE !== 'undefined' && ONLINE.jugadores && ONLINE.jugadores[eq]) {
+    return ONLINE.jugadores[eq].nombre;
+  }
+  return 'Equipo ' + EQUIPOS_DEF[eq].nombre;
+}
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -177,11 +221,15 @@ const G = {
   particulas: [],
   anillos: [],
   flotantes: [],
-  cam: { x: 0, y: 0, zoom: 1, base: 1, auto: true },
+  cam: { x: 0, y: 0, zoom: 1, base: 1, auto: true, libre: 0 },
   armas: [],
   armaSel: 0,
   cba: true,
   cbaHecha: false,
+  esquema: 'shopper',
+  mecha: 3,
+  panelArmas: true,
+  online: false,
   usadoSoga: false,
   cargando: false,
   carga: 0,
@@ -196,6 +244,17 @@ const G = {
   hudTick: 0,
   crateTimer: 5,
   config: { equipos: 2, gusanos: 3, hp: VIDA, turno: TIEMPO_TURNO },
+};
+
+// Online: el servidor administra la sala y los turnos. El que tiene el turno
+// simula y manda snapshots; los demás solo los aplican y dibujan.
+const ONLINE = {
+  socket: null, enlazado: false, activo: false, id: null, miSeat: -1,
+  turno: -1, esMiTurno: false, esperando: false, soyCreador: false,
+  estado: 'lobby', sala: null, jugadores: [], mapa: 'crossing',
+  listo: false, chat: [], revancha: [], viento: 0, ronda: 1,
+  ultimoEnvio: 0, finEnviado: false, paso: 0, error: null,
+  pendiente: null, cargando: false,
 };
 const teclas = {};
 
@@ -226,6 +285,8 @@ class Gusano {
     this.saltoApretado = false;
     this.saltoT = 0;
     this.caminando = false;
+    this.voltereta = 0;
+    this.volteretaDur = 0.55;
     this.soga = { estado: 'none', ax: 0, ay: 0, hx: 0, hy: 0, dx: 0, dy: -1, recorrido: 0, len: 0, pivotes: [] };
   }
 }
@@ -296,20 +357,12 @@ function movimientoNormal(w, control) {
   if (control) dir = (teclas.izq ? -1 : 0) + (teclas.der ? 1 : 0);
   w.caminando = false;
   if (dir) {
-    w.mirando = dir;
+    mirarHacia(w, dir);
     moverX(w, dir * CAMINAR);
     w.caminando = true;
     w.paso += 0.36;
     if (w.enPiso && Math.random() < 0.05) sonido('walk-expand', 0.035, azar(1.4, 1.7));
   }
-  if (control && teclas.arriba && w.enPiso && !w.saltoApretado) {
-    w.vy = SALTO;
-    w.enPiso = false;
-    w.saltoApretado = true;
-    w.saltoT = 0;
-    sonido('walk-compress', 0.05, 1.4);
-  }
-  if (!teclas.arriba) w.saltoApretado = false;
 
   w.vy += GRAVEDAD;
   if (w.vy > VEL_MAX_GUSANO) w.vy = VEL_MAX_GUSANO;
@@ -644,11 +697,12 @@ function lanzarProyectil(w, def, potencia) {
   const v = def.vmin + (def.vmax - def.vmin) * clamp(potencia, 0, 1);
   const x = w.x + Math.cos(ang) * 12;
   const y = w.y + Math.sin(ang) * 12 - 2;
+  const mecha = def.mecha != null && def.rebote ? G.mecha : (def.mecha != null ? def.mecha : null);
   G.proyectiles.push({
     def, dueno: w.equipo, x, y,
     vx: Math.cos(ang) * v, vy: Math.sin(ang) * v,
     edad: 0,
-    mecha: def.mecha != null ? def.mecha : null,
+    mecha,
     rebote: def.rebote || 0,
     hongea: !!def.hongea,
     sprite: def.sprite,
@@ -1153,7 +1207,7 @@ function atacarHecho() {
   G.carga = 0;
   G.armaCargando = null;
 }
-function iniciarTurno(w) {
+function iniciarTurno(w, onlineTurno) {
   G.activo = w;
   G.fase = 'mover';
   G.tiempo = TIEMPO_TURNO;
@@ -1168,13 +1222,15 @@ function iniciarTurno(w) {
   w.soga.pivotes = [];
   w.vx = 0;
   w.vy = 0;
-  G.viento = azarInt(-70, 70);
   G.msgTurno = 1.5;
+  if (!onlineTurno) {
+    G.viento = azarInt(-70, 70);
+    if (G.cajas.length < 3) soltarCaja();
+  }
   actualizarArmas();
   actualizarHUD();
-  toast('Turno de Equipo ' + EQUIPOS_DEF[w.equipo].nombre, 1300);
+  if (!onlineTurno) toast('Turno de ' + nombreEquipo(w.equipo), 1300);
   sonido('gusano-seleccion', 0.5);
-  if (G.cajas.length < 3) soltarCaja();
   centrarCamara(true);
 }
 function terminarTurno() {
@@ -1185,6 +1241,7 @@ function terminarTurno() {
   }
   G.cargando = false;
   G.carga = 0;
+  if (G.online) { enviarFinTurno(); return; }
   if (contarEquiposVivos() <= 1) { fin(); return; }
   for (let k = 1; k <= G.orden.length; k++) {
     const idx = (G.turnoPtr + k) % G.orden.length;
@@ -1214,7 +1271,7 @@ function actualizarTurno() {
     }
   } else if (G.fase === 'resolver') {
     if (!sinPendientes()) return;
-    if (contarEquiposVivos() <= 1) { fin(); return; }
+    if (contarEquiposVivos() <= 1) { if (G.online) terminarTurno(); else fin(); return; }
     if (w.muerto) { terminarTurno(); return; }
     G.fase = 'retirada';
     G.retirada = G.usadoSoga ? RETIRADA_SOGA : RETIRADA;
@@ -1223,7 +1280,7 @@ function actualizarTurno() {
     G.retirada -= TICK;
     if (w.muerto) { terminarTurno(); return; }
     if (G.retirada <= 0) {
-      if (contarEquiposVivos() <= 1) fin(); else terminarTurno();
+      if (contarEquiposVivos() <= 1) { if (G.online) terminarTurno(); else fin(); } else terminarTurno();
     }
   }
 }
@@ -1236,7 +1293,7 @@ function fin() {
   const eq = vivos.length ? vivos[0].equipo : -1;
   const el = q('finTitulo'), txt = q('finTexto');
   if (eq >= 0) {
-    el.textContent = 'GANÓ EQUIPO ' + EQUIPOS_DEF[eq].nombre.toUpperCase();
+    el.textContent = 'GANÓ ' + nombreEquipo(eq).toUpperCase();
     el.style.color = EQUIPOS_DEF[eq].color;
     txt.textContent = 'Quedaron ' + vivos.length + ' gusano(s) en pie.';
   } else {
@@ -1252,8 +1309,9 @@ function fin() {
 // ─────────────────────────────────────────────────────────────────────
 function actualizarArmas() {
   const w = G.activo;
+  // Shopper no tiene bazooka infinita: las armas salen de las cajas. La soga es la
+  // herramienta de movilidad y no se gasta.
   G.armas = [
-    { id: 'bazooka', nombre: 'Bazooka', inf: true },
     { id: 'soga', nombre: 'Soga', inf: true },
   ];
   if (w) {
@@ -1321,28 +1379,60 @@ function alSoltarFuego() {
 // Entrada
 // ─────────────────────────────────────────────────────────────────────
 const MAPA_TECLAS = {
-  ArrowLeft: 'izq', KeyA: 'izq',
-  ArrowRight: 'der', KeyD: 'der',
-  ArrowUp: 'arriba', KeyW: 'arriba',
-  ArrowDown: 'abajo', KeyS: 'abajo',
-  Space: 'fuego', Enter: 'fuego',
+  ArrowLeft: 'izq',
+  ArrowRight: 'der',
+  ArrowUp: 'arriba',
+  ArrowDown: 'abajo',
+  Enter: 'salto',
+  Backspace: 'voltereta',
+  Space: 'fuego',
 };
+function alternarArsenal(forzar) {
+  G.panelArmas = forzar == null ? !G.panelArmas : !!forzar;
+  document.body.classList.toggle('sinArsenal', !G.panelArmas);
+}
+function ciclarArma(dir) {
+  if (!G.armas.length) return;
+  seleccionarArma((G.armaSel + dir + G.armas.length) % G.armas.length);
+}
+function cambiarGusanoEquipo() {
+  if (!controlable()) return;
+  const eq = G.equipos[G.activo.equipo];
+  const vivos = eq.gusanos.filter(g => !g.muerto);
+  if (vivos.length < 2) { toast('Tu equipo tiene un solo gusano', 1200); return; }
+  const i = vivos.indexOf(G.activo);
+  const next = vivos[(i + 1) % vivos.length];
+  if (G.activo.soga.estado !== 'none') soltarSoga(G.activo);
+  G.activo = next;
+  const p = G.orden.indexOf(next);
+  if (p >= 0) G.turnoPtr = p;
+  actualizarArmas();
+  actualizarHUD();
+  actualizarBotonSoga();
+  centrarCamara(true);
+  toast('Gusano ' + (next.idx + 1) + ' de ' + nombreEquipo(next.equipo), 1000);
+}
 window.addEventListener('keydown', e => {
   const k = MAPA_TECLAS[e.code];
-  if (k) { teclas[k] = true; e.preventDefault(); }
-  if (e.code === 'Space') e.preventDefault();
+  if (k) {
+    teclas[k] = true;
+    if (G.estado === 'jugando') e.preventDefault();
+  }
 
   if (G.estado === 'jugando') {
+    if (e.code === 'Tab') { e.preventDefault(); cambiarGusanoEquipo(); return; }
     if (e.code === 'Escape') { pausar(); return; }
+    if (e.code === 'KeyQ') { ciclarArma(-1); return; }
+    if (e.code === 'KeyE') { ciclarArma(1); return; }
+    if (e.code === 'KeyZ') { restablecerZoomAuto(); return; }
     if (e.code === 'KeyT') { terminarTurno(); return; }
     if (e.code === 'KeyR') {
       if ((G.fase === 'mover' || G.fase === 'retirada') && G.activo && !G.activo.muerto) toggleSoga(G.activo);
       return;
     }
-    if (e.code === 'KeyZ') { restablecerZoomAuto(); return; }
     if (e.code.startsWith('Digit')) {
       const n = +e.code.slice(5);
-      if (n >= 1 && n <= 9) seleccionarArma(n - 1);
+      if (n >= 1 && n <= 5) { G.mecha = n; toast('Mecha: ' + n + ' s', 900); }
     }
   } else if (G.estado === 'menu' && e.code === 'Enter') {
     q('btnStart').click();
@@ -1372,7 +1462,10 @@ cv.addEventListener('mousedown', e => {
   }
 });
 window.addEventListener('mouseup', e => { if (e.button === 0) G.fuegoRaton = false; });
-cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (G.estado === 'jugando' && !G.tactil) alternarArsenal();
+});
 cv.addEventListener('wheel', e => {
   if (G.estado !== 'jugando') return;
   e.preventDefault();
@@ -1574,7 +1667,8 @@ function apuntar(w) {
 }
 function controlable() {
   return G.estado === 'jugando' && G.activo && !G.activo.muerto &&
-         (G.fase === 'mover' || G.fase === 'retirada');
+         (G.fase === 'mover' || G.fase === 'retirada') &&
+         (!G.online || (ONLINE.esMiTurno && !ONLINE.esperando));
 }
 function pausar() {
   if (G.estado !== 'jugando') return;
@@ -1627,8 +1721,17 @@ function actualizarEfectos() {
 // ─────────────────────────────────────────────────────────────────────
 function paso() {
   if (G.estado !== 'jugando') return;
+  if (G.online && !ONLINE.esMiTurno) {
+    // No es mi turno: el que juega manda snapshots. Acá solo se mueve la vista
+    // y se dejan correr los efectos para que la escena no quede congelada.
+    actualizarEfectos();
+    panPorRaton();
+    actualizarCamara();
+    if ((G.hudTick = (G.hudTick + 1) % 5) === 0) actualizarHUD();
+    return;
+  }
   const w = G.activo;
-  if (w && !w.muerto && G.raton.dentro) apuntar(w);
+  if (w && !w.muerto && G.tactil && G.raton.dentro) apuntar(w);
 
   const fuego = !!(teclas.fuego || G.fuegoRaton);
   if (fuego && !G.fuegoPrev) alPresionarFuego();
@@ -1637,12 +1740,23 @@ function paso() {
   if (G.cargando) G.carga = Math.min(1, G.carga + TICK / 0.9);
 
   for (const g of G.gusanos) {
+    if (g.voltereta > 0) g.voltereta = Math.max(0, g.voltereta - TICK);
     if (g.muerto) {
       g.muerteT += TICK;
       if (g.causa === 'agua') { g.hundiendo += TICK; g.y += 0.35; }
       continue;
     }
     const control = controlable() && g === G.activo;
+    if (control) {
+      if (g.soga.estado === 'none') {
+        if (teclas.arriba) ajustarMira(g, -1.7 * TICK);
+        if (teclas.abajo) ajustarMira(g, 1.7 * TICK);
+      }
+      if (teclas.salto && !g.saltoApretado) { saltar(g, false); g.saltoApretado = true; }
+      if (!teclas.salto) g.saltoApretado = false;
+      if (teclas.voltereta && !g.volteretaApretada) { saltar(g, true); g.volteretaApretada = true; }
+      if (!teclas.voltereta) g.volteretaApretada = false;
+    }
     if (g.soga.estado === 'disparando') {
       avanzarGarfio(g);
       movimientoNormal(g, false);
@@ -1666,9 +1780,14 @@ function paso() {
   }
   actualizarEfectos();
   actualizarTurno();
+  panPorRaton();
   actualizarCamara();
   if ((G.hudTick = (G.hudTick + 1) % 5) === 0) actualizarHUD();
   if (G.msgTurno > 0) G.msgTurno -= TICK;
+  if (G.online && ONLINE.esMiTurno && !ONLINE.esperando && G.fase !== 'esperando') {
+    ONLINE.paso = (ONLINE.paso + 1) % 4;
+    if (ONLINE.paso === 0) enviarSnapshot();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1707,6 +1826,7 @@ function limitarCamara() {
 function centrarCamara() {
   const m = G.mapa;
   if (!m) return;
+  G.cam.libre = 0;
   const esc = G.cam.base * G.cam.zoom;
   const vw = cssW / esc;
   const vh = cssH / esc;
@@ -1718,9 +1838,27 @@ function centrarCamara() {
   limitarCamara();
 }
 
+// En Worms Armageddon el mouse no apunta: lleva la vista cuando se acerca a un borde.
+function panPorRaton() {
+  if (G.tactil || G.estado !== 'jugando' || !G.raton.dentro || !G.mapa) return;
+  const m = 46;
+  let dx = 0, dy = 0;
+  if (G.raton.x < m) dx = -1;
+  else if (G.raton.x > cssW - m) dx = 1;
+  if (G.raton.y < m) dy = -1;
+  else if (G.raton.y > cssH - m) dy = 1;
+  if (!dx && !dy) return;
+  G.cam.libre = 0.9;
+  const esc = Math.max(0.0001, G.cam.base * G.cam.zoom);
+  G.cam.x += dx * 15 / esc;
+  G.cam.y += dy * 15 / esc;
+  limitarCamara();
+}
+
 function actualizarCamara() {
   const m = G.mapa;
   if (!m) return;
+  if (G.cam.libre > 0) { G.cam.libre = Math.max(0, G.cam.libre - TICK); return; }
   const esc = G.cam.base * G.cam.zoom;
   const vw = cssW / esc;
   const vh = cssH / esc;
@@ -1825,7 +1963,7 @@ function dibujarSprite(nombre, frame, x, y, opciones) {
   ctx.translate(x, y);
   if (op.flip) ctx.scale(-1, 1);
   ctx.rotate(op.rot || 0);
-  ctx.drawImage(im, f * meta.w, 0, meta.w, meta.h,
+  ctx.drawImage(im, 0, f * meta.h, meta.w, meta.h,
     -meta.w / 2 * escala, -(meta.h / 2 - 2) * escala, meta.w * escala, meta.h * escala);
   ctx.restore();
   return true;
@@ -1843,7 +1981,7 @@ function dibujarGusanoSheet(w, anim, frame, alpha) {
   ctx.globalAlpha = alpha == null ? 1 : alpha;
   ctx.translate(w.x, w.y);
   if (w.mirando > 0) ctx.scale(-1, 1);
-  ctx.drawImage(im, f * meta.w, 0, meta.w, meta.h, -30, -35, 60, 60);
+  ctx.drawImage(im, 0, f * meta.h, meta.w, meta.h, -30, -35, 60, 60);
   ctx.restore();
 }
 
@@ -1903,6 +2041,10 @@ function dibujarGusanos() {
     if (w.muerto) {
       anim = 'wdie';
       frame = Math.floor(w.muerteT * 26);
+    } else if (w.voltereta > 0 && !w.enPiso) {
+      anim = 'wroll';
+      const t = clamp(1 - w.voltereta / (w.volteretaDur || 0.55), 0, 0.9999);
+      frame = Math.floor(t * (GUSANOS_SPRITES.wroll ? GUSANOS_SPRITES.wroll.frames : 32));
     } else if (w.soga.estado === 'atada' || w.soga.estado === 'disparando') {
       anim = 'wbatrope';
       frame = frameSoga(w);
@@ -1963,7 +2105,7 @@ function dibujarCajas() {
     ctx.rotate(Math.sin(performance.now() / 600 + c.x) * 0.04);
     ctx.shadowColor = 'rgba(255,220,120,0.5)';
     ctx.shadowBlur = 12;
-    ctx.drawImage(im, f * meta.w, 0, meta.w, meta.h, -30, -30, 60, 60);
+    ctx.drawImage(im, 0, f * meta.h, meta.w, meta.h, -30, -30, 60, 60);
     ctx.restore();
   }
 }
@@ -2003,7 +2145,7 @@ function dibujarWalkers() {
     ctx.save();
     ctx.translate(e.x, e.y);
     if (e.dir > 0) ctx.scale(-1, 1);
-    ctx.drawImage(im, f * meta.w, 0, meta.w, meta.h, -30, -35, 60, 60);
+    ctx.drawImage(im, 0, f * meta.h, meta.w, meta.h, -30, -35, 60, 60);
     ctx.restore();
   }
 }
@@ -2124,37 +2266,47 @@ function dibujarBarraCarga() {
 }
 
 function dibujarMira() {
-  if (!G.raton.dentro || G.estado !== 'jugando') return;
+  if (G.estado !== 'jugando' || !G.activo || G.activo.muerto) return;
+  if (!G.tactil && !G.raton.dentro) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  if (G.tactil && G.activo && !G.activo.muerto) {
-    const esc = Math.max(0.0001, G.cam.base * G.cam.zoom);
-    const ax = (G.activo.x - G.cam.x) * esc;
-    const ay = (G.activo.y - 18 - G.cam.y) * esc;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.24)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(G.raton.x, G.raton.y);
-    ctx.stroke();
-    ctx.restore();
+  const esc = Math.max(0.0001, G.cam.base * G.cam.zoom);
+  const ax = (G.activo.x - G.cam.x) * esc;
+  const ay = (G.activo.y - 2 - G.cam.y) * esc;
+  let tx, ty;
+  if (G.tactil) {
+    tx = G.raton.x;
+    ty = G.raton.y;
+  } else {
+    // En PC la mira sigue el ángulo, no el mouse: el mouse solo mueve la vista.
+    const d = 74;
+    tx = (G.activo.x + Math.cos(G.activo.aim) * d - G.cam.x) * esc;
+    ty = (G.activo.y - 2 + Math.sin(G.activo.aim) * d - G.cam.y) * esc;
   }
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.78)';
-  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
   ctx.beginPath();
-  ctx.arc(G.raton.x, G.raton.y, 8, 0, Math.PI * 2);
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(tx, ty);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,236,170,0.92)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(tx, ty, 8, 0, Math.PI * 2);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(G.raton.x - 13, G.raton.y);
-  ctx.lineTo(G.raton.x - 5, G.raton.y);
-  ctx.moveTo(G.raton.x + 5, G.raton.y);
-  ctx.lineTo(G.raton.x + 13, G.raton.y);
-  ctx.moveTo(G.raton.x, G.raton.y - 13);
-  ctx.lineTo(G.raton.x, G.raton.y - 5);
-  ctx.moveTo(G.raton.x, G.raton.y + 5);
-  ctx.lineTo(G.raton.x, G.raton.y + 13);
+  ctx.moveTo(tx - 13, ty);
+  ctx.lineTo(tx - 5, ty);
+  ctx.moveTo(tx + 5, ty);
+  ctx.lineTo(tx + 13, ty);
+  ctx.moveTo(tx, ty - 13);
+  ctx.lineTo(tx, ty - 5);
+  ctx.moveTo(tx, ty + 5);
+  ctx.lineTo(tx, ty + 13);
   ctx.stroke();
   ctx.restore();
 }
@@ -2284,7 +2436,7 @@ function construirMarcador() {
     dot.style.background = EQUIPOS_DEF[i].color;
     const nom = document.createElement('span');
     nom.className = 'nom';
-    nom.textContent = EQUIPOS_DEF[i].nombre;
+    nom.textContent = G.online && ONLINE.jugadores && ONLINE.jugadores[i] ? ONLINE.jugadores[i].nombre : EQUIPOS_DEF[i].nombre;
     const vivos = document.createElement('span');
     vivos.className = 'vivos';
     const hp = document.createElement('div');
@@ -2302,13 +2454,13 @@ function actualizarHUD() {
   if (!w) return;
   const def = EQUIPOS_DEF[w.equipo];
   q('teamDot').style.background = def.color;
-  q('teamName').textContent = def.nombre;
+  q('teamName').textContent = nombreEquipo(w.equipo);
   q('wormName').textContent = w.nombre + ' · ' + Math.max(0, Math.round(w.hp)) + ' HP';
 
   let t = '—';
   if (G.fase === 'mover') t = Math.max(0, Math.ceil(G.tiempo));
   else if (G.fase === 'retirada') t = 'R' + Math.max(0, Math.ceil(G.retirada));
-  else if (G.fase === 'resolver') t = '···';
+  else if (G.fase === 'resolver' || G.fase === 'esperando') t = '···';
   q('timer').textContent = t;
   q('timerBox').classList.toggle('urgente', G.fase === 'mover' && G.tiempo <= 5);
 
@@ -2335,9 +2487,11 @@ function actualizarHUD() {
 
   const ayuda = q('ayuda');
   if (ayuda) {
-    ayuda.textContent = G.fase === 'retirada'
-      ? 'RETIRADA · movete y escapá · ' + Math.ceil(Math.max(0, G.retirada)) + 's'
-      : '← → mover · ↑ saltar · ESPACIO disparar/cargar · R soga · 1-9 armas · rueda zoom · Z zoom auto · ESC pausa';
+    ayuda.textContent = G.online && !ONLINE.esMiTurno
+      ? 'Turno de ' + (ONLINE.jugadores[G.activo.equipo] ? ONLINE.jugadores[G.activo.equipo].nombre : 'otro jugador') + ' · esperá tu turno'
+      : G.fase === 'retirada'
+        ? 'RETIRADA · movete y escapá · ' + Math.ceil(Math.max(0, G.retirada)) + 's'
+        : '← → mover · ↑ ↓ apuntar · Enter saltar · Backspace voltereta · Espacio fuego · Tab gusano · Q/E armas · clic derecho arsenal · 1-5 mecha · R soga · rueda zoom · Z zoom auto · ESC pausa';
   }
 }
 
@@ -2380,15 +2534,19 @@ function iniciarPartida() {
   G.mapa = meta;
   G.terreno = new Terreno(meta);
   G.config.equipos = clamp(parseInt(q('iEquipos').value, 10) || 2, 2, 5);
-  G.config.gusanos = clamp(parseInt(q('iGusanos').value, 10) || 1, 1, 5);
-  G.cba = !!q('iCBA').checked;
+  // Shopper: un gusano por jugador. El CBA es obligatorio (se recoge una caja antes de atacar).
+  G.config.gusanos = 1;
+  G.cba = true;
 
+  G.online = false;
+  limpiarOnlineJuego();
   G.estado = 'jugando';
   G.fase = 'mover';
   G.activo = null;
   G.tiempo = TIEMPO_TURNO;
   G.retirada = 0;
   G.viento = 0;
+  G.cam.libre = 0;
   G.cajas = [];
   G.proyectiles = [];
   G.walkers = [];
@@ -2463,6 +2621,7 @@ function iniciarPartida() {
   recalcularBase();
   construirMarcador();
   q('menu').classList.add('hidden');
+  q('online').classList.add('hidden');
   q('pausa').classList.add('hidden');
   q('fin').classList.add('hidden');
   q('hud').classList.remove('hidden');
@@ -2488,6 +2647,18 @@ function reanudar() {
 }
 
 function volverAlMenu() {
+  if (G.online && ONLINE.id) emitOnline('gusanos:abandonar', { id: ONLINE.id });
+  G.online = false;
+  ONLINE.id = null;
+  ONLINE.sala = null;
+  ONLINE.activo = false;
+  ONLINE.jugadores = [];
+  ONLINE.miSeat = -1;
+  ONLINE.turno = -1;
+  ONLINE.esMiTurno = false;
+  ONLINE.esperando = false;
+  ONLINE.listo = false;
+  limpiarOnlineJuego();
   G.estado = 'menu';
   G.activo = null;
   G.mapa = null;
@@ -2518,6 +2689,7 @@ function volverAlMenu() {
   if (t) t.classList.add('hidden');
   q('pausa').classList.add('hidden');
   q('fin').classList.add('hidden');
+  q('online').classList.add('hidden');
   q('hud').classList.add('hidden');
   q('menu').classList.remove('hidden');
 }
@@ -2552,22 +2724,782 @@ function construirMenu() {
   }
 
   const iE = q('iEquipos');
-  const iG = q('iGusanos');
   const upd = () => {
-    q('oEquipos').textContent = iE.value;
-    q('oGusanos').textContent = iG.value;
+    if (iE) q('oEquipos').textContent = iE.value;
   };
-  iE.addEventListener('input', upd);
-  iG.addEventListener('input', upd);
+  if (iE) iE.addEventListener('input', upd);
   upd();
 
   q('btnStart').addEventListener('click', iniciarPartida);
+  const btnOnline = q('btnOnline');
+  if (btnOnline) btnOnline.addEventListener('click', () => abrirOnline());
   q('btnSeguir').addEventListener('click', reanudar);
-  q('btnReiniciar').addEventListener('click', iniciarPartida);
+  q('btnReiniciar').addEventListener('click', () => {
+    if (G.online) return volverAlMenu();
+    iniciarPartida();
+  });
   q('btnMenu').addEventListener('click', volverAlMenu);
-  q('btnOtra').addEventListener('click', iniciarPartida);
+  q('btnOtra').addEventListener('click', () => {
+    if (G.online) return volverAlMenu();
+    iniciarPartida();
+  });
   q('btnMenuFin').addEventListener('click', volverAlMenu);
   q('btnPausaHud').addEventListener('click', pausar);
+  const bc = q('btnOnlineCerrar');
+  if (bc) bc.addEventListener('click', cerrarOnline);
+  const br = q('btnRevancha');
+  if (br) br.addEventListener('click', pedirRevancha);
+  const bs = q('btnSalirOnline');
+  if (bs) bs.addEventListener('click', volverASalaOnline);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Online: sala, turnos y snapshots
+// ─────────────────────────────────────────────────────────────────────
+function onodo(tag, cls, texto) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (texto != null && texto !== '') n.textContent = texto;
+  return n;
+}
+
+function socketPadre() {
+  try {
+    const a = (window.parent && window.parent !== window) ? window.parent.app : window.app;
+    return a && a.socket ? a.socket : null;
+  } catch { return null; }
+}
+
+function emitOnline(ev, data) {
+  return new Promise((resolve) => {
+    const s = ONLINE.socket || enlazarOnline();
+    if (!s) return resolve({ error: 'Entrá desde el chat para jugar online.' });
+    let hecho = false;
+    const t = setTimeout(() => { if (!hecho) { hecho = true; resolve({ error: 'El servidor no contestó. Probá de nuevo.' }); } }, 12000);
+    try {
+      s.emit(ev, data || {}, (r) => { if (hecho) return; hecho = true; clearTimeout(t); resolve(r || {}); });
+    } catch {
+      if (!hecho) { hecho = true; clearTimeout(t); resolve({ error: 'Sin conexión.' }); }
+    }
+  });
+}
+
+function enlazarOnline() {
+  if (ONLINE.enlazado) return ONLINE.socket;
+  const s = socketPadre();
+  if (!s) { ONLINE.error = 'Entrá desde el chat para jugar online.'; return null; }
+  ONLINE.socket = s;
+  ONLINE.enlazado = true;
+  ONLINE.error = null;
+  s.on('gusanos:estado', (d) => {
+    if (!d || (ONLINE.id && d.id !== ONLINE.id)) return;
+    ONLINE.sala = d;
+    ONLINE.id = d.id;
+    ONLINE.miSeat = d.miSeat;
+    ONLINE.soyCreador = !!d.soyCreador;
+    ONLINE.listo = !!d.listo;
+    ONLINE.jugadores = d.jugadores || [];
+    ONLINE.turno = d.turno != null ? d.turno : ONLINE.turno;
+    ONLINE.esMiTurno = d.estado === 'jugando' && d.turno === d.miSeat;
+    if (d.estado === 'jugando' && d.soyJugador && G.estado !== 'jugando') {
+      iniciarPartidaOnline({ ...d, miSeat: d.miSeat, inicio: true });
+      return;
+    }
+    if (d.estado === 'terminada' && G.estado === 'jugando') {
+      recibirFin({ id: d.id, ganador: d.ganador, motivo: d.motivo });
+      return;
+    }
+    renderOnline();
+  });
+  s.on('gusanos:turno', (d) => recibirTurno(d));
+  s.on('gusanos:snapshot', (d) => {
+    if (!d || d.id !== ONLINE.id || ONLINE.esMiTurno || G.estado !== 'jugando') return;
+    aplicarSnapshot(d.snapshot);
+  });
+  s.on('gusanos:fin', (d) => recibirFin(d));
+  s.on('gusanos:revancha', (d) => {
+    if (!d || !d.id || d.de !== ONLINE.id) return;
+    ONLINE.id = d.id;
+    ONLINE.sala = null;
+    verSala(d.id);
+  });
+  s.on('gusanos:cambio', () => {
+    const ov = q('online');
+    if (ov && !ov.classList.contains('hidden') && !ONLINE.sala) cargarLobby();
+  });
+  s.on('disconnect', () => {
+    ONLINE.error = 'Se cortó la conexión. Esperá un momento y volvé a entrar.';
+    renderOnline();
+  });
+  s.on('connect', () => {
+    if (ONLINE.id) verSala(ONLINE.id);
+  });
+  return s;
+}
+
+function abrirOnline(mesa) {
+  enlazarOnline();
+  q('menu').classList.add('hidden');
+  q('online').classList.remove('hidden');
+  ONLINE.error = null;
+  if (!ONLINE.socket) { renderOnline(); return; }
+  if (mesa) entrarSala(mesa);
+  else cargarLobby();
+}
+
+function cerrarOnline() {
+  const ov = q('online');
+  if (ov) ov.classList.add('hidden');
+  if (G.estado === 'menu') q('menu').classList.remove('hidden');
+}
+
+function cargarLobby() {
+  enlazarOnline();
+  if (!ONLINE.socket) { renderOnline(); return; }
+  ONLINE.cargando = true;
+  renderOnline();
+  emitOnline('gusanos:inicio').then((d) => {
+    ONLINE.cargando = false;
+    if (d.error) { ONLINE.error = d.error; renderOnline(); return; }
+    ONLINE.lobby = d;
+    ONLINE.error = null;
+    renderOnline();
+  });
+}
+
+function entrarSala(id) {
+  enlazarOnline();
+  if (!ONLINE.socket) { renderOnline(); return; }
+  ONLINE.id = String(id);
+  ONLINE.cargando = true;
+  ONLINE.error = null;
+  renderOnline();
+  emitOnline('gusanos:unirse', { id: ONLINE.id }).then((r) => {
+    if (r.error) { ONLINE.cargando = false; ONLINE.error = r.error; ONLINE.id = null; renderOnline(); return; }
+    verSala(r.id || ONLINE.id);
+  });
+}
+
+function verSala(id) {
+  if (!id) return;
+  emitOnline('gusanos:ver', { id }).then((r) => {
+    ONLINE.cargando = false;
+    if (r.error) { ONLINE.error = r.error; renderOnline(); return; }
+    const d = r.partida || r;
+    ONLINE.sala = d;
+    ONLINE.id = d.id;
+    ONLINE.miSeat = d.miSeat;
+    ONLINE.soyCreador = !!d.soyCreador;
+    ONLINE.listo = !!d.listo;
+    ONLINE.jugadores = d.jugadores || [];
+    ONLINE.turno = d.turno != null ? d.turno : ONLINE.turno;
+    ONLINE.esMiTurno = d.estado === 'jugando' && d.turno === d.miSeat;
+    if (d.estado === 'jugando' && d.soyJugador && G.estado !== 'jugando') {
+      iniciarPartidaOnline({ ...d, miSeat: d.miSeat, inicio: true });
+      return;
+    }
+    renderOnline();
+  });
+}
+
+function crearSalaOnline(mapa) {
+  emitOnline('gusanos:crear', { mapa }).then((r) => {
+    if (r.error) { toast(r.error, 2000); return; }
+    entrarSala(r.id);
+  });
+}
+
+function listoOnline() {
+  if (!ONLINE.id) return;
+  emitOnline('gusanos:listo', { id: ONLINE.id, listo: !ONLINE.listo }).then((r) => {
+    if (r.error) toast(r.error, 1800);
+  });
+}
+
+function empezarOnline() {
+  if (!ONLINE.id) return;
+  emitOnline('gusanos:empezar', { id: ONLINE.id }).then((r) => {
+    if (r.error) toast(r.error, 2000);
+  });
+}
+
+function chatOnline(texto) {
+  if (!ONLINE.id) return;
+  emitOnline('gusanos:chat', { id: ONLINE.id, texto }).then((r) => {
+    if (r.error) toast(r.error, 1600);
+  });
+}
+
+function salirSalaOnline() {
+  if (ONLINE.id) emitOnline('gusanos:abandonar', { id: ONLINE.id });
+  const id = ONLINE.id;
+  ONLINE.sala = null;
+  ONLINE.id = null;
+  ONLINE.miSeat = -1;
+  ONLINE.jugadores = [];
+  ONLINE.turno = -1;
+  ONLINE.esMiTurno = false;
+  ONLINE.listo = false;
+  ONLINE.esperando = false;
+  ONLINE.finEnviado = false;
+  if (id) cargarLobby();
+  else renderOnline();
+}
+
+function pedirRevancha() {
+  if (!ONLINE.id) return;
+  const b = q('btnRevancha');
+  if (b) b.disabled = true;
+  emitOnline('gusanos:revancha', { id: ONLINE.id }).then((r) => {
+    if (r.error) { toast(r.error, 1800); if (b) b.disabled = false; return; }
+    if (r.id && r.id !== ONLINE.id) { ONLINE.id = r.id; verSala(r.id); }
+    else toast('Esperando a los demás…', 1400);
+  });
+}
+
+function limpiarOnlineJuego() {
+  ONLINE.activo = false;
+  ONLINE.esMiTurno = false;
+  ONLINE.esperando = false;
+  ONLINE.finEnviado = false;
+  ONLINE.paso = 0;
+  ONLINE.ultimoEnvio = 0;
+  const b = q('btnRevancha'), s = q('btnSalirOnline'), o = q('btnOtra');
+  if (b) { b.classList.add('hidden'); b.disabled = false; }
+  if (s) s.classList.add('hidden');
+  if (o) o.classList.remove('hidden');
+}
+
+function renderOnline() {
+  const box = q('onlineCuerpo');
+  if (!box) return;
+  const escrito = box.querySelector('#onlineChatInput');
+  const texto = escrito ? escrito.value : '';
+  box.textContent = '';
+  if (ONLINE.error) box.appendChild(onodo('div', 'onlineAviso', ONLINE.error));
+  if (!ONLINE.socket) {
+    box.appendChild(onodo('div', 'onlineVacio', 'El online usa la conexión del chat. Abrí Gusanos desde la biblioteca del chat.'));
+    return;
+  }
+  if (ONLINE.sala) renderSalaOnline(box, ONLINE.sala);
+  else renderLobbyOnline(box);
+  const input = box.querySelector('#onlineChatInput');
+  if (input && texto) input.value = texto;
+}
+
+function seccionOnline(box, titulo) {
+  const s = onodo('section', 'onlineSeccion');
+  s.appendChild(onodo('div', 'onlineTitulo', titulo));
+  box.appendChild(s);
+  return s;
+}
+
+function renderLobbyOnline(box) {
+  if (ONLINE.cargando && !ONLINE.lobby) {
+    box.appendChild(onodo('div', 'onlineEstado', 'Buscando salas…'));
+    return;
+  }
+  const d = ONLINE.lobby;
+  if (!d) {
+    box.appendChild(onodo('div', 'onlineVacio', 'No se pudo cargar la lista de salas.'));
+    return;
+  }
+
+  const mias = seccionOnline(box, 'Tus salas');
+  const listaMias = onodo('div', 'onlineLista');
+  mias.appendChild(listaMias);
+  if (!(d.mias || []).length) listaMias.appendChild(onodo('div', 'onlineVacio', 'Todavía no estás en ninguna sala.'));
+  for (const m of d.mias || []) {
+    const fila = onodo('div', 'onlineFila');
+    const quien = m.estado === 'esperando' ? 'Esperando jugadores' : (m.ganador != null ? 'Terminada' : 'En juego');
+    const meta = onodo('div', 'onlineCrecimiento');
+    meta.appendChild(onodo('div', 'onlineNombre', (m.mapa || 'crossing') + ' · ' + (m.jugadores || 0) + ' jugador' + ((m.jugadores || 0) === 1 ? '' : 'es')));
+    meta.appendChild(onodo('div', 'onlineMeta', quien + (m.teToca ? ' · te toca' : '')));
+    fila.appendChild(meta);
+    if (m.teToca) fila.appendChild(onodo('span', 'jg-chip amarillo', 'Te toca'));
+    const b = onodo('button', null, m.estado === 'jugando' ? 'Seguir' : 'Entrar');
+    b.type = 'button';
+    b.addEventListener('click', () => entrarSala(m.id));
+    fila.appendChild(b);
+    listaMias.appendChild(fila);
+  }
+
+  const abiertas = seccionOnline(box, 'Mesas esperando rival');
+  const lista = onodo('div', 'onlineLista');
+  abiertas.appendChild(lista);
+  if (!(d.abiertas || []).length) lista.appendChild(onodo('div', 'onlineVacio', 'No hay mesas abiertas. Creá una y pasá el enlace.'));
+  for (const a of d.abiertas || []) {
+    const fila = onodo('div', 'onlineFila');
+    const meta = onodo('div', 'onlineCrecimiento');
+    meta.appendChild(onodo('div', 'onlineNombre', (a.creador && a.creador.nombre) || 'Alguien'));
+    meta.appendChild(onodo('div', 'onlineMeta', (a.mapa || 'crossing') + ' · ' + (a.jugadores || 1) + '/5 · Shopper'));
+    fila.appendChild(meta);
+    const b = onodo('button', null, 'Unirse');
+    b.type = 'button';
+    b.addEventListener('click', () => entrarSala(a.id));
+    fila.appendChild(b);
+    lista.appendChild(fila);
+  }
+
+  const crear = seccionOnline(box, 'Crear una sala');
+  const btns = onodo('div', 'onlineBtns');
+  const sel = onodo('select', 'onlineSelect');
+  for (const m of MAPAS) {
+    const o = onodo('option', null, m.nombre + ' · ' + m.w + '×' + m.h);
+    o.value = m.id;
+    if (m.id === G.mapaSel) o.selected = true;
+    sel.appendChild(o);
+  }
+  const b = onodo('button', 'principal', 'Crear sala');
+  b.type = 'button';
+  b.addEventListener('click', () => crearSalaOnline(sel.value));
+  btns.append(sel, b);
+  crear.appendChild(btns);
+  crear.appendChild(onodo('div', 'onlineLink', 'La sala queda con enlace para compartir: /app?juegos=gusanos&mesa=…'));
+}
+
+function renderSalaOnline(box, d) {
+  const estado = d.estado === 'jugando' ? 'Partida en curso' : d.estado === 'terminada' ? 'Partida terminada' : 'Esperando jugadores';
+  box.appendChild(onodo('div', 'onlineEstado', estado + ' · ' + (d.mapa || 'crossing') + ' · Shopper · CBA' + (d.estado === 'jugando' && d.turno != null && d.jugadores[d.turno] ? ' · Turno de ' + d.jugadores[d.turno].nombre : '')));
+
+  const jug = seccionOnline(box, 'Jugadores (' + (d.jugadores || []).length + '/5)');
+  const lista = onodo('div', 'onlineLista');
+  jug.appendChild(lista);
+  for (const j of d.jugadores || []) {
+    const fila = onodo('div', 'onlineFila');
+    const punto = onodo('span', 'onlinePunto ' + (j.listo || d.estado !== 'esperando' ? 'si' : 'no'));
+    const meta = onodo('div', 'onlineCrecimiento');
+    meta.appendChild(onodo('div', 'onlineNombre', j.nombre + (j.yo ? ' (vos)' : '')));
+    const detalles = [];
+    if (j.creador) detalles.push('creador');
+    if (d.estado === 'esperando') detalles.push(j.listo ? 'listo' : 'sin listo');
+    if (j.conectado === false) detalles.push('desconectado');
+    if (d.estado === 'jugando' && d.turno === d.jugadores.indexOf(j)) detalles.push('su turno');
+    meta.appendChild(onodo('div', 'onlineMeta', detalles.join(' · ') || 'en la sala'));
+    fila.append(punto, meta);
+    lista.appendChild(fila);
+  }
+
+  const acciones = onodo('div', 'onlineBtns');
+  if (d.estado === 'esperando') {
+    if (d.soyJugador) {
+      const bl = onodo('button', null, d.listo ? 'Cancelar listo' : 'Estoy listo');
+      bl.type = 'button';
+      bl.addEventListener('click', listoOnline);
+      acciones.appendChild(bl);
+    }
+    if (d.soyCreador) {
+      const be = onodo('button', 'principal', 'Empezar');
+      be.type = 'button';
+      be.disabled = (d.jugadores || []).length < 2 || !d.todosListos;
+      be.title = be.disabled ? 'Faltan jugadores o que todos estén listos' : '';
+      be.addEventListener('click', empezarOnline);
+      acciones.appendChild(be);
+    }
+  } else if (d.estado === 'jugando' && d.soyJugador) {
+    const bv = onodo('button', 'principal', G.estado === 'jugando' ? 'Volver al juego' : 'Entrar a la partida');
+    bv.type = 'button';
+    bv.addEventListener('click', () => {
+      if (G.estado === 'jugando') cerrarOnline();
+      else verSala(d.id);
+    });
+    acciones.appendChild(bv);
+  } else if (d.estado === 'terminada') {
+    const quien = d.ganador != null && d.jugadores[d.ganador] ? d.jugadores[d.ganador].nombre : null;
+    box.appendChild(onodo('div', 'onlineAviso', quien ? 'Ganó ' + quien + '.' : 'La partida terminó.'));
+    if (d.soyJugador) {
+      const br = onodo('button', 'principal', 'Pedir revancha');
+      br.type = 'button';
+      const ya = (d.revancha || []).filter(Boolean).length;
+      if (d.yoRevancha) br.disabled = true;
+      br.textContent = d.yoRevancha ? 'Revancha pedida (' + ya + ')' : 'Pedir revancha';
+      br.addEventListener('click', pedirRevancha);
+      acciones.appendChild(br);
+    }
+  }
+
+  const bc = onodo('button', null, 'Compartir enlace');
+  bc.type = 'button';
+  bc.addEventListener('click', () => compartirSala(d.id));
+  acciones.appendChild(bc);
+
+  if (d.soyJugador) {
+    const bs = onodo('button', null, d.estado === 'jugando' ? 'Abandonar partida' : 'Salir de la sala');
+    bs.type = 'button';
+    bs.addEventListener('click', salirSalaOnline);
+    acciones.appendChild(bs);
+  }
+  box.appendChild(acciones);
+
+  if (d.soyJugador) {
+    const chat = seccionOnline(box, 'Chat de la sala');
+    const listaChat = onodo('div', 'onlineChat');
+    for (const m of d.chat || []) {
+      const x = onodo('div', 'msg' + (m.mio ? ' mio' : ''));
+      x.appendChild(onodo('b', null, m.quien || '?'));
+      x.appendChild(document.createTextNode(': ' + m.text));
+      listaChat.appendChild(x);
+    }
+    if (!(d.chat || []).length) listaChat.appendChild(onodo('div', 'onlineVacio', 'Todavía no hay mensajes.'));
+    chat.appendChild(listaChat);
+    const form = onodo('form', 'onlineChatForm');
+    const input = onodo('input');
+    input.id = 'onlineChatInput';
+    input.type = 'text';
+    input.maxLength = 200;
+    input.autocomplete = 'off';
+    input.placeholder = 'Escribí un mensaje';
+    const enviar = onodo('button', null, 'Enviar');
+    enviar.type = 'submit';
+    form.append(input, enviar);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const t = input.value.trim();
+      if (!t) return;
+      input.value = '';
+      chatOnline(t);
+    });
+    chat.appendChild(form);
+    listaChat.scrollTop = listaChat.scrollHeight;
+  }
+}
+
+function compartirSala(id) {
+  let base = location.origin;
+  try { if (window.parent && window.parent !== window) base = window.parent.location.origin; } catch { /* mismo origen */ }
+  const url = base + '/app?juegos=gusanos&mesa=' + encodeURIComponent(id);
+  if (navigator.share && matchMedia('(max-width: 768px)').matches) {
+    navigator.share({ title: 'Gusanos online', url }).catch(() => {});
+    return;
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => toast('Enlace copiado', 1400), () => prompt('Copiá el enlace:', url));
+  } else prompt('Copiá el enlace:', url);
+}
+
+function iniciarPartidaOnline(d) {
+  const meta = MAPAS.find(m => m.id === d.mapa) || MAPAS.find(m => m.id === G.mapaSel) || MAPAS[0];
+  if (!meta) { toast('No hay mapas cargados', 2500); return; }
+  if (d.turno == null || !(d.jugadores || []).length) return;
+
+  MUNDO.w = meta.w;
+  MUNDO.h = meta.h;
+  MUNDO.agua = meta.agua != null ? meta.agua : meta.h - 40;
+  if (!G.mapa || G.mapa.id !== meta.id) {
+    for (const k of [...IMGS.keys()]) if (k.indexOf('assets/maps/') === 0) IMGS.delete(k);
+  }
+  G.mapa = meta;
+  G.terreno = new Terreno(meta);
+
+  G.online = true;
+  ONLINE.activo = true;
+  ONLINE.id = d.id;
+  ONLINE.miSeat = d.miSeat;
+  ONLINE.soyCreador = !!d.soyCreador;
+  ONLINE.jugadores = d.jugadores || [];
+  ONLINE.turno = d.turno;
+  ONLINE.viento = d.viento != null ? d.viento : 0;
+  ONLINE.ronda = d.ronda || 1;
+  ONLINE.esMiTurno = d.turno === d.miSeat;
+  ONLINE.esperando = false;
+  ONLINE.finEnviado = false;
+  ONLINE.paso = 0;
+  ONLINE.ultimoEnvio = 0;
+  ONLINE.sala = null;
+  G.config.equipos = clamp(ONLINE.jugadores.length || 2, 2, 5);
+  G.config.gusanos = 1;
+  G.cba = true;
+  G.estado = 'jugando';
+  G.fase = 'mover';
+  G.activo = null;
+  G.tiempo = TIEMPO_TURNO;
+  G.retirada = 0;
+  G.viento = ONLINE.viento;
+  G.cajas = [];
+  G.proyectiles = [];
+  G.walkers = [];
+  G.zonas = [];
+  G.llamas = [];
+  G.efectos = [];
+  G.particulas = [];
+  G.anillos = [];
+  G.flotantes = [];
+  G.sacudir = 0;
+  G.cargando = false;
+  G.carga = 0;
+  G.armaCargando = null;
+  G.fuegoPrev = false;
+  G.fuegoRaton = false;
+  G.raton.dentro = false;
+  soltarBotonesTactiles();
+  punteroMira = null;
+  punteroFuego = null;
+  G.cbaHecha = false;
+  G.usadoSoga = false;
+  G.armaSel = 0;
+  G.equipos = [];
+  G.gusanos = [];
+  G.orden = [];
+  G.turnoPtr = -1;
+  G.cam.zoom = 1;
+  G.cam.auto = true;
+  G.cam.libre = 0;
+  G.crateTimer = azar(4, 6);
+  idGusano = 0;
+
+  for (let t = 0; t < G.config.equipos; t++) G.equipos.push({ indice: t, municion: {}, gusanos: [] });
+
+  const total = G.config.equipos;
+  const puntos = puntosDeAparicion(total, meta);
+  for (let i = 0; i < total; i++) {
+    const p = puntos[i] || [meta.w * (i + 0.5) / total, MUNDO.agua - 60];
+    let x = clamp(p[0], 12, MUNDO.w - 12);
+    let y = p[1] - 8;
+    if (chocaGusano(x, y)) {
+      let libre = null;
+      for (let dx = 8; dx <= 80 && !libre; dx += 8) {
+        for (const sx of [x + dx, x - dx]) {
+          if (sx < 12 || sx > MUNDO.w - 12) continue;
+          if (!chocaGusano(sx, y)) { libre = sx; break; }
+        }
+      }
+      if (libre != null) x = libre;
+      else {
+        let guarda = 0;
+        while (chocaGusano(x, y) && guarda++ < 400) y -= 2;
+      }
+    }
+    const w = new Gusano(i, 0, x, y);
+    G.gusanos.push(w);
+    G.equipos[i].gusanos.push(w);
+  }
+  G.orden = G.gusanos.slice();
+
+  recalcularBase();
+  construirMarcador();
+  q('menu').classList.add('hidden');
+  q('online').classList.add('hidden');
+  q('pausa').classList.add('hidden');
+  q('fin').classList.add('hidden');
+  q('hud').classList.remove('hidden');
+  if (G.tactil) q('tactil').classList.remove('hidden');
+  limpiarOnlineJuego();
+  ONLINE.activo = true;
+  ONLINE.esMiTurno = d.turno === d.miSeat;
+  ONLINE.esperando = false;
+  G.online = true;
+
+  const w = G.orden[d.turno];
+  if (!w) return;
+  G.turnoPtr = d.turno;
+  iniciarTurno(w, true);
+  G.viento = ONLINE.viento;
+  if (d.snapshot) aplicarSnapshot(d.snapshot);
+  ONLINE.esMiTurno = d.turno === ONLINE.miSeat;
+  actualizarArmas();
+  actualizarHUD();
+  centrarCamara(true);
+  resetFinTactil();
+  mostrarPistaTactil();
+  toast(ONLINE.esMiTurno ? 'Tu turno' : 'Turno de ' + nombreEquipo(d.turno), 1300);
+}
+
+function capturarSnapshot() {
+  return {
+    v: 1,
+    mapa: G.mapa ? G.mapa.id : null,
+    fase: G.fase,
+    tiempo: G.tiempo,
+    retirada: G.retirada,
+    viento: G.viento,
+    turnoPtr: G.turnoPtr,
+    turnoEquipo: G.activo ? G.activo.equipo : -1,
+    turnoId: G.activo ? G.activo.id : null,
+    config: { equipos: G.config.equipos, gusanos: 1, hp: G.config.hp, turno: G.config.turno },
+    cba: G.cba,
+    cbaHecha: G.cbaHecha,
+    usadoSoga: G.usadoSoga,
+    mecha: G.mecha,
+    gusanos: G.gusanos.map(w => ({
+      id: w.id, equipo: w.equipo, idx: w.idx, nombre: w.nombre,
+      x: w.x, y: w.y, vx: w.vx, vy: w.vy, hp: w.hp, hpMax: w.hpMax,
+      muerto: w.muerto, causa: w.causa, muerteT: w.muerteT, hundiendo: w.hundiendo,
+      enPiso: w.enPiso, mirando: w.mirando, aim: w.aim, paso: w.paso,
+      caminando: w.caminando, voltereta: w.voltereta,
+      soga: {
+        estado: w.soga.estado, ax: w.soga.ax, ay: w.soga.ay, hx: w.soga.hx, hy: w.soga.hy,
+        dx: w.soga.dx, dy: w.soga.dy, recorrido: w.soga.recorrido, len: w.soga.len,
+        pivotes: (w.soga.pivotes || []).map(p => ({ x: p.x, y: p.y })),
+      },
+    })),
+    equipos: G.equipos.map(e => ({ municion: { ...e.municion } })),
+    cajas: G.cajas.map(c => ({ ...c })),
+    proyectiles: G.proyectiles,
+    walkers: G.walkers,
+    zonas: G.zonas,
+    llamas: G.llamas,
+    efectos: G.efectos,
+    particulas: G.particulas,
+    anillos: G.anillos,
+    flotantes: G.flotantes,
+    orden: G.orden.map(w => w.id),
+  };
+}
+
+function aplicarSnapshot(s) {
+  if (!s || !G.mapa || (s.mapa && s.mapa !== G.mapa.id)) return;
+  if (Array.isArray(s.gusanos)) {
+    for (const d of s.gusanos) {
+      const w = G.gusanos.find(g => g.id === d.id) || G.gusanos.find(g => g.equipo === d.equipo);
+      if (!w) continue;
+      Object.assign(w, d);
+      w.soga = d.soga ? {
+        estado: d.soga.estado, ax: d.soga.ax, ay: d.soga.ay, hx: d.soga.hx, hy: d.soga.hy,
+        dx: d.soga.dx, dy: d.soga.dy, recorrido: d.soga.recorrido, len: d.soga.len,
+        pivotes: (d.soga.pivotes || []).map(p => ({ x: p.x, y: p.y })),
+      } : w.soga;
+    }
+  }
+  if (Array.isArray(s.equipos)) {
+    for (let i = 0; i < s.equipos.length; i++) {
+      if (G.equipos[i] && s.equipos[i].municion) G.equipos[i].municion = { ...s.equipos[i].municion };
+    }
+  }
+  G.cajas = Array.isArray(s.cajas) ? s.cajas : [];
+  G.proyectiles = Array.isArray(s.proyectiles) ? s.proyectiles : [];
+  G.walkers = Array.isArray(s.walkers) ? s.walkers : [];
+  G.zonas = Array.isArray(s.zonas) ? s.zonas : [];
+  G.llamas = Array.isArray(s.llamas) ? s.llamas : [];
+  G.efectos = Array.isArray(s.efectos) ? s.efectos : [];
+  G.particulas = Array.isArray(s.particulas) ? s.particulas : [];
+  G.anillos = Array.isArray(s.anillos) ? s.anillos : [];
+  G.flotantes = Array.isArray(s.flotantes) ? s.flotantes : [];
+  if (Array.isArray(s.orden) && s.orden.length === G.gusanos.length) {
+    const porId = new Map(G.gusanos.map(w => [w.id, w]));
+    const orden = s.orden.map(id => porId.get(id)).filter(Boolean);
+    if (orden.length === G.gusanos.length) G.orden = orden;
+  }
+  if (typeof s.turnoPtr === 'number') G.turnoPtr = s.turnoPtr;
+  if (s.turnoId != null) {
+    const i = G.orden.findIndex(w => w.id === s.turnoId);
+    if (i >= 0) { G.turnoPtr = i; G.activo = G.orden[i]; }
+  } else if (s.turnoEquipo != null && s.turnoEquipo >= 0) {
+    const i = G.orden.findIndex(w => w.equipo === s.turnoEquipo);
+    if (i >= 0) { G.turnoPtr = i; G.activo = G.orden[i]; }
+  } else if (G.orden[G.turnoPtr]) {
+    G.activo = G.orden[G.turnoPtr];
+  }
+  G.fase = s.fase || 'mover';
+  G.tiempo = typeof s.tiempo === 'number' ? s.tiempo : G.tiempo;
+  G.retirada = typeof s.retirada === 'number' ? s.retirada : G.retirada;
+  G.viento = typeof s.viento === 'number' ? s.viento : G.viento;
+  G.cba = s.cba !== false;
+  G.cbaHecha = !!s.cbaHecha;
+  G.usadoSoga = !!s.usadoSoga;
+  G.mecha = s.mecha || G.mecha;
+  G.estado = 'jugando';
+  actualizarArmas();
+  actualizarHUD();
+}
+
+function enviarSnapshot() {
+  if (!G.online || !ONLINE.esMiTurno || ONLINE.esperando || !ONLINE.id) return;
+  const s = ONLINE.socket;
+  if (!s) return;
+  try { s.emit('gusanos:snapshot', { id: ONLINE.id, snapshot: capturarSnapshot() }); } catch { /* sin conexión */ }
+}
+
+function enviarFinTurno() {
+  if (!G.online || ONLINE.finEnviado) return;
+  ONLINE.finEnviado = true;
+  ONLINE.esMiTurno = false;
+  ONLINE.esperando = true;
+  const snap = capturarSnapshot();
+  G.fase = 'esperando';
+  G.cargando = false;
+  G.carga = 0;
+  G.armaCargando = null;
+  if (ONLINE.socket) {
+    try { ONLINE.socket.emit('gusanos:finTurno', { id: ONLINE.id, snapshot: snap }); } catch { /* sin conexión */ }
+  }
+  actualizarHUD();
+  toast('Turno enviado · esperando al resto', 1400);
+}
+
+function recibirTurno(d) {
+  if (!d || d.id !== ONLINE.id || d.turno == null) return;
+  if (d.miSeat != null) ONLINE.miSeat = d.miSeat;
+  if (d.jugadores) ONLINE.jugadores = d.jugadores;
+  ONLINE.turno = d.turno;
+  ONLINE.viento = d.viento != null ? d.viento : 0;
+  ONLINE.ronda = d.ronda || ONLINE.ronda;
+  ONLINE.esMiTurno = d.turno === ONLINE.miSeat;
+  ONLINE.esperando = false;
+  ONLINE.finEnviado = false;
+  ONLINE.ultimoEnvio = 0;
+  if (d.inicio || G.estado !== 'jugando' || !G.mapa || !G.online) {
+    iniciarPartidaOnline({ ...d, miSeat: d.miSeat != null ? d.miSeat : ONLINE.miSeat, jugadores: d.jugadores || ONLINE.jugadores });
+  } else {
+    if (d.snapshot) aplicarSnapshot(d.snapshot);
+    const w = G.orden[d.turno] || G.gusanos.find(g => g.equipo === d.turno);
+    if (!w) return;
+    G.turnoPtr = G.orden.indexOf(w);
+    iniciarTurno(w, true);
+    G.viento = ONLINE.viento;
+    G.online = true;
+    ONLINE.esMiTurno = d.turno === ONLINE.miSeat;
+    actualizarArmas();
+    actualizarHUD();
+    centrarCamara(true);
+  }
+  cerrarOnline();
+  toast(ONLINE.esMiTurno ? 'Tu turno' : 'Turno de ' + nombreEquipo(ONLINE.turno), 1300);
+}
+
+function recibirFin(d) {
+  if (!d || d.id !== ONLINE.id) return;
+  if (d.snapshot) aplicarSnapshot(d.snapshot);
+  G.estado = 'fin';
+  G.online = true;
+  ONLINE.esMiTurno = false;
+  ONLINE.esperando = true;
+  const t = q('tactil');
+  if (t) t.classList.add('hidden');
+  const el = q('finTitulo'), txt = q('finTexto');
+  const ganador = d.ganador;
+  if (ganador != null && ganador === ONLINE.miSeat) {
+    el.textContent = 'GANASTE';
+    el.style.color = '#f2c14e';
+    txt.textContent = 'Quedaste en pie.';
+  } else if (ganador != null && ONLINE.jugadores[ganador]) {
+    el.textContent = 'GANÓ ' + ONLINE.jugadores[ganador].nombre.toUpperCase();
+    el.style.color = '#f2c14e';
+    txt.textContent = d.motivo === 'abandono' ? 'El rival abandonó la partida.' : 'Quedó un solo gusano en pie.';
+  } else {
+    el.textContent = 'TERMINÓ LA PARTIDA';
+    el.style.color = '#ddd';
+    txt.textContent = d.motivo === 'abandono' ? (d.abandono ? d.abandono + ' abandonó.' : 'Alguien abandonó.') : 'No quedó nadie en pie.';
+  }
+  const otra = q('btnOtra'), rev = q('btnRevancha'), salir = q('btnSalirOnline');
+  if (otra) otra.classList.add('hidden');
+  if (rev) { rev.classList.remove('hidden'); rev.disabled = false; rev.textContent = 'REVANCHA'; }
+  if (salir) salir.classList.remove('hidden');
+  q('fin').classList.remove('hidden');
+}
+
+function volverASalaOnline() {
+  const id = ONLINE.id;
+  G.estado = 'menu';
+  G.activo = null;
+  G.fase = 'mover';
+  q('fin').classList.add('hidden');
+  q('hud').classList.add('hidden');
+  q('tactil').classList.add('hidden');
+  limpiarOnlineJuego();
+  ONLINE.sala = null;
+  q('online').classList.remove('hidden');
+  if (id) verSala(id);
+  else abrirOnline();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -2640,6 +3572,17 @@ window.WS = {
   tecla: (k, v) => { teclas[k] = v; },
   disparar: () => alPresionarFuego(),
   soltar: () => alSoltarFuego(),
+  elegir: (i) => seleccionarArma(i),
+  recoger: () => { if (G.activo) recogerCaja(G.activo); },
+  cajas: () => G.cajas,
+  online: ONLINE,
+  abrirOnline,
+  verSala,
+  recibirTurno,
+  recibirFin,
+  iniciarPartidaOnline,
+  capturarSnapshot,
+  aplicarSnapshot,
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -2649,5 +3592,11 @@ prepararTactil();
 construirMenu();
 ajustarLienzo();
 cargarSonidos();
+// Enlace directo a una sala (/app?juegos=gusanos&mesa=ID): la abre sola. El iframe
+// arranca en el menú y a los pocos milisegundos ya tiene el socket del chat.
+try {
+  const mesa = new URLSearchParams(location.search).get('mesa');
+  if (mesa && /^[a-f0-9]{6,20}$/.test(mesa)) setTimeout(() => abrirOnline(mesa), 300);
+} catch { /* sin query */ }
 requestAnimationFrame(bucle);
 })();

@@ -10506,7 +10506,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
     if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
     if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
-    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable, gsJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
@@ -10627,8 +10627,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
-    // Gusanos es local (hot-seat): no tiene partidas en el servidor, asi que no lleva evento ni mesas
-    { id: 'gusanos', nombre: 'Gusanos', sub: 'Artillería por turnos, 2 a 5', local: true, tapa: () => '/puente/tapas/gusanos.jpg?v=1', fondo: '#0b1626' },
+    { id: 'gusanos', nombre: 'Gusanos', sub: 'Shopper, 2 a 5 jugadores', evento: 'gusanos:inicio', tapa: () => '/puente/tapas/gusanos.jpg?v=1', fondo: '#0b1626', mesa: 'gsJuego' },
   ];
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
@@ -10700,7 +10699,7 @@ document.addEventListener('pointerdown', (ev) => {
     lista.sort((x, y) => (y.a.paraVos ? 1 : 0) - (x.a.paraVos ? 1 : 0));
     box.appendChild(el('div', 'jg-bib-titulo', 'Mesas esperando rival'));
     if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
-    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null };
+    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, gusanos: (id) => { stack = []; go('gsJuego', id); } };
     const l = el('div', 'jg-seguir'); box.appendChild(l);
     for (const { j, a } of lista.slice(0, 8)) {
       const quien = a.creador || { nombre: '?' };
@@ -10739,15 +10738,17 @@ document.addEventListener('pointerdown', (ev) => {
   }
   // ── Proyecto Gusanos ──
   // El juego terminado, en un iframe del mismo origen: su CSS y su JS no se mezclan con el chat.
-  // Es hot-seat (2 a 5 jugadores en el mismo dispositivo, por turnos). Los controles táctiles del
-  // juego se activan solos en el celular (pointer: coarse). Los eventos de adentro no llegan al
-  // chat, así que se le avisa al tiempo de uso (uso.js) para que cuente mientras se juega.
-  function gusanos() {
+  // Se juega local (2 a 5 en el mismo dispositivo, por turnos) u online, en salas de 2 a 5 que
+  // administra gusanos.js. Los controles táctiles del juego se activan solos en el celular
+  // (pointer: coarse). Los eventos de adentro no llegan al chat, así que se le avisa al tiempo de
+  // uso (uso.js) para que cuente mientras se juega.
+  function gsJuego(mesa) { gusanos(mesa); }
+  function gusanos(mesa) {
     page.appendChild(head('Gusanos', botonEnlace('/app?juegos=gusanos', 'Gusanos · __PUENTE_APP__')));
     const b = el('div', 'jg-gusanos');
     const marco = el('div', 'jg-gusanos-marco');
     const ifr = el('iframe', 'jg-gusanos-iframe');
-    ifr.src = '/puente/gusanos/index.html?v=1';
+    ifr.src = '/puente/gusanos/index.html?v=2' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
     ifr.title = 'Proyecto Gusanos';
     ifr.allow = 'autoplay; fullscreen';
     ifr.setAttribute('allowfullscreen', '');
@@ -13198,16 +13199,16 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   }
   let badgeT = null;
   function refreshBadge() {
-    // como mucho una vez cada 2 segundos: cada vez son 5 pedidos y el chat corta si llegan mas de 60 en 10 segundos
+    // como mucho una vez cada 2 segundos: cada vez son 6 pedidos y el chat corta si llegan mas de 60 en 10 segundos
     // (jugando rapido, cada jugada pedia de nuevo y aparecia el cartel de demasiados pedidos)
     if (badgeT) return;
     badgeT = setTimeout(async () => {
       badgeT = null;
-      const [d, f, aj, gs, po] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio')]);
+      const [d, f, aj, gs, po, gu] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio'), emit('gusanos:inicio')]);
       // (sin contar la partida que esta abierta en la pantalla: ahi ya se esta jugando)
       const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
       const cuenta = (r) => (r.error || !r.mias ? 0 : r.mias.filter(m => m.teToca && String(m.id) !== abierta).length);
-      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po);
+      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po) + cuenta(gu);
       setBadge(n);
     }, 2000);
   }
@@ -13255,6 +13256,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     });
     a.socket.on('pool:apunta', (m) => { if (page && window.puentePool) window.puentePool.apunta(m); });
     a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
+    a.socket.on('gusanos:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'gusanos')) show('inicio', t[1]); });
     a.socket.on('connect', () => {
       if (page && fbMesa) emit('funball:ver', { id: fbMesa.id }).then(d => d.partida && fbRender(d.partida, true));
       else if (page && ajM) emit('ajedrez:ver', { id: ajM.id }).then(d => d.partida && ajRender(d.partida));
@@ -13276,7 +13278,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },
       globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.', v: '' },
       pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '?v=3' },
-      gusanos: { nombre: 'Gusanos', desc: 'Artillería por turnos, de 2 a 5 jugadores en el mismo dispositivo. Elegí el mapa y jugá.', v: '?v=1' },
+      gusanos: { nombre: 'Gusanos', desc: 'Shopper: artillería por turnos, de 2 a 5 jugadores. Jugá local u online con gente del chat.', v: '?v=1' },
     };
     const escH = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const tarjetas = () => {
@@ -13316,9 +13318,11 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       const ok = u.origin === location.origin && /^\/app/.test(u.pathname);
       // La biblioteca (/app?juegos) o la sala de un juego (/app?juegos=truco)
       if (ok && u.searchParams.has('juegos')) {
-        const j = u.searchParams.get('juegos');
+        const j = u.searchParams.get('juegos'), mesa = u.searchParams.get('mesa');
         if (j && !JUEGOS.some(x => x.id === j)) return;
-        e.preventDefault(); e.stopPropagation(); stack = []; go('inicio', j || undefined); return;
+        e.preventDefault(); e.stopPropagation(); stack = [];
+        if (j === 'gusanos' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { go('gsJuego', mesa); return; }
+        go('inicio', j || undefined); return;
       }
       const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball'), aid = ok && u.searchParams.get('ajedrez');
       if (fid && /^[a-f0-9]{6,20}$/.test(fid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('fbMesa', fid); return; }
@@ -13327,14 +13331,19 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (gid && /^[a-f0-9]{6,20}$/.test(gid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('mrMesa', gid); return; }
       const pid = ok && u.searchParams.get('pool');
       if (pid && /^[a-f0-9]{6,20}$/.test(pid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('plMesa', pid); return; }
+      const gsid = ok && u.searchParams.get('gusanos');
+      if (gsid && /^[a-f0-9]{6,20}$/.test(gsid)) { e.preventDefault(); e.stopPropagation(); stack = []; go('gsJuego', gsid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; go('mesa', id);
     }, true);
     const sp = new URLSearchParams(location.search).get('truco');
     if (sp && /^[a-f0-9]{6,20}$/.test(sp)) setTimeout(() => { stack = []; go('mesa', sp); }, 1500);
-    const jq = new URLSearchParams(location.search), jp = jq.get('juegos');
-    if (jq.has('juegos') && (!jp || JUEGOS.some(x => x.id === jp))) setTimeout(() => { stack = []; go('inicio', jp || undefined); }, 1500);
+    const jq = new URLSearchParams(location.search), jp = jq.get('juegos'), jm = jq.get('mesa');
+    if (jq.has('juegos') && (!jp || JUEGOS.some(x => x.id === jp))) {
+      if (jp === 'gusanos' && jm && /^[a-f0-9]{6,20}$/.test(jm)) setTimeout(() => { stack = []; go('gsJuego', jm); }, 1500);
+      else setTimeout(() => { stack = []; go('inicio', jp || undefined); }, 1500);
+    }
     const fp = new URLSearchParams(location.search).get('funball');
     if (fp && /^[a-f0-9]{6,20}$/.test(fp)) setTimeout(() => { stack = []; go('fbMesa', fp); }, 1500);
     const ap = new URLSearchParams(location.search).get('ajedrez');
@@ -13343,6 +13352,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (gp && /^[a-f0-9]{6,20}$/.test(gp)) setTimeout(() => { stack = [['inicio']]; go('mrMesa', gp); }, 1500);
     const pp = new URLSearchParams(location.search).get('pool');
     if (pp && /^[a-f0-9]{6,20}$/.test(pp)) setTimeout(() => { stack = [['inicio']]; go('plMesa', pp); }, 1500);
+    const gsp = new URLSearchParams(location.search).get('gusanos');
+    if (gsp && /^[a-f0-9]{6,20}$/.test(gsp)) setTimeout(() => { stack = []; go('gsJuego', gsp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();
