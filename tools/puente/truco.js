@@ -713,19 +713,28 @@ function push(g, big) {
   if (big) changed();
 }
 
+// "Te toca", al celular: 30 segundos despues, si todavia no jugo y no tiene la app delante (asi no llega
+// mientras juega en la PC y mira otra ventana un momento). Prioridad alta, para que Android no lo demore;
+// con reloj, si no llega en 2 minutos ya no sirve (sin reloj, un dia)
+const esperando = new Map(); // "id:user" -> el aviso que espera
 function notifyTurn(g) {
   if (!webpush) return;
   const uid = g.jugadores[actor(g)];
   if (uid === BOT) return;
-  for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === uid && s.hasFocus !== false) return; // la tiene abierta
-  const key = g.id + ':' + uid;
-  if (Date.now() - (pushed.get(key) || 0) < 3 * 60e3) return;
-  pushed.set(key, Date.now());
-  const rival = nameOf(g.jugadores[other(actor(g))]).nombre;
-  const payload = JSON.stringify({ title: 'Truco', body: `Te toca contra ${rival}`, url: `/app?truco=${g.id}`, tag: 'truco-' + g.id, __puente: 1 });
-  for (const sub of db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(uid)) {
-    webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: g.libre ? 24 * 3600 : 600 }).catch(() => {});
-  }
+  const key = g.id + ':' + uid, movido = g.movido;
+  if (esperando.has(key)) return;
+  esperando.set(key, setTimeout(() => {
+    esperando.delete(key);
+    if (games.get(g.id) !== g || g.estado !== 'jugando' || g.movido !== movido || g.jugadores[actor(g)] !== uid) return;
+    for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === uid && s.hasFocus !== false) return; // la tiene abierta
+    if (Date.now() - (pushed.get(key) || 0) < 3 * 60e3) return;
+    pushed.set(key, Date.now());
+    const rival = nameOf(g.jugadores[other(actor(g))]).nombre;
+    const payload = JSON.stringify({ title: 'Truco', body: `Te toca contra ${rival}`, url: `/app?truco=${g.id}`, tag: 'truco-' + g.id, __puente: 1 });
+    for (const sub of db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(uid)) {
+      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: g.libre ? 24 * 3600 : 120, urgency: 'high' }).catch(() => {});
+    }
+  }, 30e3));
 }
 
 // La sala cambio (mesas nuevas, partidas que empiezan o terminan): que se actualice
