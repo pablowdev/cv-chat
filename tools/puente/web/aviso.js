@@ -5451,7 +5451,10 @@ document.addEventListener('pointerdown', (ev) => {
       const box = el('div', 'puente-vista-chat');
       box.setAttribute('role', 'link'); box.tabIndex = 0; box.title = 'Abrir en CV Chat';
       box.append(el('div', 'puente-vista-cab', '#' + r.canal));
-      for (const m of d.vista) {
+      // En la Guia del club, el enlace a un mensaje muestra solo ese mensaje, entero
+      const enGuia = !!cont.closest('#puente-guia') && d.vista.some(m => m.marcado);
+      if (enGuia) box.classList.add('puente-vista-solo');
+      for (const m of (enGuia ? d.vista.filter(m => m.marcado) : d.vista)) {
         const fila = el('div', 'puente-vista-fila' + (m.marcado ? ' marcado' : ''));
         if (m.foto) { const i = el('img', 'puente-vista-foto'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; fila.append(i); }
         else fila.append(el('span', 'puente-vista-foto', (m.autor || '?').trim().charAt(0).toUpperCase()));
