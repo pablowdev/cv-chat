@@ -581,7 +581,7 @@
     sec('Los grupos', 'Mientras la mesa está abierta podés pegarle a cualquier bola menos a la 8. El primero que mete una bola sin falta se queda con ese grupo (lisas o rayadas).');
     sec('El turno', 'Si metés una de tus bolas, seguís tirando. Si no metés ninguna, le toca al otro.');
     sec('Las faltas', 'Es falta si la blanca entra en una tronera, si no le pegás a ninguna bola, si le pegás primero a una del rival o a la 8 antes de tiempo. Con una falta le toca al otro, con bola en mano en cualquier lugar de la mesa.');
-    sec('La 8', 'Cuando metiste todas las tuyas, vas por la 8. Entra en cualquier tronera: no hace falta elegir ni avisar en cuál. Si la metés sin falta, ganás. Si la metés antes de tiempo o con falta, perdés.');
+    sec('La 8', 'Cuando metiste todas las tuyas, vas por la 8. Tiene que entrar en la misma tronera donde entró la última de las tuyas (la que se marca en la mesa). Si la metés ahí sin falta, ganás. Si la metés en otra tronera, antes de tiempo o con falta, perdés.');
   }
 
   // ── La mesa ──
@@ -771,7 +771,7 @@
     }
     // como en el original: "Shoot!", "Shoot Again!" si metió una suya, la bola en mano despues de una falta,
     // y mientras juega el otro, "esperando al rival" (lo que paso queda abajo, en el registro)
-    if (s.teToca && !s.enMano && vasPorLa8(s)) return '¡Tirá por la 8! Va en cualquier tronera.';
+    if (s.teToca && !s.enMano && vasPorLa8(s)) return s.la8 && s.la8.yo != null ? '¡Tirá por la 8! Va en la tronera marcada.' : '¡Tirá por la 8!';
     if (s.teToca) return s.enMano ? 'Podés mover la blanca antes de tirar.' : s.ultima && s.ultima.mio ? '¡Tirá de nuevo!' : '¡Tirá!';
     return `Esperando a ${s.rival ? s.rival.nombre : 'el rival'}…`;
   }
@@ -846,6 +846,13 @@
     const c = M.ctx, s = M.s;
     dibujarMesa(c);
     if (!s) return;
+    // la tronera donde tiene que ir la 8 del que esta tirando (si ya va por ella): un aro amarillo que late
+    const t8 = s.estado === 'jugando' && s.la8 ? (s.teToca ? s.la8.yo : s.la8.rival) : null;
+    if (t8 != null && POCKETS[t8]) {
+      const p = POCKETS[t8], a = 0.55 + 0.45 * Math.sin(performance.now() / 260);
+      c.save(); c.strokeStyle = 'rgba(240,220,20,' + a.toFixed(2) + ')'; c.lineWidth = 3;
+      c.beginPath(); c.arc(p.x, p.y, POCKET_R + 6, 0, Math.PI * 2); c.stroke(); c.restore();
+    }
     const cue = blanca();
     const mio = puedoTirar();
     // bola en mano: la zona de la cabecera y un aro alrededor de la blanca

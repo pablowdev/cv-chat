@@ -89,13 +89,20 @@ function rack() {
 function nueva(empieza) {
   return {
     bolas: rack(), turno: empieza, grupos: [null, null], salida: true,
-    enMano: true, cabecera: true, bandeja: [], ganador: null, motivo: null, texto: '',
+    enMano: true, cabecera: true, bandeja: [], troneras: {}, ganador: null, motivo: null, texto: '',
   };
 }
 
 const enGrupo = (n, g) => (g === 'lisas' ? n >= 1 && n <= 7 : g === 'rayadas' ? n >= 9 && n <= 15 : false);
 const limpio = (S, g) => !S.bolas.some(b => b.on && b.n !== 0 && b.n !== 8 && enGrupo(b.n, g));
 const blanca = (S) => S.bolas.find(b => b.n === 0);
+// La 8 va en la tronera donde entro la ultima bola del grupo (la meta quien la meta). null: en cualquiera
+// (las partidas que ya estaban en juego cuando se agrego la regla no sabian donde entro cada una)
+function troneraLa8(S, g) {
+  if (!g || !S.troneras) return null;
+  for (let i = S.bandeja.length - 1; i >= 0; i--) if (enGrupo(S.bandeja[i], g)) { const t = S.troneras[S.bandeja[i]]; return t == null ? null : t; }
+  return null;
+}
 
 // Donde se puede poner la blanca (bola en mano; en la salida, solo detras de la cabecera)
 function sePuedePoner(S, x, y) {
@@ -122,7 +129,7 @@ function simular(bolas, tiro, grabar) {
   const v0 = Math.pow(Math.max(0.03, Math.min(1, tiro.fuerza)), CURVA) * MAX_POWER;
   cue.vx = dir.x * v0; cue.vy = dir.y * v0; cue.rueda = v0 * RODAR; // patina hasta 5/7 y ahi rueda
   const ef = { x: tiro.efecto.x, y: tiro.efecto.y, bola: false, banda: false };
-  const out = { primera: null, metidas: [], blanca: false, bandas: 0, frames: [], sonidos: [] };
+  const out = { primera: null, metidas: [], donde: {}, blanca: false, bandas: 0, frames: [], sonidos: [] };
   const sonido = (tipo, f) => { if (grabar && out.sonidos.length < 400) out.sonidos.push([out.frames.length, tipo, Math.round(Math.min(1, f) * 100) / 100]); };
   const foto = () => { const f = []; for (const b of B) { f.push(b.on ? Math.round(b.x * 10) / 10 : -1, b.on ? Math.round(b.y * 10) / 10 : -1); } out.frames.push(f); };
   if (grabar) { foto(); sonido('taco', tiro.fuerza); }
@@ -213,7 +220,7 @@ function simular(bolas, tiro, grabar) {
           const h = HUECO[pi], sobre = h && (b.x - h.x) ** 2 + (b.y - h.y) ** 2 < ESQ_R * ESQ_R;
           if (enBoca || sobre || (b.x - p.x) ** 2 + (b.y - p.y) ** 2 < cae * cae) {
             b.on = false; b.vx = 0; b.vy = 0;
-            if (b.n === 0) out.blanca = true; else out.metidas.push(b.n);
+            if (b.n === 0) out.blanca = true; else { out.metidas.push(b.n); out.donde[b.n] = pi; }
             sonido('tronera', 1);
             break;
           }
@@ -240,6 +247,7 @@ function aplicar(S, r) {
 
   S.bolas = r.bolas;
   for (const n of r.metidas) S.bandeja.push(n);
+  if (S.troneras) for (const n of r.metidas) if (r.donde && r.donde[n] != null) S.troneras[n] = r.donde[n];
 
   // La 8
   if (r.metidas.includes(8)) {
@@ -249,10 +257,12 @@ function aplicar(S, r) {
       S.texto = 'Entró la 8 en la salida: se rearma el triángulo y rompe de nuevo.';
       return { rearma: true };
     }
-    const bien = grupo && limpio(S, grupo) && !falta;
+    const meta = grupo && limpio(S, grupo) ? troneraLa8(S, grupo) : null;
+    const otra = meta != null && r.donde && r.donde[8] != null && r.donde[8] !== meta;
+    const bien = grupo && limpio(S, grupo) && !falta && !otra;
     S.ganador = bien ? yo : otro;
-    S.motivo = bien ? 'la8' : 'la8-antes';
-    S.texto = bien ? 'Metió la 8: ganó la partida.' : (falta ? `Metió la 8 con falta (${razon}): perdió la partida.` : 'Metió la 8 antes de tiempo: perdió la partida.');
+    S.motivo = bien ? 'la8' : otra && !falta ? 'la8-tronera' : 'la8-antes';
+    S.texto = bien ? 'Metió la 8: ganó la partida.' : (falta ? `Metió la 8 con falta (${razon}): perdió la partida.` : otra ? 'Metió la 8 en otra tronera: perdió la partida.' : 'Metió la 8 antes de tiempo: perdió la partida.');
     return { fin: true };
   }
 
@@ -305,12 +315,14 @@ function tirar(S, t) {
 const ERROR = { 1: 0.05, 2: 0.02, 3: 0.006 };
 function compu(S, nivel, rnd = Math.random) {
   const g = S.grupos[S.turno];
+  const meta8 = g && limpio(S, g) ? troneraLa8(S, g) : null;
+  const bocas = (o) => (o.n === 8 && meta8 != null ? [BOCAS[meta8]] : BOCAS);
   const objetivos = S.bolas.filter(b => b.on && b.n !== 0 && (g ? (limpio(S, g) ? b.n === 8 : enGrupo(b.n, g)) : b.n !== 8));
   const c = blanca(S);
   // Con bola en mano: prueba poner la blanca detras de cada bola, en linea con una tronera
   const lugares = [{ x: c.x, y: c.y }];
   if (S.enMano) {
-    for (const o of objetivos.slice(0, 6)) for (const p of BOCAS) {
+    for (const o of objetivos.slice(0, 6)) for (const p of bocas(o)) {
       const ux = o.x - p.x, uy = o.y - p.y, u = Math.hypot(ux, uy) || 1;
       const x = o.x + ux / u * 120, y = o.y + uy / u * 120;
       if (sePuedePoner(S, x, y)) lugares.push({ x, y });
@@ -318,7 +330,7 @@ function compu(S, nivel, rnd = Math.random) {
   }
   const tiros = [];
   for (const L of lugares.slice(0, 8)) {
-    for (const o of objetivos) for (const p of BOCAS) {
+    for (const o of objetivos) for (const p of bocas(o)) {
       // la "bola fantasma": donde tiene que estar la blanca al pegarle para mandarla a la tronera
       const ux = p.x - o.x, uy = p.y - o.y, u = Math.hypot(ux, uy) || 1;
       const gx = o.x - ux / u * D, gy = o.y - uy / u * D; // (D: dos radios)
@@ -349,9 +361,13 @@ function compu(S, nivel, rnd = Math.random) {
     // ningun tiro bueno: le pega derecho a la bola propia mas cercana
     for (const o of objetivos.slice(0, 8)) for (const L of lugares.slice(0, 3)) probar(L, Math.atan2(o.y - L.y, o.x - L.x), 0.45);
   }
+  if (!mejor || mejor.p < 0) {
+    // tampoco: un toque suave (de costado o de frente) que no regale la partida
+    for (const o of objetivos.slice(0, 8)) for (const L of lugares.slice(0, 2)) for (const d of [0, -0.25, 0.25]) for (const f of [0.15, 0.25]) probar(L, Math.atan2(o.y - L.y, o.x - L.x) + d, f);
+  }
   if (!mejor) mejor = { L: { x: c.x, y: c.y }, ang: rnd() * Math.PI * 2, fuerza: 0.7 };
   const err = ERROR[nivel] || ERROR[2];
   return { ang: mejor.ang + (rnd() * 2 - 1) * err, fuerza: mejor.fuerza, efecto: { x: 0, y: 0 }, blanca: S.enMano ? { x: mejor.L.x, y: mejor.L.y } : null };
 }
 
-module.exports = { W, H, TL, TR, TT, TB, R, POCKET_R, POCKETS, HEAD_X, BX, BY, BOCA, BOCA_M, MEDIO_AFUERA, XMIN, XMAX, YMIN, YMAX, PUNTAS, QUIJADAS, nueva, tirar, compu, sePuedePoner, enGrupo, limpio, simular, aplicar };
+module.exports = { W, H, TL, TR, TT, TB, R, POCKET_R, POCKETS, HEAD_X, BX, BY, BOCA, BOCA_M, MEDIO_AFUERA, XMIN, XMAX, YMIN, YMAX, PUNTAS, QUIJADAS, nueva, tirar, compu, sePuedePoner, enGrupo, limpio, simular, aplicar, troneraLa8 };

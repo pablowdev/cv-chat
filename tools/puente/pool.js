@@ -287,6 +287,9 @@ function view(g, me) {
     out.bandeja = S.bandeja;
     out.texto = S.texto;
     out.enMano = S.enMano; out.cabecera = S.cabecera; out.salida = S.salida;
+    // la tronera de la 8 de cada uno (cuando ya metio todas las suyas; null: todavia no, o en cualquiera)
+    const la8 = (k) => (S.grupos[k] && M.limpio(S, S.grupos[k]) ? M.troneraLa8(S, S.grupos[k]) : null);
+    out.la8 = { yo: la8(pov), rival: la8(o) };
     out.ultima = g.ultima ? { ...g.ultima, mio: g.ultima.quien === pov } : null;
     if (g.estado === 'jugando') { out.teToca = i >= 0 && S.turno === i; out.turno = S.turno === pov ? 'yo' : 'rival'; }
   }
