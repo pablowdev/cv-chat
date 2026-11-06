@@ -18,6 +18,12 @@ const ROZAMIENTO = 62914 / 65536;      // 0.96
 const VEL_MAX = 32;                    // velocidad máxima de proyectiles
 const VEL_MAX_GUSANO = 32;             // tope de seguridad; WA no limita la soga a 16
 const CAMINAR = 1.15;
+// Desplazamiento por frame del ciclo de caminata de WA (15 frames, 13 con
+// movimiento, 3 ciclos/s). Se escala para conservar la velocidad media actual.
+const PATRON_CAMINAR = [0.5, 0, 0.5, 0.5, 0.5, 0.5, 1.5, 1.75, 1.5, 1.25, 0.25, 0, 0.25, 0.25, 0.25];
+const PASO_CAMINAR = 0.9; // 15 frames / (0.9 * 50 Hz) ≈ 3 ciclos/s
+const SUMA_PATRON = PATRON_CAMINAR.reduce((a, b) => a + b, 0);
+const ESCALA_PATRON = CAMINAR / (SUMA_PATRON * PASO_CAMINAR / 15);
 const SALTO = -4.65;
 const LARGO_SOGA_MAX = 464;            // 5 estrellas: 462–465 px
 const LARGO_SOGA_MIN = 14;
@@ -290,6 +296,8 @@ class Gusano {
     this.saltoApretado = false;
     this.saltoT = 0;
     this.caminando = false;
+    this.animCaminar = 'wwalk';
+    this.dirCaminar = 0;
     this.voltereta = 0;
     this.volteretaDur = 0.55;
     this.soga = { estado: 'none', ax: 0, ay: 0, hx: 0, hy: 0, dx: 0, dy: -1, recorrido: 0, len: 0, pivotes: [], bloqueada: false };
@@ -407,19 +415,48 @@ function moverY(w, dy, modo) {
   }
   return true;
 }
+// Altura de la superficie que hay debajo del gusano en esa columna.
+function alturaPiso(x, y) {
+  for (let d = 0; d <= 24; d++) if (G.terreno.solido(x, y + d)) return y + d;
+  return null;
+}
+// WA elige cuerpo normal, cuesta arriba o cuesta abajo según el relieve.
+function animCaminar(w, dir) {
+  const y0 = alturaPiso(w.x, w.y);
+  const y1 = alturaPiso(w.x + dir * 6, w.y);
+  if (y0 == null || y1 == null) return 'wwalk';
+  // wwalkd inclina la cola hacia abajo (cuesta arriba); wwalku la levanta
+  // (cuesta abajo). Los sprites base miran a la izquierda y se espejan después.
+  if (y1 < y0 - 1) return 'wwalkd';
+  if (y1 > y0 + 1) return 'wwalku';
+  return 'wwalk';
+}
 function movimientoNormal(w, control) {
   let dir = 0;
   if (control) dir = (teclas.izq ? -1 : 0) + (teclas.der ? 1 : 0);
+  const caminaba = w.caminando;
+  const dirAnterior = w.dirCaminar;
   w.caminando = false;
   if (dir) {
-    mirarHacia(w, dir);
-    const x0 = w.x;
-    moverX(w, dir * CAMINAR, w.enPiso ? 'caminar' : 'aire');
-    if (Math.abs(w.x - x0) > 0.01) {
+    // Shift + flecha: caminar de espaldas sin girar (moonwalk de WA).
+    const moonwalk = !!(control && teclas.shift && dir === -w.mirando);
+    if (!moonwalk) mirarHacia(w, dir);
+    if (!caminaba || dir !== dirAnterior) w.paso = 0;
+    w.dirCaminar = dir;
+    const enPisoAntes = w.enPiso;
+    const frame = ((Math.floor(w.paso) % 15) + 15) % 15;
+    const paso = enPisoAntes ? PATRON_CAMINAR[frame] * ESCALA_PATRON : CAMINAR;
+    moverX(w, dir * paso, enPisoAntes ? 'caminar' : 'aire');
+    if (enPisoAntes && w.enPiso) {
       w.caminando = true;
-      w.paso += 0.36;
-      if (w.enPiso && Math.random() < 0.05) sonido('walk-expand', 0.035, azar(1.4, 1.7));
+      w.animCaminar = animCaminar(w, dir);
+      w.paso += PASO_CAMINAR;
+      if (Math.random() < 0.05) sonido('walk-expand', 0.035, azar(1.4, 1.7));
     }
+  } else {
+    if (caminaba) w.paso = 0;
+    w.dirCaminar = 0;
+    w.animCaminar = 'wwalk';
   }
 
   if (w.enPiso) {
@@ -785,7 +822,6 @@ function fisicaSoga(w, control) {
       if (tx * dir < 0) { tx = -tx; ty = -ty; }
       w.vx += tx * HAMACAR;
       w.vy += ty * HAMACAR;
-      w.mirando = dir;
     }
   }
 
@@ -1586,6 +1622,8 @@ const MAPA_TECLAS = {
   Enter: 'salto',
   Backspace: 'voltereta',
   Space: 'fuego',
+  ShiftLeft: 'shift',
+  ShiftRight: 'shift',
 };
 function alternarArsenal(forzar) {
   G.panelArmas = forzar == null ? !G.panelArmas : !!forzar;
@@ -2181,7 +2219,8 @@ function dibujarGusanoSheet(w, anim, frame, alpha) {
   ctx.save();
   ctx.globalAlpha = alpha == null ? 1 : alpha;
   ctx.translate(w.x, w.y);
-  if (w.mirando > 0) ctx.scale(-1, 1);
+  // Las 64 poses de wbatrope ya cubren los 360°: espejarlas las rompe.
+  if (anim !== 'wbatrope' && w.mirando > 0) ctx.scale(-1, 1);
   ctx.drawImage(im, 0, f * meta.h, meta.w, meta.h, -30, -35, 60, 60);
   ctx.restore();
 }
@@ -2258,13 +2297,14 @@ function dibujarGusanos() {
       anim = w.vy < -0.3 ? 'wjumpu' : 'wfall';
       frame = Math.floor(performance.now() / 80);
     } else if (w.caminando) {
-      anim = 'wwalk';
+      anim = w.animCaminar || 'wwalk';
       frame = frameCaminar(w);
     }
 
     dibujarSoga(w);
     dibujarGusanoSheet(w, anim, frame);
-    if (!w.muerto && w === G.activo && G.estado === 'jugando' &&
+    if (!w.muerto && w === G.activo && G.estado === 'jugando' && w.enPiso &&
+        !w.caminando && !w.voltereta &&
         w.soga.estado !== 'atada' && w.soga.estado !== 'disparando') {
       dibujarGusanoSheet(w, 'wbataim', frameApuntado(w), 0.95);
     }
@@ -3531,7 +3571,7 @@ function capturarSnapshot() {
       x: w.x, y: w.y, vx: w.vx, vy: w.vy, hp: w.hp, hpMax: w.hpMax,
       muerto: w.muerto, causa: w.causa, muerteT: w.muerteT, hundiendo: w.hundiendo,
       enPiso: w.enPiso, mirando: w.mirando, ultimaDir: w.ultimaDir, aim: w.aim, paso: w.paso,
-      caminando: w.caminando, voltereta: w.voltereta,
+      caminando: w.caminando, animCaminar: w.animCaminar, dirCaminar: w.dirCaminar, voltereta: w.voltereta,
       soga: {
         estado: w.soga.estado, ax: w.soga.ax, ay: w.soga.ay, hx: w.soga.hx, hy: w.soga.hy,
         dx: w.soga.dx, dy: w.soga.dy, recorrido: w.soga.recorrido, len: w.soga.len,
@@ -3724,6 +3764,7 @@ window.addEventListener('keydown', e => {
 window.addEventListener('blur', () => {
   G.fuegoRaton = false;
   G.fuegoPrev = false;
+  teclas.shift = false;
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && G.estado === 'jugando') pausar();
