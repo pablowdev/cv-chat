@@ -18,6 +18,9 @@ const ROZAMIENTO = 62914 / 65536;      // 0.96
 const VEL_MAX = 32;                    // velocidad máxima de proyectiles
 const VEL_MAX_GUSANO = 32;             // tope de seguridad; WA no limita la soga a 16
 const CAMINAR = 1.15;
+// La mira de WA no sigue el mouse: está a una distancia corta fija y gira
+// con las flechas arriba/abajo.
+const DIST_MIRA = 74;
 // Desplazamiento por frame del ciclo de caminata de WA (15 frames, 13 con
 // movimiento, 3 ciclos/s). Se escala para conservar la velocidad media actual.
 const PATRON_CAMINAR = [0.5, 0, 0.5, 0.5, 0.5, 0.5, 1.5, 1.75, 1.5, 1.25, 0.25, 0, 0.25, 0.25, 0.25];
@@ -148,7 +151,7 @@ function sheetGusano(anim, key) {
 // Sonido (efectos de la partida)
 // ─────────────────────────────────────────────────────────────────────
 const SFX = {};
-const SFX_NOMBRES = ['soga-disparo', 'soga-impacto', 'splash', 'gusano-seleccion', 'explosion1',
+const SFX_NOMBRES = ['turno', 'soga-disparo', 'soga-impacto', 'splash', 'gusano-seleccion', 'explosion1',
   'explosion2', 'explosion3', 'fuse', 'cratepop', 'collect', 'throwrelease',
   'gusano-caida', 'walk-compress', 'walk-expand', 'crateimpact', 'cursorselect',
   'shotgun', 'shotgunreload', 'minigun', 'bow', 'bowimpact',
@@ -843,8 +846,6 @@ function fisicaSoga(w, control) {
       if (Math.abs(w.vx) < 0.05) w.vx = 0;
     }
   }
-  w.vx *= 0.999;
-  w.vy *= 0.999;
   if (w.y > MUNDO.agua + 2) ahogar(w);
 }
 
@@ -1451,6 +1452,7 @@ function iniciarTurno(w, onlineTurno) {
   G.cargando = false;
   G.carga = 0;
   G.armaCargando = null;
+  G.cargaOrigen = null;
   G.armaSel = 0;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
@@ -1465,8 +1467,15 @@ function iniciarTurno(w, onlineTurno) {
   actualizarArmas();
   actualizarHUD();
   if (!onlineTurno) toast('Turno de ' + nombreEquipo(w.equipo), 1300);
-  sonido('gusano-seleccion', 0.5);
+  avisarTurno();
   centrarCamara(true);
+}
+// En WA el inicio de turno se anuncia con el sonido de selección y el resorte
+// del gusano. En online suena sólo cuando el turno es del jugador local.
+function avisarTurno() {
+  if (G.online && !ONLINE.esMiTurno) return;
+  sonido('gusano-seleccion', 0.5);
+  sonido('turno', 0.45);
 }
 function terminarTurno() {
   if (G.estado !== 'jugando') return;
@@ -1570,12 +1579,13 @@ function seleccionarArma(i) {
 // ─────────────────────────────────────────────────────────────────────
 // Disparo
 // ─────────────────────────────────────────────────────────────────────
-function alPresionarFuego() {
+function alPresionarFuego(origen) {
   if (G.estado !== 'jugando' || G.fase !== 'mover') return;
   const w = G.activo;
   if (!w || w.muerto) return;
   const item = G.armas[G.armaSel];
   if (!item) return;
+  if (G.cargando) return;
   if (item.id === 'soga') { toggleSoga(w); return; }
   if (G.cba && !G.cbaHecha) {
     toast('CBA · recogé una caja antes de atacar', 1500);
@@ -1592,6 +1602,7 @@ function alPresionarFuego() {
     G.cargando = true;
     G.carga = 0;
     G.armaCargando = item.id;
+    G.cargaOrigen = origen || 'fuego';
   } else {
     ejecutarArma(item.id, 1);
   }
@@ -1601,6 +1612,7 @@ function alSoltarFuego() {
   const id = G.armaCargando;
   G.cargando = false;
   G.armaCargando = null;
+  G.cargaOrigen = null;
   if (!id) return;
   if (G.estado !== 'jugando' || G.fase !== 'mover' || !G.activo || G.activo.muerto) {
     G.carga = 0;
@@ -1681,10 +1693,13 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => {
   const k = MAPA_TECLAS[e.code];
   if (k) teclas[k] = false;
+  // Enter también suelta la carga cuando se disparó desde la soga/aire.
+  if (e.code === 'Enter' && G.cargando && G.cargaOrigen === 'salto') alSoltarFuego();
 });
 window.addEventListener('blur', soltarBotonesTactiles);
 
 cv.addEventListener('mousemove', e => {
+  if (G.tactil) return;
   const r = cv.getBoundingClientRect();
   G.raton.x = e.clientX - r.left;
   G.raton.y = e.clientY - r.top;
@@ -1692,7 +1707,7 @@ cv.addEventListener('mousemove', e => {
 });
 cv.addEventListener('mouseleave', () => { G.raton.dentro = false; });
 cv.addEventListener('mousedown', e => {
-  if (performance.now() < ignorarRatonHasta) return;
+  if (G.tactil || performance.now() < ignorarRatonHasta) return;
   if (e.button === 0) {
     e.preventDefault();
     G.fuegoRaton = true;
@@ -1715,7 +1730,6 @@ cv.addEventListener('wheel', e => {
 // ─────────────────────────────────────────────────────────────────────
 // Controles táctiles (solo se muestran en pantallas táctiles)
 // ─────────────────────────────────────────────────────────────────────
-let punteroMira = null;
 let punteroFuego = null;
 let ignorarRatonHasta = 0;
 let finTactilTimer = 0;
@@ -1732,17 +1746,11 @@ function activarTactil() {
   }
 }
 
-function ponerMiraDesde(e) {
-  const r = cv.getBoundingClientRect();
-  G.raton.x = clamp(e.clientX - r.left, 0, r.width);
-  G.raton.y = clamp(e.clientY - r.top, 0, r.height);
-  G.raton.dentro = true;
-}
-
 function cancelarCargaTactil() {
   G.cargando = false;
   G.carga = 0;
   G.armaCargando = null;
+  G.cargaOrigen = null;
 }
 
 function soltarBotonesTactiles() {
@@ -1859,30 +1867,8 @@ function prepararTactil() {
     });
   }
 
-  // Apuntar arrastrando el dedo por el mapa, sin disparar.
-  cv.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'touch') return;
-    e.preventDefault();
-    activarTactil();
-    ignorarRatonHasta = performance.now() + 700;
-    punteroMira = e.pointerId;
-    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
-    ponerMiraDesde(e);
-  });
-  cv.addEventListener('pointermove', e => {
-    if (e.pointerType !== 'touch' || punteroMira !== e.pointerId) return;
-    e.preventDefault();
-    ponerMiraDesde(e);
-  });
-  const soltarMira = e => {
-    if (punteroMira === e.pointerId) {
-      punteroMira = null;
-      ignorarRatonHasta = performance.now() + 700;
-    }
-  };
-  cv.addEventListener('pointerup', soltarMira);
-  cv.addEventListener('pointercancel', soltarMira);
-  cv.addEventListener('lostpointercapture', soltarMira);
+  // En móvil se apunta sólo con las flechas arriba/abajo. El canvas no
+  // intercepta toques para la mira: así los botones no se pisan entre sí.
 
   try {
     if (matchMedia('(pointer: coarse)').matches) activarTactil();
@@ -1891,18 +1877,6 @@ function prepararTactil() {
   window.addEventListener('touchstart', activarTactil, { passive: true, once: true });
 }
 
-function ratonMundo() {
-  const z = G.cam.base * G.cam.zoom;
-  return { x: G.raton.x / z + G.cam.x, y: G.raton.y / z + G.cam.y };
-}
-function apuntar(w) {
-  const m = ratonMundo();
-  if (!m) return;
-  w.aim = Math.atan2(m.y - (w.y - 2), m.x - w.x);
-  if (!teclas.izq && !teclas.der && w.enPiso && w.soga.estado === 'none' && Math.abs(Math.cos(w.aim)) > 0.08) {
-    w.mirando = Math.cos(w.aim) >= 0 ? 1 : -1;
-  }
-}
 function controlable() {
   return G.estado === 'jugando' && G.activo && !G.activo.muerto &&
          (G.fase === 'mover' || G.fase === 'retirada') &&
@@ -1969,10 +1943,9 @@ function paso() {
     return;
   }
   const w = G.activo;
-  if (w && !w.muerto && G.tactil && G.raton.dentro) apuntar(w);
 
   const fuego = !!(teclas.fuego || G.fuegoRaton);
-  if (fuego && !G.fuegoPrev) alPresionarFuego();
+  if (fuego && !G.fuegoPrev) alPresionarFuego('fuego');
   if (!fuego && G.fuegoPrev) alSoltarFuego();
   G.fuegoPrev = fuego;
   if (G.cargando) G.carga = Math.min(1, G.carga + TICK / 0.9);
@@ -1991,8 +1964,17 @@ function paso() {
         if (teclas.arriba) ajustarMira(g, -2.8 * Math.PI / 180);
         if (teclas.abajo) ajustarMira(g, 2.8 * Math.PI / 180);
       }
-      if (teclas.salto && !g.saltoApretado) { saltar(g, false); g.saltoApretado = true; }
-      if (!teclas.salto) g.saltoApretado = false;
+      if (teclas.salto && !g.saltoApretado) {
+        // Como WA: Enter desde la soga dispara el arma seleccionada; en el
+        // piso sigue siendo salto.
+        if (g.soga.estado === 'atada' || g.soga.estado === 'disparando') alPresionarFuego('salto');
+        else saltar(g, false);
+        g.saltoApretado = true;
+      }
+      if (!teclas.salto) {
+        g.saltoApretado = false;
+        if (G.cargando && G.cargaOrigen === 'salto') alSoltarFuego();
+      }
       if (teclas.voltereta && !g.volteretaApretada) { saltar(g, true); g.volteretaApretada = true; }
       if (!teclas.voltereta) g.volteretaApretada = false;
     }
@@ -2512,48 +2494,37 @@ function dibujarBarraCarga() {
 }
 
 function dibujarMira() {
-  if (G.estado !== 'jugando' || !G.activo || G.activo.muerto) return;
-  if (!G.tactil && !G.raton.dentro) return;
+  const w = G.activo;
+  if (G.estado !== 'jugando' || !w || w.muerto) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const esc = Math.max(0.0001, G.cam.base * G.cam.zoom);
-  const ax = (G.activo.x - G.cam.x) * esc;
-  const ay = (G.activo.y - 2 - G.cam.y) * esc;
-  let tx, ty;
-  if (G.tactil) {
-    tx = G.raton.x;
-    ty = G.raton.y;
-  } else {
-    // En PC la mira sigue el ángulo, no el mouse: el mouse solo mueve la vista.
-    const d = 74;
-    tx = (G.activo.x + Math.cos(G.activo.aim) * d - G.cam.x) * esc;
-    ty = (G.activo.y - 2 + Math.sin(G.activo.aim) * d - G.cam.y) * esc;
-  }
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 6]);
-  ctx.beginPath();
-  ctx.moveTo(ax, ay);
-  ctx.lineTo(tx, ty);
-  ctx.stroke();
-  ctx.restore();
+  // Igual que WA: la mira está siempre a la misma distancia corta del gusano,
+  // sobre el ángulo de apuntado. No sigue al mouse ni al último toque.
+  const tx = (w.x + Math.cos(w.aim) * DIST_MIRA - G.cam.x) * esc;
+  const ty = (w.y - 2 + Math.sin(w.aim) * DIST_MIRA - G.cam.y) * esc;
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,236,170,0.92)';
-  ctx.lineWidth = 1.5;
+  ctx.translate(tx, ty);
+  ctx.strokeStyle = 'rgba(225,240,255,0.95)';
+  ctx.fillStyle = 'rgba(225,240,255,0.95)';
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+  ctx.arc(0, 0, 8, 0, Math.PI * 2);
   ctx.stroke();
+  // Estrella de cuatro puntas, como el crosshair de Worms Armageddon.
   ctx.beginPath();
-  ctx.moveTo(tx - 13, ty);
-  ctx.lineTo(tx - 5, ty);
-  ctx.moveTo(tx + 5, ty);
-  ctx.lineTo(tx + 13, ty);
-  ctx.moveTo(tx, ty - 13);
-  ctx.lineTo(tx, ty - 5);
-  ctx.moveTo(tx, ty + 5);
-  ctx.lineTo(tx, ty + 13);
-  ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 4;
+    const r = i % 2 === 0 ? 13 : 3.2;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.8, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
   ctx.restore();
 }
 
@@ -2806,11 +2777,11 @@ function iniciarPartida() {
   G.cargando = false;
   G.carga = 0;
   G.armaCargando = null;
+  G.cargaOrigen = null;
   G.fuegoPrev = false;
   G.fuegoRaton = false;
   G.raton.dentro = false;
   soltarBotonesTactiles();
-  punteroMira = null;
   punteroFuego = null;
   G.cbaHecha = false;
   G.usadoSoga = false;
@@ -2925,7 +2896,6 @@ function volverAlMenu() {
   soltarBotonesTactiles();
   G.fuegoRaton = false;
   G.fuegoPrev = false;
-  punteroMira = null;
   punteroFuego = null;
   cancelarCargaTactil();
   resetFinTactil();
@@ -3474,11 +3444,11 @@ function iniciarPartidaOnline(d) {
   G.cargando = false;
   G.carga = 0;
   G.armaCargando = null;
+  G.cargaOrigen = null;
   G.fuegoPrev = false;
   G.fuegoRaton = false;
   G.raton.dentro = false;
   soltarBotonesTactiles();
-  punteroMira = null;
   punteroFuego = null;
   G.cbaHecha = false;
   G.usadoSoga = false;
@@ -3668,6 +3638,7 @@ function enviarFinTurno() {
   G.cargando = false;
   G.carga = 0;
   G.armaCargando = null;
+  G.cargaOrigen = null;
   if (ONLINE.socket) {
     try { ONLINE.socket.emit('gusanos:finTurno', { id: ONLINE.id, snapshot: snap }); } catch { /* sin conexión */ }
   }
