@@ -227,7 +227,7 @@ function calcular(rango) {
   try {
     const U = require('./uso.js');
     const a = U.entre(ini, fin), b = U.entre(iniAnt, finAnt);
-    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege', pool: 'Pool' };
+    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege', pool: 'Pool', gusanos: 'Gusanos' };
     const nombreSec = (k) => k.startsWith('c:') ? (nombres.has(Number(k.slice(2))) ? '#' + nombres.get(Number(k.slice(2))).name : 'Otro canal')
       : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? (juegos[k.slice(2)] ? 'Juegos · ' + juegos[k.slice(2)] : 'Juegos (el menú)') : k === 'mercado' ? 'Marketplace'
         : k === 'foro' ? 'Foro' : k === 'miembros' ? 'Panel de administradores' : 'Otras pantallas';

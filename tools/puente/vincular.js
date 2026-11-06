@@ -734,7 +734,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|juegos|chat)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|gusanos|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -775,6 +775,29 @@ async function handle(req, res) {
     let body = fs.readFileSync(file);
     if (plArch[1] === 'juego.js') body = body.toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
+  }
+
+  // Proyecto Gusanos: el juego terminado (index.html, style.css, game.js y assets/) en web/gusanos/.
+  // El codigo va al repositorio; los assets (imagenes, sonidos y mapas) son propios del servidor y no
+  // van al repositorio. Se sirve solo lo que esta adentro de web/gusanos y con los tipos conocidos.
+  if (req.method === 'GET' && p.startsWith('/puente/gusanos/')) {
+    let rel = p.slice('/puente/gusanos/'.length);
+    try { rel = decodeURIComponent(rel); } catch { return send(res, 400, 'text/plain; charset=utf-8', 'Ruta inválida'); }
+    if (rel === '') rel = 'index.html';
+    const raiz = path.join(STATIC, 'gusanos');
+    const file = path.join(raiz, rel);
+    const dentro = file.startsWith(raiz + path.sep);
+    if (!dentro || !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(rel) || rel.split('/').some(x => x === '.' || x === '..')) {
+      return send(res, 404, 'text/plain; charset=utf-8', 'No encontrado');
+    }
+    let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain; charset=utf-8', 'No encontrado'); }
+    if (!st.isFile()) return send(res, 404, 'text/plain; charset=utf-8', 'No encontrado');
+    const ext = rel.slice(rel.lastIndexOf('.') + 1).toLowerCase();
+    const tipo = { html: 'text/html', css: 'text/css', js: 'application/javascript', png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', wav: 'audio/wav' }[ext] || 'application/octet-stream';
+    const cache = /^(png|jpe?g|webp|wav)$/.test(ext) ? 'public, max-age=604800' : 'no-cache';
+    const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
+    if (cache === 'no-cache' && mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    return send(res, 200, tipo, fs.readFileSync(file), { ETag: etag, 'Cache-Control': cache });
   }
 
   // GlobalSiege (misionrisk.js): su pantalla (juego.js, juego.css y mapa.js) y el arte del juego
@@ -1410,12 +1433,13 @@ async function handle(req, res) {
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
 // muestran la tapa del juego en vez del logo.
 const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege y Pool para jugar con la gente del chat.' },
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y Gusanos para jugar con la gente del chat.' },
   truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
   globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
   pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
+  gusanos: { nombre: 'Gusanos', desc: 'Artillería por turnos, de 2 a 5 jugadores en el mismo dispositivo. Elegí el mapa y jugá.' },
 };
 function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;

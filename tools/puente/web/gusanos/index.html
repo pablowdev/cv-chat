@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Proyecto Gusanos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="top">
+      <div id="marcador"></div>
+
+      <div id="centro">
+        <div id="turnoBox">
+          <span id="teamDot"></span>
+          <span id="teamName">—</span>
+          <span id="wormName"></span>
+        </div>
+        <div id="timerBox"><span id="timer">30</span></div>
+      </div>
+
+      <div id="vientoBox">
+        <span class="rot">VIENTO</span>
+        <span id="windArrow">→</span>
+        <span id="windVal">0</span>
+        <button id="btnPausaHud" type="button" title="Pausa (ESC)">II</button>
+      </div>
+    </div>
+
+    <div id="cba" class="hidden">CBA · recogé una caja antes de atacar</div>
+    <div id="toast"></div>
+    <div id="ayuda"></div>
+    <div id="arsenal"></div>
+  </div>
+
+  <div id="tactil" class="hidden" aria-label="Controles táctiles">
+    <div id="tactilMov">
+      <button class="tactilBtn tArriba" type="button" data-tecla="arriba" aria-label="Saltar o acortar la soga">↑</button>
+      <button class="tactilBtn tIzq" type="button" data-tecla="izq" aria-label="Caminar a la izquierda o hamacar">←</button>
+      <button class="tactilBtn tAbajo" type="button" data-tecla="abajo" aria-label="Agacharse o alargar la soga">↓</button>
+      <button class="tactilBtn tDer" type="button" data-tecla="der" aria-label="Caminar a la derecha o hamacar">→</button>
+    </div>
+    <div id="tactilAcc">
+      <div id="tactilAux">
+        <button id="btnSogaTactil" class="tactilBtn tAux" type="button">SOGA</button>
+        <button id="btnFinTactil" class="tactilBtn tAux" type="button">FIN</button>
+      </div>
+      <button id="btnFuegoTactil" class="tactilBtn tFuego" type="button">
+        <span>FUEGO</span>
+        <small>mantené</small>
+      </button>
+    </div>
+    <div id="tactilPista">Arrastrá el mapa para apuntar</div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="panel menuPanel">
+      <header class="menuHead">
+        <div>
+          <h1>PROYECTO <span>GUSANOS</span></h1>
+          <p class="sub">Hot-seat · 2 a 5 jugadores · mapas de la comunidad</p>
+        </div>
+        <div class="sello">GUSANOS<br><b>200 HP · 30 s</b></div>
+      </header>
+
+      <div class="menuGrid">
+        <section class="mapSection">
+          <h2>Elegí el mapa <span id="mapCount"></span></h2>
+          <div id="mapas" class="mapas"></div>
+        </section>
+
+        <aside class="opciones">
+          <h2>Partida</h2>
+
+          <label class="slider">
+            <span>Equipos <output id="oEquipos">2</output></span>
+            <input id="iEquipos" type="range" min="2" max="5" step="1" value="2">
+            <small>2 a 5 jugadores</small>
+          </label>
+
+          <label class="slider">
+            <span>Gusanos por equipo <output id="oGusanos">3</output></span>
+            <input id="iGusanos" type="range" min="1" max="5" step="1" value="3">
+            <small>1 a 5 por equipo</small>
+          </label>
+
+          <label class="check">
+            <input id="iCBA" type="checkbox" checked>
+            <span>CBA: hay que recoger una caja antes de atacar</span>
+          </label>
+
+          <div class="esquema">
+            <h3>Esquema de partida</h3>
+            <ul>
+              <li>200 HP por gusano</li>
+              <li>30 segundos por turno</li>
+              <li>Retirada 5 s · con soga 10 s</li>
+              <li>Terreno indestructible</li>
+              <li>Bazooka y soga infinitas</li>
+              <li>Soga de 5 estrellas (462–465 px)</li>
+              <li>Cajas con las 24 armas del juego</li>
+            </ul>
+          </div>
+
+          <button id="btnStart" class="principal" type="button">JUGAR</button>
+          <p class="nota">Todos juegan en el mismo dispositivo, por turnos.</p>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <div id="pausa" class="overlay hidden">
+    <div class="panel chico">
+      <h2>PAUSA</h2>
+      <p id="pausaTexto" class="sub">La partida está en pausa.</p>
+      <button id="btnSeguir" class="principal" type="button">SEGUIR</button>
+      <button id="btnReiniciar" type="button">REINICIAR PARTIDA</button>
+      <button id="btnMenu" type="button">VOLVER AL MENÚ</button>
+    </div>
+  </div>
+
+  <div id="fin" class="overlay hidden">
+    <div class="panel chico">
+      <h2 id="finTitulo">—</h2>
+      <p id="finTexto" class="sub"></p>
+      <button id="btnOtra" class="principal" type="button">JUGAR OTRA VEZ</button>
+      <button id="btnMenuFin" type="button">VOLVER AL MENÚ</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/maps/maps.js"></script>
+<script src="assets/gusanos/sprites.js"></script>
+<script src="assets/weapons/weapons.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

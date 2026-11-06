@@ -3517,8 +3517,8 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool'];
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
@@ -10429,7 +10429,7 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'gsJuego' ? 'gusanos' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
   window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
@@ -10598,7 +10598,11 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
+    // Gusanos es local (hot-seat): no tiene partidas en el servidor, asi que no lleva evento ni mesas
+    { id: 'gusanos', nombre: 'Gusanos', sub: 'Artillería por turnos, 2 a 5', local: true, tapa: () => '/puente/tapas/gusanos.jpg?v=1', fondo: '#0b1626' },
   ];
+  // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
+  const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
   async function biblioteca() {
     // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
     page.appendChild(head('Juegos', botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__')));
@@ -10631,10 +10635,10 @@ document.addEventListener('pointerdown', (ev) => {
     pronto.append(pc, el('div', 'jg-tapa-n', 'Más juegos'), el('div', 'jg-tapa-s', 'Muy pronto'));
     grilla.appendChild(pronto);
     // las partidas en curso de todos los juegos, primero las que te toca
-    const datos = await Promise.all(JUEGOS.map(j => emit(j.evento).catch(() => ({ error: true }))));
+    const datos = await Promise.all(JUEGOS_EN_RED.map(j => emit(j.evento).catch(() => ({ error: true }))));
     if (!page || !b.isConnected) return;
     const curso = [];
-    JUEGOS.forEach((j, i) => {
+    JUEGOS_EN_RED.forEach((j, i) => {
       const d = datos[i];
       if (!d || d.error) return;
       if (d.tableros && !d.tableros.length) { tarjetas[j.id].t.remove(); return; }
@@ -10663,7 +10667,7 @@ document.addEventListener('pointerdown', (ev) => {
   // desafios para vos. Tocar una entra a jugar (truco, funball y ajedrez) o abre la sala de ese juego.
   function pintarMesas(box, datos) {
     const lista = [];
-    JUEGOS.forEach((j, i) => { const d = datos[i]; if (d && !d.error) for (const a of d.abiertas || []) lista.push({ j, a }); });
+    JUEGOS_EN_RED.forEach((j, i) => { const d = datos[i]; if (d && !d.error) for (const a of d.abiertas || []) lista.push({ j, a }); });
     lista.sort((x, y) => (y.a.paraVos ? 1 : 0) - (x.a.paraVos ? 1 : 0));
     box.appendChild(el('div', 'jg-bib-titulo', 'Mesas esperando rival'));
     if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
@@ -10704,7 +10708,41 @@ document.addEventListener('pointerdown', (ev) => {
     }
     box.appendChild(w);
   }
+  // ── Proyecto Gusanos ──
+  // El juego terminado, en un iframe del mismo origen: su CSS y su JS no se mezclan con el chat.
+  // Es hot-seat (2 a 5 jugadores en el mismo dispositivo, por turnos). Los controles táctiles del
+  // juego se activan solos en el celular (pointer: coarse). Los eventos de adentro no llegan al
+  // chat, así que se le avisa al tiempo de uso (uso.js) para que cuente mientras se juega.
+  function gusanos() {
+    page.appendChild(head('Gusanos', botonEnlace('/app?juegos=gusanos', 'Gusanos · __PUENTE_APP__')));
+    const b = el('div', 'jg-gusanos');
+    const marco = el('div', 'jg-gusanos-marco');
+    const ifr = el('iframe', 'jg-gusanos-iframe');
+    ifr.src = '/puente/gusanos/index.html?v=1';
+    ifr.title = 'Proyecto Gusanos';
+    ifr.allow = 'autoplay; fullscreen';
+    ifr.setAttribute('allowfullscreen', '');
+    ifr.loading = 'eager';
+    let ultimo = 0;
+    const marcar = () => {
+      const t = Date.now();
+      if (t - ultimo < 2000) return;
+      ultimo = t;
+      try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ }
+    };
+    ifr.addEventListener('load', () => {
+      try {
+        const w = ifr.contentWindow;
+        for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true });
+      } catch { /* otro origen */ }
+    });
+    marco.appendChild(ifr);
+    b.appendChild(marco);
+    page.appendChild(b);
+  }
   async function inicio(which) {
+    // la pila queda en la pantalla del juego, para que el tiempo de uso diga "gusanos" y no "juegos"
+    if (which === 'gusanos') { if (stack.length) stack[stack.length - 1] = ['gsJuego']; return gusanos(); }
     if (which === 'funball') return fbInicio();
     if (which === 'ajedrez') return ajInicio();
     if (which === 'globalsiege') return mr('inicio');
@@ -13200,12 +13238,13 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     // de los enlaces a su misma direccion, asi que va aca la tarjeta de siempre (la de los demas enlaces), con
     // la tapa del juego y el texto que ven WhatsApp o X (vincular.js, JUEGOS_ENLACE). Al tocarla abre el juego.
     const TARJETA = {
-      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege y Pool para jugar con la gente del chat.', v: '' },
+      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y Gusanos para jugar con la gente del chat.', v: '' },
       truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },
       globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.', v: '' },
       pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '?v=3' },
+      gusanos: { nombre: 'Gusanos', desc: 'Artillería por turnos, de 2 a 5 jugadores en el mismo dispositivo. Elegí el mapa y jugá.', v: '?v=1' },
     };
     const escH = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const tarjetas = () => {
@@ -16667,6 +16706,8 @@ var puenteSinUbicacion = (function () {
   const TICK = 5000, QUIETO = 120000, PAUSA = 30 * 60000;
   let ultimoInput = Date.now(), suma = {}, visitas = 0;
   const marcar = () => { ultimoInput = Date.now(); };
+  // Los juegos en iframe (Gusanos) avisan por aca: esos eventos no salen del iframe
+  window.__puenteUsoActivo = marcar;
   for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll']) window.addEventListener(ev, marcar, { passive: true, capture: true });
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
   function seccion() {

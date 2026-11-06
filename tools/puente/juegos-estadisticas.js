@@ -14,7 +14,7 @@ const RANGOS = { '7d': { dias: 7, paso: 'dia' }, '4s': { dias: 28, paso: 'dia' }
 const JUEGOS = [
   { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
   { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
-  { id: 'pool', nombre: 'Pool' },
+  { id: 'pool', nombre: 'Pool' }, { id: 'gusanos', nombre: 'Gusanos' },
 ];
 const COMPU = -1;
 const TOPE_PARTIDA = 2 * 3600 * 1000; // una partida que quedo abierta dias (el truco por turnos) no cuenta como horas jugando

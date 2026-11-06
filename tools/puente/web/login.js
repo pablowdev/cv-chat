@@ -306,7 +306,7 @@
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
       p.append(mk('b', '', cual ? '🎮 ' + cual + ': elegí tu nombre' : tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
-        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez y GlobalSiege, contra la compu o contra la gente del club. ')
+        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez, GlobalSiege y Gusanos, contra la compu, contra la gente del club o de a varios en el mismo dispositivo. ')
           + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
       if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
@@ -326,7 +326,7 @@
   // Los juegos tienen su propia pagina (juegos.<dominio>, juegos.html): ahi se elige el juego o la mesa, y se
   // llega aca (por afuera.js) solo a poner el nombre: la tarjeta flotando, con la tapa del juego (html.puente-nombre)
   const PAGINA_JUEGOS = 'https://juegos.' + location.hostname.replace(/^chat\./, '') + '/';
-  const NOMBRES = { truco: 'Truco', funball: 'Funball', ajedrez: 'Ajedrez', globalsiege: 'GlobalSiege', pool: 'Pool' };
+  const NOMBRES = { truco: 'Truco', funball: 'Funball', ajedrez: 'Ajedrez', globalsiege: 'GlobalSiege', pool: 'Pool', gusanos: 'Gusanos' };
   function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); location.href = PAGINA_JUEGOS; }
   let portada = null;
   const datos = () => portada || (portada = fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).catch(() => null));
@@ -369,7 +369,7 @@
     const j = mk('button', 'puente-visita-btn');
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
-    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez y GlobalSiege'));
+    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez, GlobalSiege y Gusanos'));
     j.addEventListener('click', aLosJuegos);
     const m = mk('a', 'puente-visita-btn');
     m.href = mercado;

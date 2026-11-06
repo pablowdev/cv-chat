@@ -38,3 +38,6 @@ apps/android/firma.properties
 *.keystore
 *.jks
 apps/android/app/src/main/res/**/*.png
+# Proyecto Gusanos: el codigo va al repositorio; los assets y la tapa son de cada servidor
+tools/puente/web/gusanos/assets/
+tools/puente/web/tapas/gusanos.jpg

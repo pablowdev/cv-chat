@@ -3092,6 +3092,11 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
    tanteador con fosforos y el chat con el rival (aviso.js, render y lateral) */
 .puente-jg .jg-mesa.jg-mesa2 { max-width: 76rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; }
 .puente-jg .jg-juego { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+/* Proyecto Gusanos: el juego terminado va en un iframe, a pantalla completa menos la barra de arriba.
+   El alto sale del alto de la pantalla del chat (que ya es fija) y no se mezcla con su scroll. */
+.puente-jg .jg-gusanos { box-sizing: border-box; height: calc(100% - 3.5rem - 1px); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: #070b12; }
+.puente-jg .jg-gusanos-marco { position: relative; height: 100%; background: #070b12; }
+.puente-jg .jg-gusanos-iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #070b12; }
 @media (min-width: 1000px) {
   .puente-jg .jg-mesa.jg-mesa2 { grid-template-columns: minmax(0, 1fr) 19rem; }
   .puente-jg .jg-lateral { position: sticky; top: 0.75rem; }
