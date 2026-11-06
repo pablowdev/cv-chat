@@ -50,7 +50,7 @@ const T = {
     '',
     'Además: juegos (truco, ajedrez, funball), marketplace, guardados, archivos más pesados y el foro integrado. Sin publicidad y gratis.',
     '',
-    '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**. Y arranca la **Copa Mudanza**: quien más partidas de truco gane hasta el 24/11 se lleva la de **Campeón**.',
+    '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**.',
     '',
     '📱 ¿Usás Android? La app de CV Chat ya está en Google Play, en prueba: sumate como tester en https://circulovicioso.club/descargar#play',
     '',
@@ -59,13 +59,12 @@ const T = {
   recordatorio: [
     '@here 🏠 Recordatorio: desde el **martes 24/11** este Discord queda solo para leer y la charla sigue en CV Chat. Es un clic con tu Discord y tus mensajes de siempre se vienen con vos: {enlace}',
     'CV Chat es nuestro: servidor propio, reglas propias y la historia del club guardada para siempre.',
-    '🏆 Copa Mudanza: {copa}',
   ].join('\n'),
   semana: [
     '@everyone ⏳ **Falta una semana.** El **martes 24/11 a las 12** este Discord queda solo para leer.',
     'Desde hoy, acá hay **modo lento** (un mensaje por minuto). En CV Chat no hay límites.',
     'Ya somos **{cuentas}** en CV Chat. Pasate en un clic con tu Discord, con todo tu historial: {enlace}',
-    '🏅 Quien escriba en CV Chat antes del 24/11 queda como **Fundador**. 🏆 Copa Mudanza: {copa}',
+    '🏅 Quien escriba en CV Chat antes del 24/11 queda como **Fundador**.',
   ].join('\n'),
   martes: [
     '@here 📅 **El martes 24/11 a las 12, este Discord queda solo para leer.**',
@@ -78,11 +77,11 @@ const T = {
   ultimo: [
     '@everyone 🔒 **Mañana a las 12, este Discord queda solo para leer.** Vas a poder seguir viendo todo, pero para escribir hay que estar en CV Chat.',
     'Es un clic: {enlace}',
-    'Hasta mañana a las 12 todavía te llevás la insignia **Fundador**. 🏆 Copa Mudanza: {copa}',
+    'Hasta mañana a las 12 todavía te llevás la insignia **Fundador**.',
   ].join('\n'),
   corte: [
     '🏠 **Listo: nos mudamos.** Desde ahora la charla es en CV Chat y este Discord queda para leer.',
-    '🏅 Fundadores: **{fundadores}** personas. 🏆 Campeón de la Copa Mudanza: **{campeon}**.',
+    '🏅 Fundadores: **{fundadores}** personas.',
     '¿Te quedaste afuera? Entrá con tu Discord en {enlace} o escribí en #pasate-a-cv-chat.',
   ].join('\n'),
   privados1: [
@@ -123,7 +122,7 @@ const PLAN = [
   ['como-pasarse', '2026-11-20T13:00', 'anuncio', 'Cómo pasarse, paso a paso (@here)', T.martes, { menciona: 'here' }],
   ['ultimo-aviso', '2026-11-23T22:00', 'anuncio', 'Último aviso (@everyone)', T.ultimo, { menciona: 'everyone' }],
   ['solo-lectura', '2026-11-24T12:00', 'solo_lectura', 'Discord solo para leer + #pasate-a-cv-chat', null, {}],
-  ['anuncio-corte', '2026-11-24T12:02', 'anuncio', 'Anuncio del corte, con Fundadores y Campeón', T.corte, {}],
+  ['anuncio-corte', '2026-11-24T12:02', 'anuncio', 'Anuncio del corte, con los Fundadores', T.corte, {}],
   ['resumen-1', '2026-12-01T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
   ['resumen-2', '2026-12-08T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
   ['resumen-3', '2026-12-15T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
@@ -470,7 +469,7 @@ async function soloLectura(soloCanal) {
   if (soloCanal) { cfg('lento', cfg('lento') || '0'); cfg('solo_lectura', '1'); return { estado: fallas.length ? 'error' : 'hecho', detalle: `#${soloCanal} en solo lectura${fallas.length ? ' (falló)' : ''}` }; }
   await abrirPasate();
   cfg('solo_lectura', '1');
-  congelarCopa();
+  // (la Copa Mudanza se saco el 2026-11-06: no hay campeon que congelar)
   return { estado: fallas.length ? 'error' : 'hecho', detalle: `${n} canales en solo lectura${fallas.length ? '; fallaron: ' + fallas.join(', ') : ''}; #pasate-a-cv-chat abierto` };
 }
 
@@ -571,7 +570,6 @@ async function resumen() {
     `Cuentas en CV Chat: ${n.cuentas}. Fundadores: ${n.fundadores}.`,
     `Siguen escribiendo en Discord: ${n.enDiscordConCuenta} con cuenta y ${n.enDiscordSinCuenta} sin cuenta.`,
     `Privados del bot mandados: ${n.privados}. Emails: ${n.emails}.`,
-    n.copa.length ? 'Copa Mudanza: ' + n.copa.map((x, i) => `${i + 1}. ${x.nombre} (${x.puntos})`).join(', ') + '.' : 'Copa Mudanza: sin partidas.',
     'El detalle y los botones para pausar o deshacer están en la página Admin, pestaña Mudanza.',
   ];
   let ok = 0;

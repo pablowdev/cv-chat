@@ -3297,7 +3297,6 @@ function leido(sc) {
       const d = el('div', 'pm-dato'); d.append(el('div', 'pm-dato-n', String(num)), el('div', 'pm-dato-l', label)); nums.appendChild(d);
     }
     cuerpo.appendChild(nums);
-    cuerpo.appendChild(el('div', 'pmz-copa', '🏆 Copa Mudanza: ' + (n.copa && n.copa.length ? n.copa.map((x, i) => (i + 1) + '. ' + x.nombre + ' (' + x.puntos + ')').join(' · ') : 'todavía sin partidas')));
     // El cronograma
     const lista = el('div', 'pmz-pasos');
     for (const p of datos.pasos || []) {
@@ -10722,7 +10721,6 @@ document.addEventListener('pointerdown', (ev) => {
     page.appendChild(head('Juegos', botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__')));
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
-    const copaBox = el('div'); b.appendChild(copaBox); copaMudanza(copaBox);
     const mesasBox = el('div'); b.appendChild(mesasBox); // las mesas que esperan rival, de todos los juegos (pintarMesas)
     b.appendChild(el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.length})`));
     const grilla = el('div', 'jg-tapas'); b.appendChild(grilla);
@@ -10797,30 +10795,6 @@ document.addEventListener('pointerdown', (ev) => {
       l.appendChild(r);
     }
     if (lista.length > 8) box.appendChild(el('div', 'jg-fmeta jg-mesas-mas', `y ${lista.length - 8} más: entrá a cada juego para verlas`));
-  }
-  // La Copa Mudanza (mudanza-plan.js): la tabla, del anuncio al corte y dos semanas despues
-  async function copaMudanza(box) {
-    let d = null;
-    try { const r = await fetch('/puente/api/copa', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('haven_token') || '') } }); if (r.ok) d = await r.json(); } catch { /* sin copa */ }
-    if (!d || !box.isConnected || d.ahora > d.hasta + 14 * 864e5) return;
-    const dia = (ms) => { const a = new Date(ms - 3 * 3600e3); return `${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][a.getUTCDay()]} ${a.getUTCDate()}/${a.getUTCMonth() + 1} a las ${a.getUTCHours()}${a.getUTCMinutes() ? ':' + String(a.getUTCMinutes()).padStart(2, '0') : ''}`; }; // hora de Argentina
-    const w = el('div', 'jg-copa');
-    w.appendChild(el('div', 'jg-copa-t', '🏆 Copa Mudanza'));
-    const dias = Math.ceil((d.hasta - d.ahora) / 864e5);
-    w.appendChild(el('div', 'jg-copa-s', d.ahora < d.desde ? `Arranca el ${dia(d.desde)} y termina el ${dia(d.hasta)}.`
-      : d.ahora < d.hasta ? `Termina el ${dia(d.hasta)} · ${dias <= 1 ? 'último día' : `quedan ${dias} días`}.`
-        : d.campeones.length ? `Terminó. ${d.campeones.length > 1 ? 'Campeones' : 'Campeón'}: ${d.campeones.join(' y ')} 🎉` : 'Terminó.'));
-    if (d.ahora < d.hasta) w.appendChild(el('div', 'jg-copa-r', 'Cada partida de truco que ganás suma: 3 puntos contra otra persona y 1 contra la compu (hasta 3 por día). El que más puntos tenga al final se lleva la insignia Campeón.'));
-    if (d.ahora >= d.desde) {
-      if (!d.tabla.length) w.appendChild(el('div', 'jg-copa-r', 'Todavía nadie ganó una partida: ¡arrancá vos!'));
-      else {
-        const l = el('ol', 'jg-copa-lista');
-        d.tabla.slice(0, 5).forEach((x) => { const li = el('li', x.yo ? 'yo' : ''); li.append(el('span', 'jg-copa-n', x.yo ? 'Vos' : x.nombre), el('b', '', `${x.puntos} ${x.puntos === 1 ? 'punto' : 'puntos'}`)); l.appendChild(li); });
-        w.appendChild(l);
-        if (d.yo && d.yo.puesto > 5) w.appendChild(el('div', 'jg-copa-r', `Vos: puesto ${d.yo.puesto}, con ${d.yo.puntos} ${d.yo.puntos === 1 ? 'punto' : 'puntos'}.`));
-      }
-    }
-    box.appendChild(w);
   }
   // ── Proyecto Gusanos ──
   // El juego terminado, en un iframe del mismo origen: su CSS y su JS no se mezclan con el chat.
