@@ -26,6 +26,14 @@ function nombre(db, id) {
   return u && !u.is_guest ? u.n : null;
 }
 
+// Cualquiera que juega, para "X y Z están jugando": la gente del club e invitados con su nombre (el invitado
+// que ya se fue, "un invitado") y la compu
+function quienJuega(db, id) {
+  if (!(id > 0)) return 'la compu';
+  const u = db.prepare('SELECT COALESCE(display_name, username) n FROM users WHERE id = ?').get(id);
+  return u && u.n ? u.n : 'un invitado';
+}
+
 // Las mesas: en juego (cuantas), las abiertas esperando rival (cuales) y las que se estan jugando ahora
 // entre gente del club (enJuego, para la tarjeta "Ahora en el club" de club.js: con movimiento en los
 // ultimos 30 minutos, de dos o mas personas con cuenta, sin las de la compu sola ni las de invitados)
@@ -42,9 +50,11 @@ function mesas(db, conIds) {
       // (la ultima jugada de verdad: el chat, los zumbidos y el barrido no cuentan; chat-partida.js)
       const ultima = g.estado === 'jugando' ? require('./chat-partida.js').ultimaJugada(g) : 0;
       if (g.estado === 'jugando' && Date.now() - ultima < 30 * 60e3) {
-        const ids = (g.jugadores || (g.asientos || []).map(a => a && a.uid)).filter(x => x > 0);
-        const nombres = ids.map(x => nombre(db, x));
-        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: g.publica ? `/app?${j.param}=${encodeURIComponent(g.id)}` : null, ...(conIds ? { uids: ids } : {}) });
+        // (todas: con invitados y con la compu tambien; en GlobalSiege, los ejercitos de la compu cuentan una vez)
+        const todos = g.jugadores || (g.asientos || []).map(a => (a && a.uid) || -1);
+        const ids = todos.filter(x => x > 0);
+        const nombres = todos.map(x => quienJuega(db, x)).filter((n, k, l) => n !== 'la compu' || l.indexOf(n) === k);
+        if (ids.length >= 1) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, ...(conIds ? { uids: ids } : {}) });
       }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));

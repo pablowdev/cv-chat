@@ -139,8 +139,9 @@ const nameOf = (id) => {
   const u = db.prepare('SELECT id, COALESCE(display_name, username) nombre, avatar FROM users WHERE id = ?').get(id);
   return u ? { id: u.id, nombre: u.nombre, avatar: u.avatar || null } : { id, nombre: 'Alguien', avatar: null };
 };
-// (las publicas que ya empezaron se pueden mirar)
-const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me)) || (g.estado !== 'esperando' && g.publica);
+// (cualquier partida que ya empezo se puede mirar: con gente del club, invitados o la compu; el chat de los que
+// juegan sigue siendo solo de ellos)
+const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me)) || g.estado !== 'esperando';
 const seat = (g, me) => g.jugadores.indexOf(me);
 
 function save(g) {
@@ -782,10 +783,10 @@ function ranking(since) {
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 
-// Las partidas publicas que se estan jugando entre dos personas, para mirarlas desde la sala
+// Las partidas que se estan jugando (todas: con invitados o con la compu tambien), para mirarlas desde la sala
 function mirables(me) {
   return [...games.values()]
-    .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0)
+    .filter(g => g.estado === 'jugando' && !g.jugadores.includes(me) && g.jugadores.length === 2
       // (solo las que se estan jugando de verdad: alguien jugo en la ultima media hora; chat-partida.js)
       && Date.now() - require('./chat-partida.js').ultimaJugada(g) < 30 * 60e3)
     .sort((a, b) => (b.inicio || b.creado || 0) - (a.inicio || a.creado || 0)).slice(0, 10)

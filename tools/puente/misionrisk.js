@@ -89,7 +89,8 @@ const nameOf = (id) => {
 };
 const humanos = (g) => g.asientos.filter(a => a.uid).map(a => a.uid);
 const seatOf = (g, me) => g.asientos.findIndex(a => a.uid === me);
-const canSee = (g, me) => seatOf(g, me) >= 0 || g.publica || g.invitados.includes(me);
+// (las que ya empezaron se pueden mirar todas)
+const canSee = (g, me) => seatOf(g, me) >= 0 || g.publica || g.invitados.includes(me) || g.estado !== 'esperando';
 
 function save(g) {
   try { db.prepare('INSERT OR REPLACE INTO puente_mr_mesas (id, estado, actualizado) VALUES (?, ?, ?)').run(g.id, JSON.stringify(g), Date.now()); } catch (err) { warn('globalsiege: guardar:', err.message); }
