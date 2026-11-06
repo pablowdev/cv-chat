@@ -5496,7 +5496,36 @@ document.addEventListener('pointerdown', (ev) => {
       box.addEventListener('click', ir);
       box.addEventListener('keydown', (e) => { if (e.key === 'Enter') ir(e); });
       cont.after(box);
+      if (solo) sinCita(cont);
     });
+  }
+
+  // "Un día como hoy" (logros.js) trae el mensaje citado para Discord; en CV Chat ya se ve en la vista previa
+  // de abajo, asi que la cita (quien lo dijo y el texto) no se muestra: queda el titulo y las reacciones
+  function sinCita(cont) {
+    const t = cont.textContent || '';
+    if (!t.trim().startsWith('📅') || !t.includes('Un día como hoy') || !t.includes('⭐')) return;
+    const cita = cont.querySelector('blockquote.chat-blockquote');
+    if (!cita) return;
+    const nodos = [...cont.childNodes];
+    const iCita = nodos.indexOf(cita);
+    const iFin = nodos.findIndex(n => n.nodeType === 3 && n.nodeValue.includes('⭐'));
+    const iBr = nodos.findIndex(n => n.nodeName === 'BR');
+    if (iCita < 0 || iFin < iCita || iBr < 0 || iBr > iCita) return;
+    // lo que hay entre el titulo y las reacciones: si no es solo la cita, su autor y renglones vacios
+    // (por ejemplo, enlaces a imagenes), se deja
+    const medio = nodos.slice(iBr + 1, iFin);
+    const vacio = (n) => n.nodeName === 'BR' || (n.nodeType === 3 && !n.nodeValue.trim());
+    const autor = nodos.slice(iBr + 1, iCita).filter(n => !vacio(n));
+    const soloCita = medio.every(n => vacio(n) || n === cita || autor.includes(n)) && autor.length <= 1;
+    const quien = autor.length === 1 && autor[0].nodeName === 'STRONG' ? autor : [];
+    // (si hay mas cosas, por ejemplo enlaces a imagenes: sale la cita con su autor y los renglones vacios hasta lo que sigue)
+    const kSig = nodos.findIndex((n, k) => k > iCita && !vacio(n));
+    const otra = quien.length || iCita === iBr + 1 ? nodos.slice(iBr + 1, kSig) : [cita];
+    for (const n of soloCita ? medio : otra) {
+      if (n.nodeType === 1) n.style.display = 'none';
+      else if (n.nodeType === 3) n.nodeValue = '';
+    }
   }
 
   function label(a) {
