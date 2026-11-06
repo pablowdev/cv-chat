@@ -100,6 +100,13 @@ function sweep() {
       const sf = require('./juegos-aviso.js').seFue(db, g.jugadores, BOT);
       if (sf && sf.borrar) { drop(g); changed(); }
       else if (sf) { note(g, 'Tu rival se fue del club.'); finish(g, sf.gana, 'abandono'); push(g, true); }
+      // sin reloj: el que no juega en 3 dias pierde por abandono (12 horas antes, un aviso al celular)
+      else if (!g.compu) {
+        const k = g.S.turno, uid = g.jugadores[k], q = CP.quieto(g, uid, g.tiros);
+        if (q === 'nuevo') save(g);
+        else if (q === 'avisar') { save(g); CP.avisoQuieto({ uid, titulo: 'Pool', url: `/app?pool=${g.id}`, tag: 'pool-' + g.id, rival: nameOf(g.jugadores[1 - k]).nombre, db, webpush }); }
+        else if (q === 'perder') { note(g, `${nameOf(uid).nombre} no jugó en 3 días.`); finish(g, 1 - k, 'abandono'); push(g, true); }
+      }
     }
   }
 }

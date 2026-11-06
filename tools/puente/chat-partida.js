@@ -29,10 +29,32 @@ const zumbidos = new Map(); // "id:user" -> { k, n, at }: los de cada uno en el 
 const porHora = new Map(); // user -> los de la ultima hora
 
 // Desde cuando le toca al que le toca (cada juego lo llama al guardar la partida): uid y, si el mismo puede
-// jugar varias veces seguidas, algo que cambie con cada jugada
+// jugar varias veces seguidas, algo que cambie con cada jugada. Devuelve true si empezo un turno nuevo
 function turno(g, uid, jugada) {
   const k = uid + ':' + (jugada == null ? '' : jugada);
-  if (!g.zt || g.zt.k !== k) g.zt = { k, at: Date.now() };
+  if (!g.zt || g.zt.k !== k) { g.zt = { k, at: Date.now() }; return true; }
+  return false;
+}
+
+// ── La partida quieta: el que tiene que jugar y no juega en 3 dias, pierde (las partidas sin reloj) ──
+// Cada juego lo pregunta en su barrido (cada minuto), con el mismo turno que usa al guardar. 12 horas antes
+// le llega un aviso al celular. Devuelve 'perder', 'avisar', 'nuevo' (empezo a contar: hay que guardar) o null
+const QUIETO_MS = 3 * 24 * 3600e3, AVISO_ANTES = 12 * 3600e3;
+function quieto(g, uid, jugada) {
+  if (!(uid > 0)) return null;
+  if (turno(g, uid, jugada)) return 'nuevo';
+  const t = Date.now() - g.zt.at;
+  if (t > QUIETO_MS) return 'perder';
+  if (t > QUIETO_MS - AVISO_ANTES && !g.zt.aviso) { g.zt.aviso = 1; return 'avisar'; }
+  return null;
+}
+// o: { uid, titulo, url, tag, rival, db, webpush }
+function avisoQuieto(o) {
+  if (!o.webpush) return;
+  const payload = JSON.stringify({ title: o.titulo, body: `Te quedan 12 horas para jugar contra ${o.rival}: si no, perdés la partida.`, url: o.url, tag: o.tag, __puente: 1 });
+  for (const sub of o.db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(o.uid)) {
+    o.webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 6 * 3600, urgency: 'high' }).catch(() => {});
+  }
 }
 
 // o: { g, juego, titulo, url, yo, de (su nombre), quien (como figura en el chat), para (al que le toca; null
@@ -69,4 +91,4 @@ function zumbar(o) {
   return { ok: true, quedan: 3 - z.n };
 }
 
-module.exports = { chatear, mensajes, turno, zumbar };
+module.exports = { chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS };
