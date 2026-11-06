@@ -200,11 +200,11 @@
   // ── El panel de ajustes: las medidas en vivo (y un boton para copiarlas) ──
   const AJUSTES = [
     ['GRAV', 'Gravedad', 0.05, 0.6, 0.005], ['CAMINAR', 'Caminar (px/paso)', 0.5, 3, 0.1],
-    ['SOGA_EMPUJE', 'Soga: balanceo', 0, 0.4, 0.01], ['SOGA_ROCE', 'Soga: roce (lo que conserva)', 0.98, 1, 0.0005],
-    ['SOGA_VMAX', 'Soga: velocidad máxima', 6, 32, 1], ['SOGA_REBOTE', 'Soga: rebote contra paredes', 0, 1, 0.05],
+    ['SOGA_EMPUJE', 'Soga: balanceo (empuje)', 0, 0.8, 0.01],
+    ['SOGA_VMAX', 'Soga: velocidad máxima', 6, 32, 1], ['SOGA_REBOTE', 'Soga: rebote contra paredes', 0, 1, 0.05], ['SOGA_MIN', 'Soga: largo mínimo', 4, 40, 1],
     ['SOGA_ACORTA', 'Soga: acortar (px/paso)', 0.5, 8, 0.1], ['SOGA_ALARGA', 'Soga: alargar (px/paso)', 0.5, 8, 0.1],
     ['SOGA_LARGO', 'Soga: largo máximo', 150, 700, 2], ['SOGA_VEL', 'Soga: velocidad del gancho', 6, 40, 1],
-    ['REBOTE', 'Rebote volando', 0, 1, 0.05], ['ROCE', 'Deslizar: lo que conserva', 0.8, 1, 0.005],
+    ['REBOTE', 'Rebote volando', 0, 1, 0.05], ['VMAX', 'Velocidad máxima volando', 8, 40, 1], ['ROCE', 'Deslizar: lo que conserva', 0.8, 1, 0.005],
     ['CAIDA_DESDE', 'Caída: lastima desde (px/paso)', 4, 16, 0.5],
   ];
   const panel = document.getElementById('ajustes');

@@ -4,7 +4,9 @@
 // La fisica imita el "sentir" de los juegos de artilleria de los 90 con soga (medidas de la documentacion
 // de la comunidad): gravedad ~0.24 px/paso², caminar 1 px/paso, subir escalones de hasta 8 px, saltos
 // con Enter (adelante / doble: atras) y Retroceso (arriba / doble: mortal), caida que lastima desde 8 px/paso,
-// y la soga: rigida, que se enrolla en las esquinas, se acorta y se alarga, y al acortarla gira mas rapido.
+// y la soga: tira pero se afloja, se enrolla en las esquinas y se acorta y se alarga. La forma de moverse
+// chocando (de a 1 pixel, subiendo o bajando 1 pixel contra las paredes) y la soga salen de Proyecto Gusanos,
+// el juego del dueño; las medidas, de la wiki de la comunidad y de partidas filmadas analizadas cuadro a cuadro.
 (function (raiz) {
   'use strict';
 
@@ -17,17 +19,17 @@
     SUBE: 14, BAJA: 13,       // escalon que sube caminando / que baja sin caerse
     SALTO_ADELANTE: [2.25, -3.897], SALTO_ATRAS: [0.7814, -4.4316], SALTO_ARRIBA: [0, -4.5], MORTAL: [0.42413, -5.98799],
     DOBLE: 12,                // pasos para el doble toque (Enter Enter, Retroceso Retroceso)
-    REBOTE: 0.3,              // al chocar volando contra una pared
+    REBOTE: 0.6,              // al chocar volando contra una pared (como en Proyecto Gusanos)
     ROCE: 0.96,               // deslizando por el piso (pierde 4% por paso)
     CAIDA_DESDE: 8, CAIDA_COEF: 50, // daño por caida: ((v - 8) * coef + 18) / 18
     MIRA: 0.049,              // radianes por paso al apuntar
-    // la soga
-    SOGA_LARGO: 462, SOGA_MIN: 10, SOGA_VEL: 18,
-    SOGA_ACORTA: 3.2, SOGA_ALARGA: 4.4,
-    SOGA_EMPUJE: 0.11,        // el balanceo con izquierda/derecha (horizontal)
-    SOGA_ROCE: 0.998,         // lo que conserva de la velocidad tangencial en cada paso
-    SOGA_VMAX: 16,            // tope de velocidad colgado
-    SOGA_REBOTE: 0.45,        // al chocar colgado contra el terreno
+    // la soga (5 estrellas: 462 px y tiros ilimitados). Una soga de un solo lado: tira pero se afloja
+    // (medido en partidas filmadas). Acortar y alargar: ~4 px por paso (medido: 200-225 px/s)
+    SOGA_LARGO: 462, SOGA_MIN: 14, SOGA_VEL: 18,
+    SOGA_ACORTA: 4.0, SOGA_ALARGA: 4.4,
+    SOGA_EMPUJE: 0.38,        // el balanceo: empuje a lo largo del giro (el valor de Proyecto Gusanos)
+    SOGA_VMAX: 32,            // tope de velocidad colgado
+    SOGA_REBOTE: 0.6,         // al chocar colgado contra el terreno
     // la granada de prueba
     GRANADA_V: 12, CARGA: 50, GRANADA_REBOTE_X: 0.96, GRANADA_REBOTE_Y: 0.6,
     EXPLOSION_R: 48, EXPLOSION_DANO: 50, EXPLOSION_EMPUJE: 7,
@@ -177,126 +179,150 @@
     }
   }
 
+  // ── Moverse chocando (como en Proyecto Gusanos, el juego original del dueño): de a 1 pixel; contra una
+  // pared, prueba subir o bajar 1 pixel y sigue (pierde un poco: 30/32), y si no puede, rebota ──
+  function moverX(T, s, dx, rebote) {
+    const sg = Math.sign(dx); let resto = Math.abs(dx);
+    while (resto > 1e-6) {
+      const p = Math.min(resto, 1) * sg; resto -= Math.min(resto, 1);
+      const nx = s.x + p;
+      if (!choca(T, nx, s.y)) { s.x = nx; continue; }
+      if (!choca(T, nx, s.y - 1)) { s.x = nx; s.y -= 1; s.vx *= 30 / 32; continue; }
+      if (!choca(T, nx, s.y + 1)) { s.x = nx; s.y += 1; s.vx *= 30 / 32; continue; }
+      s.vx = -s.vx * rebote; if (Math.abs(s.vx) < 0.03) s.vx = 0;
+      return false;
+    }
+    return true;
+  }
+  // devuelve 'piso' si choco contra el piso, 'techo' contra el techo, o null
+  function moverY(T, s, dy) {
+    const sg = Math.sign(dy); let resto = Math.abs(dy);
+    while (resto > 1e-6) {
+      const p = Math.min(resto, 1) * sg; resto -= Math.min(resto, 1);
+      const ny = s.y + p;
+      if (!choca(T, s.x, ny)) { s.y = ny; continue; }
+      return sg > 0 ? 'piso' : 'techo';
+    }
+    return null;
+  }
+
+  function aterrizar(s) {
+    const v = s.vy;
+    if (s.sinCaida) s.sinCaida = false;
+    else if (v > C.CAIDA_DESDE) {
+      const dano = Math.floor(((v - C.CAIDA_DESDE + 1 / 65536) * C.CAIDA_COEF + 18) / 18);
+      s.caida = dano; s.vida = Math.max(0, s.vida - dano);
+    }
+    s.vy = 0;
+    // los saltos aterrizan quietos; lo que venia volando rapido (una explosion) se desliza
+    s.estado = Math.abs(s.vx) > 2.5 ? 'desliza' : 'suelo';
+    if (s.estado === 'suelo') s.vx = 0;
+    s.tiros = Infinity; // al tocar el piso, la soga vuelve a tener todos sus tiros
+  }
+
   function pasoAire(J, s) {
     const T = J.T;
     s.vy = Math.min(C.VMAX, s.vy + C.GRAV);
     s.vx = Math.max(-C.VMAX, Math.min(C.VMAX, s.vx));
-    if (s.vx) s.dir = s.vx > 0 ? 1 : -1;
+    if (Math.abs(s.vx) > 0.05) s.dir = s.vx > 0 ? 1 : -1;
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(s.vx), Math.abs(s.vy))));
     for (let i = 0; i < n && s.estado === 'aire'; i++) {
-      const dx = s.vx / n, dy = s.vy / n;
-      if (dx) {
-        if (!choca(T, s.x + dx, s.y)) s.x += dx;
-        else if (s.vy >= 0 && !choca(T, s.x + dx, s.y - 1)) { s.x += dx; s.y -= 1; }
-        else s.vx = -s.vx * C.REBOTE;
-      }
-      if (dy) {
-        if (!choca(T, s.x, s.y + dy)) s.y += dy;
-        else if (dy > 0) {
-          // cae: se apoya (y si venia rapido, se lastima)
-          while (!choca(T, s.x, s.y + 0.25)) s.y += 0.25;
-          const v = s.vy;
-          if (s.sinCaida) s.sinCaida = false;
-          else if (v > C.CAIDA_DESDE) {
-            const dano = Math.floor(((v - C.CAIDA_DESDE + 1 / 65536) * C.CAIDA_COEF + 18) / 18);
-            s.caida = dano; s.vida = Math.max(0, s.vida - dano);
-          }
-          s.vy = 0;
-          // (los saltos aterrizan quietos; lo que venia volando rapido, por una explosion, se desliza)
-          s.estado = Math.abs(s.vx) > 2.5 ? 'desliza' : 'suelo';
-          if (s.estado === 'suelo') s.vx = 0;
-          s.y = Math.floor(s.y); // (apoyada justo encima del piso, sin meterse en el)
-        } else s.vy = 0; // el techo
-      }
+      if (s.vx) moverX(T, s, s.vx / n, C.REBOTE);
+      const r = moverY(T, s, s.vy / n);
+      if (r === 'piso') { aterrizar(s); break; }
+      if (r === 'techo') s.vy = 0;
     }
+    if (s.estado === 'aire') s.vx *= 0.999;
   }
 
   // ── La soga ──
   function tirarGancho(s) {
-    // nunca por debajo de la horizontal
-    const a = Math.min(0, s.mira);
-    s.gancho = { x: s.x, y: s.y - 4, dx: Math.cos(a) * s.dir, dy: Math.sin(a), d: 0 };
+    // nunca por debajo de la horizontal (con todas las estrellas: hasta 90 grados de la vertical)
+    let dx = Math.cos(s.mira) * s.dir, dy = Math.sin(s.mira);
+    if (dy > -0.015) { dy = -0.015; const n = Math.hypot(dx, dy); dx /= n; dy /= n; }
+    s.gancho = { x: s.x, y: s.y - 2, dx, dy, d: 0 };
   }
   function volarGancho(J, s) {
     const T = J.T, g = s.gancho;
     for (let i = 0; i < C.SOGA_VEL; i++) {
       const nx = g.x + g.dx, ny = g.y + g.dy;
       if (T.solido(nx, ny)) {
-        // se engancha en el ultimo pixel libre
+        // se engancha en el ultimo pixel libre (muy cerca, no engancha)
         const L = Math.hypot(g.x - s.x, g.y - s.y);
         s.gancho = null;
-        if (L < C.SOGA_MIN) return;
-        s.soga = { piv: [{ x: g.x, y: g.y, s: 0 }], L: Math.min(C.SOGA_LARGO, L), fijo: 0 };
+        if (L < 20 || !T.libre(s.x, s.y - 2, g.x, g.y, 2)) return;
+        s.soga = { piv: [{ x: g.x, y: g.y, s: 0 }], L: Math.max(C.SOGA_MIN, Math.min(C.SOGA_LARGO, L)), fijo: 0 };
         s.estado = 'soga'; s.salto = null;
         return;
       }
       g.x = nx; g.y = ny; g.d++;
-      if (g.d >= C.SOGA_LARGO || g.y < -50 || g.x < -50 || g.x > T.w + 50) { s.gancho = null; return; }
+      if (g.d >= C.SOGA_LARGO || g.y < -300 || g.x < -60 || g.x > T.w + 60) { s.gancho = null; return; }
     }
   }
 
   function pasoSoga(J, s, e) {
     const T = J.T, R = s.soga;
-    let p = R.piv[R.piv.length - 1];
-    let r = R.L - R.fijo;
-    // la distancia ahora y la direccion desde el ultimo punto de enganche
-    let dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy) || 1;
-    const tensa = d >= r - 0.5;
-    // acortar / alargar (al acortar, gira mas rapido: se conserva el momento angular)
-    if (e.arr || e.aba) {
-      const nL = Math.max(R.fijo + C.SOGA_MIN, Math.min(C.SOGA_LARGO, R.L + (e.arr ? -C.SOGA_ACORTA : C.SOGA_ALARGA)));
-      const nr = nL - R.fijo;
-      if (e.arr && nr < d) {
-        const nx = p.x + dx / d * nr, ny = p.y + dy / d * nr;
-        if (!choca(T, nx, ny)) {
-          const ux = dx / d, uy = dy / d, vr = s.vx * ux + s.vy * uy;
-          const tx = s.vx - vr * ux, ty = s.vy - vr * uy, k = d / nr;
-          if (tensa) { s.vx = tx * k + vr * ux; s.vy = ty * k + vr * uy; }
-          s.x = nx; s.y = ny; R.L = nL;
-        }
-      } else if (e.aba) R.L = nL;
-      r = R.L - R.fijo;
-    }
-    // el balanceo: empuja de costado (solo tensa)
-    if (tensa) {
-      if (e.izq && !e.der) { s.vx -= C.SOGA_EMPUJE; s.dir = -1; }
-      if (e.der && !e.izq) { s.vx += C.SOGA_EMPUJE; s.dir = 1; }
+    const ultimo = () => R.piv[R.piv.length - 1];
+    // acortar / alargar (medido en partidas: unos 4 px por paso en los dos sentidos)
+    if (e.arr) acortar(T, s);
+    if (e.aba) R.L = Math.min(C.SOGA_LARGO, R.L + C.SOGA_ALARGA);
+    // el balanceo: empuje a lo largo del giro, para el lado que se aprieta
+    const d = (e.izq ? -1 : 0) + (e.der ? 1 : 0);
+    if (d) {
+      const p = ultimo(), dx = s.x - p.x, dy = s.y - p.y, n = Math.hypot(dx, dy) || 1;
+      let tx = -dy / n, ty = dx / n;
+      if (tx * d < 0) { tx = -tx; ty = -ty; }
+      s.vx += tx * C.SOGA_EMPUJE; s.vy += ty * C.SOGA_EMPUJE;
+      s.dir = d;
     }
     s.vy += C.GRAV;
-    // el roce de la soga (la parte tangencial)
-    dx = s.x - p.x; dy = s.y - p.y; d = Math.hypot(dx, dy) || 1;
-    {
-      const ux = dx / d, uy = dy / d, vr = s.vx * ux + s.vy * uy;
-      const tx = (s.vx - vr * ux) * C.SOGA_ROCE, ty = (s.vy - vr * uy) * C.SOGA_ROCE;
-      s.vx = tx + vr * ux; s.vy = ty + vr * uy;
-    }
-    // tope de velocidad
-    const v = Math.hypot(s.vx, s.vy);
-    if (v > C.SOGA_VMAX) { s.vx *= C.SOGA_VMAX / v; s.vy *= C.SOGA_VMAX / v; }
-    // moverse de a poco, chocando, enrollando y restringiendo
+    s.vx = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vx));
+    s.vy = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vy));
+    // moverse de a poco: chocar, enrollar en las esquinas y que la soga no se estire
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(s.vx), Math.abs(s.vy))));
+    let apoyada = false;
     for (let i = 0; i < n && s.estado === 'soga'; i++) {
       const ax = s.x, ay = s.y;
-      const mx = s.vx / n, my = s.vy / n;
-      if (mx) { if (!choca(T, s.x + mx, s.y)) s.x += mx; else s.vx = -s.vx * C.SOGA_REBOTE; }
-      if (my) { if (!choca(T, s.x, s.y + my)) s.y += my; else s.vy = -s.vy * C.SOGA_REBOTE; }
+      if (s.vx) moverX(T, s, s.vx / n, C.SOGA_REBOTE);
+      const r = moverY(T, s, s.vy / n);
+      if (r === 'piso') { apoyada = true; s.vy = 0; }
+      else if (r === 'techo') s.vy = 0;
       enrollar(T, s, ax, ay);
       restringir(T, s, ax, ay);
     }
+    // apoyada en el piso, colgada: roza como caminando
+    if (apoyada) { s.vx *= C.ROCE; if (Math.abs(s.vx) < 0.05) s.vx = 0; }
+  }
+
+  // acortar: tira de la serpiente hacia el enganche (si no la mete en el terreno)
+  function acortar(T, s) {
+    const R = s.soga, p = R.piv[R.piv.length - 1];
+    const nL = Math.max(R.fijo + C.SOGA_MIN, R.L - C.SOGA_ACORTA);
+    const r = nL - R.fijo, dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (d > r) {
+      const ux = dx / d, uy = dy / d, tx = p.x + ux * r, ty = p.y + uy * r;
+      // el camino tiene que estar libre
+      const k = Math.ceil(d - r);
+      for (let i = 1; i <= k; i++) if (choca(T, s.x - ux * (d - r) * i / k, s.y - uy * (d - r) * i / k)) return;
+      s.x = tx; s.y = ty;
+      const vr = s.vx * ux + s.vy * uy;
+      if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+    }
+    R.L = nL;
   }
 
   // ¿la soga se apoya en una esquina? (el tramo del ultimo enganche a la serpiente cruza terreno)
   function enrollar(T, s, ax, ay) {
     const R = s.soga;
-    // desenrollar: el tramo quedo derecho (cambio de lado respecto del enganche anterior)
+    // desenrollar: el tramo quedo derecho (paso al otro lado del enganche anterior)
     while (R.piv.length > 1) {
       const p = R.piv[R.piv.length - 1], q = R.piv[R.piv.length - 2];
       const lado = Math.sign((p.x - q.x) * (s.y - p.y) - (p.y - q.y) * (s.x - p.x));
       if (lado !== 0 && lado !== p.s) { R.piv.pop(); R.fijo -= Math.hypot(p.x - q.x, p.y - q.y); }
       else break;
     }
-    // enrollar: el tramo cruza terreno. Busca entre donde estaba (libre) y donde esta el punto exacto en
-    // que se apoya, y engancha la soga en la esquina
+    // enrollar: busca entre donde estaba (libre) y donde esta el momento exacto en que el tramo toca
+    // terreno, y engancha la soga en esa esquina (el ultimo pixel libre)
     for (let vuelta = 0; vuelta < 3; vuelta++) {
       const p = R.piv[R.piv.length - 1];
       if (T.libre(p.x, p.y, s.x, s.y, 2)) return;
@@ -306,7 +332,6 @@
         if (T.libre(p.x, p.y, ax + (s.x - ax) * m, ay + (s.y - ay) * m, 2)) lo = m; else hi = m;
       }
       const bx = ax + (s.x - ax) * hi, by = ay + (s.y - ay) * hi;
-      // la esquina: el ultimo pixel libre antes del terreno, en la linea del enganche al punto bloqueado
       const ddx = bx - p.x, ddy = by - p.y, nn = Math.ceil(Math.max(Math.abs(ddx), Math.abs(ddy)));
       let cx = null, cy = null;
       for (let k = 2; k <= nn; k++) {
@@ -321,14 +346,24 @@
     }
   }
 
-  // la soga no se estira: si quedo mas lejos, vuelve al circulo y pierde la velocidad hacia afuera
+  // la soga no se estira (pero se afloja): si quedo mas lejos, vuelve al circulo y pierde la velocidad
+  // hacia afuera. Si ese punto cae en el terreno, se desliza por el borde (busca el angulo libre mas cerca)
   function restringir(T, s, ax, ay) {
     const R = s.soga, p = R.piv[R.piv.length - 1], r = R.L - R.fijo;
     const dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy) || 1;
     if (d <= r) return;
-    const nx = p.x + dx / d * r, ny = p.y + dy / d * r;
-    if (!choca(T, nx, ny)) { s.x = nx; s.y = ny; } else { s.x = ax; s.y = ay; }
-    const ux = dx / d, uy = dy / d, vr = s.vx * ux + s.vy * uy;
+    let ux = dx / d, uy = dy / d, tx = p.x + ux * r, ty = p.y + uy * r;
+    if (choca(T, tx, ty)) {
+      const base = Math.atan2(uy, ux); let libre = null;
+      for (let k = 1; k <= 12 && !libre; k++) for (const sg of [-1, 1]) {
+        const a = base + sg * k * 0.02, x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+        if (!choca(T, x, y)) { libre = [x, y, Math.cos(a), Math.sin(a)]; break; }
+      }
+      if (!libre) { s.x = ax; s.y = ay; const vr = s.vx * ux + s.vy * uy; if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; } return; }
+      [tx, ty, ux, uy] = libre;
+    }
+    s.x = tx; s.y = ty;
+    const vr = s.vx * ux + s.vy * uy;
     if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
   }
 
