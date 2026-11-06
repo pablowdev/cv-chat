@@ -871,7 +871,12 @@
       // como apunta el rival (y donde pone la blanca si tiene bola en mano)
       const x = M.rival.x != null ? M.rival.x : cue.x, y = M.rival.y != null ? M.rival.y : cue.y;
       if (s.enMano && M.rival.x != null) { cue.x = x; cue.y = y; }
-      dibujarTaco(c, x, y, M.rival.ang, M.rival.fuerza || 0, 0.85);
+      // (llega 4 veces por segundo: se acerca de a poco a la ultima, por el lado corto)
+      const v = M.rivalVista || (M.rivalVista = { ang: M.rival.ang, fuerza: M.rival.fuerza || 0 });
+      const d = Math.atan2(Math.sin(M.rival.ang - v.ang), Math.cos(M.rival.ang - v.ang));
+      v.ang += Math.abs(d) < 0.001 ? d : d * 0.25;
+      v.fuerza += ((M.rival.fuerza || 0) - v.fuerza) * 0.25;
+      dibujarTaco(c, x, y, v.ang, v.fuerza, 0.85);
     }
     // la barra de fuerza (en el celular va acostada)
     const pc = ((M.apuntando || M.cargando ? M.fuerza : M.barra) * 100) + '%';
@@ -886,9 +891,12 @@
     const apuntarA = (x, y) => { const cue = blanca(); if (!cue) return; const dx = x - cue.x, dy = y - cue.y; if (Math.hypot(dx, dy) > 1) M.ang = Math.atan2(dy, dx); };
     const apuntarDedo = (p) => { const cue = blanca(); if (cue && Math.hypot(p.x - cue.x, p.y - cue.y) > R * 2) apuntarA(p.x, p.y); };
     const contar = () => {
-      // la mira, para que el rival la vea (pool.js la reparte; como mucho 12 por segundo)
-      const now = performance.now();
-      if (now - M.ultimoApunta < 85 || !M.s || M.s.compu) return;
+      // la mira, para que el rival la vea (pool.js la reparte). Como mucho 4 por segundo: Haven corta
+      // con "Slow down: too many requests" si un socket manda mas de 60 eventos en 10 segundos. La
+      // ultima posicion sale igual (un poco despues), y del otro lado la mira se mueve suave
+      if (!M.s || M.s.compu) return;
+      const now = performance.now(), falta = 250 - (now - (M.ultimoApunta || 0));
+      if (falta > 0) { if (!M.apuntaLuego) M.apuntaLuego = setTimeout(() => { M.apuntaLuego = null; contar(); }, falta); return; }
       M.ultimoApunta = now;
       const cue = blanca();
       A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando || M.cargando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y }).catch(() => {});
@@ -1056,7 +1064,7 @@
     usar(api) { A = api; },
     inicio, crear, reglas, mesa, salir,
     estado(s) { if (M && s && s.id === M.id) render(s); },
-    apunta(m) { if (M && m && m.id === M.id && M.s && !M.s.teToca) M.rival = { ...m, t: performance.now() }; },
+    apunta(m) { if (M && m && m.id === M.id && M.s && !M.s.teToca) { if (!M.rival || performance.now() - M.rival.t > 4000) M.rivalVista = null; M.rival = { ...m, t: performance.now() }; } },
     abierta: () => M && M.id,
   };
 })();
