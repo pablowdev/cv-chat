@@ -10426,9 +10426,10 @@ document.addEventListener('pointerdown', (ev) => {
     if (!page) return;
     page.remove(); page = null; stack = []; mesa = null; clearInterval(tickT);
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
+    refreshBadge();
   }
   function back() {
-    if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); }
+    if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); refreshBadge(); }
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
@@ -10445,7 +10446,7 @@ document.addEventListener('pointerdown', (ev) => {
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.add('active'));
     return page;
   }
-  function go(view, arg) { frame(); stack.push([view, arg]); show(view, arg); }
+  function go(view, arg) { frame(); stack.push([view, arg]); show(view, arg); refreshBadge(); }
   // Boton para pasar el enlace de la biblioteca (/app?juegos) o de un juego (/app?juegos=truco)
   function botonEnlace(ruta, titulo) {
     const b = el('button', 'jg-icono'); b.type = 'button';
@@ -13178,7 +13179,10 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     badgeT = setTimeout(async () => {
       badgeT = null;
       const [d, f, aj, gs, po] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio')]);
-      const n = (d.error ? 0 : d.mias.filter(m => m.teToca).length) + (f.error || !f.mias ? 0 : f.mias.filter(m => m.teToca).length) + (aj.error || !aj.mias ? 0 : aj.mias.filter(m => m.teToca).length) + (gs.error || !gs.mias ? 0 : gs.mias.filter(m => m.teToca).length) + (po.error || !po.mias ? 0 : po.mias.filter(m => m.teToca).length);
+      // (sin contar la partida que esta abierta en la pantalla: ahi ya se esta jugando)
+      const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
+      const cuenta = (r) => (r.error || !r.mias ? 0 : r.mias.filter(m => m.teToca && String(m.id) !== abierta).length);
+      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po);
       setBadge(n);
     }, 2000);
   }
