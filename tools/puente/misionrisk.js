@@ -204,6 +204,14 @@ function act(me, d) {
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seatOf(g, me);
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // El zumbido para apurar al que le toca (chat-partida.js)
+  if (d.tipo === 'zumbido') {
+    if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
+    const t = g.S.turno, para = juegaCompu(g, t) ? null : g.asientos[t - 1].uid;
+    const r = CP.zumbar({ g, juego: 'globalsiege', titulo: 'GlobalSiege', url: `/app?globalsiege=${g.id}`, yo: me, de: nameOf(me).nombre, quien: me, para, io, db, webpush });
+    if (r.ok) push(g);
+    return r;
+  }
   // El chat entre las personas de la mesa (chat-partida.js): desde la espera hasta que se cierra la mesa
   if (d.tipo === 'chat') {
     if (humanos(g).length < 2) return { error: 'El chat es para cuando hay más personas en la mesa.' };
@@ -349,6 +357,7 @@ function view(g, me) {
 }
 
 function push(g, big) {
+  if (g.estado === 'jugando' && g.S) CP.turno(g, g.asientos[g.S.turno - 1].uid || 0); // (para el zumbido)
   save(g);
   const ids = humanos(g);
   for (const [, s] of io.sockets.sockets) {

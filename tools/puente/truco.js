@@ -381,6 +381,15 @@ function act(me, d) {
 
 function doAct(g, i, d) {
   const tipo = String(d.tipo || '');
+  // El zumbido para apurar al rival (chat-partida.js)
+  if (tipo === 'zumbido') {
+    if (g.compu) return { error: 'Contra la compu no hay zumbidos.' };
+    if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
+    const yo = g.jugadores[i];
+    const r = require('./chat-partida.js').zumbar({ g, juego: 'truco', titulo: 'Truco', url: `/app?truco=${g.id}`, yo, de: nameOf(yo).nombre, quien: i, para: g.jugadores[actor(g)], jugada: g.movido, io, db, webpush });
+    if (r.ok) push(g, false);
+    return r;
+  }
   if (tipo === 'chat') {
     const text = String(d.texto || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
     if (!text) return { error: 'Escribí algo.' };
@@ -706,6 +715,7 @@ function view(g, me) {
 
 // Manda el estado a los dos (cada uno con lo suyo) y, si hace falta, un aviso al celular
 function push(g, big) {
+  if (g.estado === 'jugando') require('./chat-partida.js').turno(g, g.jugadores[actor(g)], g.movido); // (para el zumbido)
   save(g);
   const ids = g.jugadores.filter(x => x !== BOT);
   for (const [, s] of io.sockets.sockets) {

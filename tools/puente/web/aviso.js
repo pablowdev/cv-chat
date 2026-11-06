@@ -10513,7 +10513,52 @@ document.addEventListener('pointerdown', (ev) => {
   // Para hablar con los rivales mientras se juega (el Truco tiene el suyo, al costado). La caja queda
   // fija debajo de la mesa, fuera de lo que se vuelve a dibujar en cada jugada (asi no se pierde lo
   // que se esta escribiendo), y solo cambia la lista. Es temporal: se borra cuando se cierra la mesa
-  function chatPartida(padre, s, enviar) {
+  // ── El zumbido (chat-partida.js): el boton 📳 al lado de Enviar, cuando le toca a otro ──
+  const puedeZumbar = (s) => !!s && s.estado === 'jugando' && s.teToca === false && !s.compu && s.soyJugador !== false;
+  function botonZumbido(juego, id) {
+    const b = el('button', 'jg-btn jg-zumbido', '📳'); b.type = 'button';
+    b.title = 'Zumbido: avisale que le toca jugar'; b.setAttribute('aria-label', 'Mandar un zumbido');
+    b.addEventListener('click', async () => {
+      if (b.dataset.yendo) return;
+      b.dataset.yendo = '1';
+      const r = await emit(juego + ':accion', { id, tipo: 'zumbido' });
+      delete b.dataset.yendo;
+      if (r && r.error) toast(r.error, 'error');
+      else if (r && r.ok) { toast(r.quedan > 0 ? 'Zumbido enviado' : 'Zumbido enviado (es el último de este turno)', 'success'); sacudir(page); }
+    });
+    return b;
+  }
+  function sacudir(x) {
+    if (!x) return;
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch { /* como siempre */ }
+    x.classList.remove('puente-zumbido'); void x.offsetWidth; x.classList.add('puente-zumbido');
+    setTimeout(() => x.classList.remove('puente-zumbido'), 700);
+  }
+  // el sonido: un bzz grave que tiembla (sintetizado)
+  let zCtx = null;
+  function sonarZumbido() {
+    try {
+      zCtx = zCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (zCtx.state === 'suspended') zCtx.resume();
+      const t = zCtx.currentTime, o = zCtx.createOscillator(), lfo = zCtx.createOscillator(), lg = zCtx.createGain(), g = zCtx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 95; lfo.frequency.value = 28; lg.gain.value = 18;
+      lfo.connect(lg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.03); g.gain.setValueAtTime(0.2, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
+      o.connect(g).connect(zCtx.destination); o.start(t); lfo.start(t); o.stop(t + 0.7); lfo.stop(t + 0.7);
+    } catch { /* sin sonido */ }
+  }
+  // Me llego un zumbido: si estoy en esa mesa, tiembla la mesa; si no, tiembla la pantalla. Siempre el aviso
+  function zumbidoRecibido(z) {
+    if (!z) return;
+    const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
+    const aca = !!page && abierta === String(z.id);
+    sonarZumbido();
+    try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch { /* sin vibrar */ }
+    sacudir(aca ? page : document.body);
+    toast(aca ? `${z.de} te mandó un zumbido` : `${z.de} te mandó un zumbido: te toca en el ${z.titulo}`, 'info');
+  }
+  window.puenteZumbido = { recibido: zumbidoRecibido };
+  function chatPartida(padre, s, enviar, juego) {
     let c = padre.querySelector(':scope > .jg-chat-partida');
     if (!s || !s.chat) { if (c) c.remove(); return; }
     if (!c || c.dataset.id !== String(s.id)) {
@@ -10524,7 +10569,9 @@ document.addEventListener('pointerdown', (ev) => {
       const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
       inp.placeholder = 'Escribí un mensaje';
       const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
-      form.append(inp, send);
+      form.append(inp);
+      if (juego) form.append(botonZumbido(juego, s.id));
+      form.append(send);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const t = inp.value.trim();
@@ -10540,6 +10587,8 @@ document.addEventListener('pointerdown', (ev) => {
       lista.style.height = '10rem';
       padre.appendChild(c);
     }
+    const zb = c.querySelector('.jg-zumbido');
+    if (zb) zb.style.display = puedeZumbar(s) ? '' : 'none';
     const lista = c.querySelector('.jg-chat-lista');
     const msgs = s.chat;
     // (los colores cuentan: en GlobalSiege llegan cuando empieza la guerra)
@@ -11223,7 +11272,7 @@ document.addEventListener('pointerdown', (ev) => {
         const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
         inp.placeholder = `Mensaje a ${(s.rival && s.rival.nombre) || 'tu rival'}`;
         const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
-        form.append(inp, send);
+        form.append(inp, botonZumbido('truco', s.id), send);
         const mandar = (t) => emit('truco:accion', { id: mesa.id, tipo: 'chat', texto: t }).then(r => { if (r && r.error) toast(r.error, 'error'); });
         form.addEventListener('submit', (e) => { e.preventDefault(); const t = inp.value.trim(); if (!t) return; inp.value = ''; mandar(t); });
         chat.append(el('div', 'jg-chat-t', 'Chat'), lista, rapidos, form);
@@ -11240,6 +11289,8 @@ document.addEventListener('pointerdown', (ev) => {
     tan.append(col('Vos', pts[0], antes[0]), col((s.rival && s.rival.nombre) || 'Rival', pts[1], antes[1]));
     mesa.pts = pts; mesa.ptsId = s.id;
     // chat
+    const zb = L.querySelector('.jg-zumbido');
+    if (zb) zb.style.display = puedeZumbar(s) ? '' : 'none';
     const lista = L.querySelector('.jg-chat-lista');
     if (lista) {
       const msgs = s.chat || [];
@@ -11916,7 +11967,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const prev = fbMesa.s;
     fbMesa.s = s; mesa.s = s;
     botonSalir(fbMesa.menu, s);
-    chatPartida(page, s, (t) => emit('funball:accion', { id: s.id, tipo: 'chat', texto: t }));
+    chatPartida(page, s, (t) => emit('funball:accion', { id: s.id, tipo: 'chat', texto: t }), 'funball');
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && fbMesa && fbMesa.id === s.id) { stack.pop(); go('fbMesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Funball · ${s.tablero}`;
@@ -12922,7 +12973,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const prev = ajM.s;
     ajM.s = s; mesa.s = s; ajM.recibido = performance.now();
     botonSalir(ajM.menu, s);
-    chatPartida(page, s, (t) => emit('ajedrez:accion', { id: s.id, tipo: 'chat', texto: t }));
+    chatPartida(page, s, (t) => emit('ajedrez:accion', { id: s.id, tipo: 'chat', texto: t }), 'ajedrez');
     if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && ajM && ajM.id === s.id) { stack.pop(); go('ajMesa', s.siguiente); } }, 600); }
     const t = page.querySelector('.jg-titulo');
     if (t) t.textContent = `Ajedrez · ${s.ritmo}${s.compu ? ' · compu ' + s.nivel.toLowerCase() : ''}`;
@@ -13255,15 +13306,8 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (plVisto.get(s.id) !== k) { plVisto.set(s.id, k); refreshBadge(); }
     });
     a.socket.on('pool:apunta', (m) => { if (page && window.puentePool) window.puentePool.apunta(m); });
-    // El zumbido del rival: en la mesa, la sacude (juego.js); en otra parte, un aviso y la pantalla que tiembla
-    a.socket.on('pool:zumbido', (z) => {
-      if (!z) return;
-      if (page && window.puentePool && window.puentePool.abierta() === z.id) { window.puentePool.zumbido(z); return; }
-      try { window.app && window.app._showToast && window.app._showToast(`${z.de} te mandó un zumbido: te toca en el Pool`, 'info'); } catch { /* sin aviso */ }
-      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch { /* sin vibrar */ }
-      const b = document.body;
-      if (b && !matchMedia('(prefers-reduced-motion: reduce)').matches) { b.classList.remove('puente-zumbido'); void b.offsetWidth; b.classList.add('puente-zumbido'); setTimeout(() => b.classList.remove('puente-zumbido'), 700); }
-    });
+    // El zumbido de otro jugador (chat-partida.js), de cualquier juego
+    a.socket.on('juego:zumbido', (z) => { if (window.puenteZumbido) window.puenteZumbido.recibido(z); });
     a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
     a.socket.on('gusanos:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'gusanos')) show('inicio', t[1]); });
     a.socket.on('connect', () => {

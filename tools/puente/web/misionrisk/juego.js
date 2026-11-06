@@ -379,7 +379,7 @@
     dibujar();
     barra();
     panel();
-    if (A.chat) A.chat(M.chatBox, s, (t) => A.emit('mr:accion', { id: s.id, tipo: 'chat', texto: t }));
+    if (A.chat) A.chat(M.chatBox, s, (t) => A.emit('mr:accion', { id: s.id, tipo: 'chat', texto: t }), 'mr');
   }
 
   // ── El mapa ──

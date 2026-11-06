@@ -237,6 +237,14 @@ function act(me, d) {
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seat(g, me);
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // El zumbido para apurar al rival (chat-partida.js)
+  if (d.tipo === 'zumbido') {
+    if (g.compu) return { error: 'Contra la compu no hay zumbidos.' };
+    if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
+    const r = CP.zumbar({ g, juego: 'ajedrez', titulo: 'Ajedrez', url: `/app?ajedrez=${g.id}`, yo: me, de: nameOf(me).nombre, quien: i, para: g.jugadores[seatOfColor(g, turno(g))], io, db, webpush });
+    if (r.ok) push(g, false);
+    return r;
+  }
   // El chat con el rival (chat-partida.js): mientras dura la mesa, tambien despues de terminar
   if (d.tipo === 'chat') {
     if (g.compu) return { error: 'Contra la compu no hay chat.' };
@@ -390,6 +398,7 @@ function view(g, me) {
 }
 
 function push(g, big) {
+  if (g.estado === 'jugando') CP.turno(g, g.jugadores[seatOfColor(g, turno(g))]); // (para el zumbido)
   save(g);
   const ids = g.jugadores.filter(x => x !== BOT);
   for (const [, s] of io.sockets.sockets) {
