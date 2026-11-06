@@ -299,6 +299,8 @@ function botDraw(g, k) {
 
 function rematch(g) {
   const n = nueva(g.jugadores[0], { ritmo: g.ritmo, compu: g.compu, amistosa: !!g.amistosa, nivel: g.nivel, jugadores: g.jugadores.slice() });
+  // La charla sigue en la revancha (los mismos jugadores, en los mismos lugares)
+  if (g.chat) n.chat = g.chat.slice();
   games.set(n.id, n);
   start(n, 1 - g.blancas);
   g.siguiente = n.id; push(g, true);

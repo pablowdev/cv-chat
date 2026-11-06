@@ -231,6 +231,8 @@ function rematch(g) {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: false, invitado: null,
     compu: g.compu, amistosa: !!g.amistosa, nivel: g.nivel, jugadores: g.jugadores.slice(), estado: 'esperando', log: [], revancha: [false, false], tiros: 0,
   };
+  // La charla sigue en la revancha (los mismos jugadores, en los mismos lugares)
+  if (g.chat) n.chat = g.chat.slice();
   games.set(n.id, n);
   // en la revancha rompe el que perdio
   start(n, 1 - g.ganador);
