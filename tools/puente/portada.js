@@ -29,7 +29,8 @@ function nombre(db, id) {
 // Las mesas: en juego (cuantas), las abiertas esperando rival (cuales) y las que se estan jugando ahora
 // entre gente del club (enJuego, para la tarjeta "Ahora en el club" de club.js: con movimiento en los
 // ultimos 30 minutos, de dos o mas personas con cuenta, sin las de la compu sola ni las de invitados)
-function mesas(db) {
+// conIds: con los ids de los que juegan (uids), para que club.js no le ofrezca a nadie sus propias partidas
+function mesas(db, conIds) {
   let jugando = 0;
   const abiertas = [], enJuego = [];
   for (const j of JUEGOS) {
@@ -38,20 +39,25 @@ function mesas(db) {
     for (const r of filas) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }
       if (g.estado === 'jugando') jugando++;
-      if (g.estado === 'jugando' && Date.now() - (r.actualizado || 0) < 30 * 60e3) {
+      // (la ultima jugada de verdad: el chat, los zumbidos y el barrido no cuentan; chat-partida.js)
+      const ultima = g.estado === 'jugando' ? require('./chat-partida.js').ultimaJugada(g) : 0;
+      if (g.estado === 'jugando' && Date.now() - ultima < 30 * 60e3) {
         const ids = (g.jugadores || (g.asientos || []).map(a => a && a.uid)).filter(x => x > 0);
         const nombres = ids.map(x => nombre(db, x));
-        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: r.actualizado, enlace: g.publica ? `/app?${j.param}=${encodeURIComponent(g.id)}` : null });
+        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: g.publica ? `/app?${j.param}=${encodeURIComponent(g.id)}` : null, ...(conIds ? { uids: ids } : {}) });
       }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));
       if (!quien) continue; // (las de los invitados no se muestran)
-      abiertas.push({ juego: j.juego, nombre: j.nombre, detalle: j.detalle(g), quien, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, creado: g.creado || 0 });
+      const uids = (g.jugadores || (g.asientos || []).map(a => a && a.uid)).filter(x => x > 0);
+      abiertas.push({ juego: j.juego, nombre: j.nombre, detalle: j.detalle(g), quien, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, creado: g.creado || 0, ...(conIds ? { uids } : {}) });
     }
   }
   abiertas.sort((a, b) => b.creado - a.creado);
   enJuego.sort((a, b) => b.at - a.at);
-  return { jugando, abiertas: abiertas.slice(0, 4).map(({ creado, ...x }) => x), enJuego: enJuego.slice(0, 4).map(({ at, ...x }) => x) };
+  // (con ids: todas, para que club.js saque las de cada uno antes de quedarse con 4)
+  const n = conIds ? 50 : 4;
+  return { jugando, abiertas: abiertas.slice(0, n).map(({ creado, ...x }) => x), enJuego: enJuego.slice(0, n).map(({ at, ...x }) => x) };
 }
 
 async function armar(db, io, warn) {

@@ -357,7 +357,7 @@ function view(g, me) {
 }
 
 function push(g, big) {
-  if (g.estado === 'jugando' && g.S) CP.turno(g, g.asientos[g.S.turno - 1].uid || 0); // (para el zumbido)
+  if (g.estado === 'jugando' && g.S) CP.turno(g, g.asientos[g.S.turno - 1].uid || 0, undefined, true); // (para el zumbido y la ultima jugada)
   save(g);
   const ids = humanos(g);
   for (const [, s] of io.sockets.sockets) {

@@ -81,8 +81,10 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   res.setHeader('Cache-Control', 'no-store');
   // las mesas, siempre al dia (son pocas filas): el resto se guarda 30 segundos
   let m = null;
-  try { m = require('./portada.js').mesas(db); } catch (err) { warn('club: mesas:', err.message); }
-  return json(res, 200, m ? { ...hecho.datos, abiertas: m.abiertas, enJuego: m.enJuego } : hecho.datos);
+  try { m = require('./portada.js').mesas(db, true); } catch (err) { warn('club: mesas:', err.message); }
+  // sin las partidas de uno mismo (no se ofrece mirar ni entrar a la propia) y sin los ids de nadie
+  const ajenas = (l) => l.filter(x => !(x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, ...x }) => x);
+  return json(res, 200, m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego) } : hecho.datos);
 }
 
 module.exports = { handle, enDiscord, cuentas };

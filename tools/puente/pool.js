@@ -321,7 +321,7 @@ function view(g, me) {
 }
 
 function push(g, big) {
-  if (g.estado === 'jugando') CP.turno(g, g.jugadores[g.S.turno], g.tiros); // (para el zumbido)
+  if (g.estado === 'jugando') CP.turno(g, g.jugadores[g.S.turno], g.tiros, true); // (para el zumbido y la ultima jugada)
   save(g);
 
   const ids = g.jugadores.filter(x => x !== BOT);
@@ -377,8 +377,8 @@ function ranking(since) {
 function mirables(me) {
   return [...games.values()]
     .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0)
-      // (solo las que se estan jugando de verdad: alguien jugo en la ultima media hora; chat-partida.js: turno)
-      && Date.now() - ((g.zt && g.zt.at) || g.movido || g.inicio || g.creado || 0) < 30 * 60e3)
+      // (solo las que se estan jugando de verdad: alguien jugo en la ultima media hora; chat-partida.js)
+      && Date.now() - require('./chat-partida.js').ultimaJugada(g) < 30 * 60e3)
     .sort((a, b) => (b.inicio || b.creado || 0) - (a.inicio || a.creado || 0)).slice(0, 10)
     .map(g => ({ id: g.id, jugadores: g.jugadores.map(nameOf) }));
 }

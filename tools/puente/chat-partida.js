@@ -30,10 +30,18 @@ const porHora = new Map(); // user -> los de la ultima hora
 
 // Desde cuando le toca al que le toca (cada juego lo llama al guardar la partida): uid y, si el mismo puede
 // jugar varias veces seguidas, algo que cambie con cada jugada. Devuelve true si empezo un turno nuevo
-function turno(g, uid, jugada) {
+// real: lo llama el juego al guardar despues de una jugada (el barrido y el zumbido solo empiezan a contar)
+function turno(g, uid, jugada, real) {
   const k = uid + ':' + (jugada == null ? '' : jugada);
-  if (!g.zt || g.zt.k !== k) { g.zt = { k, at: Date.now() }; return true; }
+  if (!g.zt || g.zt.k !== k) { g.zt = real ? { k, at: Date.now(), real: 1 } : { k, at: Date.now() }; return true; }
   return false;
+}
+
+// Cuando fue la ultima jugada de verdad (para "Se está jugando" y la tarjeta del club): no cuentan el chat,
+// los zumbidos ni el barrido que empieza a contar el plazo
+function ultimaJugada(g) {
+  const log = g.log && g.log.length ? g.log[g.log.length - 1].t || 0 : 0;
+  return Math.max(g.zt && g.zt.real ? g.zt.at : 0, g.movido || 0, log) || g.inicio || g.creado || 0;
 }
 
 // ── La partida quieta: el que tiene que jugar y no juega en 3 dias (o el plazo de cada juego), pierde ──
@@ -91,4 +99,4 @@ function zumbar(o) {
   return { ok: true, quedan: 3 - z.n };
 }
 
-module.exports = { chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS };
+module.exports = { chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, ultimaJugada };
