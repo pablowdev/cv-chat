@@ -178,11 +178,10 @@ function hookHttp() {
         if (/^\/themes\/[^/]+\.theme\.css$/.test(ruta) && !temasPublicados().includes(ruta.slice('/themes/'.length))) { send(res, 404, 'text/plain', 'No encontrado'); return true; }
         if (ruta === '/api/themes') soloTemasPublicados(res);
       }
-      // "Personas" de Haven (escribir con otro nombre y foto): solo los administradores
+      // "Personas" de Haven (escribir con otro nombre y foto): en CV Chat no hay, para nadie
+      // (la seccion de Editar perfil no se muestra, tema)
       if (req.method === 'POST' && (url === '/api/personas' || url.startsWith('/api/personas?'))) {
-        const who = sessionUser(req);
-        const admin = who && db.prepare('SELECT is_admin FROM users WHERE id = ?').get(who.id);
-        if (!admin || !admin.is_admin) { send(res, 403, 'application/json', JSON.stringify({ error: 'Las personas son solo para administradores.' })); return true; }
+        send(res, 403, 'application/json', JSON.stringify({ error: 'En CV Chat no hay personajes.' })); return true;
       }
       // Activar la verificacion con una app de codigos (Authy, Google Authenticator): Haven arma el QR
       // como "Haven: usuario"; se rehace como "CV Chat: usuario" con el logo de la app (las apps que
