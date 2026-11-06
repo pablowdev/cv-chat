@@ -2158,9 +2158,48 @@ function leido(sc) {
       r.append(el('span', 'puente-club-mesa-ico', ICONO[(m || j).juego] || '🎲'), t);
       if (m) r.append(entrar(m));
       else if (j.enlace) { const a = el('a', 'puente-club-entrar', 'Mirar'); a.href = j.enlace; a.title = 'Mirar la partida'; r.append(a); }
+      // tocar la partida (no el boton): la ventanita con el detalle (en el celular el renglon queda cortado)
+      r.title = 'Ver la partida';
+      r.addEventListener('click', (e) => {
+        if (e.target instanceof Element && e.target.closest('a[href]')) { e.stopPropagation(); return; }
+        e.stopPropagation(); ventanaMesa(m || j, !!m);
+      });
       tarjeta.append(r);
     }
     tarjeta.hidden = false;
+  }
+
+  // La ventanita de una partida de la tarjeta: el juego, como esta, quienes juegan y el boton (Mirar o Entrar)
+  function ventanaMesa(x, abierta) {
+    document.querySelector('.puente-club-ventana-fondo')?.remove();
+    const fondo = el('div', 'puente-club-ventana-fondo');
+    const v = el('div', 'puente-club-ventana');
+    v.setAttribute('role', 'dialog'); v.setAttribute('aria-label', x.nombre);
+    const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', esc); };
+    const esc = (e) => { if (e.key === 'Escape') cerrar(); };
+    document.addEventListener('keydown', esc);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(); });
+    const cab = el('div', 'puente-club-ventana-cab');
+    cab.append(el('span', 'puente-club-ventana-ico', ICONO[x.juego] || '🎲'), el('span', 'puente-club-ventana-t', x.nombre));
+    v.append(cab);
+    if (abierta) {
+      v.append(el('div', 'puente-club-ventana-s', mesaTexto(x) + (x.detalle ? ' · ' + x.detalle : '')));
+      v.append(el('div', 'puente-club-ventana-sub', 'Arma la mesa'));
+      const l = el('ul', 'puente-club-ventana-lista'); l.append(el('li', '', x.quien)); v.append(l);
+    } else {
+      v.append(el('div', 'puente-club-ventana-s', 'Se está jugando ahora'));
+      v.append(el('div', 'puente-club-ventana-sub', (x.quienes || []).length === 1 ? 'Juega' : 'Juegan'));
+      const l = el('ul', 'puente-club-ventana-lista');
+      for (const q of x.quienes || []) l.append(el('li', '', q));
+      v.append(l);
+    }
+    const acc = el('div', 'puente-club-ventana-acc');
+    const c = el('button', 'puente-club-ventana-cerrar', 'Cerrar'); c.type = 'button'; c.addEventListener('click', cerrar);
+    acc.append(c);
+    if (x.enlace) { const a = el('a', 'puente-club-entrar', abierta ? 'Entrar' : '👀 Mirar'); a.href = x.enlace; a.addEventListener('click', cerrar); acc.append(a); }
+    v.append(acc);
+    fondo.append(v);
+    document.body.append(fondo);
   }
 
   let pidiendo = false;

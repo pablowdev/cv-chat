@@ -3587,6 +3587,21 @@ html body a.puente-club-entrar {
   flex: none; padding: 0.25rem 0.75rem; border-radius: 0.375rem; background: #ee2d6f; color: #fff !important; font-weight: 700; font-size: 0.8125rem; text-decoration: none !important;
 }
 html body a.puente-club-entrar:hover { background: #d4245f; }
+/* La partida de la tarjeta se toca: la ventanita con el detalle (aviso.js: ventanaMesa) */
+html body .puente-club-mesa { cursor: pointer; }
+html body .puente-club-ventana-fondo { box-sizing: border-box; position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0, 0, 0, 0.6); animation: puente-hoja-entra 0.14s ease-out; }
+html body .puente-club-ventana { box-sizing: border-box; width: 100%; max-width: 22rem; padding: 1rem 1.125rem; border-radius: 0.75rem; background: #232328; color: #dbdee1; box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.6); }
+html body .puente-club-ventana-cab { display: flex; align-items: center; gap: 0.5rem; }
+html body .puente-club-ventana-ico { font-size: 1.5rem; line-height: 1; }
+html body .puente-club-ventana-t { font-size: 1.125rem; font-weight: 800; color: #f2f3f5; }
+html body .puente-club-ventana-s { margin-top: 0.375rem; font-size: 0.875rem; color: #b5bac1; }
+html body .puente-club-ventana-sub { margin-top: 0.875rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #949ba4; }
+html body .puente-club-ventana-lista { margin: 0.375rem 0 0; padding: 0; list-style: none; }
+html body .puente-club-ventana-lista li { padding: 0.375rem 0; border-bottom: 1px solid #2f2e35; font-size: 0.9375rem; color: #f2f3f5; overflow-wrap: anywhere; }
+html body .puente-club-ventana-lista li:last-child { border-bottom: 0; }
+html body .puente-club-ventana-acc { display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+html body .puente-club-ventana-acc a.puente-club-entrar { padding: 0.5rem 1rem; font-size: 0.875rem; }
+html body .puente-club-ventana-cerrar { padding: 0.5rem 1rem; border: 0; border-radius: 0.375rem; background: #36353b; color: #dbdee1; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
 /* Las hojas: una ventana en la PC, toda la pantalla en el celular */
 html body .puente-hoja-fondo { position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
 html body .puente-hoja-fondo { animation: puente-hoja-entra 0.14s ease-out; }
