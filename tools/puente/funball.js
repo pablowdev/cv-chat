@@ -57,7 +57,7 @@ function setup(ctx) {
       if (g.estado === 'jugando') { g.deadline = null; arm(g); }
     } catch { /* fila rota */ }
   }
-  setInterval(sweep, 10 * 60 * 1000).unref();
+  setInterval(sweep, 60 * 1000).unref(); // (cada minuto: asi las mesas de los que se fueron no quedan colgadas)
   setTimeout(sweep, 60e3).unref();
   io.on('connection', (socket) => {
     const on = (ev, fn) => socket.on(ev, (data, ack) => {
@@ -96,6 +96,8 @@ function sweep() {
   for (const g of [...games.values()]) {
     if (g.estado === 'terminada' && now - (g.fin || 0) > 3600e3) drop(g);
     else if (g.estado === 'esperando' && now - g.creado > 24 * 3600e3) { drop(g); changed(); }
+    // la mesa de alguien que ya no esta (un invitado que se fue): se cierra, no se puede jugar (juegos-aviso.js)
+    else if (g.estado === 'esperando' && require('./juegos-aviso.js').seFue(db, g.jugadores, BOT)) { drop(g); changed(); }
     else if (g.estado === 'jugando') {
       // Con alguien que ya no esta (juegos-aviso.js)
       const sf = require('./juegos-aviso.js').seFue(db, g.jugadores, BOT);
