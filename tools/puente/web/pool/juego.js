@@ -679,6 +679,7 @@
     const t = s.estado === 'esperando' && s.soyCreador ? 'Cancelar partida' : s.estado === 'jugando' && s.soyJugador ? 'Abandonar' : 'Copiar enlace';
     M.salirBtn.textContent = t; M.salirBtn.style.visibility = '';
     M.salirBtn.classList.toggle('jg-peligro', t !== 'Copiar enlace');
+    M.mesaEl.classList.toggle('pl-mira', !s.soyJugador); // (el que mira no toca el panel: lo mueve el que tira)
     // El tiro nuevo: se ve el recorrido (la primera vez que se abre la mesa, no: queda como esta)
     const nuevo = s.ultima && M.visto !== undefined && s.ultima.n !== M.visto;
     if (M.visto === undefined) M.visto = s.ultima ? s.ultima.n : 0;
@@ -931,7 +932,7 @@
       c.strokeStyle = '#f0dc14'; c.lineWidth = 2;
       c.beginPath(); c.arc(g.x, g.y, R, 0, Math.PI * 2); c.stroke(); c.restore();
       dibujarTaco(c, cue.x, cue.y, M.ang, M.apuntando || M.cargando ? M.fuerza : 0);
-    } else if (!s.teToca && M.rival && performance.now() - M.rival.t < 4000) {
+    } else if (!s.teToca && M.rival && (performance.now() - M.rival.t < 4000 || !s.soyJugador)) {
       // como apunta el rival (y donde pone la blanca si tiene bola en mano)
       const x = M.rival.x != null ? M.rival.x : cue.x, y = M.rival.y != null ? M.rival.y : cue.y;
       if (s.enMano && M.rival.x != null) { cue.x = x; cue.y = y; }
@@ -943,7 +944,8 @@
       dibujarTaco(c, x, y, v.ang, v.fuerza, 0.85);
     }
     // la barra de fuerza (en el celular va acostada)
-    const pc = ((M.apuntando || M.cargando ? M.fuerza : M.barra) * 100) + '%';
+    const ve = !s.soyJugador && M.rival; // el que mira: la fuerza del que tira (la que carga, o la de su barra)
+    const pc = ((ve ? (M.rivalVista && M.rivalVista.fuerza > 0.02 ? M.rivalVista.fuerza : M.rival.barra != null ? M.rival.barra : 0) : M.apuntando || M.cargando ? M.fuerza : M.barra) * 100) + '%';
     if (M.medidor.offsetWidth > M.medidor.offsetHeight) { M.lleno.style.width = pc; M.lleno.style.height = ''; } else { M.lleno.style.height = pc; M.lleno.style.width = ''; }
     if (s.inicio) { const sg = Math.max(0, Math.floor((Date.now() - s.inicio) / 1000)); M.reloj.textContent = `${Math.floor(sg / 60)}:${String(sg % 60).padStart(2, '0')}`; }
   }
@@ -963,7 +965,7 @@
       if (falta > 0) { if (!M.apuntaLuego) M.apuntaLuego = setTimeout(() => { M.apuntaLuego = null; contar(); }, falta); return; }
       M.ultimoApunta = now;
       const cue = blanca();
-      A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando || M.cargando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y }).catch(() => {});
+      A.emit('pool:accion', { id: M.id, tipo: 'apunta', ang: M.ang, fuerza: M.apuntando || M.cargando ? M.fuerza : 0, x: cue && cue.x, y: cue && cue.y, barra: M.barra, ex: M.efecto.x, ey: M.efecto.y }).catch(() => {});
     };
     // Como en Yahoo Pool (PC): el boton izquierdo mueve el taco alrededor de la blanca; se aprieta el
     // derecho y se tira el mouse para atras (la fuerza se ve en la barra) y al soltarlo, tira
@@ -1049,6 +1051,7 @@
     const desdeBarra = (e) => {
       const r = M.medidor.querySelector('.pl-tubo').getBoundingClientRect();
       M.barra = clamp(r.width > r.height ? (e.clientX - r.left) / r.width : 1 - (e.clientY - r.top) / r.height, 0.03, 1);
+      if (M.s && M.s.teToca) contar(); // (para el que mira)
     };
     M.medidor.addEventListener('pointerdown', (e) => {
       try { M.medidor.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
@@ -1097,7 +1100,7 @@
     M.fino.addEventListener('pointerup', finoFin);
     M.fino.addEventListener('pointercancel', finoFin);
     // el efecto
-    const ponerEfecto = (x, y) => { const d = Math.hypot(x, y); if (d > 0.8) { x *= 0.8 / d; y *= 0.8 / d; } M.efecto = { x, y }; M.punto.style.left = (50 + x * 50) + '%'; M.punto.style.top = (50 + y * 50) + '%'; };
+    const ponerEfecto = (x, y) => { const d = Math.hypot(x, y); if (d > 0.8) { x *= 0.8 / d; y *= 0.8 / d; } M.efecto = { x, y }; M.punto.style.left = (50 + x * 50) + '%'; M.punto.style.top = (50 + y * 50) + '%'; if (M.s && M.s.teToca) contar(); };
     const desdeEfecto = (e) => { const r = M.efectoEl.getBoundingClientRect(); ponerEfecto((e.clientX - r.left) / r.width * 2 - 1, (e.clientY - r.top) / r.height * 2 - 1); };
     M.efectoEl.addEventListener('pointerdown', (e) => { try { M.efectoEl.setPointerCapture(e.pointerId); } catch { /* sin captura */ } desdeEfecto(e); });
     M.efectoEl.addEventListener('pointermove', (e) => { if (e.buttons) desdeEfecto(e); });
@@ -1128,7 +1131,14 @@
     usar(api) { A = api; },
     inicio, crear, reglas, mesa, salir,
     estado(s) { if (M && s && s.id === M.id) render(s); },
-    apunta(m) { if (M && m && m.id === M.id && M.s && !M.s.teToca) { if (!M.rival || performance.now() - M.rival.t > 4000) M.rivalVista = null; M.rival = { ...m, t: performance.now() }; } },
+    apunta(m) {
+      if (M && m && m.id === M.id && M.s && !M.s.teToca) {
+        if (!M.rival || performance.now() - M.rival.t > 4000) M.rivalVista = null;
+        M.rival = { ...m, t: performance.now() };
+        // el que mira: el efecto que eligio el que tira
+        if (!M.s.soyJugador && m.ex != null && m.ey != null && M.ponerEfecto) M.ponerEfecto(m.ex, m.ey);
+      }
+    },
     abierta: () => M && M.id,
   };
 })();

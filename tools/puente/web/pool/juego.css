@@ -51,6 +51,8 @@
 .puente-jg .pl-lleno { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(to top, #6f9a3f 0 55%, #cde05a 55%); }
 .puente-jg .pl-marcas { width: 10px; margin-left: 2px; background: repeating-linear-gradient(to bottom, transparent 0 11px, #4f6f69 11px 12px); }
 .puente-jg .pl-sonido { margin-top: 8px; padding: 2px 8px; min-height: 0; }
+/* el que mira: el panel lo mueve el que tira (el sonido si se puede tocar) */
+.puente-jg .pl-mira .pl-der > :not(.pl-sonido), .puente-jg .pl-mira .pl-lienzo { pointer-events: none; }
 /* En la PC, el chat de la partida mas bajito, para que entre todo sin scroll (juego.js: ajustar) */
 @media (min-width: 641px) {
   .puente-jg .pl-chat .jg-chat-lista { height: 7.5rem !important; }

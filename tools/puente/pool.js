@@ -232,10 +232,11 @@ function act(me, d, socket) {
     if (now - (apuntado.get(g.id) || 0) < 80) return { ok: true };
     apuntado.set(g.id, now);
     const n = (v, a, b) => { v = Number(v); return Number.isFinite(v) ? Math.max(a, Math.min(b, v)) : null; };
-    const m = { id: g.id, ang: n(d.ang, -10, 10), fuerza: n(d.fuerza, 0, 1), x: n(d.x, 0, M.W), y: n(d.y, 0, M.H) };
+    // (tambien la barra de fuerza y el efecto que eligio, para que el que mira vea el panel como lo tiene el que tira)
+    const m = { id: g.id, ang: n(d.ang, -10, 10), fuerza: n(d.fuerza, 0, 1), x: n(d.x, 0, M.W), y: n(d.y, 0, M.H), barra: n(d.barra, 0, 1), ex: n(d.ex, -1, 1), ey: n(d.ey, -1, 1) };
     if (m.ang === null) return { ok: true };
-    const otro = g.jugadores[1 - i];
-    for (const [, s] of io.sockets.sockets) if (s !== socket && s.user && s.user.id === otro) { try { s.emit('pool:apunta', m); } catch { /* sesion cerrada */ } }
+    const otro = g.jugadores[1 - i], mira = 'pool:' + g.id;
+    for (const [, s] of io.sockets.sockets) if (s !== socket && s.user && (s.user.id === otro || s.jgMirando === mira)) { try { s.emit('pool:apunta', m); } catch { /* sesion cerrada */ } }
     return { ok: true };
   }
   if (d.tipo !== 'tirar') return { error: 'No entendí.' };
