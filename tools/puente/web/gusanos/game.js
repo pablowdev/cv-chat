@@ -17,7 +17,7 @@ const GRAVEDAD = 15728 / 65536;        // 0.23999 px/frame²
 const ROZAMIENTO = 62914 / 65536;      // 0.96
 const VEL_MAX = 32;                    // velocidad máxima de proyectiles
 const VEL_MAX_GUSANO = 32;             // tope de seguridad; WA no limita la soga a 16
-const CAMINAR = 1.15;
+const CAMINAR = 1.0; // WA: 1 px por tick = 50 px/s
 // La mira de WA no sigue el mouse: está a una distancia corta fija y gira
 // con las flechas arriba/abajo.
 const DIST_MIRA = 74;
@@ -25,9 +25,30 @@ const DIST_MIRA = 74;
 // movimiento, 3 ciclos/s). Se escala para conservar la velocidad media actual.
 const PATRON_CAMINAR = [0.5, 0, 0.5, 0.5, 0.5, 0.5, 1.5, 1.75, 1.5, 1.25, 0.25, 0, 0.25, 0.25, 0.25];
 const PASO_CAMINAR = 0.9; // 15 frames / (0.9 * 50 Hz) ≈ 3 ciclos/s
-const SUMA_PATRON = PATRON_CAMINAR.reduce((a, b) => a + b, 0);
-const ESCALA_PATRON = CAMINAR / (SUMA_PATRON * PASO_CAMINAR / 15);
-const SALTO = -4.65;
+// La fase avanza 0,9 por tick: algunos frames se repiten. Se calcula la suma
+// real de un segundo (50 ticks) para que la velocidad media sea 50 px/s.
+const SUMA_PATRON_50 = (() => {
+  let suma = 0, fase = 0;
+  for (let i = 0; i < 50; i++) {
+    suma += PATRON_CAMINAR[Math.floor(fase) % PATRON_CAMINAR.length];
+    fase += PASO_CAMINAR;
+  }
+  return suma;
+})();
+const ESCALA_PATRON = CAMINAR * 50 / SUMA_PATRON_50;
+// Trayectorias reales de W:A (parábolas de la comunidad, en píxeles):
+// adelante 32 de alto y 72 de largo; atrás/arriba 40 de alto y 32 de largo;
+// mortal 72 de alto y 21 de largo. Los valores de velocidad salen de esas
+// parábolas con la gravedad del juego (0,24 px/tick²).
+const SALTOS = {
+  adelante: { vy: -4.04, vx: 2.20, roll: 0,        rollDur: 0 },
+  atras:    { vy: -4.50, vx: 0.88, roll: 0,        rollDur: 0 },
+  arriba:   { vy: -4.50, vx: 0,    roll: 0,        rollDur: 0 },
+  mortal:   { vy: -6.00, vx: 0.43, roll: 1.00,     rollDur: 1.00 },
+  mini:     { vy: -4.50, vx: 0.88, roll: 0.70,     rollDur: 0.70 },
+};
+const VENTANA_SALTO = 0.14; // doble toque, como el arranque de salto de WA
+const VENTANA_MINI = 0.20;  // espera extra para el mini mortal (Backspace x2 + Enter)
 const LARGO_SOGA_MAX = 464;            // 5 estrellas: 462–465 px
 const LARGO_SOGA_MIN = 14;
 const VEL_GARFIO = 18;
@@ -81,15 +102,80 @@ function mirarHacia(w, dir) {
   w.mirando = dir;
   fijarElevacion(w, e);
 }
-function saltar(w, atras) {
-  if (!w.enPiso || w.muerto) return;
-  const dir = atras ? -w.mirando : w.mirando;
-  w.vy = SALTO * (atras ? 1.04 : 1);
-  w.vx = dir * (atras ? 2.9 : 2.55);
+function ejecutarSalto(w, tipo) {
+  const def = SALTOS[tipo];
+  if (!def || !w.enPiso || w.muerto) return;
+  const dir = tipo === 'adelante' ? w.mirando : -w.mirando;
+  w.vy = def.vy;
+  w.vx = def.vx ? dir * def.vx : 0;
   w.enPiso = false;
   w.saltoT = 0;
-  if (atras) w.voltereta = w.volteretaDur;
-  sonido('walk-compress', 0.06, atras ? 1.25 : 1.4);
+  w.caminando = false;
+  w.volteretaDur = def.rollDur || 0.55;
+  w.voltereta = def.roll ? def.rollDur : 0;
+  w.saltoPendiente = null;
+  w.saltoPendienteT = 0;
+  w.ultimoSalto = '';
+  w.ultimoSaltoT = 0;
+  sonido('walk-compress', 0.06, tipo === 'adelante' ? 1.4 : 1.25);
+}
+
+// WA distingue cuatro saltos según la secuencia de teclas. El primer toque
+// queda en espera una fracción de segundo para ver si viene el segundo.
+function presionarSalto(w, tecla) {
+  if (!w.enPiso || w.muerto || w.soga.estado !== 'none') return;
+  if (tecla === 'adelante') {
+    if (w.ultimoSalto === 'adelante' && w.ultimoSaltoT > 0) {
+      w.saltoPendiente = null;
+      w.saltoPendienteT = 0;
+      ejecutarSalto(w, 'atras');
+      return;
+    }
+    if (w.saltoPendiente === 'arriba') {
+      w.saltoPendiente = null;
+      w.saltoPendienteT = 0;
+      ejecutarSalto(w, 'atras');
+      return;
+    }
+    if (w.saltoPendiente === 'mortal') {
+      w.saltoPendiente = null;
+      w.saltoPendienteT = 0;
+      ejecutarSalto(w, 'mini');
+      return;
+    }
+    if (!w.saltoPendiente) {
+      w.saltoPendiente = 'adelante';
+      w.saltoPendienteT = VENTANA_SALTO;
+      w.ultimoSalto = 'adelante';
+      w.ultimoSaltoT = VENTANA_SALTO;
+    }
+  } else {
+    if (w.ultimoSalto === 'atras' && w.ultimoSaltoT > 0) {
+      // Segundo Backspace: esperar un posible Enter para el mini mortal.
+      w.saltoPendiente = 'mortal';
+      w.saltoPendienteT = VENTANA_MINI;
+      w.ultimoSalto = '';
+      w.ultimoSaltoT = 0;
+      return;
+    }
+    if (!w.saltoPendiente) {
+      w.saltoPendiente = 'arriba';
+      w.saltoPendienteT = VENTANA_SALTO;
+      w.ultimoSalto = 'atras';
+      w.ultimoSaltoT = VENTANA_SALTO;
+    }
+  }
+}
+
+function actualizarSalto(w) {
+  if (w.ultimoSaltoT > 0) w.ultimoSaltoT = Math.max(0, w.ultimoSaltoT - TICK);
+  if (w.saltoPendienteT <= 0) return;
+  w.saltoPendienteT -= TICK;
+  if (w.saltoPendienteT > 0) return;
+  const tipo = w.saltoPendiente;
+  w.saltoPendiente = null;
+  w.saltoPendienteT = 0;
+  if (tipo) ejecutarSalto(w, tipo);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -298,6 +384,11 @@ class Gusano {
     this.paso = 0;
     this.saltoApretado = false;
     this.saltoT = 0;
+    this.saltoPendiente = null;
+    this.saltoPendienteT = 0;
+    this.ultimoSalto = '';
+    this.ultimoSaltoT = 0;
+    this.volteretaApretada = false;
     this.caminando = false;
     this.animCaminar = 'wwalk';
     this.dirCaminar = 0;
@@ -531,6 +622,10 @@ function matar(w, causa) {
   w.muerto = true;
   w.causa = causa || 'dano';
   w.muerteT = 0;
+  w.saltoPendiente = null;
+  w.saltoPendienteT = 0;
+  w.ultimoSalto = '';
+  w.ultimoSaltoT = 0;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
   w.soga.bloqueada = false;
@@ -1457,6 +1552,12 @@ function iniciarTurno(w, onlineTurno) {
   w.soga.estado = 'none';
   w.soga.pivotes = [];
   w.soga.bloqueada = false;
+  w.saltoPendiente = null;
+  w.saltoPendienteT = 0;
+  w.ultimoSalto = '';
+  w.ultimoSaltoT = 0;
+  w.saltoApretado = false;
+  w.volteretaApretada = false;
   w.vx = 0;
   w.vy = 0;
   G.msgTurno = 1.5;
@@ -1483,6 +1584,10 @@ function terminarTurno() {
     G.activo.soga.estado = 'none';
     G.activo.soga.pivotes = [];
     G.activo.soga.bloqueada = false;
+    G.activo.saltoPendiente = null;
+    G.activo.saltoPendienteT = 0;
+    G.activo.ultimoSalto = '';
+    G.activo.ultimoSaltoT = 0;
   }
   G.cargando = false;
   G.carga = 0;
@@ -1959,6 +2064,7 @@ function paso() {
     }
     const control = controlable() && g === G.activo;
     if (control) {
+      actualizarSalto(g);
       if (g.soga.estado === 'none') {
         // Worms Armageddon mueve la mira 0x200 por tick (~2,8°).
         if (teclas.arriba) ajustarMira(g, -2.8 * Math.PI / 180);
@@ -1966,16 +2072,19 @@ function paso() {
       }
       if (teclas.salto && !g.saltoApretado) {
         // Como WA: Enter desde la soga dispara el arma seleccionada; en el
-        // piso sigue siendo salto.
+        // piso es el salto adelante (o el segundo toque del salto atrás).
         if (g.soga.estado === 'atada' || g.soga.estado === 'disparando') alPresionarFuego('salto');
-        else saltar(g, false);
+        else presionarSalto(g, 'adelante');
         g.saltoApretado = true;
       }
       if (!teclas.salto) {
         g.saltoApretado = false;
         if (G.cargando && G.cargaOrigen === 'salto') alSoltarFuego();
       }
-      if (teclas.voltereta && !g.volteretaApretada) { saltar(g, true); g.volteretaApretada = true; }
+      if (teclas.voltereta && !g.volteretaApretada) {
+        presionarSalto(g, 'atras');
+        g.volteretaApretada = true;
+      }
       if (!teclas.voltereta) g.volteretaApretada = false;
     }
     if (g.soga.estado === 'disparando') {
@@ -2708,7 +2817,7 @@ function actualizarHUD() {
       ? 'Turno de ' + (ONLINE.jugadores[G.activo.equipo] ? ONLINE.jugadores[G.activo.equipo].nombre : 'otro jugador') + ' · esperá tu turno'
       : G.fase === 'retirada'
         ? 'RETIRADA · movete y escapá · ' + Math.ceil(Math.max(0, G.retirada)) + 's'
-        : '← → mover · ↑ ↓ apuntar · Enter saltar · Backspace voltereta · Espacio fuego · Tab gusano · Q/E armas · clic derecho arsenal · 1-5 mecha · R soga · rueda zoom · Z zoom auto · ESC pausa';
+        : '← → mover · ↑ ↓ apuntar · Enter salto · Enter×2 atrás · Backspace arriba · Backspace×2 mortal · Espacio fuego · Tab gusano · Q/E armas · clic derecho arsenal · 1-5 mecha · R soga · rueda zoom · Z zoom auto · ESC pausa';
   }
 }
 
@@ -3541,7 +3650,7 @@ function capturarSnapshot() {
       x: w.x, y: w.y, vx: w.vx, vy: w.vy, hp: w.hp, hpMax: w.hpMax,
       muerto: w.muerto, causa: w.causa, muerteT: w.muerteT, hundiendo: w.hundiendo,
       enPiso: w.enPiso, mirando: w.mirando, ultimaDir: w.ultimaDir, aim: w.aim, paso: w.paso,
-      caminando: w.caminando, animCaminar: w.animCaminar, dirCaminar: w.dirCaminar, voltereta: w.voltereta,
+      caminando: w.caminando, animCaminar: w.animCaminar, dirCaminar: w.dirCaminar, voltereta: w.voltereta, volteretaDur: w.volteretaDur,
       soga: {
         estado: w.soga.estado, ax: w.soga.ax, ay: w.soga.ay, hx: w.soga.hx, hy: w.soga.hy,
         dx: w.soga.dx, dy: w.soga.dy, recorrido: w.soga.recorrido, len: w.soga.len,
