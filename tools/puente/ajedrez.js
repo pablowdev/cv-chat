@@ -252,7 +252,11 @@ function act(me, d) {
   const g = games.get(String(d.id));
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seat(g, me);
+  // el que mira: pedir participar en el chat y, si lo aceptaron, escribir (chat-partida.js)
+  if (i < 0 && g.estado !== 'esperando') { const r = CP.accionEsp(g, me, nameOf(me).nombre, d); if (r) { if (r.ok) push(g, false); return r; } }
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // el que juega: aceptar (o no) al que pidio participar en el chat
+  { const r = CP.respuestaEsp(g, d); if (r) { if (r.ok) push(g, false); return r; } }
   // El zumbido para apurar al rival (chat-partida.js)
   if (d.tipo === 'zumbido') {
     if (g.compu) return { error: 'Contra la compu no hay zumbidos.' };
@@ -382,6 +386,8 @@ function view(g, me) {
     rival: P[o] ? { ...P[o], color: g.estado === 'esperando' ? null : colorOf(g, o) } : null,
     invitado: g.invitado ? nameOf(g.invitado) : null, soyJugador: i >= 0, soyCreador: g.jugadores[0] === me,
     chat: i >= 0 && !g.compu ? CP.mensajes(g, i, (k) => ({ quien: k === i ? 'Vos' : (P[k] ? P[k].nombre : 'Rival') })) : null,
+    // los espectadores en el chat: los pedidos (para el que juega) o su estado y el chat si lo aceptaron (para el que mira)
+    ...(!g.compu && g.estado !== 'esperando' ? CP.vistaEsp(g, me, i >= 0, (k) => ({ quien: P[k] ? P[k].nombre : 'Alguien' })) : {}),
     log: g.log.slice(-6).map(x => x.text),
     ganador: g.estado === 'terminada' ? (g.ganador === null || g.ganador === undefined ? 'empate' : g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     motivoTexto: g.motivo ? RESULTADO[g.motivo] || '' : '',

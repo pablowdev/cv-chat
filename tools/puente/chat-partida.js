@@ -18,7 +18,57 @@ function chatear(g, quien, texto) {
 
 // Los mensajes como los ve cada uno: mio (si lo mando el), quien (el nombre) y color (opcional)
 function mensajes(g, yo, nombre) {
-  return (g.chat || []).map(m => ({ mio: m.de === yo, text: m.text, t: m.t, ...nombre(m.de) }));
+  return (g.chat || []).map(m => (m.esp ? { mio: m.de === yo, text: m.text, t: m.t, quien: m.n, esp: true } : { mio: m.de === yo, text: m.text, t: m.t, ...nombre(m.de) }));
+}
+
+// ── Los espectadores en el chat ──
+// El que mira pide participar; cualquiera de los que juegan lo acepta (o no). Lo aceptado queda en la partida
+// (g.espect): ok, pedidos (con el nombre) y rechazados (no puede volver a pedir por 10 minutos). Sus mensajes
+// van con de: 'e:<id>', esp y su nombre, y se ven como "Nombre (espectador)"
+const espKey = (uid) => 'e:' + uid;
+function espEstado(g, uid) {
+  const e = g.espect || {};
+  return e.ok && e.ok[uid] ? 'ok' : e.pide && e.pide[uid] ? 'pedido' : 'nada';
+}
+// lo que va en la vista: para el que juega, los pedidos; para el que mira, su estado y (si esta aceptado) el chat
+function vistaEsp(g, me, juega, nombre) {
+  if (juega) return { pedidosChat: Object.entries((g.espect && g.espect.pide) || {}).map(([uid, p]) => ({ uid: Number(uid), nombre: p.n })) };
+  const est = espEstado(g, me);
+  return { chatEsp: est, chat: est === 'ok' ? mensajes(g, espKey(me), nombre) : null };
+}
+// lo que hace el que mira: pedir y, si ya lo aceptaron, escribir. null: no es para esto
+function accionEsp(g, me, nombre, d) {
+  if (d.tipo !== 'pedirChat' && d.tipo !== 'chat') return null;
+  if (g.compu) return { error: 'Esta partida no tiene chat.' };
+  if (!(me > 0)) return { error: 'No estás en esta partida.' };
+  g.espect = g.espect || {};
+  const e = g.espect, now = Date.now();
+  if (d.tipo === 'pedirChat') {
+    if (e.ok && e.ok[me]) return { ok: true };
+    if (e.pide && e.pide[me]) return { error: 'Ya lo pediste: esperá que alguien de la partida te acepte.' };
+    if (e.no && now - (e.no[me] || 0) < 10 * 60e3) return { error: 'No te aceptaron en el chat. Probá más tarde.' };
+    e.pide = e.pide || {};
+    if (Object.keys(e.pide).length >= 10) return { error: 'Hay muchos pedidos esperando. Probá más tarde.' };
+    e.pide[me] = { n: String(nombre || 'Alguien').slice(0, 60), t: now };
+    return { ok: true };
+  }
+  if (!(e.ok && e.ok[me])) return { error: 'Para escribir, pedí participar en el chat.' };
+  const err = chatear(g, espKey(me), d.texto);
+  if (err) return { error: err };
+  const m = g.chat[g.chat.length - 1];
+  m.esp = 1; m.n = String(nombre || 'Alguien').slice(0, 60);
+  return { ok: true };
+}
+// lo que hace el que juega: aceptar o no un pedido. null: no es para esto
+function respuestaEsp(g, d) {
+  if (d.tipo !== 'aceptarChat' && d.tipo !== 'rechazarChat') return null;
+  const e = g.espect || {}, uid = Number(d.uid);
+  if (!e.pide || !e.pide[uid]) return { ok: true };
+  delete e.pide[uid];
+  if (d.tipo === 'aceptarChat') (e.ok = e.ok || {})[uid] = 1;
+  else (e.no = e.no || {})[uid] = Date.now();
+  g.espect = e;
+  return { ok: true };
 }
 
 // ── El zumbido (como el del Messenger): para avisarle al que le toca que juegue ──
@@ -99,4 +149,4 @@ function zumbar(o) {
   return { ok: true, quedan: 3 - z.n };
 }
 
-module.exports = { chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, ultimaJugada };
+module.exports = { espEstado, vistaEsp, accionEsp, respuestaEsp, chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, ultimaJugada };

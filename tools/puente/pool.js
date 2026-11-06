@@ -205,7 +205,11 @@ function act(me, d, socket) {
   const g = games.get(String(d.id));
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seat(g, me);
+  // el que mira: pedir participar en el chat y, si lo aceptaron, escribir (chat-partida.js)
+  if (i < 0 && g.estado !== 'esperando') { const r = CP.accionEsp(g, me, nameOf(me).nombre, d); if (r) { if (r.ok) push(g, false); return r; } }
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // el que juega: aceptar (o no) al que pidio participar en el chat
+  { const r = CP.respuestaEsp(g, d); if (r) { if (r.ok) push(g, false); return r; } }
   if (d.tipo === 'chat') {
     if (g.compu) return { error: 'Contra la compu no hay chat.' };
     const err = CP.chatear(g, i, d.texto);
@@ -302,6 +306,8 @@ function view(g, me) {
     rival: P[o] ? { ...P[o], grupo: S ? S.grupos[o] : null } : null,
     invitado: g.invitado ? nameOf(g.invitado) : null, soyJugador: i >= 0, soyCreador: g.jugadores[0] === me,
     chat: i >= 0 && !g.compu ? CP.mensajes(g, i, (k) => ({ quien: k === i ? 'Vos' : (P[k] ? P[k].nombre : 'Rival') })) : null,
+    // los espectadores en el chat: los pedidos (para el que juega) o su estado y el chat si lo aceptaron (para el que mira)
+    ...(!g.compu && g.estado !== 'esperando' ? CP.vistaEsp(g, me, i >= 0, (k) => ({ quien: P[k] ? P[k].nombre : 'Alguien' })) : {}),
     log: g.log.slice(-6).map(x => x.text),
     ganador: g.estado === 'terminada' ? (g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     revancha: g.estado === 'terminada' ? { yo: !!g.revancha[pov], rival: !!g.revancha[o] } : null, siguiente: g.siguiente || null,

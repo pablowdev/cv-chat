@@ -10594,9 +10594,47 @@ document.addEventListener('pointerdown', (ev) => {
     toast(aca ? `${z.de} te mandó un zumbido` : `${z.de} te mandó un zumbido: te toca en el ${z.titulo}`, 'info');
   }
   window.puenteZumbido = { recibido: zumbidoRecibido };
+  // ── Los espectadores en el chat (chat-partida.js) ──
+  // Al que juega: los pedidos ("X quiere participar en el chat", Aceptar / No). Al que mira y todavia no lo
+  // aceptaron: el boton para pedirlo (o que ya lo pidio), en lugar de los mensajes y lo de escribir
+  function espChat(c, s, juego) {
+    const t = c.querySelector('.jg-chat-t');
+    let pb = c.querySelector('.jg-chat-pedidos');
+    if (!pb) { pb = el('div', 'jg-chat-pedidos'); if (t) t.after(pb); else c.prepend(pb); }
+    const ped = s.pedidosChat || [];
+    const kp = ped.map(p => p.uid).join(',');
+    if (pb.dataset.k !== kp) {
+      const habia = pb.dataset.k ? pb.dataset.k.split(',').length : 0;
+      if (pb.dataset.k !== undefined && ped.length > habia) beep(660, 80);
+      pb.dataset.k = kp; pb.textContent = '';
+      for (const p of ped) {
+        const r = el('div', 'jg-chat-pedido');
+        r.appendChild(el('span', 'jg-chat-pedido-t', `👀 ${p.nombre} quiere participar en el chat`));
+        const responder = (tipo) => emit(juego + ':accion', { id: s.id, tipo, uid: p.uid }).then(x => { if (x && x.error) toast(x.error, 'error'); });
+        const si = el('button', 'jg-btn jg-primario', 'Aceptar'); si.type = 'button'; si.addEventListener('click', () => responder('aceptarChat'));
+        const no = el('button', 'jg-btn', 'No'); no.type = 'button'; no.addEventListener('click', () => responder('rechazarChat'));
+        r.append(si, no); pb.appendChild(r);
+      }
+    }
+    const mira = s.soyJugador === false && !!s.chatEsp;
+    const ver = !mira || s.chatEsp === 'ok';
+    for (const x of c.querySelectorAll('.jg-chat-lista, .jg-chat-form, .jg-chat-rapidos')) x.style.display = ver ? '' : 'none';
+    let pe = c.querySelector('.jg-chat-pedir');
+    if (ver) { if (pe) pe.remove(); return; }
+    if (!pe) { pe = el('div', 'jg-chat-pedir'); pb.after(pe); }
+    if (pe.dataset.k === s.chatEsp) return;
+    pe.dataset.k = s.chatEsp; pe.textContent = '';
+    if (s.chatEsp === 'pedido') { pe.appendChild(el('div', 'jg-chat-pedir-t', 'Pediste participar en el chat. Cuando alguien de la partida te acepte, vas a poder escribir.')); return; }
+    pe.appendChild(el('div', 'jg-chat-pedir-t', 'El chat es de los que juegan. Si querés, pedí participar: con que uno te acepte, podés escribir como espectador.'));
+    const b = el('button', 'jg-btn jg-primario', 'Pedir participar en el chat'); b.type = 'button';
+    b.addEventListener('click', () => emit(juego + ':accion', { id: s.id, tipo: 'pedirChat' }).then(r => { if (r && r.error) toast(r.error, 'error'); else toast('Pedido enviado', 'success'); }));
+    pe.appendChild(b);
+  }
+  // el nombre en el chat: el espectador, "Nombre (espectador)"
+  const nombreChat = (m, otro) => (m.esp ? `${m.quien || 'Alguien'} (espectador)` : m.mio ? (m.quien || 'Vos') : (m.quien || otro || '?'));
   function chatPartida(padre, s, enviar, juego) {
     let c = padre.querySelector(':scope > .jg-chat-partida');
-    if (!s || !s.chat) { if (c) c.remove(); return; }
+    if (!s || (!s.chat && !(s.chatEsp && juego))) { if (c) c.remove(); return; }
     if (!c || c.dataset.id !== String(s.id)) {
       if (c) c.remove();
       c = el('div', 'jg-chat jg-chat-partida'); c.dataset.id = String(s.id);
@@ -10625,6 +10663,8 @@ document.addEventListener('pointerdown', (ev) => {
     }
     const zb = c.querySelector('.jg-zumbido');
     if (zb) zb.style.display = puedeZumbar(s) ? '' : 'none';
+    if (juego) espChat(c, s, juego);
+    if (!s.chat) return;
     const lista = c.querySelector('.jg-chat-lista');
     const msgs = s.chat;
     // (los colores cuentan: en GlobalSiege llegan cuando empieza la guerra)
@@ -10635,9 +10675,9 @@ document.addEventListener('pointerdown', (ev) => {
     lista.textContent = '';
     if (!msgs.length) lista.appendChild(el('div', 'jg-chat-vacio', 'Todavía no hay mensajes. ¡Saludá!'));
     for (const m of msgs) {
-      const x = el('div', 'jg-msg' + (m.mio ? ' mio' : ''));
-      const b = el('b', '', m.quien || '?');
-      if (m.color && !m.mio) b.style.color = m.color;
+      const x = el('div', 'jg-msg' + (m.mio ? ' mio' : '') + (m.esp ? ' esp' : ''));
+      const b = el('b', '', nombreChat(m));
+      if (m.color && !m.mio && !m.esp) b.style.color = m.color;
       x.append(b, document.createTextNode(': ' + m.text));
       lista.appendChild(x);
     }
@@ -11280,14 +11320,14 @@ document.addEventListener('pointerdown', (ev) => {
       L = el('div', 'jg-lateral'); L.dataset.id = String(s.id);
       const tan = el('div', 'jg-tanteador');
       L.appendChild(tan);
-      if (!s.compu && s.soyJugador !== false) {
+      if (!s.compu && (s.soyJugador !== false || s.chatEsp)) {
         const chat = el('div', 'jg-chat');
         const lista = el('div', 'jg-chat-lista');
         const rapidos = el('div', 'jg-chat-rapidos');
         (s.gritos || []).forEach((g) => { const o = el('button', 'jg-grito', g); o.type = 'button'; o.addEventListener('click', () => mandar(g)); rapidos.appendChild(o); });
         const form = el('form', 'jg-chat-form');
         const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
-        inp.placeholder = `Mensaje a ${(s.rival && s.rival.nombre) || 'tu rival'}`;
+        inp.placeholder = s.soyJugador === false ? 'Escribí un mensaje' : `Mensaje a ${(s.rival && s.rival.nombre) || 'tu rival'}`;
         const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
         form.append(inp, botonZumbido('truco', s.id), send);
         const mandar = (t) => emit('truco:accion', { id: mesa.id, tipo: 'chat', texto: t }).then(r => { if (r && r.error) toast(r.error, 'error'); });
@@ -11308,6 +11348,8 @@ document.addEventListener('pointerdown', (ev) => {
     // chat
     const zb = L.querySelector('.jg-zumbido');
     if (zb) zb.style.display = puedeZumbar(s) ? '' : 'none';
+    const chatEl = L.querySelector('.jg-chat');
+    if (chatEl) espChat(chatEl, s, 'truco');
     const lista = L.querySelector('.jg-chat-lista');
     if (lista) {
       const msgs = s.chat || [];
@@ -11317,8 +11359,8 @@ document.addEventListener('pointerdown', (ev) => {
         lista.textContent = '';
         if (!msgs.length) lista.appendChild(el('div', 'jg-chat-vacio', 'Todavía no hay mensajes. ¡Saludá!'));
         for (const m of msgs) {
-          const x = el('div', 'jg-msg' + (m.mio ? ' mio' : ''));
-          x.append(el('b', '', m.mio ? 'Vos' : ((s.rival && s.rival.nombre) || 'Rival')), document.createTextNode(': ' + m.text));
+          const x = el('div', 'jg-msg' + (m.mio ? ' mio' : '') + (m.esp ? ' esp' : ''));
+          x.append(el('b', '', nombreChat(m, (s.rival && s.rival.nombre) || 'Rival')), document.createTextNode(': ' + m.text));
           lista.appendChild(x);
         }
         const nuevoRival = prev && (prev.chat || []).length < msgs.length && !msgs[msgs.length - 1].mio;

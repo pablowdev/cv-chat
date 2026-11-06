@@ -384,7 +384,12 @@ function act(me, d) {
   const g = games.get(String(d.id));
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seat(g, me);
+  const CP = require('./chat-partida.js');
+  // el que mira: pedir participar en el chat y, si lo aceptaron, escribir
+  if (i < 0 && g.estado !== 'esperando') { const r = CP.accionEsp(g, me, nameOf(me).nombre, d); if (r) { if (r.ok) push(g, false); return r; } }
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // el que juega: aceptar (o no) al que pidio participar en el chat
+  { const r = CP.respuestaEsp(g, d); if (r) { if (r.ok) push(g, false); return r; } }
   return doAct(g, i, d) || { ok: true };
 }
 
@@ -695,7 +700,9 @@ function view(g, me) {
     log: g.log.slice(-6).map(x => x.text), grito: g.grito && Date.now() - g.grito.t < 6000 ? { mio: g.grito.de === pov, text: g.grito.text } : null,
     gritos: GRITOS, ganador: g.estado === 'terminada' ? (g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     revancha: g.estado === 'terminada' ? { yo: !!g.revancha[pov], rival: !!g.revancha[o] } : null, siguiente: g.siguiente || null,
-    chat: i >= 0 ? (g.chat || []).map(x => ({ mio: x.de === pov, text: x.text, t: x.t })) : null, manos: g.manos || 0,
+    chat: i >= 0 ? (g.chat || []).map(x => (x.esp ? { mio: false, text: x.text, t: x.t, quien: x.n, esp: true } : { mio: x.de === pov, text: x.text, t: x.t })) : null, manos: g.manos || 0,
+    // los espectadores en el chat (chat-partida.js): los pedidos para el que juega; para el que mira, su estado y el chat
+    ...(!g.compu && g.estado !== 'esperando' ? require('./chat-partida.js').vistaEsp(g, me, i >= 0, (k) => ({ quien: P[k] ? P[k].nombre : 'Alguien' })) : {}),
   };
   if (g.estado === 'jugando' && g.h) {
     const h = g.h;
@@ -813,4 +820,4 @@ function lobby(me) {
   return { enJuego: mirables(me), abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };
+module.exports = { setup, stats, _test: { act, rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };

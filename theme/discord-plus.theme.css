@@ -2515,6 +2515,16 @@ html body .puente-vista-texto {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
 /* El mensaje enlazado solo y entero, con los emojis del club (aviso.js) */
+/* El espectador en el chat de la partida (aviso.js: espChat): sus mensajes apagados y en italica, los pedidos
+   para los que juegan y el boton para pedir participar */
+html body .puente-jg .jg-msg.esp { color: #8e9297; font-style: italic; }
+html body .puente-jg .jg-msg.esp b { color: #a3a6ad !important; font-weight: 600; }
+html body .puente-jg .jg-chat-pedidos:empty { display: none; }
+html body .puente-jg .jg-chat-pedido { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; padding: 0.375rem 0.5rem; border-radius: 0.5rem; background: #2b2d31; margin-bottom: 0.375rem; }
+html body .puente-jg .jg-chat-pedido-t { flex: 1 1 10rem; font-size: 0.875rem; color: #dbdee1; }
+html body .puente-jg .jg-chat-pedido .jg-btn { min-height: 2rem; padding: 0 0.75rem; font-size: 0.8125rem; }
+html body .puente-jg .jg-chat-pedir { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.25rem 0; }
+html body .puente-jg .jg-chat-pedir-t { font-size: 0.875rem; color: #b5bac1; }
 /* El que mira una partida (aviso.js: cartelMirando) */
 html body .puente-jg .jg-mirando { margin: 0 auto 0.5rem; padding: 0.375rem 0.75rem; border-radius: 0.5rem; background: #2b2d31; color: #dbdee1; font-size: 0.875rem; text-align: center; }
 html body .puente-jg .pl-pie .jg-mirando { margin: 0; flex: 1 1 100%; }

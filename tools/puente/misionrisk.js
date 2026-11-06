@@ -204,7 +204,11 @@ function act(me, d) {
   const g = games.get(String(d.id));
   if (!g) return { error: 'Esa partida ya no está.' };
   const i = seatOf(g, me);
+  // el que mira: pedir participar en el chat y, si lo aceptaron, escribir (chat-partida.js)
+  if (i < 0 && g.estado !== 'esperando' && humanos(g).length > 1) { const r = CP.accionEsp(g, me, nameOf(me).nombre, d); if (r) { if (r.ok) push(g); return r; } }
   if (i < 0) return { error: 'No estás en esta partida.' };
+  // el que juega: aceptar (o no) al que pidio participar en el chat
+  { const r = CP.respuestaEsp(g, d); if (r) { if (r.ok) push(g); return r; } }
   // El zumbido para apurar al que le toca (chat-partida.js)
   if (d.tipo === 'zumbido') {
     if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
@@ -327,6 +331,11 @@ function view(g, me) {
       const k = seatOf(g, uid);
       return { quien: uid === me ? 'Vos' : nameOf(uid).nombre, color: S && k >= 0 ? MAPA.ejercitos[k + 1].color : null };
     }) : null,
+    // los espectadores en el chat (chat-partida.js)
+    ...(g.estado !== 'esperando' && humanos(g).length > 1 ? CP.vistaEsp(g, me, i >= 0, (uid) => {
+      const k = seatOf(g, uid);
+      return { quien: nameOf(uid).nombre, color: S && k >= 0 ? MAPA.ejercitos[k + 1].color : null };
+    }) : {}),
     asientos: g.asientos.map((a, k) => {
       const p = a.uid ? nameOf(a.uid) : null;
       const x = { ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me };
