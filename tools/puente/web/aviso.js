@@ -5461,10 +5461,25 @@ document.addEventListener('pointerdown', (ev) => {
       const box = el('div', 'puente-vista-chat');
       box.setAttribute('role', 'link'); box.tabIndex = 0; box.title = 'Abrir en CV Chat';
       box.append(el('div', 'puente-vista-cab', '#' + r.canal));
-      // En la Guia del club, el enlace a un mensaje muestra solo ese mensaje, entero
-      const enGuia = !!cont.closest('#puente-guia') && d.vista.some(m => m.marcado);
-      if (enGuia) box.classList.add('puente-vista-solo');
-      for (const m of (enGuia ? d.vista.filter(m => m.marcado) : d.vista)) {
+      // El enlace a un mensaje muestra solo ese mensaje, entero (el de un canal, sus ultimos mensajes)
+      const solo = d.vista.some(m => m.marcado);
+      if (solo) box.classList.add('puente-vista-solo');
+      // Los emojis del club (:cv1:) como en el chat
+      const conEmojis = (t) => {
+        const e = el('div', 'puente-vista-texto'), lista = (window.app && Array.isArray(window.app.customEmojis)) ? window.app.customEmojis : [];
+        const re = /<a?:([a-zA-Z0-9_-]+):[0-9]+>|:([a-zA-Z0-9_-]+):/g;
+        let k = 0, x;
+        while ((x = re.exec(t))) {
+          const ce = lista.find(c => c.name === (x[1] || x[2]));
+          if (!ce) continue;
+          if (x.index > k) e.append(document.createTextNode(t.slice(k, x.index)));
+          const i = el('img', 'custom-emoji puente-vista-emoji'); i.src = ce.url; i.alt = ':' + ce.name + ':'; i.title = i.alt; e.append(i);
+          k = x.index + x[0].length;
+        }
+        if (k < t.length) e.append(document.createTextNode(t.slice(k)));
+        return e;
+      };
+      for (const m of (solo ? d.vista.filter(m => m.marcado) : d.vista)) {
         const fila = el('div', 'puente-vista-fila' + (m.marcado ? ' marcado' : ''));
         if (m.foto) { const i = el('img', 'puente-vista-foto'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; fila.append(i); }
         else fila.append(el('span', 'puente-vista-foto', (m.autor || '?').trim().charAt(0).toUpperCase()));
@@ -5472,7 +5487,7 @@ document.addEventListener('pointerdown', (ev) => {
         const cab = el('div', 'puente-vista-quien');
         cab.append(el('b', '', m.autor), el('span', '', ' ' + (m.hora || '')));
         der.append(cab);
-        if (m.texto) der.append(el('div', 'puente-vista-texto', m.texto));
+        if (m.texto) der.append(conEmojis(m.texto));
         if (m.imagen) { const i = el('img', 'puente-vista-imagen'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; der.append(i); }
         fila.append(der);
         box.append(fila);
