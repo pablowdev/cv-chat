@@ -26,7 +26,11 @@
   fetch('/puente/descargas.json', { cache: 'no-store' }).then(r => r.json()).then((d) => {
     for (const k of ['android', 'windows']) {
       const t = document.getElementById(k + '-tam');
-      if (d[k]) t.textContent = `Versión ${d[k].version || '1.0'} · ${mb(d[k].tam)}`;
+      // Windows: el boton lleva a Microsoft Store; abajo, el instalador de aca
+      if (k === 'windows') {
+        t.textContent = '';
+        if (d[k]) { const a = document.createElement('a'); a.href = '/puente/descargas/CV-Chat-Windows.exe'; a.setAttribute('download', ''); a.textContent = `O bajá el instalador (versión ${d[k].version || '1.0'} · ${mb(d[k].tam)})`; t.append(a); }
+      } else if (d[k]) t.textContent = `Versión ${d[k].version || '1.0'} · ${mb(d[k].tam)}`;
       else { t.textContent = 'Todavía no está disponible.'; document.getElementById(k + '-btn').remove(); }
     }
   }).catch(() => {});
