@@ -387,7 +387,9 @@ function ranking(since) {
 // Las partidas publicas que se estan jugando entre dos personas, para mirarlas desde la sala
 function mirables(me) {
   return [...games.values()]
-    .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0))
+    .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0)
+      // (solo las que se estan jugando de verdad: alguien jugo en la ultima media hora; chat-partida.js: turno)
+      && Date.now() - ((g.zt && g.zt.at) || g.movido || g.inicio || g.creado || 0) < 30 * 60e3)
     .sort((a, b) => (b.inicio || b.creado || 0) - (a.inicio || a.creado || 0)).slice(0, 10)
     .map(g => ({ id: g.id, jugadores: g.jugadores.map(nameOf) }));
 }
