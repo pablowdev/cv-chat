@@ -45,7 +45,7 @@
   }
 
   // ── La serpiente (dibujo propio): parada, como una cobra, del tamaño de su forma de choque (9x16):
-  // la cola enroscada abajo, el cuerpo derecho y la cabeza arriba mirando para su lado. Siempre vertical
+  // la cola curvada abajo, el cuerpo y la cabeza arriba mirando para su lado. Color piel clarito, sin lengua. Siempre vertical
   // (en el piso, en el aire y colgada; colgada se inclina un poco hacia la soga) ──
   function pintarSerpiente(x, s, t) {
     if (s.estado === 'muerta') return;
@@ -75,17 +75,17 @@
       x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round';
       for (let k = 1; k < pts.length; k++) { x.lineWidth = an[k] + extra; x.beginPath(); x.moveTo(pts[k - 1][0], pts[k - 1][1]); x.lineTo(pts[k][0], pts[k][1]); x.stroke(); }
     };
-    trazo(1.4, '#2f7d1f');   // el borde
-    trazo(0, '#58c23a');     // el cuerpo
+    trazo(1.4, '#b9805c');   // el borde
+    trazo(0, '#f1c6a2');     // el cuerpo (color piel clarito)
     // la panza clara, de un solo tiron, del lado de adelante del tramo que sube
-    x.strokeStyle = '#c9e98a'; x.lineWidth = 0.9; x.lineCap = 'round';
+    x.strokeStyle = '#fbe4cf'; x.lineWidth = 0.9; x.lineCap = 'round';
     x.beginPath(); const k0 = Math.floor(pts.length * 0.55); x.moveTo(pts[k0][0] + D * 1.2, pts[k0][1]); for (let k = k0 + 1; k < pts.length - 2; k++) x.lineTo(pts[k][0] + D * 1.1, pts[k][1]); x.stroke();
     // la cabeza (arriba, un poco hacia adelante)
     const hx = s.dir * 1.2, hy = -7;
-    x.fillStyle = '#6bd94a'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#b9805c'; x.beginPath(); x.ellipse(hx, hy, 4.1, 3.3, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#f4cba8'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = '#fff'; x.fillRect(Math.round(hx + s.dir * 1.2) - 1, hy - 2, 2, 2);
     x.fillStyle = '#111'; x.fillRect(Math.round(hx + s.dir * 1.6), hy - 2, 1, 1);
-    if (Math.floor(t / 400) % 4 === 0) { x.strokeStyle = '#e8335a'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(hx + s.dir * 3.2, hy + 0.8); x.lineTo(hx + s.dir * 5.6, hy + 1.2); x.stroke(); }
     x.restore();
   }
 
@@ -105,7 +105,7 @@
 
   // ── Los controles: los del juego clasico ──
   const apretada = {}, recien = {};
-  const TECLAS = { ArrowLeft: 'izq', ArrowRight: 'der', ArrowUp: 'arr', ArrowDown: 'aba', Enter: 'enter', Backspace: 'retro', ' ': 'espacio' };
+  const TECLAS = { ArrowLeft: 'izq', ArrowRight: 'der', ArrowUp: 'arr', ArrowDown: 'aba', Enter: 'enter', Backspace: 'retro', ' ': 'espacio', Shift: 'shift' };
   addEventListener('keydown', (e) => {
     if (e.target && /input|textarea/i.test(e.target.tagName)) return;
     const k = TECLAS[e.key];
@@ -127,7 +127,7 @@
   }
 
   function entradaDelPaso() {
-    const e = { izq: apretada.izq, der: apretada.der, arr: apretada.arr, aba: apretada.aba, enter: recien.enter, retro: recien.retro, soga: false };
+    const e = { izq: apretada.izq, der: apretada.der, arr: apretada.arr, aba: apretada.aba, shift: apretada.shift, enter: recien.enter, retro: recien.retro, soga: false };
     // Espacio: con la soga, la tira (o la suelta); con la granada, se mantiene para cargar
     if (herramienta === 'soga') e.soga = recien.espacio;
     else {

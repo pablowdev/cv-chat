@@ -18,7 +18,7 @@
     CAMINAR: 1, PATRON: [0.5, 0, 0.5, 0.5, 0.5, 0.5, 1.5, 1.75, 1.5, 1.25, 0.25, 0, 0.25, 0.25, 0.25, 0, 0, 0],
     SUBE: 14, BAJA: 13,       // escalon que sube caminando / que baja sin caerse
     SALTO_ADELANTE: [2.25, -3.897], SALTO_ATRAS: [0.7814, -4.4316], SALTO_ARRIBA: [0, -4.5], MORTAL: [0.42413, -5.98799],
-    DOBLE: 12,                // pasos para el doble toque (Enter Enter, Retroceso Retroceso)
+    DOBLE: 9, DOBLE_MINI: 12, // pasos de espera para las combinaciones (0,18 s; el mortal chico, 0,24 s)
     REBOTE: 0.6,              // al chocar volando contra una pared (como en Proyecto Gusanos)
     ROCE: 0.96,               // deslizando por el piso (pierde 4% por paso)
     CAIDA_DESDE: 8, CAIDA_COEF: 50, // daño por caida: ((v - 8) * coef + 18) / 18
@@ -129,18 +129,26 @@
 
   function pasoSuelo(J, s, e) {
     const T = J.T;
-    // los saltos: un toque o dos (espera unos pasos para saber)
+    // los saltos, con las combinaciones del juego clasico (el primer toque espera un poquito por si viene otro):
+    //   Enter: adelante · Enter Enter: atras · Retroceso: arriba · Retroceso Retroceso: mortal
+    //   Retroceso Enter: atras · Retroceso Retroceso Enter: mortal chico (como el salto atras)
     if (s.salto) {
+      const q = s.salto.seq;
       s.salto.t--;
-      if (e.enter && s.salto.tecla === 'enter') { s.salto = null; return saltar(s, C.SALTO_ATRAS, true); }
-      if (e.retro && s.salto.tecla === 'retro') { s.salto = null; return saltar(s, C.MORTAL, true); }
-      if (s.salto.t <= 0) { const k = s.salto.tecla; s.salto = null; return saltar(s, k === 'enter' ? C.SALTO_ADELANTE : C.SALTO_ARRIBA, false); }
-    } else if (e.enter) { s.salto = { tecla: 'enter', t: C.DOBLE }; }
-    else if (e.retro) { s.salto = { tecla: 'retro', t: C.DOBLE }; }
-    // caminar
+      if (e.enter) { s.salto = null; return saltar(s, C.SALTO_ATRAS, true); } // E E, R E y R R E
+      if (e.retro && q === 'r') { s.salto = { seq: 'rr', t: C.DOBLE_MINI - C.DOBLE }; }
+      else if (s.salto.t <= 0) {
+        s.salto = null;
+        if (q === 'e') return saltar(s, C.SALTO_ADELANTE, false);
+        if (q === 'r') return saltar(s, C.SALTO_ARRIBA, false);
+        return saltar(s, C.MORTAL, true); // rr
+      }
+    } else if (e.enter) { s.salto = { seq: 'e', t: C.DOBLE }; }
+    else if (e.retro) { s.salto = { seq: 'r', t: C.DOBLE }; }
+    // caminar (con Shift, sin darse vuelta)
     const d = e.izq && !e.der ? -1 : e.der && !e.izq ? 1 : 0;
     if (d && !s.salto) {
-      if (s.dir !== d) { s.dir = d; s.mira = s.mira; }
+      if (s.dir !== d && !e.shift) s.dir = d;
       else caminar(T, s, d);
     }
     if (!apoyada(T, s.x, s.y)) { s.estado = 'aire'; s.vx = 0; s.vy = 0; }
