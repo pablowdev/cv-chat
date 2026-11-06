@@ -581,7 +581,7 @@
     sec('Los grupos', 'Mientras la mesa está abierta podés pegarle a cualquier bola menos a la 8. El primero que mete una bola sin falta se queda con ese grupo (lisas o rayadas).');
     sec('El turno', 'Si metés una de tus bolas, seguís tirando. Si no metés ninguna, le toca al otro.');
     sec('Las faltas', 'Es falta si la blanca entra en una tronera, si no le pegás a ninguna bola, si le pegás primero a una del rival o a la 8 antes de tiempo. Con una falta le toca al otro, con bola en mano en cualquier lugar de la mesa.');
-    sec('La 8', 'Cuando metiste todas las tuyas, vas por la 8. Si la metés sin falta, ganás. Si la metés antes de tiempo o con falta, perdés.');
+    sec('La 8', 'Cuando metiste todas las tuyas, vas por la 8. Entra en cualquier tronera: no hace falta elegir ni avisar en cuál. Si la metés sin falta, ganás. Si la metés antes de tiempo o con falta, perdés.');
   }
 
   // ── La mesa ──
@@ -754,6 +754,13 @@
     M.msg.textContent = mensaje();
     if (!M.anim) bandeja(s.bandeja || []);
   }
+  // Ya metiste todas las tuyas y la 8 sigue en la mesa (las bolas llegan como [n, x, y, en la mesa])
+  function vasPorLa8(s) {
+    const g = s.yo && s.yo.grupo, b = s.bolas || [];
+    if (g !== 'lisas' && g !== 'rayadas') return false;
+    const mia = (n) => (g === 'lisas' ? n >= 1 && n <= 7 : n >= 9 && n <= 15);
+    return b.some(x => x[0] === 8 && x[3]) && !b.some(x => mia(x[0]) && x[3]);
+  }
   function mensaje() {
     const s = M.s;
     if (M.anim) return M.anim.u.mio ? 'Tiraste…' : `Tira ${s.rival ? s.rival.nombre : 'el rival'}…`;
@@ -764,6 +771,7 @@
     }
     // como en el original: "Shoot!", "Shoot Again!" si metió una suya, la bola en mano despues de una falta,
     // y mientras juega el otro, "esperando al rival" (lo que paso queda abajo, en el registro)
+    if (s.teToca && !s.enMano && vasPorLa8(s)) return '¡Tirá por la 8! Va en cualquier tronera.';
     if (s.teToca) return s.enMano ? 'Podés mover la blanca antes de tirar.' : s.ultima && s.ultima.mio ? '¡Tirá de nuevo!' : '¡Tirá!';
     return `Esperando a ${s.rival ? s.rival.nombre : 'el rival'}…`;
   }
