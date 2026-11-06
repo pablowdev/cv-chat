@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Shoppa</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0a09; font-family: system-ui, sans-serif; color: #eee; touch-action: none; -webkit-user-select: none; user-select: none; }
+  canvas { display: block; }
+  button { font: inherit; cursor: pointer; }
+  .capa { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,8,8,0.88); z-index: 5; }
+  .capa[hidden] { display: none; }
+  .caja { width: min(440px, 92vw); max-height: 88vh; overflow: auto; padding: 18px; border-radius: 12px; background: #1d1a1a; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+  .caja h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: 1px; color: #f1c6a2; }
+  .caja h2 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #a9a29c; }
+  .caja p { margin: 6px 0; color: #c9c2bb; font-size: 14px; line-height: 1.4; }
+  .btn { padding: 10px 14px; border: 0; border-radius: 8px; background: #3a3434; color: #fff; font-weight: 600; }
+  .btn.primario { background: #e0763a; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .fila { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 6px 0; border-radius: 8px; background: #2a2525; }
+  .fila .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acc { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .punto { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  #hud { position: fixed; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: 8px; pointer-events: none; z-index: 2; }
+  #equipos { display: grid; gap: 3px; font-size: 12px; }
+  .eq { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.5); }
+  .eq .barra { width: 90px; height: 7px; border-radius: 4px; background: #333; overflow: hidden; }
+  .eq .barra i { display: block; height: 100%; }
+  .eq.turno { outline: 2px solid #ffd23f; }
+  #reloj { min-width: 56px; padding: 4px 10px; border-radius: 8px; background: rgba(0,0,0,0.65); font: 700 22px monospace; text-align: center; }
+  #viento { margin-top: 4px; width: 120px; height: 10px; border-radius: 5px; background: rgba(0,0,0,0.6); position: relative; overflow: hidden; }
+  #viento i { position: absolute; top: 0; bottom: 0; background: #6ec1ff; }
+  #aviso { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: rgba(0,0,0,0.7); font-size: 15px; z-index: 2; pointer-events: none; transition: opacity 0.3s; }
+  #armas { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; gap: 6px; z-index: 2; }
+  #armas button { min-width: 64px; padding: 6px 8px; border: 2px solid transparent; border-radius: 8px; background: rgba(0,0,0,0.65); color: #eee; font-size: 12px; }
+  #armas button.sel { border-color: #ffd23f; }
+  #armas button:disabled { opacity: 0.35; }
+  #carga { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); width: 200px; height: 10px; border-radius: 5px; background: rgba(0,0,0,0.6); overflow: hidden; z-index: 2; }
+  #carga i { display: block; height: 100%; background: linear-gradient(90deg, #ffd23f, #ff5a2f); }
+  .tactil { position: fixed; left: 0; right: 0; bottom: 52px; display: none; justify-content: space-between; padding: 8px; pointer-events: none; z-index: 3; }
+  .tactil div { display: grid; gap: 6px; pointer-events: auto; }
+  .tactil button { width: 52px; height: 52px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.14); color: #fff; font-size: 17px; }
+  .tactil .izq { grid-template-columns: repeat(3, 52px); }
+  .tactil .der { grid-template-columns: repeat(2, 52px); }
+  @media (pointer: coarse) { .tactil { display: flex; } }
+  .ayuda { font-size: 12px; color: #a9a29c; line-height: 1.5; }
+  .ayuda b { color: #f1c6a2; }
+</style>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+<div id="hud" hidden><div id="equipos"></div><div><div id="reloj">30</div><div id="viento"><i></i></div></div></div>
+<div id="aviso" style="opacity:0"></div>
+<div id="carga" hidden><i></i></div>
+<div id="armas" hidden></div>
+<div class="tactil" id="tactil" hidden>
+  <div class="izq"><span></span><button data-k="arr">↑</button><span></span><button data-k="izq">←</button><button data-k="aba">↓</button><button data-k="der">→</button></div>
+  <div class="der"><button data-k="enter">⤴</button><button data-k="retro">⤒</button><button data-k="espacio">●</button><button data-k="fin">⏭</button></div>
+</div>
+<div class="capa" id="menu" hidden></div>
+<script src="motor.js?v=3"></script>
+<script src="mapas.js?v=3"></script>
+<script src="juego.js?v=3"></script>
+</body>
+</html>

@@ -3566,8 +3566,8 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos'];
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['Shoppa', '#e0763a'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
@@ -10526,7 +10526,7 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'gsJuego' ? 'gusanos' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'gsJuego' ? 'gusanos' : v === 'shJuego' ? 'shoppa' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
   window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
@@ -10574,7 +10574,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
     if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
     if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
-    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable, gsJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable, gsJuego, shJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
@@ -10792,6 +10792,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'gusanos', nombre: 'Gusanos', sub: 'Shopper, 2 a 5 jugadores', evento: 'gusanos:inicio', tapa: () => '/puente/tapas/gusanos.jpg?v=1', fondo: '#0b1626', mesa: 'gsJuego' },
+    { id: 'shoppa', nombre: 'Shoppa', sub: 'Shopper con serpientes · en prueba', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.png?v=1', fondo: '#2a1510', mesa: 'shJuego' },
   ];
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
@@ -10862,7 +10863,7 @@ document.addEventListener('pointerdown', (ev) => {
     lista.sort((x, y) => (y.a.paraVos ? 1 : 0) - (x.a.paraVos ? 1 : 0));
     box.appendChild(el('div', 'jg-bib-titulo', 'Mesas esperando rival'));
     if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
-    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, gusanos: (id) => { stack = []; go('gsJuego', id); } };
+    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, gusanos: (id) => { stack = []; go('gsJuego', id); }, shoppa: (id) => { stack = []; go('shJuego', id); } };
     const l = el('div', 'jg-seguir'); box.appendChild(l);
     for (const { j, a } of lista.slice(0, 8)) {
       const quien = a.creador || { nombre: '?' };
@@ -10882,6 +10883,18 @@ document.addEventListener('pointerdown', (ev) => {
   // (pointer: coarse). Los eventos de adentro no llegan al chat, así que se le avisa al tiempo de
   // uso (uso.js) para que cuente mientras se juega.
   function gsJuego(mesa) { gusanos(mesa); }
+  // Shoppa (el juego nuevo, en prueba): igual que Gusanos, en un iframe del mismo origen (web/shoppa/juego.html);
+  // las salas y los turnos los lleva shoppa.js
+  function shJuego(mesa) {
+    page.appendChild(head('Shoppa', botonEnlace('/app?juegos=shoppa', 'Shoppa · __PUENTE_APP__')));
+    const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
+    ifr.src = '/puente/shoppa/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
+    ifr.title = 'Shoppa'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+    let ultimo = 0;
+    const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
+    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
+    marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
+  }
   function gusanos(mesa) {
     page.appendChild(head('Gusanos', botonEnlace('/app?juegos=gusanos', 'Gusanos · __PUENTE_APP__')));
     const b = el('div', 'jg-gusanos');
@@ -10912,6 +10925,7 @@ document.addEventListener('pointerdown', (ev) => {
   async function inicio(which) {
     // la pila queda en la pantalla del juego, para que el tiempo de uso diga "gusanos" y no "juegos"
     if (which === 'gusanos') { if (stack.length) stack[stack.length - 1] = ['gsJuego']; return gusanos(); }
+    if (which === 'shoppa') { if (stack.length) stack[stack.length - 1] = ['shJuego']; return shJuego(); }
     if (which === 'funball') return fbInicio();
     if (which === 'ajedrez') return ajInicio();
     if (which === 'globalsiege') return mr('inicio');
@@ -13480,6 +13494,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         if (j && !JUEGOS.some(x => x.id === j)) return;
         e.preventDefault(); e.stopPropagation(); stack = [];
         if (j === 'gusanos' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { go('gsJuego', mesa); return; }
+        if (j === 'shoppa' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { go('shJuego', mesa); return; }
         go('inicio', j || undefined); return;
       }
       const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball'), aid = ok && u.searchParams.get('ajedrez');
