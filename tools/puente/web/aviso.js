@@ -13255,6 +13255,15 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       if (plVisto.get(s.id) !== k) { plVisto.set(s.id, k); refreshBadge(); }
     });
     a.socket.on('pool:apunta', (m) => { if (page && window.puentePool) window.puentePool.apunta(m); });
+    // El zumbido del rival: en la mesa, la sacude (juego.js); en otra parte, un aviso y la pantalla que tiembla
+    a.socket.on('pool:zumbido', (z) => {
+      if (!z) return;
+      if (page && window.puentePool && window.puentePool.abierta() === z.id) { window.puentePool.zumbido(z); return; }
+      try { window.app && window.app._showToast && window.app._showToast(`${z.de} te mandó un zumbido: te toca en el Pool`, 'info'); } catch { /* sin aviso */ }
+      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch { /* sin vibrar */ }
+      const b = document.body;
+      if (b && !matchMedia('(prefers-reduced-motion: reduce)').matches) { b.classList.remove('puente-zumbido'); void b.offsetWidth; b.classList.add('puente-zumbido'); setTimeout(() => b.classList.remove('puente-zumbido'), 700); }
+    });
     a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
     a.socket.on('gusanos:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'gusanos')) show('inicio', t[1]); });
     a.socket.on('connect', () => {

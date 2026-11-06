@@ -25,6 +25,9 @@ const games = new Map(); // id -> partida
 const timers = new Map(); // id -> el tiro pendiente de la compu
 const pushed = new Map(); // "id:user" -> ultimo aviso
 const apuntado = new Map(); // id -> ultima vez que se paso la mira (para no saturar)
+const turnoDesde = new Map(); // id -> { tiros, at }: desde cuando le toca al que le toca
+const zumbidos = new Map(); // "id:user" -> { tiros, n, at }: los zumbidos de cada uno en el turno del rival
+const zumbidosHora = new Map(); // user -> los de la ultima hora (en todas sus partidas)
 const rng = (n) => crypto.randomInt(n);
 const rnd = () => crypto.randomInt(1e9) / 1e9;
 
@@ -204,6 +207,7 @@ function act(me, d, socket) {
     return { ok: true };
   }
   if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
+  if (d.tipo === 'zumbido') return zumbido(g, i);
   if (d.tipo === 'abandonar') {
     note(g, `${nameOf(me).nombre} abandonó.`);
     finish(g, 1 - i, 'abandono'); push(g, true);
@@ -224,6 +228,42 @@ function act(me, d, socket) {
   }
   if (d.tipo !== 'tirar') return { error: 'No entendí.' };
   return shot(g, i, d);
+}
+
+// El zumbido (como el del Messenger): le sacude la mesa al rival y, si no tiene CV Chat delante, le llega
+// al celular. Para que nadie lo use para molestar: solo en el turno del rival, despues de 20 segundos sin
+// que tire, uno por minuto, como mucho 3 por turno y 10 por hora entre todas las partidas
+function zumbido(g, i) {
+  if (g.compu) return { error: 'Contra la compu no hay zumbidos.' };
+  if (g.S.turno === i) return { error: 'Te toca a vos: tirá.' };
+  const otro = g.jugadores[1 - i], yo = g.jugadores[i], now = Date.now();
+  const t = turnoDesde.get(g.id);
+  if (!t || t.tiros !== g.tiros) turnoDesde.set(g.id, { tiros: g.tiros, at: now });
+  const desde = turnoDesde.get(g.id).at;
+  if (now - desde < 20e3) return { error: `Dale un momento: podés mandar un zumbido en ${Math.ceil((20e3 - (now - desde)) / 1000)} segundos.` };
+  const key = g.id + ':' + yo;
+  let z = zumbidos.get(key);
+  if (!z || z.tiros !== g.tiros) z = { tiros: g.tiros, n: 0, at: 0 };
+  if (z.n >= 3) return { error: 'Ya le mandaste 3 zumbidos en este turno. Esperá a que tire.' };
+  if (now - z.at < 60e3) return { error: `Esperá ${Math.ceil((60e3 - (now - z.at)) / 1000)} segundos para mandar otro zumbido.` };
+  const hora = (zumbidosHora.get(yo) || []).filter(x => now - x < 3600e3);
+  if (hora.length >= 10) return { error: 'Mandaste muchos zumbidos en la última hora. Probá más tarde.' };
+  z.n++; z.at = now; zumbidos.set(key, z);
+  hora.push(now); zumbidosHora.set(yo, hora);
+  const de = nameOf(yo).nombre;
+  note(g, `${de} mandó un zumbido.`);
+  let delante = false;
+  for (const [, s] of io.sockets.sockets) {
+    if (s.user && s.user.id === otro) { try { s.emit('pool:zumbido', { id: g.id, de }); } catch { /* sesion cerrada */ } if (s.hasFocus !== false) delante = true; }
+  }
+  if (webpush && !delante) {
+    const payload = JSON.stringify({ title: 'Pool', body: `${de} te mandó un zumbido: te toca tirar`, url: `/app?pool=${g.id}`, tag: 'pool-zumbido-' + g.id, __puente: 1 });
+    for (const sub of db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(otro)) {
+      webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 120, urgency: 'high' }).catch(() => {});
+    }
+  }
+  push(g, false);
+  return { ok: true, quedan: 3 - z.n };
 }
 
 function rematch(g) {
@@ -298,6 +338,9 @@ function view(g, me) {
 
 function push(g, big) {
   save(g);
+  const t = turnoDesde.get(g.id);
+  if (g.estado !== 'jugando') { turnoDesde.delete(g.id); for (const k of g.jugadores) zumbidos.delete(g.id + ':' + k); }
+  else if (!t || t.tiros !== g.tiros) turnoDesde.set(g.id, { tiros: g.tiros, at: Date.now() });
   const ids = g.jugadores.filter(x => x !== BOT);
   for (const [, s] of io.sockets.sockets) {
     if (s.user && ids.includes(s.user.id)) { try { s.emit('pool:estado', view(g, s.user.id)); } catch { /* sesion cerrada */ } }

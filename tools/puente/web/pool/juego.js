@@ -415,6 +415,15 @@
       else if (tipo === 'tronera') this.sonar('tronera', 0.9);
       else if (tipo === 'tunel') this.sonar('tunel', 0.9);
       else if (tipo === 'campana') this.sonar('campana', 0.8);
+      else if (tipo === 'zumbido') {
+        try {
+          const o = this.ctx.createOscillator(), lfo = this.ctx.createOscillator(), lg = this.ctx.createGain(), g = this.ctx.createGain();
+          o.type = 'sawtooth'; o.frequency.value = 95; lfo.frequency.value = 28; lg.gain.value = 18;
+          lfo.connect(lg).connect(o.frequency);
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 0.03); g.gain.setValueAtTime(0.22, t + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
+          o.connect(g).connect(this.master); o.start(t); lfo.start(t); o.stop(t + 0.7); lfo.stop(t + 0.7);
+        } catch { /* sin sonido */ }
+      }
     },
   };
 
@@ -621,10 +630,20 @@
     M.medidor = el('div', 'pl-fuerza'); const tubo = el('div', 'pl-tubo'); M.lleno = el('div', 'pl-lleno'); tubo.appendChild(M.lleno); M.medidor.append(tubo, el('div', 'pl-marcas'));
     M.sonidoBtn = btn(audio.on() ? '🔊' : '🔇', 'jg-suave pl-sonido', () => { try { localStorage.setItem('pool-sonido', audio.on() ? '0' : '1'); } catch { /* sin almacenamiento */ } M.sonidoBtn.textContent = audio.on() ? '🔊' : '🔇'; audio.init(); });
     M.sonidoBtn.title = 'Sonido';
+    // el zumbido: para apurar al rival cuando tarda en tirar
+    M.zumbidoBtn = btn('📳', 'jg-suave pl-sonido pl-zumbido-btn', async () => {
+      if (M.zumbando) return;
+      M.zumbando = true;
+      const r = await accion({ tipo: 'zumbido' });
+      if (M) M.zumbando = false;
+      if (r && r.ok) { A.toast(r.quedan > 0 ? 'Zumbido enviado' : 'Zumbido enviado (es el último de este turno)', 'success'); sacudir(); }
+    });
+    M.zumbidoBtn.title = 'Zumbido: avisale a tu rival que le toca tirar';
+    M.zumbidoBtn.style.display = 'none';
     // la rueda para afinar la punteria (solo se ve con pantalla tactil)
     M.fino = el('div', 'pl-fino'); M.fino.title = 'Afinar: arrastrá para girar el taco de a poquito';
     const afinar = el('div', 'pl-afinar'); afinar.append(M.fino, el('div', 'pl-etq', 'Afinar'));
-    der.append(M.efectoEl, el('div', 'pl-etq', 'Efecto'), M.medidor, el('div', 'pl-etq', 'Fuerza'), afinar, M.sonidoBtn);
+    der.append(M.efectoEl, el('div', 'pl-etq', 'Efecto'), M.medidor, el('div', 'pl-etq', 'Fuerza'), afinar, M.sonidoBtn, M.zumbidoBtn);
     M.mesaEl = b;
     try { if (matchMedia('(pointer: coarse)').matches) tactil(); } catch { /* sin matchMedia */ }
     juego.append(centro, der);
@@ -633,6 +652,9 @@
     M.chatBox = el('div', 'pl-chat');
     b.append(M.pie, M.chatBox);
     controles();
+    // la mesa del tamaño justo para que entre todo en la pantalla, sin scroll
+    M.alCambiarTam = () => ajustar();
+    addEventListener('resize', M.alCambiarTam);
     M.msg.textContent = 'Cargando…';
     const d = await A.emit('pool:ver', { id });
     if (M !== yo) return;
@@ -651,6 +673,7 @@
     if (!M) return;
     cancelAnimationFrame(M.raf);
     if (M.teclas) document.removeEventListener('keydown', M.teclas);
+    if (M.alCambiarTam) removeEventListener('resize', M.alCambiarTam);
     M = null;
   }
 
@@ -686,6 +709,41 @@
     hud();
     pie();
     if (A.chat) A.chat(M.chatBox, s, (texto) => A.emit('pool:accion', { id: s.id, tipo: 'chat', texto }));
+    M.zumbidoBtn.style.display = s.estado === 'jugando' && s.soyJugador && !s.compu && !s.teToca ? '' : 'none';
+    requestAnimationFrame(ajustar);
+  }
+
+  // La mesa del tamaño justo para que la pantalla entera (mesa, avisos y chat) entre sin scroll: la mesa y
+  // la bandeja crecen parejo con el ancho, asi que alcanza con una cuenta. En el celular, como siempre
+  function ajustar() {
+    if (!M || !M.mesaEl.isConnected) return;
+    const page = A.page(), b = M.mesaEl;
+    if (!page || innerWidth <= 640) { b.style.maxWidth = ''; return; }
+    const centro = M.cv.parentElement, juego = centro.parentElement;
+    const ancho = centro.clientWidth;
+    if (!ancho) return;
+    const porAncho = (M.cv.offsetHeight + M.bjCv.offsetHeight) / ancho; // cuanto crece de alto por cada px de ancho
+    const sobra = (b.getBoundingClientRect().bottom - page.getBoundingClientRect().top + page.scrollTop) - page.clientHeight;
+    const extra = getComputedStyle(b).boxSizing === 'border-box' ? b.offsetWidth - juego.offsetWidth : 0; // los margenes, si cuentan
+    const quiero = Math.round(Math.max(480, Math.min(1100, juego.offsetWidth - sobra / porAncho + extra)));
+    const ahora = parseFloat(b.style.maxWidth) || 1100;
+    if (Math.abs(quiero - ahora) > 4) b.style.maxWidth = quiero + 'px';
+  }
+
+  // El zumbido: la mesa tiembla (y suena, y en el celular vibra)
+  function sacudir() {
+    if (!M) return;
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch { /* como siempre */ }
+    const j = M.cv.parentElement.parentElement;
+    j.classList.remove('pl-zumba'); void j.offsetWidth; j.classList.add('pl-zumba');
+    setTimeout(() => j.classList.remove('pl-zumba'), 700);
+  }
+  function zumbido(z) {
+    if (!M || !z || z.id !== M.id) return;
+    audio.init(); audio.play('zumbido');
+    try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch { /* sin vibrar */ }
+    sacudir();
+    A.toast(`${z.de} te mandó un zumbido`, 'info');
   }
 
   // El recorrido del ultimo tiro, cuadro por cuadro (30 por segundo), con sus sonidos. Los tiros del rival se
@@ -1081,5 +1139,6 @@
     estado(s) { if (M && s && s.id === M.id) render(s); },
     apunta(m) { if (M && m && m.id === M.id && M.s && !M.s.teToca) { if (!M.rival || performance.now() - M.rival.t > 4000) M.rivalVista = null; M.rival = { ...m, t: performance.now() }; } },
     abierta: () => M && M.id,
+    zumbido,
   };
 })();
