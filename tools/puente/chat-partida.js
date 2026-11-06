@@ -36,16 +36,16 @@ function turno(g, uid, jugada) {
   return false;
 }
 
-// ── La partida quieta: el que tiene que jugar y no juega en 3 dias, pierde (las partidas sin reloj) ──
+// ── La partida quieta: el que tiene que jugar y no juega en 3 dias (o el plazo de cada juego), pierde ──
 // Cada juego lo pregunta en su barrido (cada minuto), con el mismo turno que usa al guardar. 12 horas antes
 // le llega un aviso al celular. Devuelve 'perder', 'avisar', 'nuevo' (empezo a contar: hay que guardar) o null
 const QUIETO_MS = 3 * 24 * 3600e3, AVISO_ANTES = 12 * 3600e3;
-function quieto(g, uid, jugada) {
+function quieto(g, uid, jugada, plazo = QUIETO_MS) {
   if (!(uid > 0)) return null;
   if (turno(g, uid, jugada)) return 'nuevo';
   const t = Date.now() - g.zt.at;
-  if (t > QUIETO_MS) return 'perder';
-  if (t > QUIETO_MS - AVISO_ANTES && !g.zt.aviso) { g.zt.aviso = 1; return 'avisar'; }
+  if (t > plazo) return 'perder';
+  if (t > plazo - AVISO_ANTES && !g.zt.aviso) { g.zt.aviso = 1; return 'avisar'; }
   return null;
 }
 // o: { uid, titulo, url, tag, rival, db, webpush }
