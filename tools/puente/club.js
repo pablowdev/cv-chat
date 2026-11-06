@@ -79,7 +79,10 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
     try { hecho = { at: Date.now(), datos: armar(db, io, warn) }; } catch (err) { warn('club:', err.message); if (!hecho.datos) return json(res, 503, { error: 'no' }); }
   }
   res.setHeader('Cache-Control', 'no-store');
-  return json(res, 200, hecho.datos);
+  // las mesas, siempre al dia (son pocas filas): el resto se guarda 30 segundos
+  let m = null;
+  try { m = require('./portada.js').mesas(db); } catch (err) { warn('club: mesas:', err.message); }
+  return json(res, 200, m ? { ...hecho.datos, abiertas: m.abiertas, enJuego: m.enJuego } : hecho.datos);
 }
 
 module.exports = { handle, enDiscord, cuentas };

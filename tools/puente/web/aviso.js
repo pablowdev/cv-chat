@@ -2148,11 +2148,15 @@ function leido(sc) {
     }
     fotos.append(n);
     const m = (datos.abiertas || [])[0];
-    if (m) {
+    // (si no hay ninguna esperando rival: la que se esta jugando ahora entre gente del club)
+    const j = m ? null : (datos.enJuego || [])[0];
+    if (m || j) {
       const r = el('div', 'puente-club-mesa');
       const t = el('span', 'puente-club-mesa-txt');
-      t.append(el('b', '', m.nombre + ':'), document.createTextNode(' ' + mesaTexto(m)));
-      r.append(el('span', 'puente-club-mesa-ico', ICONO[m.juego] || '🎲'), t, entrar(m));
+      const q = j && j.quienes;
+      t.append(el('b', '', (m || j).nombre + ':'), document.createTextNode(' ' + (m ? mesaTexto(m) : q.slice(0, -1).join(', ') + ' y ' + q[q.length - 1] + ' están jugando')));
+      r.append(el('span', 'puente-club-mesa-ico', ICONO[(m || j).juego] || '🎲'), t);
+      if (m) r.append(entrar(m));
       tarjeta.append(r);
     }
     tarjeta.hidden = false;
@@ -2381,6 +2385,12 @@ function leido(sc) {
     pintar();
     traerDatos();
     setInterval(() => { if (document.visibilityState === 'visible') traerDatos(); }, 60e3);
+    // Cuando se arma, empieza o termina una partida (los juegos avisan a todos): la tarjeta al dia, sin
+    // pedir de mas (como mucho una vez cada 3 segundos)
+    let cambioT = null;
+    for (const ev of ['truco:cambio', 'funball:cambio', 'ajedrez:cambio', 'mr:cambio', 'pool:cambio']) {
+      app.socket.on(ev, () => { if (!cambioT) cambioT = setTimeout(() => { cambioT = null; if (document.visibilityState === 'visible') traerDatos(); }, 3000); });
+    }
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDatos(); });
     document.getElementById('mobile-menu-btn')?.addEventListener('click', () => traerDatos());
     // La primera vez en este dispositivo, la Guía sola

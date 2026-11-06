@@ -26,16 +26,23 @@ function nombre(db, id) {
   return u && !u.is_guest ? u.n : null;
 }
 
-// Las mesas: en juego (cuantas) y las abiertas esperando rival (cuales)
+// Las mesas: en juego (cuantas), las abiertas esperando rival (cuales) y las que se estan jugando ahora
+// entre gente del club (enJuego, para la tarjeta "Ahora en el club" de club.js: con movimiento en los
+// ultimos 30 minutos, de dos o mas personas con cuenta, sin las de la compu sola ni las de invitados)
 function mesas(db) {
   let jugando = 0;
-  const abiertas = [];
+  const abiertas = [], enJuego = [];
   for (const j of JUEGOS) {
     let filas = [];
-    try { filas = db.prepare(`SELECT estado FROM ${j.tabla}`).all(); } catch { continue; }
+    try { filas = db.prepare(`SELECT estado, actualizado FROM ${j.tabla}`).all(); } catch { continue; }
     for (const r of filas) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }
       if (g.estado === 'jugando') jugando++;
+      if (g.estado === 'jugando' && Date.now() - (r.actualizado || 0) < 30 * 60e3) {
+        const ids = (g.jugadores || (g.asientos || []).map(a => a && a.uid)).filter(x => x > 0);
+        const nombres = ids.map(x => nombre(db, x));
+        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: r.actualizado });
+      }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));
       if (!quien) continue; // (las de los invitados no se muestran)
@@ -43,7 +50,8 @@ function mesas(db) {
     }
   }
   abiertas.sort((a, b) => b.creado - a.creado);
-  return { jugando, abiertas: abiertas.slice(0, 4).map(({ creado, ...x }) => x) };
+  enJuego.sort((a, b) => b.at - a.at);
+  return { jugando, abiertas: abiertas.slice(0, 4).map(({ creado, ...x }) => x), enJuego: enJuego.slice(0, 4).map(({ at, ...x }) => x) };
 }
 
 async function armar(db, io, warn) {
