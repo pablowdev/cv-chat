@@ -13337,7 +13337,44 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   if (ios && !standalone) return;
   if (!ios && !/Android|Mobile/i.test(navigator.userAgent)) return; // en la PC no hay notificaciones del sistema (puente-sin-avisos-pc)
 
+  // Quien apaga las notificaciones push en Ajustes (el interruptor de Haven) no se vuelve a anotar solo
+  const APAGADO_KEY = 'puente_push_apagado';
+  document.addEventListener('change', (e) => {
+    if (!e.isTrusted || !e.target || e.target.id !== 'push-notif-enabled') return;
+    storage(() => (e.target.checked ? localStorage.removeItem(APAGADO_KEY) : localStorage.setItem(APAGADO_KEY, '1')));
+  }, true);
+
+  // El permiso ya esta dado (la app de Android lo pide al abrirse, o se dio antes) pero este celular
+  // no esta anotado: sin cartel (el permiso no se vuelve a pedir) se anota como lo hace Haven, sin sus
+  // carteles de error si falla. Una vez por dia como mucho.
+  const REINTENTO_KEY = 'puente_push_intento';
+  async function anotarSolo(app) {
+    if (storage(() => localStorage.getItem(APAGADO_KEY))) return;
+    if (Number(storage(() => localStorage.getItem(REINTENTO_KEY)) || 0) > Date.now()) return;
+    try { if (await app._swRegistration.pushManager.getSubscription()) return; } catch { return; }
+    if (!app.socket || !app.socket.connected) return;
+    storage(() => localStorage.setItem(REINTENTO_KEY, String(Date.now() + 24 * 3600 * 1000)));
+    try {
+      const r = await fetch('/api/push/vapid-key');
+      if (!r.ok) return;
+      const { publicKey } = await r.json();
+      const b64 = (publicKey + '='.repeat((4 - publicKey.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+      const clave = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const sub = await app._swRegistration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: clave });
+      const j = sub.toJSON();
+      app._pushSubscription = sub;
+      app.socket.emit('push-subscribe', { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, scope: typeof app._pushScope === 'function' ? app._pushScope() : 'mentions' });
+      const tg = document.getElementById('push-notif-enabled'); if (tg) tg.checked = true;
+      storage(() => localStorage.removeItem(REINTENTO_KEY));
+    } catch (err) { console.warn('[puente] notificaciones: no se pudo anotar este celular', err && err.message); }
+  }
+
   async function check() {
+    if (Notification.permission === 'granted') {
+      const app = window.app;
+      if (app && app._swRegistration) await anotarSolo(app);
+      return;
+    }
     if (Notification.permission !== 'default') return;
     if (Number(storage(() => localStorage.getItem(LATER_KEY)) || 0) > Date.now()) return;
     const app = window.app;
