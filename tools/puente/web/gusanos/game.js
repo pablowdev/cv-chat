@@ -47,14 +47,14 @@ const SALTOS = {
   mortal:   { vy: -6.00, vx: 0.43, roll: 1.00,     rollDur: 1.00 },
   mini:     { vy: -4.50, vx: 0.88, roll: 0.70,     rollDur: 0.70 },
 };
-const VENTANA_SALTO = 0.14; // doble toque, como el arranque de salto de WA
-const VENTANA_MINI = 0.20;  // espera extra para el mini mortal (Backspace x2 + Enter)
+const VENTANA_SALTO = 0.18; // doble toque, como el arranque de salto de WA
+const VENTANA_MINI = 0.24;  // espera extra para el mini mortal (Backspace x2 + Enter)
 const LARGO_SOGA_MAX = 464;            // 5 estrellas: 462–465 px
 const LARGO_SOGA_MIN = 14;
 const VEL_GARFIO = 18;
 const ACORTAR = 3.2;
-const ALARGAR = 4.4;
-const HAMACAR = 0.16;                  // empuje lateral de la soga (antes 0.42: aceleraba de más)
+const ALARGAR = 6.0;
+const HAMACAR = 0.38;                  // empuje lateral de la soga, más parecido a WA
 const REBOTE_GUSANO = 0.6;             // rebote contra paredes, como Worms Armageddon
 const PASO_ARRIBA = 8;                 // la caminata sube escalones de hasta 8 px
 const PASO_ABAJO = 8;                  // y baja escalones de hasta 8 px
@@ -102,10 +102,16 @@ function mirarHacia(w, dir) {
   w.mirando = dir;
   fijarElevacion(w, e);
 }
+function puedeSaltar(w) {
+  return !w.muerto && (w.enPiso || enPiso(w.x, w.y));
+}
 function ejecutarSalto(w, tipo) {
   const def = SALTOS[tipo];
-  if (!def || !w.enPiso || w.muerto) return;
+  if (!def || !puedeSaltar(w)) return;
+  if (!w.enPiso) w.enPiso = true;
   const dir = tipo === 'adelante' ? w.mirando : -w.mirando;
+  w.saltoActivo = true;
+  w.saltoTipo = tipo;
   w.vy = def.vy;
   w.vx = def.vx ? dir * def.vx : 0;
   w.enPiso = false;
@@ -123,7 +129,7 @@ function ejecutarSalto(w, tipo) {
 // WA distingue cuatro saltos según la secuencia de teclas. El primer toque
 // queda en espera una fracción de segundo para ver si viene el segundo.
 function presionarSalto(w, tecla) {
-  if (!w.enPiso || w.muerto || w.soga.estado !== 'none') return;
+  if (!puedeSaltar(w) || w.soga.estado !== 'none') return;
   if (tecla === 'adelante') {
     if (w.ultimoSalto === 'adelante' && w.ultimoSaltoT > 0) {
       w.saltoPendiente = null;
@@ -176,6 +182,24 @@ function actualizarSalto(w) {
   w.saltoPendiente = null;
   w.saltoPendienteT = 0;
   if (tipo) ejecutarSalto(w, tipo);
+}
+
+// Los saltos se registran en el keydown/pointerdown, no esperando el próximo
+// tick de 20 ms: así no se pierden dos toques rápidos de Backspace.
+function entradaSaltoTecla(code) {
+  const w = G.activo;
+  if (!w || w.muerto || !controlable()) return;
+  if (code === 'Enter') {
+    if (w.soga.estado === 'atada' || w.soga.estado === 'disparando') {
+      alPresionarFuego('salto');
+    } else {
+      presionarSalto(w, 'adelante');
+    }
+    w.saltoApretado = true;
+  } else if (code === 'Backspace') {
+    presionarSalto(w, 'atras');
+    w.volteretaApretada = true;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -388,6 +412,8 @@ class Gusano {
     this.saltoPendienteT = 0;
     this.ultimoSalto = '';
     this.ultimoSaltoT = 0;
+    this.saltoActivo = false;
+    this.saltoTipo = null;
     this.volteretaApretada = false;
     this.caminando = false;
     this.animCaminar = 'wwalk';
@@ -574,6 +600,8 @@ function movimientoNormal(w, control) {
       w.saltoT += TICK;
     } else {
       asentarTrasCaer(w);
+      w.saltoActivo = false;
+      w.saltoTipo = null;
       w.vx *= ROZAMIENTO;
       if (Math.abs(w.vx) < 0.05) w.vx = 0;
     }
@@ -626,6 +654,8 @@ function matar(w, causa) {
   w.saltoPendienteT = 0;
   w.ultimoSalto = '';
   w.ultimoSaltoT = 0;
+  w.saltoActivo = false;
+  w.saltoTipo = null;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
   w.soga.bloqueada = false;
@@ -1556,6 +1586,8 @@ function iniciarTurno(w, onlineTurno) {
   w.saltoPendienteT = 0;
   w.ultimoSalto = '';
   w.ultimoSaltoT = 0;
+  w.saltoActivo = false;
+  w.saltoTipo = null;
   w.saltoApretado = false;
   w.volteretaApretada = false;
   w.vx = 0;
@@ -1588,6 +1620,8 @@ function terminarTurno() {
     G.activo.saltoPendienteT = 0;
     G.activo.ultimoSalto = '';
     G.activo.ultimoSaltoT = 0;
+    G.activo.saltoActivo = false;
+    G.activo.saltoTipo = null;
   }
   G.cargando = false;
   G.carga = 0;
@@ -1775,6 +1809,7 @@ window.addEventListener('keydown', e => {
   }
 
   if (G.estado === 'jugando') {
+    if (!e.repeat && (e.code === 'Enter' || e.code === 'Backspace')) entradaSaltoTecla(e.code);
     if (e.code === 'Tab') { e.preventDefault(); cambiarGusanoEquipo(); return; }
     if (e.code === 'Escape') { pausar(); return; }
     if (e.code === 'KeyQ') { ciclarArma(-1); return; }
@@ -1909,6 +1944,8 @@ function prepararTactil() {
       ignorarRatonHasta = performance.now() + 700;
       try { b.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
       teclas[k] = true;
+      if (k === 'salto') entradaSaltoTecla('Enter');
+      else if (k === 'voltereta') entradaSaltoTecla('Backspace');
       b.classList.add('activo');
     });
     b.addEventListener('pointerup', soltar);
@@ -2385,8 +2422,14 @@ function dibujarGusanos() {
       anim = 'wbatrope';
       frame = frameSoga(w);
     } else if (!w.enPiso) {
-      anim = w.vy < -0.3 ? 'wjumpu' : 'wfall';
-      frame = Math.floor(performance.now() / 80);
+      if (w.saltoActivo && w.saltoTipo) {
+        anim = w.saltoTipo === 'adelante' ? 'wjump'
+          : w.saltoTipo === 'arriba' ? 'wjumpu' : 'wjumpd';
+      } else {
+        anim = w.vy < -0.3 ? 'wjumpu' : 'wfall';
+      }
+      // Los sprites de salto de WA usan rate 25 ms, no 80.
+      frame = Math.floor(performance.now() / 25);
     } else if (w.caminando) {
       anim = w.animCaminar || 'wwalk';
       frame = frameCaminar(w);
@@ -3651,6 +3694,7 @@ function capturarSnapshot() {
       muerto: w.muerto, causa: w.causa, muerteT: w.muerteT, hundiendo: w.hundiendo,
       enPiso: w.enPiso, mirando: w.mirando, ultimaDir: w.ultimaDir, aim: w.aim, paso: w.paso,
       caminando: w.caminando, animCaminar: w.animCaminar, dirCaminar: w.dirCaminar, voltereta: w.voltereta, volteretaDur: w.volteretaDur,
+      saltoActivo: w.saltoActivo, saltoTipo: w.saltoTipo,
       soga: {
         estado: w.soga.estado, ax: w.soga.ax, ay: w.soga.ay, hx: w.soga.hx, hy: w.soga.hy,
         dx: w.soga.dx, dy: w.soga.dy, recorrido: w.soga.recorrido, len: w.soga.len,
