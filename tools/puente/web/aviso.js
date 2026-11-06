@@ -4830,6 +4830,42 @@ function puenteHojaAlto(vh) {
   // Si se estaba leyendo lo ultimo, sigue viendose (el chat se achico o se agrando por abajo)
   if (abajo) requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });
 }
+// Arrastrar una hoja (emojis o GIFs) tiene que ser fluido: cambiar su alto en cada movimiento del dedo
+// vuelve a acomodar los miles de emojis y todo el chat (el cuadro de escribir sube con la hoja), y se
+// traba. Mientras se arrastra, la hoja queda del alto maximo y se corre hacia abajo, y el cuadro de
+// escribir la acompaña. Se corren con una animacion en pausa que el dedo adelanta o atrasa: no se toca
+// el atributo style en cada movimiento (los estilos de Haven miran ese atributo y cada cambio cuesta).
+// Al soltar, el alto de verdad, una sola vez.
+const puenteArrastre = {
+  inicio(p, variable, vh, max) {
+    if (p._puenteArrastre) return;
+    const area = document.documentElement.classList.contains('puente-hoja-abierta') ? document.getElementById('message-input-area') : null;
+    p.style.transition = 'none';
+    p.style.setProperty(variable, max + 'vh');
+    // translate (no transform: la hoja de GIFs tiene transform fijo en el tema). 1 ms = 0,1vh
+    const hoja = p.animate([{ translate: '0 0' }, { translate: '0 ' + max + 'vh' }], { duration: max * 10, fill: 'both' });
+    hoja.pause();
+    const cuadro = area ? area.animate([{ translate: '0 -100vh' }, { translate: '0 100vh' }], { duration: 2000, fill: 'both' }) : null;
+    if (cuadro) cuadro.pause();
+    p._puenteArrastre = { max, h0: vh, hoja, cuadro };
+    this.mover(p, vh);
+  },
+  mover(p, vh) {
+    const a = p._puenteArrastre;
+    if (!a) return;
+    a.hoja.currentTime = (a.max - vh) * 10;
+    if (a.cuadro) a.cuadro.currentTime = (a.h0 - vh + 100) * 10;
+  },
+  // Despues de esto, el que llama pone el alto final (setHeight); la animacion de alto vuelve despues
+  fin(p) {
+    const a = p._puenteArrastre;
+    if (!a) return;
+    p._puenteArrastre = null;
+    a.hoja.cancel();
+    if (a.cuadro) a.cuadro.cancel();
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!p._puenteArrastre) p.style.transition = ''; }));
+  },
+};
 // Tocar el cuadro de escribir con una hoja abierta: se cierra y aparece el teclado, como en Discord
 document.addEventListener('pointerdown', (ev) => {
   if (!document.documentElement.classList.contains('puente-hoja-abierta')) return;
@@ -4937,19 +4973,23 @@ document.addEventListener('pointerdown', (ev) => {
         else return;
       }
       const vh = h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100;
+      puenteArrastre.inicio(p, '--puente-emojis-alto', h0, MAX_VH);
       height = Math.max(10, Math.min(MAX_VH, vh));
-      setHeight(p, height);
+      puenteArrastre.mover(p, height);
       if (e.cancelable) e.preventDefault();
     }, { passive: false });
-    el.addEventListener('touchend', () => {
-      p.style.transition = '';
+    const soltar = () => {
       const was = active;
       y0 = null; active = false;
+      if (!p._puenteArrastre) p.style.transition = '';
+      puenteArrastre.fin(p);
       if (!was) return;
       if (height < MIN_VH - 5) { height = DEFAULT_VH; close(app); return; }
       height = Math.max(MIN_VH, height);
       setHeight(p, height);
-    }, { passive: true });
+    };
+    el.addEventListener('touchend', soltar, { passive: true });
+    el.addEventListener('touchcancel', soltar, { passive: true });
   }
 
   function decorate(app) {
@@ -5098,18 +5138,22 @@ document.addEventListener('pointerdown', (ev) => {
         } else if (!((dy > 6 && height < MAX_VH - 0.5) || (dy < -6 && el.scrollTop <= 0))) return;
         active = true; y0 = e.touches[0].clientY; h0 = height; p.style.transition = 'none';
       }
+      puenteArrastre.inicio(p, '--puente-gifs-alto', h0, MAX_VH);
       height = Math.max(10, Math.min(MAX_VH, h0 + ((y0 - e.touches[0].clientY) / window.innerHeight) * 100));
-      setHeight(p, height);
+      puenteArrastre.mover(p, height);
       if (e.cancelable) e.preventDefault();
     }, { passive: false });
-    el.addEventListener('touchend', () => {
-      p.style.transition = '';
+    const soltar = () => {
       const was = active; y0 = null; active = false;
+      if (!p._puenteArrastre) p.style.transition = '';
+      puenteArrastre.fin(p);
       if (!was) return;
       if (height < MIN_VH - 5) { height = DEFAULT_VH; close(app); return; }
       height = Math.max(MIN_VH, height);
       setHeight(p, height);
-    }, { passive: true });
+    };
+    el.addEventListener('touchend', soltar, { passive: true });
+    el.addEventListener('touchcancel', soltar, { passive: true });
   }
   function decorate(app) {
     const p = picker();
@@ -5183,7 +5227,7 @@ document.addEventListener('pointerdown', (ev) => {
     new MutationObserver(() => {
       const el = picker();
       if (!isOpen(el)) { closeBackdrop(); height = DEFAULT_VH; if (el) el.classList.remove('puente-sin-subir'); puenteHojaAlto(null); }
-      else { try { decorate(app); } catch (err) { console.warn('[puente] selector de GIFs:', err); } }
+      else if (!el._puenteArrastre) { try { decorate(app); } catch (err) { console.warn('[puente] selector de GIFs:', err); } } // arrastrando: se corre sola (puenteArrastre)
     }).observe(p, { attributes: true, attributeFilter: ['style'] });
   })();
 })();
