@@ -705,7 +705,27 @@
     const porAncho = (M.cv.offsetHeight + M.bjCv.offsetHeight) / ancho; // cuanto crece de alto por cada px de ancho
     const sobra = (b.getBoundingClientRect().bottom - page.getBoundingClientRect().top + page.scrollTop) - page.clientHeight;
     const extra = getComputedStyle(b).boxSizing === 'border-box' ? b.offsetWidth - juego.offsetWidth : 0; // los margenes, si cuentan
-    const quiero = Math.round(Math.max(480, Math.min(1100, juego.offsetWidth - sobra / porAncho + extra)));
+    // El panel de la derecha (efecto, fuerza, afinar) tiene su alto: con la mesa mas baja que el, achicarla no
+    // gana lugar, solo deja un hueco. Lo que mide cada columna por su contenido (la fuerza, lo minimo):
+    const alto = (x, porDentro) => {
+      const cs = getComputedStyle(x);
+      let h = 0, n = 0;
+      for (const c of x.children) {
+        const cc = getComputedStyle(c);
+        if (cc.display === 'none' || cc.position === 'absolute') continue;
+        n++;
+        const propio = parseFloat(cc.flexGrow) > 0 && parseFloat(cc.minHeight) > 0 ? parseFloat(cc.minHeight) : c.offsetHeight;
+        h += propio + parseFloat(cc.marginTop) + parseFloat(cc.marginBottom);
+      }
+      return h + (porDentro ? Math.max(0, n - 1) * (parseFloat(cs.rowGap) || 0) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0);
+    };
+    const der = juego.lastElementChild;
+    const fijo = alto(centro) - M.cv.offsetHeight - M.bjCv.offsetHeight; // aviso, jugadores y bordes
+    const derAlto = der && der !== centro && innerWidth > 640 ? alto(der, true) : 0;
+    const meta = juego.offsetHeight - sobra; // el alto que puede tener el juego para que no haya scroll
+    // el ancho de la mesa para ese alto; si ni asi entra (manda el panel), la mas grande que mide lo mismo que el panel
+    const centroQuiero = meta > derAlto ? (meta - fijo) / porAncho : (derAlto - fijo) / porAncho;
+    const quiero = Math.round(Math.max(480, Math.min(1100, centroQuiero + (juego.offsetWidth - ancho) + extra)));
     const ahora = parseFloat(b.style.maxWidth) || 1100;
     if (Math.abs(quiero - ahora) > 4) b.style.maxWidth = quiero + 'px';
   }
