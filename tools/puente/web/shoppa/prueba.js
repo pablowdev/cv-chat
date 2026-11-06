@@ -44,39 +44,35 @@
     return cv;
   }
 
-  // ── La serpiente (dibujo propio): cuerpo de bolitas que sigue la cabeza, ojo y lengua ──
+  // ── La serpiente (dibujo propio): parada, como una cobra, del tamaño de su forma de choque (9x16):
+  // la cola enroscada abajo, el cuerpo derecho y la cabeza arriba mirando para su lado. Siempre vertical
+  // (en el piso, en el aire y colgada; colgada se inclina un poco hacia la soga) ──
   function pintarSerpiente(x, s, t) {
     if (s.estado === 'muerta') return;
-    const col = ['#58c23a', '#47a82e', '#3a9426'];
-    // el cuerpo: si esta quieta, enroscada y erguida; si se mueve, sigue su recorrido
-    let pts = [];
-    const quieta = s.estado === 'suelo' && s.cola.length && Math.hypot(s.cola[Math.min(6, s.cola.length - 1)][0] - s.x, s.cola[Math.min(6, s.cola.length - 1)][1] - s.y) < 2;
-    if (quieta || s.estado === 'suelo') {
-      const ond = Math.sin(t / 180) * 0.6;
-      for (let i = 0; i < 9; i++) {
-        const u = i / 8;
-        pts.push([s.x - s.dir * (Math.sin(u * 3.4 + ond) * 3 + u * 2), s.y - 6 + u * 13]);
-      }
-    } else {
-      pts.push([s.x, s.y - 4]);
-      let dist = 0, k = 0;
-      for (let i = 1; i < 9; i++) {
-        const quiero = i * 1.7;
-        while (k < s.cola.length - 1 && dist < quiero) { dist += Math.hypot(s.cola[k + 1][0] - s.cola[k][0], s.cola[k + 1][1] - s.cola[k][1]); k++; }
-        const c = s.cola[k] || [s.x, s.y + i];
-        pts.push([c[0], c[1] - 4 + i * 0.4]);
-      }
-    }
-    for (let i = pts.length - 1; i >= 1; i--) {
-      x.fillStyle = col[i % 3];
-      x.beginPath(); x.arc(pts[i][0], pts[i][1], 3.3 - i * 0.18, 0, Math.PI * 2); x.fill();
-    }
-    // la cabeza
-    const h = pts[0];
-    x.fillStyle = '#6bd94a'; x.beginPath(); x.ellipse(h[0] + s.dir * 0.8, h[1], 3.6, 3, 0, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#fff'; x.fillRect(Math.round(h[0] + s.dir * 1.5) - 1, Math.round(h[1]) - 2, 2, 2);
-    x.fillStyle = '#111'; x.fillRect(Math.round(h[0] + s.dir * 2), Math.round(h[1]) - 2, 1, 1);
-    if (Math.floor(t / 400) % 4 === 0) { x.strokeStyle = '#e8335a'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(h[0] + s.dir * 3.5, h[1] + 1); x.lineTo(h[0] + s.dir * 6, h[1] + 1.5); x.stroke(); }
+    // inclinacion: colgada, hacia el enganche (como mucho 25 grados); si no, derecha
+    let inc = 0;
+    if (s.soga) { const p = s.soga.piv[s.soga.piv.length - 1]; inc = Math.max(-0.45, Math.min(0.45, Math.atan2(p.x - s.x, s.y - p.y))); }
+    const mov = s.estado === 'suelo' ? (s.cola.length > 1 && Math.abs(s.cola[0][0] - s.cola[1][0]) > 0.1 ? 1 : 0) : 0;
+    const ond = Math.sin(t / (mov ? 70 : 260)) * (mov ? 1.2 : 0.5);
+    x.save(); x.translate(s.x, s.y); x.rotate(inc);
+    // la cola enroscada (abajo, ocupa el ancho de 9)
+    x.fillStyle = '#3a9426';
+    x.beginPath(); x.ellipse(0, 6, 4.3, 2.2, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#47a82e';
+    x.beginPath(); x.ellipse(-s.dir * 1, 5.2, 3, 1.5, 0, 0, Math.PI * 2); x.fill();
+    // el cuerpo: de la cola a la cabeza, con una curva suave que ondula
+    const pts = [];
+    for (let k = 0; k <= 8; k++) { const u = k / 8; pts.push([Math.sin(u * 3.1 + ond) * 1.6 * (1 - u) * s.dir, 5 - u * 11]); }
+    for (let k = 0; k < pts.length; k++) { x.fillStyle = k % 2 ? '#47a82e' : '#58c23a'; x.beginPath(); x.arc(pts[k][0], pts[k][1], 2.6 - k * 0.08, 0, Math.PI * 2); x.fill(); }
+    // la panza clara
+    x.fillStyle = '#c9e98a'; x.fillRect(Math.round(pts[4][0] + s.dir * 0.5) - 1, -3, 1, 6);
+    // la cabeza (arriba, un poco hacia adelante)
+    const hx = s.dir * 1.2, hy = -7;
+    x.fillStyle = '#6bd94a'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff'; x.fillRect(Math.round(hx + s.dir * 1.2) - 1, hy - 2, 2, 2);
+    x.fillStyle = '#111'; x.fillRect(Math.round(hx + s.dir * 1.6), hy - 2, 1, 1);
+    if (Math.floor(t / 400) % 4 === 0) { x.strokeStyle = '#e8335a'; x.lineWidth = 0.7; x.beginPath(); x.moveTo(hx + s.dir * 3.2, hy + 0.8); x.lineTo(hx + s.dir * 5.6, hy + 1.2); x.stroke(); }
+    x.restore();
   }
 
   // ── La pagina ──
@@ -160,7 +156,7 @@
       x.strokeStyle = '#d9c38a'; x.lineWidth = 1; x.beginPath();
       x.moveTo(s.soga.piv[0].x, s.soga.piv[0].y);
       for (const p of s.soga.piv) x.lineTo(p.x, p.y);
-      x.lineTo(s.x, s.y - 3); x.stroke();
+      x.lineTo(s.x, s.y - 6); x.stroke();
       x.fillStyle = '#eee'; x.fillRect(s.soga.piv[0].x - 1, s.soga.piv[0].y - 1, 2, 2);
     }
     if (s.gancho) { x.strokeStyle = '#d9c38a'; x.lineWidth = 1; x.beginPath(); x.moveTo(s.x, s.y - 4); x.lineTo(s.gancho.x, s.gancho.y); x.stroke(); x.fillStyle = '#eee'; x.fillRect(s.gancho.x - 1, s.gancho.y - 1, 2, 2); }
