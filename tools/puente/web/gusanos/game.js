@@ -16,7 +16,7 @@ const TICK = 0.02;
 const GRAVEDAD = 15728 / 65536;        // 0.23999 px/frame²
 const ROZAMIENTO = 62914 / 65536;      // 0.96
 const VEL_MAX = 32;                    // velocidad máxima de proyectiles
-const VEL_MAX_GUSANO = 16;             // velocidad máxima con soga
+const VEL_MAX_GUSANO = 32;             // tope de seguridad; WA no limita la soga a 16
 const CAMINAR = 1.15;
 const SALTO = -4.65;
 const LARGO_SOGA_MAX = 464;            // 5 estrellas: 462–465 px
@@ -24,7 +24,11 @@ const LARGO_SOGA_MIN = 14;
 const VEL_GARFIO = 18;
 const ACORTAR = 3.2;
 const ALARGAR = 4.4;
-const HAMACAR = 0.42;
+const HAMACAR = 0.16;                  // empuje lateral de la soga (antes 0.42: aceleraba de más)
+const REBOTE_GUSANO = 0.6;             // rebote contra paredes, como Worms Armageddon
+const PASO_ARRIBA = 8;                 // la caminata sube escalones de hasta 8 px
+const PASO_ABAJO = 8;                  // y baja escalones de hasta 8 px
+const ASENTAR_ABAJO = 16;              // al aterrizar, busca piso hasta 16 px
 const VIDA = 200;
 const TIEMPO_TURNO = 30;
 const RETIRADA = 5;
@@ -280,6 +284,7 @@ class Gusano {
     this.hundiendo = 0;
     this.enPiso = false;
     this.mirando = 1;
+    this.ultimaDir = 1;
     this.aim = -Math.PI / 2;
     this.paso = 0;
     this.saltoApretado = false;
@@ -287,7 +292,7 @@ class Gusano {
     this.caminando = false;
     this.voltereta = 0;
     this.volteretaDur = 0.55;
-    this.soga = { estado: 'none', ax: 0, ay: 0, hx: 0, hy: 0, dx: 0, dy: -1, recorrido: 0, len: 0, pivotes: [] };
+    this.soga = { estado: 'none', ax: 0, ay: 0, hx: 0, hy: 0, dx: 0, dy: -1, recorrido: 0, len: 0, pivotes: [], bloqueada: false };
   }
 }
 
@@ -306,7 +311,31 @@ function enPiso(x, y) {
   if (!t) return false;
   return t.solido(x, y + 8) || t.solido(x - 4, y + 8) || t.solido(x + 4, y + 8);
 }
-function moverX(w, dx) {
+// Distancia al piso más cercano por debajo del gusano, o 0 si no hay.
+function buscarPiso(x, y, profundidad) {
+  for (let d = 1; d <= profundidad; d++) if (enPiso(x, y + d)) return d;
+  return 0;
+}
+// Al caminar, WA sigue el relieve: sube hasta 8 px y baja hasta 8 px.
+function asentarPie(w, dir, profundidad) {
+  if (enPiso(w.x, w.y)) return true;
+  const d = buscarPiso(w.x + (dir || 0) * 2, w.y, profundidad);
+  if (!d) return false;
+  w.y += d;
+  w.enPiso = true;
+  return true;
+}
+// Al aterrizar, WA asienta el cuerpo con una sonda más profunda (16 px).
+function asentarTrasCaer(w) {
+  if (enPiso(w.x, w.y)) { w.enPiso = true; return true; }
+  const d = buscarPiso(w.x + (w.ultimaDir || 0) * 2, w.y, ASENTAR_ABAJO);
+  if (!d) return false;
+  w.y += d;
+  w.enPiso = true;
+  return true;
+}
+function moverX(w, dx, modo) {
+  modo = modo || 'aire';
   const signo = Math.sign(dx);
   let resto = Math.abs(dx);
   while (resto > 1e-6) {
@@ -314,19 +343,43 @@ function moverX(w, dx) {
     const nx = w.x + p;
     if (!chocaGusano(nx, w.y)) {
       w.x = nx;
+      if (signo) w.ultimaDir = signo;
+      if (modo === 'caminar') {
+        // Bajar el escalón que quedó debajo; si no hay piso, empieza a caer.
+        if (!enPiso(w.x, w.y)) asentarPie(w, signo, PASO_ABAJO);
+        if (!enPiso(w.x, w.y)) w.enPiso = false;
+      }
     } else {
-      let subio = false;
-      for (let s = 1; s <= 5; s++) {
+      let libre = false;
+      const maxSub = modo === 'caminar' ? PASO_ARRIBA : 1;
+      for (let s = 1; s <= maxSub; s++) {
         if (!chocaGusano(nx, w.y - s) && !chocaGusano(w.x, w.y - s)) {
-          w.y -= s; w.x = nx; subio = true; break;
+          w.y -= s; w.x = nx; libre = true;
+          if (signo) w.ultimaDir = signo;
+          if (modo !== 'caminar') w.vx *= 30 / 32;
+          break;
         }
       }
-      if (!subio) { w.vx = 0; return; }
+      if (!libre && modo !== 'caminar') {
+        // Paso diagonal hacia abajo: bajar un escalón sin frenar el impulso.
+        if (!chocaGusano(nx, w.y + 1) && !chocaGusano(w.x, w.y + 1)) {
+          w.y += 1; w.x = nx; libre = true;
+          if (signo) w.ultimaDir = signo;
+          w.vx *= 30 / 32;
+        }
+      }
+      if (!libre) {
+        if (modo === 'caminar') w.vx = 0;
+        else { w.vx = -w.vx * REBOTE_GUSANO; if (Math.abs(w.vx) < 0.03) w.vx = 0; }
+        return false;
+      }
     }
     resto -= Math.min(resto, 1);
   }
+  return true;
 }
-function moverY(w, dy) {
+function moverY(w, dy, modo) {
+  modo = modo || 'aire';
   const signo = Math.sign(dy);
   let resto = Math.abs(dy);
   while (resto > 1e-6) {
@@ -344,13 +397,15 @@ function moverY(w, dy) {
           if (d > 0) herir(w, d);
         }
         w.enPiso = true;
+        asentarTrasCaer(w);
       } else {
         w.vy = 0;
       }
-      return;
+      return false;
     }
     resto -= Math.min(resto, 1);
   }
+  return true;
 }
 function movimientoNormal(w, control) {
   let dir = 0;
@@ -358,28 +413,45 @@ function movimientoNormal(w, control) {
   w.caminando = false;
   if (dir) {
     mirarHacia(w, dir);
-    moverX(w, dir * CAMINAR);
-    w.caminando = true;
-    w.paso += 0.36;
-    if (w.enPiso && Math.random() < 0.05) sonido('walk-expand', 0.035, azar(1.4, 1.7));
+    const x0 = w.x;
+    moverX(w, dir * CAMINAR, w.enPiso ? 'caminar' : 'aire');
+    if (Math.abs(w.x - x0) > 0.01) {
+      w.caminando = true;
+      w.paso += 0.36;
+      if (w.enPiso && Math.random() < 0.05) sonido('walk-expand', 0.035, azar(1.4, 1.7));
+    }
   }
-
-  w.vy += GRAVEDAD;
-  if (w.vy > VEL_MAX_GUSANO) w.vy = VEL_MAX_GUSANO;
-  if (Math.abs(w.vx) > 0.01) moverX(w, clamp(w.vx, -6, 6));
-  moverY(w, w.vy);
 
   if (w.enPiso) {
-    w.vx *= ROZAMIENTO;
-    if (Math.abs(w.vx) < 0.05) w.vx = 0;
+    // En el piso no hace falta volver a integrar gravedad; sólo seguir el relieve.
+    if (!dir) {
+      w.vy += GRAVEDAD;
+      moverY(w, w.vy, 'aire');
+      asentarTrasCaer(w);
+    }
+    if (w.enPiso) {
+      w.vx *= ROZAMIENTO;
+      if (Math.abs(w.vx) < 0.05) w.vx = 0;
+    }
   } else {
-    w.vx *= 0.999;
-    w.saltoT += TICK;
+    w.vy += GRAVEDAD;
+    if (w.vy > VEL_MAX_GUSANO) w.vy = VEL_MAX_GUSANO;
+    if (Math.abs(w.vx) > 0.01) moverX(w, clamp(w.vx, -VEL_MAX_GUSANO, VEL_MAX_GUSANO), 'aire');
+    moverY(w, w.vy, 'aire');
+    if (!w.enPiso) {
+      w.vx *= 0.999;
+      w.saltoT += TICK;
+    } else {
+      asentarTrasCaer(w);
+      w.vx *= ROZAMIENTO;
+      if (Math.abs(w.vx) < 0.05) w.vx = 0;
+    }
   }
   w.vx = clamp(w.vx, -VEL_MAX_GUSANO, VEL_MAX_GUSANO);
-  if (!enPiso(w.x, w.y)) w.enPiso = false;
+  if (w.enPiso && !enPiso(w.x, w.y)) w.enPiso = false;
 }
-// saca al gusano del terreno por el lado más cercano
+// Saca al gusano del terreno por el lado más cercano. Es sólo un rescate:
+// el movimiento normal ya resuelve los choques con la respuesta de WA.
 function resolverColision(w) {
   if (!chocaGusano(w.x, w.y)) return false;
   let mejor = null;
@@ -395,8 +467,8 @@ function resolverColision(w) {
   w.x += mejor.dx * mejor.d;
   w.y += mejor.dy * mejor.d;
   if (mejor.dy !== 0) w.vy = 0; else w.vx = 0;
-  w.vx *= 0.5;
-  w.vy *= 0.5;
+  w.vx *= 0.6;
+  w.vy *= 0.6;
   return true;
 }
 
@@ -421,6 +493,7 @@ function matar(w, causa) {
   w.muerteT = 0;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
+  w.soga.bloqueada = false;
   if (causa === 'agua') {
     w.hundiendo = 0.001;
     sonido('splash', 0.55, azar(0.94, 1.06));
@@ -457,16 +530,42 @@ function rutaSoga(s) {
     usado += Math.hypot(p.x - px, p.y - py);
     px = p.x; py = p.y;
   }
-  return { px, py, disponible: Math.max(0, s.len - usado) };
+  return { px, py, usado, disponible: Math.max(0, s.len - usado) };
 }
 function lineaSogaLibre(x1, y1, x2, y2) {
   const d = Math.hypot(x2 - x1, y2 - y1);
-  const n = Math.ceil(d / 3);
+  const n = Math.max(2, Math.ceil(d / 1.5));
   for (let i = 1; i < n; i++) {
     const t = i / n;
     if (G.terreno.solido(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)) return false;
   }
   return true;
+}
+// Primer choque de un segmento contra el terreno. Devuelve el último punto libre
+// (donde va el gancho o el pivote) y el punto ya dentro del terreno.
+function primerChoqueSegmento(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const d = Math.hypot(dx, dy);
+  if (d < 0.5) return null;
+  const n = Math.max(2, Math.ceil(d / 0.75));
+  let lo = 0;
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    if (G.terreno.solido(x1 + dx * t, y1 + dy * t)) {
+      let hi = t;
+      for (let k = 0; k < 7; k++) {
+        const m = (lo + hi) / 2;
+        if (G.terreno.solido(x1 + dx * m, y1 + dy * m)) hi = m; else lo = m;
+      }
+      return {
+        x: x1 + dx * lo, y: y1 + dy * lo,
+        hx: x1 + dx * hi, hy: y1 + dy * hi,
+        ux: dx / d, uy: dy / d,
+      };
+    }
+    lo = t;
+  }
+  return null;
 }
 function direccionSoga(w) {
   let dx = Math.cos(w.aim), dy = Math.sin(w.aim);
@@ -485,29 +584,38 @@ function dispararGarfio(w) {
   w.soga = {
     estado: 'disparando', ax: 0, ay: 0,
     hx: w.x, hy: w.y - 2, dx: d.dx, dy: d.dy, recorrido: 0,
-    len: 0, pivotes: [],
+    len: 0, pivotes: [], bloqueada: false,
   };
   G.usadoSoga = true;
   sonido('soga-disparo', 0.42, azar(0.97, 1.03));
 }
 function avanzarGarfio(w) {
   const s = w.soga;
-  const paso = VEL_GARFIO / 4;
-  for (let i = 0; i < 4; i++) {
-    const nx = s.hx + s.dx * paso;
-    const ny = s.hy + s.dy * paso;
-    if (G.terreno.solido(nx, ny)) {
-      const d = Math.hypot(s.hx - w.x, s.hy - w.y);
-      if (d < 24) { s.estado = 'none'; return; }
+  for (let i = 0; i < VEL_GARFIO; i++) {
+    const nx = s.hx + s.dx;
+    const ny = s.hy + s.dy;
+    const choque = primerChoqueSegmento(s.hx, s.hy, nx, ny);
+    if (choque) {
+      const d = Math.hypot(choque.x - w.x, choque.y - (w.y - 2));
+      if (d < 20) { s.estado = 'none'; return; }
+      // El ancla queda en el último píxel libre, nunca dentro de la pared.
+      let ax = choque.x, ay = choque.y;
+      for (let k = 0; k < 4 && G.terreno.solido(ax, ay); k++) { ax -= s.dx; ay -= s.dy; }
+      if (G.terreno.solido(ax, ay) || !lineaSogaLibre(w.x, w.y - 2, ax, ay)) {
+        s.estado = 'none';
+        return;
+      }
       s.estado = 'atada';
-      s.ax = s.hx; s.ay = s.hy;
+      s.ax = ax; s.ay = ay;
+      s.hx = ax; s.hy = ay;
       s.len = clamp(d, LARGO_SOGA_MIN, LARGO_SOGA_MAX);
       s.pivotes = [];
+      s.bloqueada = false;
       sonido('soga-impacto', 0.5, azar(0.98, 1.04));
       return;
     }
     s.hx = nx; s.hy = ny;
-    s.recorrido += paso;
+    s.recorrido += 1;
     if (s.recorrido >= LARGO_SOGA_MAX || s.hx < -60 || s.hx > MUNDO.w + 60 || s.hy < -300) {
       s.estado = 'none';
       return;
@@ -518,6 +626,7 @@ function soltarSoga(w) {
   if (w.soga.estado === 'none') return;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
+  w.soga.bloqueada = false;
   sonido('throwrelease', 0.28, azar(0.95, 1.1));
 }
 function toggleSoga(w) {
@@ -528,42 +637,37 @@ function toggleSoga(w) {
     w.soga.estado = 'none';
   }
 }
-function restringirSoga(w) {
+// Acortar la soga tira del gusano, pero nunca lo arrastra dentro del terreno.
+function caminoGusanoLibre(w, tx, ty) {
+  const dx = tx - w.x, dy = ty - w.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 1e-6) return true;
+  const n = Math.ceil(d);
+  for (let i = 1; i <= n; i++) {
+    if (chocaGusano(w.x + dx * i / n, w.y + dy * i / n)) return false;
+  }
+  return true;
+}
+function acortarSoga(w) {
   const s = w.soga;
-  for (let iter = 0; iter < 2; iter++) {
-    const r = rutaSoga(s);
-    if (r.disponible < 6 && s.pivotes.length) { s.pivotes.pop(); continue; }
-    const dx = w.x - r.px, dy = w.y - r.py;
-    const d = Math.hypot(dx, dy);
-    if (d <= r.disponible || d < 1e-6) return;
+  const nuevo = Math.max(LARGO_SOGA_MIN, s.len - ACORTAR);
+  if (nuevo >= s.len - 1e-4) return;
+  const r = rutaSoga(s);
+  const disp = Math.max(0, nuevo - r.usado);
+  const dx = w.x - r.px, dy = w.y - r.py;
+  const d = Math.hypot(dx, dy);
+  if (d > disp + 0.01) {
     const nx = dx / d, ny = dy / d;
-    w.x = r.px + nx * r.disponible;
-    w.y = r.py + ny * r.disponible;
+    const tx = r.px + nx * disp, ty = r.py + ny * disp;
+    if (!caminoGusanoLibre(w, tx, ty)) return;
+    w.x = tx; w.y = ty;
     const vr = w.vx * nx + w.vy * ny;
     if (vr > 0) { w.vx -= nx * vr; w.vy -= ny * vr; }
   }
+  s.len = nuevo;
 }
-function detectarEnrollado(w) {
-  const s = w.soga;
-  const r = rutaSoga(s);
-  const dx = r.px - w.x, dy = r.py - w.y;
-  const d = Math.hypot(dx, dy);
-  if (d < 12) return;
-  const pasos = Math.max(2, Math.ceil(d / 3));
-  let ultimo = null;
-  for (let i = 1; i <= pasos; i++) {
-    const t = i / pasos;
-    const x = w.x + dx * t, y = w.y + dy * t;
-    if (G.terreno.solido(x, y)) {
-      if (ultimo &&
-          Math.hypot(ultimo.x - w.x, ultimo.y - w.y) > 10 &&
-          Math.hypot(ultimo.x - r.px, ultimo.y - r.py) > 10) {
-        s.pivotes.push(ultimo);
-      }
-      return;
-    }
-    ultimo = { x, y };
-  }
+function alargarSoga(w) {
+  w.soga.len = Math.min(LARGO_SOGA_MAX, w.soga.len + ALARGAR);
 }
 function podarPivotes(w) {
   const s = w.soga;
@@ -573,11 +677,105 @@ function podarPivotes(w) {
     else break;
   }
 }
+function cercaDeTerreno(x, y, r) {
+  for (let d = 1; d <= r; d++) {
+    if (G.terreno.solido(x + d, y) || G.terreno.solido(x - d, y) ||
+        G.terreno.solido(x, y + d) || G.terreno.solido(x, y - d) ||
+        G.terreno.solido(x + d, y + d) || G.terreno.solido(x - d, y + d) ||
+        G.terreno.solido(x + d, y - d) || G.terreno.solido(x - d, y - d)) return true;
+  }
+  return false;
+}
+// La primera cara de la pared no sirve como pivote: hay que enganchar en el
+// vértice desde donde el gusano queda visible. Probamos puntos libres cerca del
+// primer choque y nos quedamos con el camino más corto que no cruce terreno.
+function buscarPivote(w, r, choque) {
+  const R = 200, paso = 5;
+  const x0 = Math.max(0, Math.floor(choque.x - R));
+  const x1 = Math.min(MUNDO.w - 1, Math.ceil(choque.x + R));
+  const y0 = Math.max(0, Math.floor(choque.y - R));
+  const y1 = Math.min(MUNDO.h - 1, Math.ceil(choque.y + R));
+  let mejor = null;
+  const probar = (x, y) => {
+    if (G.terreno.solido(x, y) || !cercaDeTerreno(x, y, 6)) return;
+    if (Math.hypot(x - w.x, y - w.y) < 10) return;
+    if (Math.hypot(x - r.px, y - r.py) < 8) return;
+    const ultimo = w.soga.pivotes[w.soga.pivotes.length - 1];
+    if (ultimo && Math.hypot(x - ultimo.x, y - ultimo.y) < 8) return;
+    if (!lineaSogaLibre(r.px, r.py, x, y)) return;
+    if (!lineaSogaLibre(x, y, w.x, w.y)) return;
+    const total = Math.hypot(x - r.px, y - r.py) + Math.hypot(x - w.x, y - w.y);
+    if (!mejor || total < mejor.total) mejor = { x, y, total };
+  };
+  for (let x = x0; x <= x1; x += paso) {
+    for (let y = y0; y <= y1; y += paso) probar(x, y);
+  }
+  // Afinar alrededor del mejor punto para que la soga quede pegada al vértice.
+  if (mejor) {
+    const bx = mejor.x, by = mejor.y;
+    for (let x = Math.max(x0, bx - paso); x <= Math.min(x1, bx + paso); x++) {
+      for (let y = Math.max(y0, by - paso); y <= Math.min(y1, by + paso); y++) probar(x, y);
+    }
+  }
+  return mejor;
+}
+function actualizarPivotes(w) {
+  const s = w.soga;
+  podarPivotes(w);
+  s.bloqueada = false;
+  // Si no hay camino posible, no repetir la búsqueda en cada tick mientras
+  // el gusano casi no se movió.
+  if (s.sinPivote && Math.hypot(w.x - s.sinPivote.x, w.y - s.sinPivote.y) < 6) {
+    s.bloqueada = true;
+    return;
+  }
+  for (let i = 0; i < 4; i++) {
+    const r = rutaSoga(s);
+    if (lineaSogaLibre(r.px, r.py, w.x, w.y)) { s.sinPivote = null; break; }
+    const choque = primerChoqueSegmento(r.px, r.py, w.x, w.y);
+    if (!choque) { s.sinPivote = null; break; }
+    const p = buscarPivote(w, r, choque);
+    if (!p) { s.bloqueada = true; s.sinPivote = { x: w.x, y: w.y }; break; }
+    s.sinPivote = null;
+    s.pivotes.push({ x: p.x, y: p.y });
+  }
+}
+function restringirSoga(w) {
+  const s = w.soga;
+  const r = rutaSoga(s);
+  if (s.bloqueada && !lineaSogaLibre(r.px, r.py, w.x, w.y)) return;
+  const dx = w.x - r.px, dy = w.y - r.py;
+  const d = Math.hypot(dx, dy);
+  if (d <= r.disponible + 0.01 || d < 1e-4) return;
+  const nd = Math.max(0, r.disponible);
+  let nx = dx / d, ny = dy / d;
+  let tx = r.px + nx * nd, ty = r.py + ny * nd;
+  // Si la posición tensa cae dentro del terreno, buscar el ángulo libre más
+  // cercano alrededor del pivote (la soga se desliza por el borde).
+  if (!caminoGusanoLibre(w, tx, ty)) {
+    const base = Math.atan2(ny, nx);
+    let libre = null;
+    for (let k = 1; k <= 16 && !libre; k++) {
+      for (const sg of [-1, 1]) {
+        const a = base + sg * k * 0.035;
+        const x = r.px + Math.cos(a) * nd, y = r.py + Math.sin(a) * nd;
+        if (caminoGusanoLibre(w, x, y)) { libre = { x, y, nx: Math.cos(a), ny: Math.sin(a) }; break; }
+      }
+    }
+    if (!libre) return;
+    tx = libre.x; ty = libre.y; nx = libre.nx; ny = libre.ny;
+  }
+  w.x = tx; w.y = ty;
+  if (w.enPiso && !enPiso(w.x, w.y)) w.enPiso = false;
+  const vr = w.vx * nx + w.vy * ny;
+  if (vr > 0) { w.vx -= nx * vr; w.vy -= ny * vr; }
+}
 function fisicaSoga(w, control) {
   const s = w.soga;
+  if (!s || s.estado !== 'atada') return;
   if (control) {
-    if (teclas.arriba) s.len = Math.max(LARGO_SOGA_MIN, s.len - ACORTAR);
-    if (teclas.abajo) s.len = Math.min(LARGO_SOGA_MAX, s.len + ALARGAR);
+    if (teclas.arriba) acortarSoga(w);
+    if (teclas.abajo) alargarSoga(w);
     const dir = (teclas.izq ? -1 : 0) + (teclas.der ? 1 : 0);
     if (dir) {
       const r = rutaSoga(s);
@@ -595,22 +793,22 @@ function fisicaSoga(w, control) {
   w.vx = clamp(w.vx, -VEL_MAX_GUSANO, VEL_MAX_GUSANO);
   w.vy = clamp(w.vy, -VEL_MAX_GUSANO, VEL_MAX_GUSANO);
 
-  const sub = Math.max(1, Math.ceil(Math.hypot(w.vx, w.vy) / 2));
+  const sub = Math.max(1, Math.ceil(Math.max(Math.abs(w.vx), Math.abs(w.vy))));
   for (let k = 0; k < sub; k++) {
-    w.x += w.vx / sub;
-    w.y += w.vy / sub;
-    if (chocaGusano(w.x, w.y)) {
-      resolverColision(w);
-      w.vx *= 0.2;
-      w.vy *= 0.2;
-    }
-    detectarEnrollado(w);
+    moverX(w, w.vx / sub, 'aire');
+    moverY(w, w.vy / sub, 'aire');
+    actualizarPivotes(w);
     restringirSoga(w);
-    podarPivotes(w);
+  }
+  if (w.enPiso) {
+    if (!enPiso(w.x, w.y)) w.enPiso = false;
+    else {
+      w.vx *= ROZAMIENTO;
+      if (Math.abs(w.vx) < 0.05) w.vx = 0;
+    }
   }
   w.vx *= 0.999;
   w.vy *= 0.999;
-  w.enPiso = false;
   if (w.y > MUNDO.agua + 2) ahogar(w);
 }
 
@@ -1220,6 +1418,7 @@ function iniciarTurno(w, onlineTurno) {
   G.armaSel = 0;
   w.soga.estado = 'none';
   w.soga.pivotes = [];
+  w.soga.bloqueada = false;
   w.vx = 0;
   w.vy = 0;
   G.msgTurno = 1.5;
@@ -1238,6 +1437,7 @@ function terminarTurno() {
   if (G.activo) {
     G.activo.soga.estado = 'none';
     G.activo.soga.pivotes = [];
+    G.activo.soga.bloqueada = false;
   }
   G.cargando = false;
   G.carga = 0;
@@ -1749,8 +1949,9 @@ function paso() {
     const control = controlable() && g === G.activo;
     if (control) {
       if (g.soga.estado === 'none') {
-        if (teclas.arriba) ajustarMira(g, -1.7 * TICK);
-        if (teclas.abajo) ajustarMira(g, 1.7 * TICK);
+        // Worms Armageddon mueve la mira 0x200 por tick (~2,8°).
+        if (teclas.arriba) ajustarMira(g, -2.8 * Math.PI / 180);
+        if (teclas.abajo) ajustarMira(g, 2.8 * Math.PI / 180);
       }
       if (teclas.salto && !g.saltoApretado) { saltar(g, false); g.saltoApretado = true; }
       if (!teclas.salto) g.saltoApretado = false;
@@ -1993,6 +2194,10 @@ function frameSoga(w) {
   const s = w.soga;
   let ax = s.ax, ay = s.ay;
   if (s.estado === 'disparando') { ax = s.hx; ay = s.hy; }
+  else if (s.estado === 'atada') {
+    const r = rutaSoga(s);
+    ax = r.px; ay = r.py;
+  }
   const ang = Math.atan2(ay - w.y, ax - w.x);
   const m = GUSANOS_SPRITES.wbatrope ? GUSANOS_SPRITES.wbatrope.frames : 64;
   return Math.floor((((ang + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * m) % m;
@@ -2018,7 +2223,8 @@ function dibujarSoga(w) {
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(w.x, w.y - 2);
-  for (const p of s.pivotes) ctx.lineTo(p.x, p.y);
+  // Los pivotes están ordenados desde el ancla hacia el gusano.
+  for (let i = s.pivotes.length - 1; i >= 0; i--) ctx.lineTo(s.pivotes[i].x, s.pivotes[i].y);
   if (s.estado === 'atada') ctx.lineTo(s.ax, s.ay);
   else ctx.lineTo(s.hx, s.hy);
   ctx.stroke();
@@ -3324,11 +3530,12 @@ function capturarSnapshot() {
       id: w.id, equipo: w.equipo, idx: w.idx, nombre: w.nombre,
       x: w.x, y: w.y, vx: w.vx, vy: w.vy, hp: w.hp, hpMax: w.hpMax,
       muerto: w.muerto, causa: w.causa, muerteT: w.muerteT, hundiendo: w.hundiendo,
-      enPiso: w.enPiso, mirando: w.mirando, aim: w.aim, paso: w.paso,
+      enPiso: w.enPiso, mirando: w.mirando, ultimaDir: w.ultimaDir, aim: w.aim, paso: w.paso,
       caminando: w.caminando, voltereta: w.voltereta,
       soga: {
         estado: w.soga.estado, ax: w.soga.ax, ay: w.soga.ay, hx: w.soga.hx, hy: w.soga.hy,
         dx: w.soga.dx, dy: w.soga.dy, recorrido: w.soga.recorrido, len: w.soga.len,
+        bloqueada: !!w.soga.bloqueada,
         pivotes: (w.soga.pivotes || []).map(p => ({ x: p.x, y: p.y })),
       },
     })),
@@ -3356,8 +3563,10 @@ function aplicarSnapshot(s) {
       w.soga = d.soga ? {
         estado: d.soga.estado, ax: d.soga.ax, ay: d.soga.ay, hx: d.soga.hx, hy: d.soga.hy,
         dx: d.soga.dx, dy: d.soga.dy, recorrido: d.soga.recorrido, len: d.soga.len,
+        bloqueada: !!d.soga.bloqueada,
         pivotes: (d.soga.pivotes || []).map(p => ({ x: p.x, y: p.y })),
       } : w.soga;
+      if (w.soga && w.soga.bloqueada == null) w.soga.bloqueada = false;
     }
   }
   if (Array.isArray(s.equipos)) {
@@ -3553,6 +3762,7 @@ window.WS = {
   iniciar: iniciarPartida,
   mapa: id => { if (id) G.mapaSel = id; iniciarPartida(); },
   paso: (n = 1) => { for (let i = 0; i < n; i++) paso(); dibujar(); },
+  fisica: (n = 1) => { for (let i = 0; i < n; i++) paso(); },
   estado: () => ({
     estado: G.estado, fase: G.fase, tiempo: +G.tiempo.toFixed(2),
     activo: G.activo && G.activo.nombre, equipo: G.activo && G.activo.equipo,
