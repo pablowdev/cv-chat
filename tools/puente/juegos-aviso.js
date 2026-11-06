@@ -36,4 +36,18 @@ function conInvitado(db, ids) {
   try { return ids.some(id => Number(id) > 0 && (db.prepare('SELECT is_guest FROM users WHERE id = ?').get(id) || { is_guest: 1 }).is_guest); } catch { return false; }
 }
 
-module.exports = { anunciar, conInvitado };
+// Una partida en juego con alguien que ya no esta (el invitado que se fue: Haven borra su cuenta al
+// desconectarse) no la puede seguir nadie. Cada juego la cierra en su barrido:
+//   - si queda alguien del club, gana por abandono (amistosa por el invitado: finish lo marca solo)
+//   - si solo quedaba la compu (o nadie), se borra
+// Devuelve null (estan todos), { gana: asiento } o { borrar: true }.
+function seFue(db, jugadores, bot) {
+  try {
+    const falta = jugadores.map(id => Number(id) > 0 && !db.prepare('SELECT 1 FROM users WHERE id = ?').get(id));
+    if (!falta.some(Boolean)) return null;
+    const quedan = jugadores.map((id, i) => i).filter(i => !falta[i] && jugadores[i] !== bot);
+    return quedan.length === 1 ? { gana: quedan[0] } : { borrar: true };
+  } catch { return null; }
+}
+
+module.exports = { anunciar, conInvitado, seFue };

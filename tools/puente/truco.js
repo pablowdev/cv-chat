@@ -69,6 +69,7 @@ function setup(ctx) {
     } catch { /* fila rota */ }
   }
   setInterval(sweep, 10 * 60 * 1000).unref();
+  setTimeout(sweep, 60e3).unref();
   io.on('connection', (socket) => {
     const on = (ev, fn) => socket.on(ev, (data, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
@@ -148,6 +149,12 @@ function sweep() {
       finish(g, other(i), 'abandono'); push(g, true);
     }
     else if (g.estado === 'esperando' && now - g.creado > 24 * 3600e3) { drop(g); changed(); }
+    else if (g.estado === 'jugando') {
+      // Con alguien que ya no esta (juegos-aviso.js)
+      const sf = require('./juegos-aviso.js').seFue(db, g.jugadores, BOT);
+      if (sf && sf.borrar) { drop(g); changed(); }
+      else if (sf) { note(g, 'Tu rival se fue del club.'); finish(g, sf.gana, 'abandono'); push(g, true); }
+    }
   }
 }
 
