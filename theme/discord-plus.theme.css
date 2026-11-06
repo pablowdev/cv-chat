@@ -2515,6 +2515,9 @@ html body .puente-vista-texto {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
 /* El mensaje enlazado solo y entero, con los emojis del club (aviso.js) */
+/* El que mira una partida (aviso.js: cartelMirando) */
+html body .puente-jg .jg-mirando { margin: 0 auto 0.5rem; padding: 0.375rem 0.75rem; border-radius: 0.5rem; background: #2b2d31; color: #dbdee1; font-size: 0.875rem; text-align: center; }
+html body .puente-jg .pl-pie .jg-mirando { margin: 0; flex: 1 1 100%; }
 /* El zumbido del Pool cuando no estas en la mesa: la pantalla tiembla un momento (aviso.js) */
 html body.puente-zumbido, html body .puente-jg.puente-zumbido { animation: puente-zumbido 0.6s linear; }
 html body .puente-jg .jg-chat-form .jg-zumbido { flex: none; min-height: 2.5rem; padding: 0 0.75rem; font-size: 1.125rem; background: #2b2d31; color: #f2f3f5; }

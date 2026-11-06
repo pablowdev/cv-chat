@@ -2157,6 +2157,7 @@ function leido(sc) {
       t.append(el('b', '', (m || j).nombre + ':'), document.createTextNode(' ' + (m ? mesaTexto(m) : q.slice(0, -1).join(', ') + ' y ' + q[q.length - 1] + ' están jugando')));
       r.append(el('span', 'puente-club-mesa-ico', ICONO[(m || j).juego] || '🎲'), t);
       if (m) r.append(entrar(m));
+      else if (j.enlace) { const a = el('a', 'puente-club-entrar', 'Mirar'); a.href = j.enlace; a.title = 'Mirar la partida'; r.append(a); }
       tarjeta.append(r);
     }
     tarjeta.hidden = false;
@@ -10542,6 +10543,13 @@ document.addEventListener('pointerdown', (ev) => {
   // Para hablar con los rivales mientras se juega (el Truco tiene el suyo, al costado). La caja queda
   // fija debajo de la mesa, fuera de lo que se vuelve a dibujar en cada jugada (asi no se pierde lo
   // que se esta escribiendo), y solo cambia la lista. Es temporal: se borra cuando se cierra la mesa
+  // El que mira una partida (no juega): un cartel arriba, para que se entienda por que no puede jugar
+  function cartelMirando(b, s) {
+    if (!s || s.soyJugador !== false || s.estado === 'esperando') return;
+    const n = [s.yo, s.rival].filter(Boolean).map(p => p.nombre).join(' y ');
+    b.appendChild(el('div', 'jg-mirando', s.estado === 'terminada' ? `👀 Mirabas la partida de ${n}` : `👀 Estás mirando la partida de ${n}`));
+  }
+  window.puenteMirando = cartelMirando;
   // ── El zumbido (chat-partida.js): el boton 📳 al lado de Enviar, cuando le toca a otro ──
   const puedeZumbar = (s) => !!s && s.estado === 'jugando' && s.teToca === false && !s.compu && s.soyJugador !== false;
   function botonZumbido(juego, id) {
@@ -10895,6 +10903,7 @@ document.addEventListener('pointerdown', (ev) => {
       return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('mesa', m.id));
     });
     section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => joinGame(a.id)));
+    section('Se está jugando', d.enJuego || [], (m) => row(m.jugadores[0], m.jugadores.map(p => p.nombre).join(' vs '), 'Podés mirar la partida', '👀 Mirar', '', () => go('mesa', m.id)));
     if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
     // Récord y ranking
     const s = d.stats;
@@ -11099,8 +11108,10 @@ document.addEventListener('pointerdown', (ev) => {
       w.appendChild(acts); b.appendChild(w); return;
     }
     // Marcador
+    const mira = s.soyJugador === false; // el que mira: los nombres en vez de "vos"
+    cartelMirando(b, s);
     const score = el('div', 'jg-marcador');
-    const side = (p, mine) => { const x = el('div', 'jg-lado' + (mine ? ' mio' : '')); x.append(avatar(p), el('div', 'jg-lnombre', mine ? 'Vos' : p.nombre), el('div', 'jg-lpuntos', String(p.puntos))); return x; };
+    const side = (p, mine) => { const x = el('div', 'jg-lado' + (mine ? ' mio' : '')); x.append(avatar(p), el('div', 'jg-lnombre', mine && !mira ? 'Vos' : p.nombre), el('div', 'jg-lpuntos', String(p.puntos))); return x; };
     score.append(side(s.rival, false), el('div', 'jg-meta', `de ${s.puntos}`), side(s.yo, true));
     // En tablet y celu el tanteador del costado queda abajo: los fosforos van tambien aca, en fila
     const fos = el('div', 'jg-marcador-fos');
@@ -11167,13 +11178,14 @@ document.addEventListener('pointerdown', (ev) => {
     if (s.tanto) {
       // Cantando el tanto: lo que ya dijo cada uno
       if (s.tanto.rival != null) st.appendChild(el('div', 'jg-canto rival', `${s.rival.nombre}: Tengo ${s.tanto.rival}`));
-      if (s.tanto.yo != null) st.appendChild(el('div', 'jg-canto', `Vos: Tengo ${s.tanto.yo}`));
-      st.appendChild(el('div', 'jg-turno', s.tanto.turno === 'yo' ? 'Cantá tu tanto' : `Esperando que ${s.rival.nombre} cante el tanto…`));
+      if (s.tanto.yo != null) st.appendChild(el('div', 'jg-canto', `${mira ? s.yo.nombre : 'Vos'}: Tengo ${s.tanto.yo}`));
+      st.appendChild(el('div', 'jg-turno', s.tanto.turno === 'yo' ? (mira ? `Esperando que ${s.yo.nombre} cante el tanto…` : 'Cantá tu tanto') : `Esperando que ${s.rival.nombre} cante el tanto…`));
     } else if (s.pendiente) {
-      const who = s.pendiente.de === 'yo' ? 'Cantaste' : `${s.rival.nombre} cantó`;
+      const who = s.pendiente.de === 'yo' ? (mira ? `${s.yo.nombre} cantó` : 'Cantaste') : `${s.rival.nombre} cantó`;
       st.appendChild(el('div', 'jg-canto' + (s.pendiente.de === 'yo' ? '' : ' rival'), `${who}: ${CANTO[s.pendiente.canto] || s.pendiente.canto}`));
       if (s.pendiente.de === 'yo') st.appendChild(el('div', 'jg-turno', `Esperando que ${s.rival.nombre} conteste…`));
-    } else st.appendChild(el('div', 'jg-turno', s.turno === 'yo' ? 'Te toca' : `Juega ${s.rival.nombre}…`));
+      else if (mira) st.appendChild(el('div', 'jg-turno', `Esperando que ${s.yo.nombre} conteste…`));
+    } else st.appendChild(el('div', 'jg-turno', s.turno === 'yo' ? (mira ? `Juega ${s.yo.nombre}…` : 'Te toca') : `Juega ${s.rival.nombre}…`));
     const last = (s.log || []).slice(-1)[0];
     if (last && !s.tanto) st.appendChild(el('div', 'jg-ultimo', last));
     if (s.tantoVer) st.appendChild(el('div', 'jg-ultimo', 'Pidieron ver el tanto: las cartas se muestran al final de la mano.'));
@@ -11184,6 +11196,8 @@ document.addEventListener('pointerdown', (ev) => {
     // Tus cartas
     const canPlay = (s.acciones || []).includes('jugar');
     const hand = el('div', 'jg-mano' + (canPlay ? ' juega' : ''));
+    // (el que mira: las del de abajo, boca abajo)
+    if (mira) for (let k = 0; k < (s.yoCartas || 0); k++) hand.appendChild(card(null, 'rival'));
     s.cartas.forEach((c, k) => {
       const x = card(c, 'mia');
       if (reparte) { x.classList.add('jg-reparte', 'mia-reparte'); x.style.setProperty('--d', (k * 2 + (s.mano ? 0 : 1)) * 0.14 + 's'); }
@@ -11192,7 +11206,7 @@ document.addEventListener('pointerdown', (ev) => {
     });
     b.appendChild(hand);
     if (s.baza === 0 && s.miEnvido != null) b.appendChild(el('div', 'jg-envido', `Tu envido: ${s.miEnvido}${s.mano ? ' · sos mano' : ''}`));
-    else b.appendChild(el('div', 'jg-envido', s.mano ? 'Sos mano' : '\u00a0')); // (siempre la linea, asi no se mueve lo de abajo)
+    else b.appendChild(el('div', 'jg-envido', s.mano ? (mira ? `${s.yo.nombre} es mano` : 'Sos mano') : mira ? `${s.rival.nombre} es mano` : '\u00a0')); // (siempre la linea, asi no se mueve lo de abajo)
     // Los cantos de ahora
     const acts = el('div', 'jg-cantos');
     if ((s.acciones || []).includes('tanto')) {
@@ -11346,11 +11360,12 @@ document.addEventListener('pointerdown', (ev) => {
   }
   // Las cartas del tanto que se mostraron al final de la mano (si las pidieron)
   function muestraTanto(s, cls) {
-    const m = s.muestra, quien = m.de === 'yo' ? 'Vos' : s.rival.nombre;
+    const mira = s.soyJugador === false;
+    const m = s.muestra, quien = m.de === 'yo' && !mira ? 'Vos' : m.de === 'yo' ? s.yo.nombre : s.rival.nombre;
     const w = el('div', 'jg-muestra' + (cls ? ' ' + cls : '') + (m.mintio ? ' mintio' : ''));
-    w.appendChild(el('div', 'jg-muestra-t', `${quien} ${m.de === 'yo' ? 'cantaste' : 'cantó'} ${m.dijo} de tanto`));
+    w.appendChild(el('div', 'jg-muestra-t', `${quien} ${m.de === 'yo' && !mira ? 'cantaste' : 'cantó'} ${m.dijo} de tanto`));
     const cs = el('div', 'jg-muestra-cartas'); m.cartas.forEach(c => cs.appendChild(card(c, 'jugada'))); w.appendChild(cs);
-    const tenia = m.de === 'yo' ? 'Tenías' : 'Tenía';
+    const tenia = m.de === 'yo' && !mira ? 'Tenías' : 'Tenía';
     w.appendChild(el('div', 'jg-muestra-r', !m.mintio ? `${tenia} ${m.tenia} ✔`
       : m.de === 'yo' ? `${tenia} ${m.tenia}: ¡te pescaron! Los ${m.pts} puntos son para ${s.rival.nombre}.`
         : `¡Mintió! ${tenia} ${m.tenia}. Los ${m.pts} puntos son para vos.`));
@@ -11370,8 +11385,8 @@ document.addEventListener('pointerdown', (ev) => {
   }
   function end(b, s) {
     const w = el('div', 'jg-fin');
-    const won = s.ganador === 'yo';
-    w.append(el('div', 'jg-hero-cartas', won ? '🏆' : '🃏'), el('div', 'jg-hero-t', won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`),
+    const won = s.ganador === 'yo', mira = s.soyJugador === false;
+    w.append(el('div', 'jg-hero-cartas', won ? '🏆' : '🃏'), el('div', 'jg-hero-t', mira ? `Ganó ${(won ? s.yo : s.rival).nombre}` : won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`),
       el('div', 'jg-hero-s', `${s.yo.puntos} a ${s.rival.puntos}${s.motivo === 'abandono' ? (won ? ' · tu rival abandonó' : ' · por abandono') : ''}`));
     if (s.muestra) w.appendChild(muestraTanto(s, 'fija'));
     const acts = el('div', 'jg-acciones');
@@ -11758,6 +11773,7 @@ document.addEventListener('pointerdown', (ev) => {
       return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('fbMesa', m.id));
     });
     section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => fbJoin(a.id)));
+    section('Se está jugando', d.enJuego || [], (m) => row(m.jugadores[0], m.jugadores.map(p => p.nombre).join(' vs '), 'Podés mirar la partida', '👀 Mirar', '', () => go('fbMesa', m.id)));
     if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
     const s = d.stats;
     box.appendChild(el('div', 'jg-sub', 'Tu récord'));
@@ -12022,12 +12038,14 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (!b) return;
     b.textContent = '';
     if (fbMesa && fbMesa.tutorial) { b.appendChild(fbVisor(fbBoard(s, s.celdas, {}))); return; }
+    const mira = s.soyJugador === false; // el que mira: los nombres en vez de "vos"
+    cartelMirando(b, s);
     const score = el('div', 'jg-marcador fb-marcador');
     const count = (k) => s.celdas.reduce((n, v) => n + (v[1] === k && v[2] ? 1 : 0), 0);
     const side = (p, mine) => {
       const x = el('div', 'jg-lado' + (mine ? ' mio' : ''));
       const dot = el('span', 'fb-color fb-color-' + (p.color === 'R' ? 'r' : 'v'));
-      x.append(avatar(p), el('div', 'jg-lnombre', mine ? 'Vos' : p.nombre), dot, el('div', 'jg-lpuntos', String(count(p.color))));
+      x.append(avatar(p), el('div', 'jg-lnombre', mine && !mira ? 'Vos' : p.nombre), dot, el('div', 'jg-lpuntos', String(count(p.color))));
       return x;
     };
     score.append(side(s.rival, false), el('div', 'jg-meta', 'bolas'), side(s.yo, true));
@@ -12050,12 +12068,13 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     b.appendChild(fbVisor(board));
     const st = el('div', 'jg-status');
     const mine = s.teToca;
-    st.appendChild(el('div', 'jg-turno', mine ? `Te toca (${s.yo.color === 'R' ? 'rojas' : 'verdes'})` : `Juega ${s.rival.nombre}…`));
+    const juega = mira && s.turno ? ([s.yo, s.rival].find(p => p && p.color === s.turno) || s.rival) : s.rival;
+    st.appendChild(el('div', 'jg-turno', mine ? `Te toca (${s.yo.color === 'R' ? 'rojas' : 'verdes'})` : `Juega ${juega.nombre}…`));
     st.appendChild(el('div', 'jg-ultimo', mine ? (sel ? 'Tocá una casilla marcada (o la misma bola para elegir otra).' : 'Tocá una de tus bolas.') : ((s.log || []).slice(-1)[0] || '')));
     if (s.deadline) { const r = el('div', 'jg-reloj' + (mine ? ' mio' : '')); r.appendChild(el('span')); r.appendChild(el('span', 'jg-reloj-t')); st.appendChild(r); }
     b.appendChild(st);
     const tip = el('div', 'fb-pie', 'Tu base es la marcada abajo a la derecha: defendela. Ganás si llegás con una bola a la del rival, arriba a la izquierda.');
-    b.appendChild(tip);
+    if (!mira) b.appendChild(tip);
   }
   function fbMuestra(board, s, sel, targets) {
     const flip = s.yo && s.yo.color === 'R';
@@ -12737,7 +12756,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     const w = el('div', 'jg-fin');
     const won = s.ganador === 'yo', draw = s.ganador === 'empate';
     const why = { meta: 'llegó a la meta', bolas: 'se quedó con las únicas bolas', abandono: 'por abandono', 'sin-jugadas': 'el otro no tenía jugadas', empate: 'no quedó ninguna bola' }[s.motivo] || '';
-    w.append(el('div', 'jg-hero-cartas', draw ? '🤝' : won ? '🏆' : '🟢'), el('div', 'jg-hero-t', draw ? 'Empate' : won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`), el('div', 'jg-hero-s', why));
+    w.append(el('div', 'jg-hero-cartas', draw ? '🤝' : won ? '🏆' : '🟢'), el('div', 'jg-hero-t', draw ? 'Empate' : s.soyJugador === false ? `Ganó ${(won ? s.yo : s.rival).nombre}` : won ? '¡Ganaste!' : `Ganó ${s.rival.nombre}`), el('div', 'jg-hero-s', why));
     const acts = el('div', 'jg-acciones');
     if (s.soyJugador && !s.siguiente) {
       const r = el('button', 'jg-btn jg-primario', s.revancha && s.revancha.yo ? 'Esperando revancha…' : s.revancha && s.revancha.rival ? `${s.rival.nombre} quiere la revancha: ¡Dale!` : 'Revancha');
@@ -12836,6 +12855,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('ajMesa', m.id));
     });
     section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => ajJoin(a.id)));
+    section('Se está jugando', d.enJuego || [], (m) => row(m.jugadores[0], m.jugadores.map(p => p.nombre).join(' vs '), 'Podés mirar la partida', '👀 Mirar', '', () => go('ajMesa', m.id)));
     if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
     const s = d.stats;
     box.appendChild(el('div', 'jg-sub', 'Tu récord'));
@@ -13103,6 +13123,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         est.append(el('span', '', s.teToca ? 'Hacé tu primera jugada: ' : `${s.rival.nombre} tiene que hacer su primera jugada: `), el('b', 'aj-primera', ''));
       } else if (s.teToca) est.textContent = s.jaque ? '¡Jaque! Te toca' : 'Te toca';
       else if (s.soyJugador) est.textContent = s.rival && s.rival.compu ? 'La compu está pensando…' : `Le toca a ${s.rival ? s.rival.nombre : 'tu rival'}`;
+      else { const t = [s.yo, s.rival].find(p => p && p.color === s.turno); est.textContent = t ? `Le toca a ${t.nombre}` : '👀 Mirando la partida'; }
       if (s.teToca) est.classList.add('mio');
       lado.appendChild(est);
       if (s.tablas === 'rival') {

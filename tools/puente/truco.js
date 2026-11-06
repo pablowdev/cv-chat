@@ -81,7 +81,14 @@ function setup(ctx) {
     on('truco:crear', create);
     on('truco:unirse', join);
     on('truco:cancelar', cancel);
-    on('truco:ver', (me, d) => { const g = games.get(String(d.id)); if (!g) return { error: 'Esa partida ya no está.' }; if (!canSee(g, me)) return { error: 'Esa partida es privada.' }; return { partida: view(g, me) }; });
+    on('truco:ver', (me, d, socket) => {
+      const g = games.get(String(d.id));
+      if (!g) return { error: 'Esa partida ya no está.' };
+      if (!canSee(g, me)) return { error: 'Esa partida es privada.' };
+      // el que mira (no juega) recibe las jugadas mientras tenga la mesa abierta
+      socket.jgMirando = g.jugadores.includes(me) ? null : 'truco:' + g.id;
+      return { partida: view(g, me) };
+    });
     on('truco:accion', act);
   });
   log(`truco: listo (${games.size} partidas en curso)`);
@@ -132,7 +139,8 @@ const nameOf = (id) => {
   const u = db.prepare('SELECT id, COALESCE(display_name, username) nombre, avatar FROM users WHERE id = ?').get(id);
   return u ? { id: u.id, nombre: u.nombre, avatar: u.avatar || null } : { id, nombre: 'Alguien', avatar: null };
 };
-const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me));
+// (las publicas que ya empezaron se pueden mirar)
+const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me)) || (g.estado !== 'esperando' && g.publica);
 const seat = (g, me) => g.jugadores.indexOf(me);
 
 function save(g) {
@@ -686,7 +694,7 @@ function view(g, me) {
     log: g.log.slice(-6).map(x => x.text), grito: g.grito && Date.now() - g.grito.t < 6000 ? { mio: g.grito.de === pov, text: g.grito.text } : null,
     gritos: GRITOS, ganador: g.estado === 'terminada' ? (g.ganador === pov ? 'yo' : 'rival') : null, motivo: g.motivo || null,
     revancha: g.estado === 'terminada' ? { yo: !!g.revancha[pov], rival: !!g.revancha[o] } : null, siguiente: g.siguiente || null,
-    chat: (g.chat || []).map(x => ({ mio: x.de === pov, text: x.text, t: x.t })), manos: g.manos || 0,
+    chat: i >= 0 ? (g.chat || []).map(x => ({ mio: x.de === pov, text: x.text, t: x.t })) : null, manos: g.manos || 0,
   };
   if (g.estado === 'jugando' && g.h) {
     const h = g.h;
@@ -694,6 +702,7 @@ function view(g, me) {
     out.mano = g.manoDe === pov;
     out.cartas = i >= 0 ? h.cartas[pov] : [];
     out.rivalCartas = h.cartas[o].length;
+    out.yoCartas = h.cartas[pov].length; // (para el que mira: las del de abajo, boca abajo)
     out.bazas = h.bazas.map(b => ({ yo: b[pov] || null, rival: b[o] || null, gana: b.gana === undefined ? null : b.gana === 'parda' ? 'parda' : b.gana === pov ? 'yo' : 'rival' }));
     out.baza = h.baza;
     out.turno = who === pov ? 'yo' : 'rival';
@@ -719,7 +728,7 @@ function push(g, big) {
   save(g);
   const ids = g.jugadores.filter(x => x !== BOT);
   for (const [, s] of io.sockets.sockets) {
-    if (s.user && ids.includes(s.user.id)) { try { s.emit('truco:estado', view(g, s.user.id)); } catch { /* sesion cerrada */ } }
+    if (s.user && (ids.includes(s.user.id) || s.jgMirando === 'truco:' + g.id)) { try { s.emit('truco:estado', view(g, s.user.id)); } catch { /* sesion cerrada */ } }
   }
   if (g.estado === 'jugando') notifyTurn(g);
   if (big) changed();
@@ -773,6 +782,14 @@ function ranking(since) {
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
 
+// Las partidas publicas que se estan jugando entre dos personas, para mirarlas desde la sala
+function mirables(me) {
+  return [...games.values()]
+    .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0))
+    .sort((a, b) => (b.inicio || b.creado || 0) - (a.inicio || a.creado || 0)).slice(0, 10)
+    .map(g => ({ id: g.id, jugadores: g.jugadores.map(nameOf) }));
+}
+
 function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
@@ -790,7 +807,7 @@ function lobby(me) {
     });
   const d = new Date();
   const mes = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) + 3 * 3600e3; // el mes en hora de Argentina
-  return { abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
+  return { enJuego: mirables(me), abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
 module.exports = { setup, stats, _test: { rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };

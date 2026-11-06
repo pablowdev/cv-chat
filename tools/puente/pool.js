@@ -61,7 +61,14 @@ function setup(ctx) {
     on('pool:crear', create);
     on('pool:unirse', join);
     on('pool:cancelar', cancel);
-    on('pool:ver', (me, d) => { const g = games.get(String(d.id)); if (!g) return { error: 'Esa partida ya no está.' }; if (!canSee(g, me)) return { error: 'Esa partida es privada.' }; return { partida: view(g, me) }; });
+    on('pool:ver', (me, d, socket) => {
+      const g = games.get(String(d.id));
+      if (!g) return { error: 'Esa partida ya no está.' };
+      if (!canSee(g, me)) return { error: 'Esa partida es privada.' };
+      // el que mira (no juega) recibe las jugadas mientras tenga la mesa abierta
+      socket.jgMirando = g.jugadores.includes(me) ? null : 'pool:' + g.id;
+      return { partida: view(g, me) };
+    });
     on('pool:accion', act);
   });
   log(`pool: listo (${games.size} partidas en curso)`);
@@ -73,7 +80,8 @@ const nameOf = (id) => {
   const u = db.prepare('SELECT id, COALESCE(display_name, username) nombre, avatar FROM users WHERE id = ?').get(id);
   return u ? { id: u.id, nombre: u.nombre, avatar: u.avatar || null } : { id, nombre: 'Alguien', avatar: null };
 };
-const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me));
+// (las publicas que ya empezaron se pueden mirar)
+const canSee = (g, me) => g.jugadores.includes(me) || (g.estado === 'esperando' && (g.publica || g.invitado === me)) || (g.estado !== 'esperando' && g.publica);
 const seat = (g, me) => g.jugadores.indexOf(me);
 
 function save(g) {
@@ -310,7 +318,7 @@ function push(g, big) {
 
   const ids = g.jugadores.filter(x => x !== BOT);
   for (const [, s] of io.sockets.sockets) {
-    if (s.user && ids.includes(s.user.id)) { try { s.emit('pool:estado', view(g, s.user.id)); } catch { /* sesion cerrada */ } }
+    if (s.user && (ids.includes(s.user.id) || s.jgMirando === 'pool:' + g.id)) { try { s.emit('pool:estado', view(g, s.user.id)); } catch { /* sesion cerrada */ } }
   }
   if (g.estado === 'jugando') notifyTurn(g);
   if (big) changed();
@@ -357,6 +365,14 @@ function ranking(since) {
   return db.prepare(`SELECT ganador id, COUNT(*) n FROM puente_pool_partidas WHERE compu = 0 AND amistosa = 0 AND ganador IS NOT NULL AND fin >= ?
     GROUP BY ganador ORDER BY n DESC LIMIT 10`).all(since).map(r => ({ ...nameOf(r.id), ganadas: r.n }));
 }
+// Las partidas publicas que se estan jugando entre dos personas, para mirarlas desde la sala
+function mirables(me) {
+  return [...games.values()]
+    .filter(g => g.estado === 'jugando' && g.publica && !g.compu && !g.jugadores.includes(me) && g.jugadores.length === 2 && g.jugadores.every(x => x > 0))
+    .sort((a, b) => (b.inicio || b.creado || 0) - (a.inicio || a.creado || 0)).slice(0, 10)
+    .map(g => ({ id: g.id, jugadores: g.jugadores.map(nameOf) }));
+}
+
 function lobby(me) {
   const all = [...games.values()];
   const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitado === me) && !g.jugadores.includes(me))
@@ -374,7 +390,7 @@ function lobby(me) {
     });
   const d = new Date();
   const mes = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) + 3 * 3600e3;
-  return { niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
+  return { enJuego: mirables(me), niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
 module.exports = { setup, stats, _test: { games, create, join, act, view, botMove, BOT } };

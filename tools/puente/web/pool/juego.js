@@ -463,6 +463,7 @@
       return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => A.go('plMesa', m.id));
     });
     section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => unirse(a.id)));
+    section('Se está jugando', d.enJuego || [], (m) => row(m.jugadores[0], m.jugadores.map(p => p.nombre).join(' vs '), 'Podés mirar la partida', '👀 Mirar', '', () => A.go('plMesa', m.id)));
     if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
     const s = d.stats;
     box.appendChild(el('div', 'jg-sub', 'Tu récord'));
@@ -805,6 +806,11 @@
   }
   function mensaje() {
     const s = M.s;
+    // el que mira: quien tira, por su nombre
+    if (!s.soyJugador && s.estado === 'jugando') {
+      const quien = M.anim ? (M.anim.u.mio ? s.yo : s.rival) : s.turno === 'yo' ? s.yo : s.rival;
+      return `${M.anim ? 'Tira' : 'Le toca a'} ${quien ? quien.nombre : 'alguien'}${M.anim ? '…' : ''}`;
+    }
     if (M.anim) return M.anim.u.mio ? 'Tiraste…' : `Tira ${s.rival ? s.rival.nombre : 'el rival'}…`;
     if (s.estado === 'esperando') return s.invitado ? `Esperando a ${s.invitado.nombre}…` : 'Esperando rival… Pasale el enlace a alguien o esperá que alguien entre desde la sala.';
     if (s.estado === 'terminada') {
@@ -862,6 +868,7 @@
       else if (s.revancha && s.revancha.yo) M.pie.appendChild(el('div', 'jg-estado', 'Esperando que el otro acepte la revancha…'));
       else M.pie.appendChild(btn(s.revancha && s.revancha.rival ? 'Aceptar la revancha' : 'Revancha', 'jg-primario', async () => { const r = await accion({ tipo: 'revancha' }); if (r.id) { A.stack().pop(); A.go('plMesa', r.id); } }));
     }
+    if (window.puenteMirando) window.puenteMirando(M.pie, s);
     const ult = (s.log || []).slice(-3);
     if (ult.length) { const l = el('div', 'pl-log'); for (const x of ult) l.appendChild(el('div', null, x)); M.pie.appendChild(l); }
     if (M.tactil && s.estado === 'jugando' && s.soyJugador) M.pie.appendChild(el('div', 'jg-ayuda', 'Apuntá arrastrando el dedo sobre la mesa y afiná con la rueda. Para tirar, arrastrá la barra de fuerza y soltá (si volvés al principio antes de soltar, no tira).'));

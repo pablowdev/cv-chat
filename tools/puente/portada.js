@@ -41,7 +41,7 @@ function mesas(db) {
       if (g.estado === 'jugando' && Date.now() - (r.actualizado || 0) < 30 * 60e3) {
         const ids = (g.jugadores || (g.asientos || []).map(a => a && a.uid)).filter(x => x > 0);
         const nombres = ids.map(x => nombre(db, x));
-        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: r.actualizado });
+        if (ids.length >= 2 && nombres.every(Boolean)) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: r.actualizado, enlace: g.publica ? `/app?${j.param}=${encodeURIComponent(g.id)}` : null });
       }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));
