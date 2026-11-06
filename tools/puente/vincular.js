@@ -780,11 +780,13 @@ async function handle(req, res) {
   // Proyecto Gusanos: el juego terminado (index.html, style.css, game.js y assets/) en web/gusanos/.
   // El codigo va al repositorio; los assets (imagenes, sonidos y mapas) son propios del servidor y no
   // van al repositorio. Se sirve solo lo que esta adentro de web/gusanos y con los tipos conocidos.
-  if (req.method === 'GET' && p.startsWith('/puente/gusanos/')) {
-    let rel = p.slice('/puente/gusanos/'.length);
+  // (Shoppa, el juego nuevo, se sirve igual desde web/shoppa: la pagina de prueba de la fisica y el juego)
+  const carpetaJuego = req.method === 'GET' && /^\/puente\/(gusanos|shoppa)\//.exec(p);
+  if (carpetaJuego) {
+    let rel = p.slice(('/puente/' + carpetaJuego[1] + '/').length);
     try { rel = decodeURIComponent(rel); } catch { return send(res, 400, 'text/plain; charset=utf-8', 'Ruta inválida'); }
     if (rel === '') rel = 'index.html';
-    const raiz = path.join(STATIC, 'gusanos');
+    const raiz = path.join(STATIC, carpetaJuego[1]);
     const file = path.join(raiz, rel);
     const dentro = file.startsWith(raiz + path.sep);
     if (!dentro || !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(rel) || rel.split('/').some(x => x === '.' || x === '..')) {
