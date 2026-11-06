@@ -55,17 +55,31 @@
     const mov = s.estado === 'suelo' ? (s.cola.length > 1 && Math.abs(s.cola[0][0] - s.cola[1][0]) > 0.1 ? 1 : 0) : 0;
     const ond = Math.sin(t / (mov ? 70 : 260)) * (mov ? 1.2 : 0.5);
     x.save(); x.translate(s.x, s.y); x.rotate(inc);
-    // la cola enroscada (abajo, ocupa el ancho de 9)
-    x.fillStyle = '#3a9426';
-    x.beginPath(); x.ellipse(0, 6, 4.3, 2.2, 0, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#47a82e';
-    x.beginPath(); x.ellipse(-s.dir * 1, 5.2, 3, 1.5, 0, 0, Math.PI * 2); x.fill();
-    // el cuerpo: de la cola a la cabeza, con una curva suave que ondula
-    const pts = [];
-    for (let k = 0; k <= 8; k++) { const u = k / 8; pts.push([Math.sin(u * 3.1 + ond) * 1.6 * (1 - u) * s.dir, 5 - u * 11]); }
-    for (let k = 0; k < pts.length; k++) { x.fillStyle = k % 2 ? '#47a82e' : '#58c23a'; x.beginPath(); x.arc(pts[k][0], pts[k][1], 2.6 - k * 0.08, 0, Math.PI * 2); x.fill(); }
-    // la panza clara
-    x.fillStyle = '#c9e98a'; x.fillRect(Math.round(pts[4][0] + s.dir * 0.5) - 1, -3, 1, 6);
+    // el cuerpo, de una sola pieza: una S que va de la punta de la cola (fina, curvada hacia atras) por
+    // el piso y sube hasta el cuello. Grosor: fino en la cola, grueso abajo, medio en el cuello
+    const D = s.dir, o = ond * 0.6;
+    const ctrl = [[-D * 4.2, 3.2], [-D * 3.6, 6.4], [-D * 1.2, 7.4], [D * 1.6, 6.6 + o * 0.2], [D * 2.4, 3.4], [D * 1.2 + o, 0], [-D * 0.2 + o * 0.5, -3], [D * 0.6, -5.4]];
+    const anchos = [1.2, 2.6, 4.2, 4.6, 4.4, 4.0, 3.6, 3.3];
+    // curva suave por los puntos (Catmull-Rom)
+    const pts = [], an = [];
+    for (let k = 0; k < ctrl.length - 1; k++) {
+      const p0 = ctrl[Math.max(0, k - 1)], p1 = ctrl[k], p2 = ctrl[k + 1], p3 = ctrl[Math.min(ctrl.length - 1, k + 2)];
+      for (let u = 0; u < 1; u += 0.25) {
+        const u2 = u * u, u3 = u2 * u;
+        const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (-a + 3 * b - 3 * c + d) * u3);
+        pts.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]); an.push(anchos[k] + (anchos[k + 1] - anchos[k]) * u);
+      }
+    }
+    pts.push(ctrl[ctrl.length - 1]); an.push(anchos[anchos.length - 1]);
+    const trazo = (extra, color) => {
+      x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round';
+      for (let k = 1; k < pts.length; k++) { x.lineWidth = an[k] + extra; x.beginPath(); x.moveTo(pts[k - 1][0], pts[k - 1][1]); x.lineTo(pts[k][0], pts[k][1]); x.stroke(); }
+    };
+    trazo(1.4, '#2f7d1f');   // el borde
+    trazo(0, '#58c23a');     // el cuerpo
+    // la panza clara, de un solo tiron, del lado de adelante del tramo que sube
+    x.strokeStyle = '#c9e98a'; x.lineWidth = 0.9; x.lineCap = 'round';
+    x.beginPath(); const k0 = Math.floor(pts.length * 0.55); x.moveTo(pts[k0][0] + D * 1.2, pts[k0][1]); for (let k = k0 + 1; k < pts.length - 2; k++) x.lineTo(pts[k][0] + D * 1.1, pts[k][1]); x.stroke();
     // la cabeza (arriba, un poco hacia adelante)
     const hx = s.dir * 1.2, hy = -7;
     x.fillStyle = '#6bd94a'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
