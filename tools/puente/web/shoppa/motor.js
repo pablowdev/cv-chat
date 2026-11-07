@@ -25,9 +25,12 @@
     MIRA: 0.049,              // radianes por paso al apuntar
     // la soga (5 estrellas: 462 px y tiros ilimitados). Una soga de un solo lado: tira pero se afloja
     // (medido en partidas filmadas). Acortar y alargar: ~4 px por paso (medido: 200-225 px/s)
-    SOGA_LARGO: 462, SOGA_MIN: 14, SOGA_VEL: 18,
-    SOGA_ACORTA: 4.0, SOGA_ALARGA: 4.4,
-    SOGA_EMPUJE: 0.38,        // el balanceo: empuje a lo largo del giro (el valor de Proyecto Gusanos)
+    // Medido cuadro por cuadro en una partida de Shopper filmada a 60 cuadros, con la camara quieta y escala 1:1
+    // (la soga llega justo a 462): el gancho vuela 20 px por paso, acortar y alargar son 4 px por paso, colgado no
+    // hay rozamiento (la energia se conserva) y el balanceo es un empujon chico, de ~0,19 px/paso², horizontal.
+    SOGA_LARGO: 462, SOGA_MIN: 14, SOGA_VEL: 20,
+    SOGA_ACORTA: 4.0, SOGA_ALARGA: 4.0,
+    SOGA_EMPUJE: 0.19,        // el balanceo: empujon horizontal (antes 0.38 a lo largo del giro: el doble de fuerte)
     SOGA_VMAX: 32,            // tope de velocidad colgado
     SOGA_REBOTE: 0.6,         // al chocar colgado contra el terreno
     // la granada de prueba
@@ -125,6 +128,8 @@
   function saltar(s, v, atras) {
     const d = atras ? -s.dir : s.dir;
     s.vx = v[0] * d; s.vy = v[1]; s.estado = 'aire';
+    // (para el dibujo y para la mira: los saltos para atras no se dan vuelta, y el mortal gira una vuelta)
+    s.atras = !!atras; s.giro = v === C.MORTAL ? 1 : 0; s.aireT = 0;
   }
 
   function pasoSuelo(J, s, e) {
@@ -222,7 +227,7 @@
       s.caida = dano; s.vida = Math.max(0, s.vida - dano); s.golpe = (s.golpe || 0) + dano;
       if (s.J) s.J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n: dano, caida: true });
     }
-    s.vy = 0;
+    s.vy = 0; s.atras = false; s.giro = 0;
     // los saltos aterrizan quietos; lo que venia volando rapido (una explosion) se desliza
     s.estado = Math.abs(s.vx) > 2.5 ? 'desliza' : 'suelo';
     if (s.estado === 'suelo') s.vx = 0;
@@ -233,7 +238,8 @@
     const T = J.T;
     s.vy = Math.min(C.VMAX, s.vy + C.GRAV);
     s.vx = Math.max(-C.VMAX, Math.min(C.VMAX, s.vx));
-    if (Math.abs(s.vx) > 0.05) s.dir = s.vx > 0 ? 1 : -1;
+    if (Math.abs(s.vx) > 0.05 && !s.atras) s.dir = s.vx > 0 ? 1 : -1;
+    s.aireT = (s.aireT || 0) + 1;
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(s.vx), Math.abs(s.vy))));
     for (let i = 0; i < n && s.estado === 'aire'; i++) {
       if (s.vx) moverX(T, s, s.vx / n, C.REBOTE);
@@ -275,15 +281,10 @@
     // acortar / alargar (medido en partidas: unos 4 px por paso en los dos sentidos)
     if (e.arr) acortar(T, s);
     if (e.aba) R.L = Math.min(C.SOGA_LARGO, R.L + C.SOGA_ALARGA);
-    // el balanceo: empuje a lo largo del giro, para el lado que se aprieta
+    // el balanceo: un empujon horizontal chico para el lado que se aprieta (la soga se queda con lo que va
+    // hacia afuera; abajo empuja entero y con la soga acostada casi no hace nada, como en el juego clasico)
     const d = (e.izq ? -1 : 0) + (e.der ? 1 : 0);
-    if (d) {
-      const p = ultimo(), dx = s.x - p.x, dy = s.y - p.y, n = Math.hypot(dx, dy) || 1;
-      let tx = -dy / n, ty = dx / n;
-      if (tx * d < 0) { tx = -tx; ty = -ty; }
-      s.vx += tx * C.SOGA_EMPUJE; s.vy += ty * C.SOGA_EMPUJE;
-      s.dir = d;
-    }
+    if (d) { s.vx += d * C.SOGA_EMPUJE; s.dir = d; }
     s.vy += C.GRAV;
     s.vx = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vx));
     s.vy = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vy));
@@ -370,10 +371,24 @@
       }
       if (!libre) { s.x = ax; s.y = ay; const vr = s.vx * ux + s.vy * uy; if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; } return; }
       [tx, ty, ux, uy] = libre;
+      s.x = tx; s.y = ty;
+      const vr = s.vx * ux + s.vy * uy;
+      if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+      return;
     }
+    // la velocidad gira con la soga: se queda la parte a lo largo del giro (medida donde estaba) y se pierde
+    // solo lo que iba hacia afuera. Asi el balanceo no pierde energia (antes se iba frenando solo: en el juego
+    // clasico, sin tocar nada, la serpiente sigue yendo y viniendo igual)
+    const ox = ax - p.x, oy = ay - p.y, od = Math.hypot(ox, oy);
     s.x = tx; s.y = ty;
-    const vr = s.vx * ux + s.vy * uy;
-    if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+    if (od > 1e-6) {
+      const u0x = ox / od, u0y = oy / od;
+      const vt = s.vx * -u0y + s.vy * u0x, vr0 = Math.min(0, s.vx * u0x + s.vy * u0y);
+      s.vx = vt * -uy + vr0 * ux; s.vy = vt * ux + vr0 * uy;
+    } else {
+      const vr = s.vx * ux + s.vy * uy;
+      if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+    }
   }
 
   // ── Las armas y las cajas ──

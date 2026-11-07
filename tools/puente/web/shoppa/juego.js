@@ -205,7 +205,7 @@
       mapa: 'fabrica', turno, fase, tiempo, cajaN, nTurno, cajaTomada, ataco, arma, viento: J.viento,
       gusanos: jug.map((j, i) => ({ equipo: i, muerto: j.serp.estado === 'muerta' })),
       armas: jug.map(j => j.armas),
-      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho })),
+      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
       cosas: J.cosas.map(g => ({ ...g })),
       efectos: J.efectos.filter(e => e.t < 3),
       textos: textos.filter(t => t.v > 1.6).map(t => ({ ...t })),
@@ -250,15 +250,36 @@
   let avisoT = null;
   function aviso(t) { const a = $('aviso'); a.textContent = t; a.style.opacity = 1; clearTimeout(avisoT); avisoT = setTimeout(() => { a.style.opacity = 0; }, 2200); }
 
+  // la inclinacion del piso debajo (las serpientes se acuestan con la pendiente, hasta ~30 grados)
+  function pendiente(s) {
+    const T = J.T, alto = (px) => { for (let k = -10; k <= 14; k++) if (T.solido(px, s.y + 8 + k)) return k; return null; };
+    const a = alto(s.x - 5), b = alto(s.x + 5);
+    if (a === null || b === null) return 0;
+    return Math.max(-0.55, Math.min(0.55, Math.atan2(b - a, 10)));
+  }
   function pintarSerpiente(s, t) {
     if (s.estado === 'muerta') return;
     let inc = 0;
+    const D = s.dir;
     if (s.soga) { const p = s.soga.piv[s.soga.piv.length - 1]; inc = Math.max(-0.45, Math.min(0.45, Math.atan2(p.x - s.x, s.y - p.y))); }
+    else if (s.estado === 'suelo' || s.estado === 'desliza') inc = pendiente(s);
+    else if (s.estado === 'aire') inc = s.giro ? -D * Math.PI * 2 * Math.min(1, (s.aireT || 0) / 42) : Math.max(-0.35, Math.min(0.35, s.vx * 0.06));
+    // el giro se suaviza (que no salte de un pixel al otro), salvo el del mortal
+    if (s.estado === 'aire' && s.giro) s.inc = inc;
+    else {
+      // (despues del mortal queda en una vuelta entera: se lleva a -pi..pi para que no gire para atras)
+      if (s.inc !== undefined) s.inc = Math.atan2(Math.sin(s.inc), Math.cos(s.inc));
+      s.inc = (s.inc === undefined ? inc : s.inc + (inc - s.inc) * 0.35);
+    }
     const mov = s.estado === 'suelo' && s.cola.length > 1 && Math.abs(s.cola[0][0] - s.cola[1][0]) > 0.1;
-    const ond = Math.sin(t / (mov ? 70 : 260)) * (mov ? 1.2 : 0.5);
-    x.save(); x.translate(s.x, s.y); x.rotate(inc);
-    const D = s.dir, o = ond * 0.6;
-    const ctrl = [[-D * 4.2, 3.2], [-D * 3.6, 6.4], [-D * 1.2, 7.4], [D * 1.6, 6.6 + o * 0.2], [D * 2.4, 3.4], [D * 1.2 + o, 0], [-D * 0.2 + o * 0.5, -3], [D * 0.6, -5.4]];
+    // caminando: como en el juego clasico, avanza de a empujones; en el empujon el cuerpo se estira para
+    // adelante y baja la cabeza, y despues se vuelve a juntar (sigue el paso del motor, s.fase de 18)
+    const u = mov ? ((s.fase || 0) % 18) / 18 : 0;
+    const est = mov ? Math.max(0, Math.sin((u - 0.22) / 0.5 * Math.PI)) * (u > 0.22 && u < 0.72 ? 1 : 0) : 0;
+    const ond = Math.sin(t / 260) * (mov ? 0 : 0.5);
+    x.save(); x.translate(s.x, s.y); x.rotate(s.inc);
+    const o = ond * 0.6, e1 = est * 2.2, e2 = est * 1.6;
+    const ctrl = [[-D * (4.2 + e2 * 0.4), 3.2], [-D * (3.6 + e2 * 0.3), 6.4], [-D * 1.2, 7.4], [D * (1.6 + e2 * 0.3), 6.6 + o * 0.2], [D * (2.4 + e1 * 0.5), 3.4 + e2 * 0.3], [D * (1.2 + e1 * 0.8) + o, 0 + e2 * 0.6], [D * (-0.2 + e1 * 1.1) + o * 0.5, -3 + e2 * 0.9], [D * (0.6 + e1 * 1.3), -5.4 + e2 * 1.1]];
     const anchos = [1.2, 2.6, 4.2, 4.6, 4.4, 4.0, 3.6, 3.3];
     const pts = [], an = [];
     for (let k = 0; k < ctrl.length - 1; k++) {
@@ -272,7 +293,7 @@
     const trazo = (extra, color) => { x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round'; for (let k = 1; k < pts.length; k++) { x.lineWidth = an[k] + extra; x.beginPath(); x.moveTo(pts[k - 1][0], pts[k - 1][1]); x.lineTo(pts[k][0], pts[k][1]); x.stroke(); } };
     trazo(1.4, '#b9805c'); trazo(0, '#f1c6a2');
     x.strokeStyle = '#fbe4cf'; x.lineWidth = 0.9; x.beginPath(); const k0 = Math.floor(pts.length * 0.55); x.moveTo(pts[k0][0] + D * 1.2, pts[k0][1]); for (let k = k0 + 1; k < pts.length - 2; k++) x.lineTo(pts[k][0] + D * 1.1, pts[k][1]); x.stroke();
-    const hx = D * 1.2, hy = -7;
+    const hx = D * (1.2 + e1 * 1.3), hy = -7 + e2 * 1.1;
     x.fillStyle = '#b9805c'; x.beginPath(); x.ellipse(hx, hy, 4.1, 3.3, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = '#f4cba8'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = '#fff'; x.fillRect(Math.round(hx + D * 1.2) - 1, hy - 2, 2, 2);
