@@ -293,13 +293,22 @@
     }
     pts.push(ctrl[ctrl.length - 1]); an.push(anchos[anchos.length - 1]);
     const trazo = (extra, color) => { x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round'; for (let k = 1; k < pts.length; k++) { x.lineWidth = an[k] + extra; x.beginPath(); x.moveTo(pts[k - 1][0], pts[k - 1][1]); x.lineTo(pts[k][0], pts[k][1]); x.stroke(); } };
-    trazo(1.4, '#b9805c'); trazo(0, '#f1c6a2');
+    // cabeza y cuerpo son una sola pieza: primero el borde de todo junto, despues el relleno de todo
+    const hx = D * (0.8 + e1 * 1.3), hy = -7.6 + e2 * 1.1;
+    const cab = (extra, color) => { x.fillStyle = color; x.beginPath(); x.ellipse(hx, hy, 4.6 + extra, 4.9 + extra, D * 0.15, 0, Math.PI * 2); x.fill(); };
+    trazo(1.4, '#b9805c'); cab(0.7, '#b9805c'); trazo(0, '#f1c6a2'); cab(0, '#f1c6a2');
     x.strokeStyle = '#fbe4cf'; x.lineWidth = 0.9; x.beginPath(); const k0 = Math.floor(pts.length * 0.55); x.moveTo(pts[k0][0] + D * 1.2, pts[k0][1]); for (let k = k0 + 1; k < pts.length - 2; k++) x.lineTo(pts[k][0] + D * 1.1, pts[k][1]); x.stroke();
-    const hx = D * (1.2 + e1 * 1.3), hy = -7 + e2 * 1.1;
-    x.fillStyle = '#b9805c'; x.beginPath(); x.ellipse(hx, hy, 4.1, 3.3, 0, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#f4cba8'; x.beginPath(); x.ellipse(hx, hy, 3.4, 2.6, 0, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#fff'; x.fillRect(Math.round(hx + D * 1.2) - 1, hy - 2, 2, 2);
-    x.fillStyle = '#111'; x.fillRect(Math.round(hx + D * 1.6), hy - 2, 1, 1);
+    // los ojos grandes (el de adelante un poco mas chico), mirando para donde va
+    for (const [ex, r] of [[1.0, 1.35], [3.3, 1.2]]) {
+      const cx = hx + D * ex, cy = hy - 0.6;
+      x.fillStyle = '#fff'; x.beginPath(); x.ellipse(cx, cy, r, 1.9, 0, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = '#5a3a28'; x.lineWidth = 0.35; x.stroke();
+      x.fillStyle = '#111'; x.beginPath(); x.ellipse(cx + D * 0.45, cy + 0.3, 0.6, 0.95, 0, 0, Math.PI * 2); x.fill();
+    }
+    // las cejas y la sonrisa
+    x.strokeStyle = '#3a2418'; x.lineWidth = 0.75; x.lineCap = 'round'; x.beginPath();
+    x.moveTo(hx - D * 0.2, hy - 3.0); x.lineTo(hx + D * 1.8, hy - 3.4); x.moveTo(hx + D * 2.6, hy - 3.4); x.lineTo(hx + D * 4.0, hy - 3.0); x.stroke();
+    x.strokeStyle = '#9c6648'; x.lineWidth = 0.5; x.beginPath(); x.arc(hx + D * 2.6, hy + 1.9, 1.1, 0.2 * Math.PI, 0.8 * Math.PI); x.stroke();
     x.restore();
   }
 
