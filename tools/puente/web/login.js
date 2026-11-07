@@ -306,7 +306,7 @@
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
       p.append(mk('b', '', cual ? '🎮 ' + cual + ': elegí tu nombre' : tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
-        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez, GlobalSiege y Gusanos, contra la compu, contra la gente del club o de a varios en el mismo dispositivo. ')
+        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez y GlobalSiege, contra la compu, contra la gente del club o de a varios en el mismo dispositivo. ')
           + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
       if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
@@ -369,7 +369,7 @@
     const j = mk('button', 'puente-visita-btn');
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
-    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez, GlobalSiege y Gusanos'));
+    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez y GlobalSiege'));
     j.addEventListener('click', aLosJuegos);
     const m = mk('a', 'puente-visita-btn');
     m.href = mercado;
