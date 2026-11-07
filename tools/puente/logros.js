@@ -170,8 +170,10 @@ function customEmojis() {
   return customCache;
 }
 
+// Los archivos de Haven: "[file:nombre](/uploads/x|tamaño)"
+const FILE_LINK_RE = /\[file:([^\]\n]+)\]\(((?:spoiler-img:)?\/uploads\/[^\s|)]+)(?:\|[^)\n]*)?\)/g;
 function excerpt(s, n = 140) {
-  let t = String(s || '').replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼️').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/(^|\s)\/uploads\/\S+/g, '$1🖼️').replace(/<a?:(\w+):\d+>/g, ':$1:').replace(/\s+/g, ' ').trim();
+  let t = String(s || '').replace(FILE_LINK_RE, '📎').replace(/!\[[^\]]*\]\([^)]*\)/g, '🖼️').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/(^|\s)\/uploads\/\S+/g, '$1🖼️').replace(/<a?:(\w+):\d+>/g, ':$1:').replace(/\s+/g, ' ').trim();
   if (t.length > n) t = t.slice(0, n - 1).trimEnd() + '…';
   return t.replace(/@(everyone|here)/gi, '@​$1'); // citado, nunca avisa a todos
 }
@@ -474,7 +476,7 @@ function memoryPick(nowMs) {
       const t = excerpt(m.content, 400);
       // Charla de verdad: ni anuncios a todos, ni solo un enlace o una imagen, ni muy corto
       if (/@(everyone|here)/i.test(m.content || '')) return false;
-      if (t.split('🖼️').join('').replace(/https?:\/\/\S+/g, '').trim().length < 15) return false;
+      if (t.split('🖼️').join('').split('📎').join('').replace(/https?:\/\/\S+/g, '').trim().length < 15) return false;
       if (/^🧵 \*\*/.test(m.content || '') && m.user_id === g) return false; // inicio de hilo armado por el puente
       return !used.get(m.id);
     });
@@ -494,11 +496,13 @@ function memoryOf(m, years, n, channels = channelMap()) {
   if (!c) return null;
   const best = { years, n };
   const base = (publicUrl || '').replace(/\/+$/, '');
-  const fotos = mediaOf(m.content);
+  // Los archivos de Haven: un video dice "🎬 Video" y otro archivo, su nombre (no el codigo "[file:...](...)")
+  const content = String(m.content || '').replace(FILE_LINK_RE, (_, name, p) => /\.(?:mp4|webm|mov|m4v)$/i.test(p) ? '🎬 Video' : '📎 ' + name);
+  const fotos = mediaOf(content);
   // Sin las imagenes en grande: el recorte del chat que arma el enlace ya las muestra en chico.
   // Del texto se sacan (sin el 🖼️ que las reemplazaba)
   const texto = fotos.files.length || fotos.links.length
-    ? excerpt(String(m.content || '').replace(MEDIA_RE, ' ').replace(EXT_IMG_RE, ' '), 300) : excerpt(m.content, 300);
+    ? excerpt(content.replace(MEDIA_RE, ' ').replace(EXT_IMG_RE, ' '), 300) : excerpt(content, 300);
   return {
     id: m.id, years: best.years, n: best.n, canal: c, nombre: nameOf(m) || 'Alguien',
     texto, media: { files: [], links: [] }, fecha: m.created_at,

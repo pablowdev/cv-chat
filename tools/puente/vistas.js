@@ -170,12 +170,17 @@ async function fotoDeChat(r) {
 }
 const FOTO_RE = /^\/uploads\/(?:[a-z-]+\/)?[A-Za-z0-9._-]+\.(?:png|jpe?g|webp|gif)$/i;
 // El texto del mensaje como se lee (sin el markdown, los enlaces cortos) y su foto, si es una foto
+const ARCHIVO_RE = /^\[file:([^\]\n]+)\]\((\/uploads\/[^\s|)]+)\|[^)\n]*\)$/;
+const VIDEO_RE = /\.(?:mp4|webm|mov|m4v)$/i;
 function leer(content) {
-  let foto = null;
+  let foto = null, video = null;
   const lineas = [];
   for (let l of String(content || '').split('\n')) {
     l = l.trim();
     if (FOTO_RE.test(l)) { if (!foto) foto = l; continue; }
+    // Los archivos de Haven "[file:nombre](/uploads/x|tamaño)": el video se muestra, el resto dice que hay un archivo
+    const a = ARCHIVO_RE.exec(l);
+    if (a) { if (VIDEO_RE.test(a[2])) { if (!video) video = a[2]; lineas.push('[video]'); } else lineas.push('[archivo]'); continue; }
     if (/^\/uploads\//.test(l)) { lineas.push('[archivo]'); continue; }
     lineas.push(l.replace(/^>\s?/, ''));
   }
@@ -191,7 +196,7 @@ function leer(content) {
       try { const x = new URL(u); return x.hostname.replace(/^www\./, '') + (x.pathname.length > 1 ? '/…' : ''); } catch { return u; }
     })
     .replace(/(\*\*|__|~~|`)/g, '').replace(/\s+/g, ' ').trim();
-  return { texto: t, foto };
+  return { texto: t, foto, video };
 }
 const hora = s => {
   const d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? '' : 'Z'));
@@ -218,7 +223,7 @@ function pedacito(ch, msgId, n = 8) {
 // El pedacito para mostrar adentro de la app (aviso.js): sin dibujo, los datos
 function pedacitoDatos(ch, msgId) {
   const { filas, marcado } = pedacito(ch, msgId, msgId ? 5 : 4);
-  return filas.map(r => { const l = leer(r.content); return { id: r.id, autor: autorDe(r), foto: fotoUrl(r), texto: l.texto, imagen: l.foto ? publicUrl + l.foto : null, hora: hora(r.created_at), marcado: r.id === marcado }; });
+  return filas.map(r => { const l = leer(r.content); return { id: r.id, autor: autorDe(r), foto: fotoUrl(r), texto: l.video ? l.texto.replace('[video]', '').replace(/\s+/g, ' ').trim() : l.texto, imagen: l.foto ? publicUrl + l.foto : null, video: l.video ? publicUrl + l.video : null, hora: hora(r.created_at), marcado: r.id === marcado }; });
 }
 // Los ultimos n mensajes de un canal publico (canalPublico), sin dibujo: la pantalla de entrar (portada.js)
 // (con los emojis del club que aparecen en el texto, :cv1: -> su imagen, para dibujarlos como en el chat)

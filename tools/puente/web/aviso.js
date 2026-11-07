@@ -5528,6 +5528,17 @@ document.addEventListener('pointerdown', (ev) => {
         der.append(cab);
         if (m.texto) der.append(conEmojis(m.texto));
         if (m.imagen) { const i = el('img', 'puente-vista-imagen'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; der.append(i); }
+        // Un video: su primer cuadro con el ▶ (tocarlo lleva al mensaje, donde se mira)
+        else if (m.video && /^https?:\/\//.test(m.video)) {
+          const w = el('div', 'puente-vista-video');
+          w.style.cssText = 'position:relative;display:inline-block;max-width:100%;margin-top:.25rem;border-radius:.25rem;overflow:hidden;background:#000;line-height:0';
+          const v = document.createElement('video');
+          v.src = m.video + '#t=0.1'; v.preload = 'metadata'; v.muted = true; v.playsInline = true;
+          v.style.cssText = 'display:block;max-width:100%;max-height:12rem;pointer-events:none';
+          const p = el('span', '', '▶');
+          p.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:2.5rem;height:2.5rem;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:1.1rem;line-height:2.5rem;text-align:center;padding-left:.15rem;box-sizing:border-box';
+          w.append(v, p); der.append(w);
+        }
         fila.append(der);
         box.append(fila);
       }
