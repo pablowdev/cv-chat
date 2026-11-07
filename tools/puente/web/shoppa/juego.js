@@ -279,8 +279,10 @@
     const ond = Math.sin(t / 260) * (mov ? 0 : 0.5);
     x.save(); x.translate(s.x, s.y); x.rotate(s.inc);
     const o = ond * 0.6, e1 = est * 2.2, e2 = est * 1.6;
-    const ctrl = [[-D * (4.2 + e2 * 0.4), 3.2], [-D * (3.6 + e2 * 0.3), 6.4], [-D * 1.2, 7.4], [D * (1.6 + e2 * 0.3), 6.6 + o * 0.2], [D * (2.4 + e1 * 0.5), 3.4 + e2 * 0.3], [D * (1.2 + e1 * 0.8) + o, 0 + e2 * 0.6], [D * (-0.2 + e1 * 1.1) + o * 0.5, -3 + e2 * 0.9], [D * (0.6 + e1 * 1.3), -5.4 + e2 * 1.1]];
-    const anchos = [1.2, 2.6, 4.2, 4.6, 4.4, 4.0, 3.6, 3.3];
+    // la forma (de la cola a la cabeza): punta de la cola apoyada atras, una joroba, la panza abajo,
+    // el pecho que sale para adelante y el cuello que sube a la cabeza; caminando la joroba se aplana
+    const ctrl = [[-D * (7.8 + e2 * 0.5), 7.2], [-D * (7.0 + e2 * 0.4), 4.6 + e1 * 0.5], [-D * (5.2 + e2 * 0.3), 2.6 + e1 * 1.0], [-D * (3.4 + e2 * 0.2), 5.8 + e1 * 0.4], [-D * 1.0, 6.9], [D * (1.3 + e1 * 0.5), 4.0 + e2 * 0.3 + o * 0.2], [D * (0.6 + e1 * 0.9) + o, 0.0 + e2 * 0.7], [D * (1.0 + e1 * 1.3) + o * 0.5, -3.6 + e2 * 1.1]];
+    const anchos = [3.2, 3.0, 3.4, 4.0, 4.8, 5.0, 4.8, 5.2];
     const pts = [], an = [];
     for (let k = 0; k < ctrl.length - 1; k++) {
       const p0 = ctrl[Math.max(0, k - 1)], p1 = ctrl[k], p2 = ctrl[k + 1], p3 = ctrl[Math.min(ctrl.length - 1, k + 2)];
