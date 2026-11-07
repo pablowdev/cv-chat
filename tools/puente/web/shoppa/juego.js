@@ -9,12 +9,13 @@
   const PASO = 20, TURNO = 30, RETIRADA = 3, VIDA = 150, MAX_CAJAS = 3;
   const COLORES = ['#ff6b6b', '#4aa3ff', '#62d26f', '#ffd23f', '#c77dff'];
   const $ = (id) => document.getElementById(id);
-  const cv = $('lienzo'), x = cv.getContext('2d');
+  // (x es let: los dibujos de los menus usan pintarSerpiente sobre otro canvas un momento)
+  const cv = $('lienzo'); let x = cv.getContext('2d');
 
   // ── El estado de la partida ──
   let J = null, def = null, fondo = null, jug = [], turno = 0, fase = 'menu', tiempo = 0, quietos = 0;
   let cajaTomada = false, ataco = false, arma = 'soga', carga = null, semilla = 1, cajaN = 0, nTurno = 0;
-  let textos = [], online = null, ultimaFoto = 0, vidaAntes = null;
+  let textos = [], online = null, ultimaFoto = 0, vidaAntes = null, eqN = -1;
   const cam = { x: 960, y: 450, z: 2 };
 
   // ── Azar con semilla (las cajas, en el mismo orden para todos) ──
@@ -45,7 +46,7 @@
     for (let k = 0; k < 2; k++) soltarCaja();
     turno = primero || 0;
     cam.z = Math.max(1, Math.min(2.4, innerHeight / 470));
-    $('hud').hidden = false; $('armas').hidden = false;
+    $('hud').hidden = false; $('armas').hidden = true; panel = false; eqN = -1;
     if (matchMedia('(pointer: coarse)').matches) $('tactil').hidden = false;
     $('menu').hidden = true;
   }
@@ -85,8 +86,15 @@
     if (e.key === 'r' || e.key === 'R') elegirArma('soga');
     if (e.key === '+' || e.key === '=') cam.z = Math.min(4, cam.z + 0.25);
     if (e.key === '-') cam.z = Math.max(0.6, cam.z - 0.25);
-    if (e.key === 'Tab') e.preventDefault();
+    if (e.key === 'Tab') { e.preventDefault(); abrirPanel(); }
+    if (e.key === 'Escape') abrirPanel(false);
+    if (e.key === 'F1') { e.preventDefault(); elegirArma('bazooka'); }
+    if (e.key === 'F2') { e.preventDefault(); elegirArma('granada'); }
   });
+  // el panel de armas: clic derecho lo abre y cierra; un clic en el mapa lo cierra
+  cv.addEventListener('contextmenu', (e) => { e.preventDefault(); abrirPanel(); });
+  cv.addEventListener('pointerdown', (e) => { if (e.button === 0 && panel) abrirPanel(false); });
+  $('armaBtn').addEventListener('click', () => abrirPanel());
   addEventListener('keyup', (e) => { const k = TECLAS[e.key]; if (k) apretada[k] = false; });
   addEventListener('blur', () => { for (const k in apretada) apretada[k] = false; });
   for (const b of document.querySelectorAll('[data-k]')) {
@@ -100,17 +108,70 @@
   function puede(a) { return a === 'soga' || (jug[turno] && jug[turno].armas[a] > 0); }
   function elegirArma(a) { if (!juegoYo() || !puede(a)) return; arma = a; carga = null; pintarArmas(); }
   function ciclarArma(d) { let i = ARMAS_ORDEN.indexOf(arma); for (let k = 0; k < 3; k++) { i = (i + d + 3) % 3; if (puede(ARMAS_ORDEN[i])) return elegirArma(ARMAS_ORDEN[i]); } }
-  function pintarArmas() {
-    const b = $('armas'); b.textContent = '';
-    if (!J) return;
-    for (const a of ARMAS_ORDEN) {
-      const n = a === 'soga' ? '∞' : jug[turno].armas[a];
-      const bt = document.createElement('button'); bt.type = 'button';
-      bt.textContent = (a === 'soga' ? '🪢 Soga' : a === 'bazooka' ? '🚀 Bazuca' : '💣 Granada') + ' ' + n;
-      bt.className = arma === a ? 'sel' : ''; bt.disabled = !juegoYo() || !puede(a);
-      bt.addEventListener('click', () => elegirArma(a));
-      b.appendChild(bt);
+  // ── El panel de armas: una grilla con una fila por tecla (Util = la soga, F1, F2) ──
+  const NOMBRE_ARMA = { soga: 'Soga', bazooka: 'Bazuca', granada: 'Granada' };
+  const FILAS_ARMAS = [['Util', ['soga']], ['F1', ['bazooka']], ['F2', ['granada']]];
+  let panel = false;
+  const cantidad = (a) => (a === 'soga' ? '∞' : (jug[turno] && jug[turno].armas[a]) || 0);
+  function abrirPanel(v) {
+    panel = v === undefined ? !panel : !!v;
+    if (!J || fase === 'menu' || fase === 'fin') panel = false;
+    $('armas').hidden = !panel;
+    if (panel) pintarArmas();
+  }
+  // los iconos (dibujos propios): la soga enrollada con el gancho, la bazuca y la granada
+  function icono(c, a) {
+    const g = c.getContext('2d'), k = c.width / 24;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.setTransform(k, 0, 0, k, 0, 0);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    if (a === 'soga') {
+      g.strokeStyle = '#6b4b25'; g.lineWidth = 3.2;
+      for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(10 + i * 0.6, 15 - i * 1.6, 7, 3.6, -0.15, 0, Math.PI * 2); g.stroke(); }
+      g.strokeStyle = '#e2c48a'; g.lineWidth = 1.8;
+      for (let i = 0; i < 3; i++) { g.beginPath(); g.ellipse(10 + i * 0.6, 15 - i * 1.6, 7, 3.6, -0.15, 0, Math.PI * 2); g.stroke(); }
+      g.strokeStyle = '#e2c48a'; g.beginPath(); g.moveTo(16, 10); g.lineTo(19, 6); g.stroke();
+      g.strokeStyle = '#cfd6de'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(19, 6); g.lineTo(20.5, 3); g.arc(19, 3.4, 1.6, 0, Math.PI, true); g.stroke();
+    } else if (a === 'bazooka') {
+      g.translate(12, 13); g.rotate(-0.55);
+      g.fillStyle = '#26301c'; g.fillRect(-10.5, -3.6, 21, 7.2);
+      g.fillStyle = '#6f8150'; g.fillRect(-9.5, -2.6, 19, 5.2);
+      g.fillStyle = '#93a86c'; g.fillRect(-9.5, -2.6, 19, 1.6);
+      g.fillStyle = '#e0763a'; g.fillRect(6.5, -2.6, 2, 5.2);
+      g.fillStyle = '#26301c'; g.fillRect(-11.5, -4.4, 2.4, 8.8); g.fillRect(-2, 2.4, 2.6, 4.2);
+    } else {
+      g.fillStyle = '#1d3a19'; g.beginPath(); g.ellipse(12, 15, 7.2, 7.6, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3f7d36'; g.beginPath(); g.ellipse(12, 15, 6, 6.4, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#7cc06e'; g.beginPath(); g.ellipse(9.6, 12.4, 2, 1.4, -0.6, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#9aa3ad'; g.fillRect(9.6, 5.2, 4.8, 3.4); g.fillStyle = '#5d646c'; g.fillRect(9.6, 7.6, 4.8, 1);
+      g.strokeStyle = '#d7dde3'; g.lineWidth = 1.3; g.beginPath(); g.arc(17, 5.4, 2.2, 0, Math.PI * 2); g.stroke();
     }
+  }
+  function pintarArmas() {
+    if (!J) return;
+    // el boton con el arma en la mano
+    const bt = $('armaBtn');
+    icono(bt.firstElementChild, arma); bt.lastElementChild.textContent = NOMBRE_ARMA[arma] + ' ×' + cantidad(arma);
+    const b = $('armas'); if (b.hidden) return;
+    b.textContent = '';
+    const grilla = div('grilla'), pie = div('pie'), pn = h('span', ''), pc = h('span', '');
+    const mostrar = (a) => { pn.textContent = NOMBRE_ARMA[a]; pc.textContent = '×' + cantidad(a); };
+    for (const [rot, armas] of FILAS_ARMAS) {
+      grilla.appendChild(h('div', rot)).className = 'rot';
+      for (let k = 0; k < 5; k++) {
+        const a = armas[k], c = document.createElement('button'); c.type = 'button'; c.className = 'celda';
+        if (a) {
+          const ic = document.createElement('canvas'); ic.width = ic.height = 60; icono(ic, a); c.appendChild(ic);
+          if (arma === a) c.classList.add('sel');
+          c.disabled = !juegoYo() || !puede(a); c.title = NOMBRE_ARMA[a];
+          c.addEventListener('click', () => { elegirArma(a); abrirPanel(false); });
+          c.addEventListener('mouseenter', () => mostrar(a));
+          c.addEventListener('mouseleave', () => mostrar(arma));
+        } else c.disabled = true;
+        grilla.appendChild(c);
+      }
+    }
+    mostrar(arma); pie.append(pn, pc);
+    b.append(grilla, pie);
   }
 
   // puede atacar: tiene que haber agarrado una caja este turno (regla de Shopper) y no haber atacado
@@ -351,7 +412,9 @@
     x.font = 'bold 7px system-ui, sans-serif'; x.textAlign = 'center';
     jug.forEach((j, i) => {
       const s = j.serp; if (s.estado === 'muerta') return;
-      x.fillStyle = 'rgba(0,0,0,0.55)'; const w = Math.max(24, x.measureText(j.nombre).width + 6); x.fillRect(s.x - w / 2, s.y - 33, w, 18);
+      const w = Math.max(24, x.measureText(j.nombre).width + 6);
+      x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillRect(s.x - w / 2, s.y - 33, w, 18);
+      x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 0.5; x.strokeRect(s.x - w / 2, s.y - 33, w, 18);
       x.fillStyle = j.color; x.fillText(j.nombre, s.x, s.y - 26); x.fillText(String(Math.max(0, s.vida)), s.x, s.y - 18);
     });
     // la flecha: a quien le toca (baja y sube)
@@ -374,15 +437,25 @@
     x.lineTo(def.w + 200, def.h + 300); x.closePath(); x.fill();
     // el HUD
     $('reloj').textContent = String(Math.max(0, Math.ceil(tiempo / 50)));
-    $('reloj').style.color = fase === 'retirada' ? '#ffd23f' : '#fff';
+    $('reloj').style.color = fase === 'retirada' ? '#ffd23f' : (jug[turno] ? jug[turno].color : '#fff');
     const vi = $('viento').firstChild, vv = (J.viento || 0) / 70;
     vi.style.left = vv < 0 ? (50 + vv * 50) + '%' : '50%'; vi.style.width = Math.abs(vv) * 50 + '%';
-    const eqs = $('equipos'); eqs.textContent = '';
+    // los equipos: el nombre en un cartelito y la barra de vida (se arman una vez y despues solo se actualizan)
+    const eqs = $('equipos');
+    if (eqN !== jug.length) {
+      eqs.textContent = '';
+      for (const j of jug) {
+        const r = div('eq'), n = h('span', j.nombre), b = document.createElement('span'), ii = document.createElement('i');
+        n.className = 'nom'; n.style.color = j.color; b.className = 'barra'; ii.style.background = j.color;
+        b.appendChild(ii); r.append(n, b); eqs.appendChild(r);
+      }
+      eqN = jug.length;
+    }
     jug.forEach((j, i) => {
-      const r = document.createElement('div'); r.className = 'eq' + (i === turno ? ' turno' : '');
-      const n = document.createElement('span'); n.textContent = j.nombre; n.style.color = j.color;
-      const b = document.createElement('span'); b.className = 'barra'; const ii = document.createElement('i'); ii.style.width = Math.max(0, j.serp.vida) / VIDA * 100 + '%'; ii.style.background = j.color; b.appendChild(ii);
-      r.append(n, b); eqs.appendChild(r);
+      const r = eqs.children[i]; if (!r) return;
+      r.classList.toggle('turno', i === turno); r.classList.toggle('muerta', j.serp.estado === 'muerta');
+      const w = Math.max(0, j.serp.vida) / VIDA * 100 + '%', ii = r.lastChild.firstChild;
+      if (ii.style.width !== w) ii.style.width = w;
     });
     $('carga').hidden = carga === null; if (carga !== null) $('carga').firstChild.style.width = carga * 100 + '%';
   }
@@ -395,22 +468,97 @@
   const boton = (t, c, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn ' + c; b.textContent = t; b.addEventListener('click', fn); return b; };
   function pantalla(c) { const m = $('menu'); m.hidden = false; m.textContent = ''; m.appendChild(c); fase = 'menu'; $('hud').hidden = true; $('armas').hidden = true; $('tactil').hidden = true; }
 
-  function ayuda() {
-    const a = div('ayuda');
-    a.innerHTML = '<b>Shopper:</b> solo la soga para moverse, una caja por turno, y para atacar primero hay que agarrar una caja. Se ataca desde la soga (Enter).<br>'
-      + '<b>← →</b> caminar · <b>↑ ↓</b> apuntar · <b>Enter</b> saltar (×2 atrás) · <b>Retroceso</b> arriba (×2 mortal)<br>'
-      + '<b>Espacio</b> tirar / soltar la soga · en la soga <b>↑ ↓</b> acortar / alargar · <b>← →</b> balancearse<br>'
-      + '<b>Q / E</b> cambiar de arma · <b>R</b> la soga · <b>Espacio</b> (en el piso) cargar y tirar · <b>Enter</b> (colgado) soltar el arma · <b>1-5</b> mecha · <b>+ −</b> zoom';
-    return a;
+  // ── Los dibujos de las tarjetas del menu (con las mismas serpientes del juego) ──
+  function retrato(fn) {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+    const antes = x; x = c.getContext('2d');
+    try { fn(x); } finally { x = antes; }
+    return c;
+  }
+  function paisaje(g, arriba, abajo, pasto) {
+    const cielo = g.createLinearGradient(0, 0, 0, 180); cielo.addColorStop(0, arriba); cielo.addColorStop(1, abajo);
+    g.fillStyle = cielo; g.fillRect(0, 0, 320, 180);
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    for (const [cx, cy, r] of [[60, 34, 12], [76, 30, 15], [94, 36, 10], [236, 48, 10], [250, 44, 13], [266, 50, 9]]) { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#4a2f1d'; g.beginPath(); g.moveTo(0, 180); g.lineTo(0, 140); g.quadraticCurveTo(80, 118, 160, 138); g.quadraticCurveTo(240, 156, 320, 132); g.lineTo(320, 180); g.closePath(); g.fill();
+    g.strokeStyle = pasto; g.lineWidth = 6; g.beginPath(); g.moveTo(0, 141); g.quadraticCurveTo(80, 119, 160, 139); g.quadraticCurveTo(240, 157, 320, 133); g.stroke();
+  }
+  function serpienteEn(g, cx, cy, k, dir) {
+    g.save(); g.translate(cx, cy); g.scale(k, k);
+    pintarSerpiente({ estado: 'pose', dir, cola: [], x: 0, y: 0, fase: 0 }, 0);
+    g.restore();
+  }
+  const DIBUJOS = {
+    online(g) {
+      paisaje(g, '#3d6fd8', '#a8d4ff', '#5fbf4a');
+      serpienteEn(g, 92, 94, 4.2, 1); serpienteEn(g, 234, 112, 4.2, -1);
+      // las ondas de la conexion entre las dos
+      g.strokeStyle = '#ffd84a'; g.lineWidth = 3; g.lineCap = 'round';
+      for (const r of [10, 20, 30]) { g.beginPath(); g.arc(162, 70, r, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
+      g.fillStyle = '#ffd84a'; g.beginPath(); g.arc(162, 70, 3.5, 0, Math.PI * 2); g.fill();
+    },
+    local(g) {
+      paisaje(g, '#e0763a', '#ffd9a0', '#7fbf4a');
+      serpienteEn(g, 104, 90, 4, 1); serpienteEn(g, 218, 98, 4, -1);
+      // un teclado adelante, para pasarse
+      g.fillStyle = '#1c1c22'; g.fillRect(96, 132, 128, 36); g.fillStyle = '#3a3a46';
+      for (let f = 0; f < 3; f++) for (let k = 0; k < 10; k++) g.fillRect(101 + k * 12, 136 + f * 10, 10, 8);
+      g.fillStyle = '#ffd84a'; g.fillRect(137, 156, 46, 8);
+    },
+    ayuda(g) {
+      paisaje(g, '#253a8f', '#6a86d8', '#4aa35f');
+      // colgada de una soga, balanceandose
+      g.strokeStyle = '#e9dcc0'; g.lineWidth = 2; g.beginPath(); g.moveTo(150, 0); g.lineTo(200, 58); g.stroke();
+      serpienteEn(g, 204, 88, 3.8, 1);
+      g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.setLineDash([4, 6]); g.beginPath(); g.arc(160, 0, 110, Math.PI * 0.2, Math.PI * 0.8); g.stroke(); g.setLineDash([]);
+    },
+  };
+  let pistaEl = null;
+  function pista(t) { const e = p(t); e.className = 'pista'; pistaEl = e; return e; }
+  function tarjeta(titulo, texto, dibujo, fn) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tile';
+    b.append(retrato(dibujo), h('span', titulo));
+    b.addEventListener('click', fn);
+    const ver = () => { if (pistaEl) pistaEl.textContent = texto; };
+    b.addEventListener('mouseenter', ver); b.addEventListener('focus', ver);
+    return b;
+  }
+
+  const TECLAS_AYUDA = [
+    ['← →', 'caminar · en la soga, balancearse'],
+    ['↑ ↓', 'apuntar · en la soga, acortar / alargar'],
+    ['Enter', 'saltar (dos veces: para atrás) · colgado, soltar el arma'],
+    ['Retroceso', 'salto alto (dos veces: mortal)'],
+    ['Espacio', 'tirar / soltar la soga · con un arma en el piso, cargar y tirar'],
+    ['Tab o clic derecho', 'abrir el panel de armas'],
+    ['R · F1 · F2', 'soga · bazuca · granada'],
+    ['Q / E', 'arma anterior / siguiente'],
+    ['1 a 5', 'mecha de la granada (segundos)'],
+    ['+ −', 'acercar / alejar'],
+  ];
+  function menuAyuda() {
+    const c = caja(); c.append(h('h1', 'Cómo se juega'));
+    c.append(h('h2', 'Shopper'), p('Solo la soga para moverse. Cae una caja por turno y para atacar primero hay que agarrar una. Se ataca desde la soga (Enter). El último que queda gana.'));
+    c.append(h('h2', 'Teclas'));
+    const t = document.createElement('table'); t.className = 'teclas';
+    for (const [k, v] of TECLAS_AYUDA) { const r = t.insertRow(); r.insertCell().textContent = k; r.insertCell().textContent = v; }
+    c.append(t);
+    const acc = div('acc'); acc.append(boton('Volver', 'primario', menuPrincipal)); c.append(acc);
+    pantalla(c);
   }
 
   function menuPrincipal() {
     const c = caja();
-    c.append(h('h1', 'SHOPPA'), p('Serpientes, sogas y cajas. El último que queda gana.'));
-    const acc = div('acc');
+    const logo = h('h1', 'SHOPPA'); logo.className = 'logo';
+    const sub = p('Serpientes, sogas y cajas.'); sub.className = 'sub';
     const sock = socketDelChat();
-    acc.append(boton('Jugar online', 'primario', () => (sock ? menuOnline() : aviso('Abrí Shoppa desde la sección Juegos de CV Chat para jugar online'))), boton('Jugar en esta compu', '', () => menuLocal()));
-    c.append(acc, h('h2', 'Cómo se juega'), ayuda());
+    const t = div('tiles');
+    t.append(
+      tarjeta('Jugar online', 'Partidas con la gente de CV Chat, de 2 a 5 jugadores.', DIBUJOS.online, () => (sock ? menuOnline() : aviso('Abrí Shoppa desde la sección Juegos de CV Chat para jugar online'))),
+      tarjeta('En esta compu', 'De 2 a 4 jugadores, pasándose el teclado.', DIBUJOS.local, () => menuLocal()),
+      tarjeta('Cómo se juega', 'Las reglas de Shopper y las teclas.', DIBUJOS.ayuda, () => menuAyuda()),
+    );
+    c.append(logo, sub, t, pista('Elegí cómo jugar.'));
     pantalla(c);
   }
 

@@ -5,61 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Shoppa</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0a09; font-family: system-ui, sans-serif; color: #eee; touch-action: none; -webkit-user-select: none; user-select: none; }
+  :root { --azul1: #0d2bb0; --azul2: #020a4c; --borde: #8ea2dd; --borde2: #2b3c86; --texto: #e8edff; --pista: #6fd3ff; --amarillo: #ffd84a; --letra: Verdana, Tahoma, system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0a09; font-family: var(--letra); color: #eee; touch-action: none; -webkit-user-select: none; user-select: none; }
   canvas { display: block; }
   button { font: inherit; cursor: pointer; }
-  .capa { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,8,8,0.88); z-index: 5; }
+
+  /* ── Los menus: cielo azul con estrellas que se mueven y paneles con borde doble ── */
+  .capa { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5; overflow: auto;
+    background:
+      radial-gradient(1.6px 1.6px at 23px 41px, #fff 50%, transparent 52%),
+      radial-gradient(1px 1px at 87px 13px, #cfe0ff 50%, transparent 52%),
+      radial-gradient(1.2px 1.2px at 151px 97px, #fff 50%, transparent 52%),
+      radial-gradient(2px 2px at 190px 160px, #ffe9a8 50%, transparent 52%),
+      radial-gradient(1px 1px at 60px 180px, #fff 50%, transparent 52%),
+      radial-gradient(1px 1px at 40px 90px, #9fb8ff 50%, transparent 52%),
+      radial-gradient(1.4px 1.4px at 110px 30px, #fff 50%, transparent 52%),
+      radial-gradient(ellipse at 50% 30%, var(--azul1), var(--azul2) 78%);
+    background-size: 211px 211px, 211px 211px, 211px 211px, 211px 211px, 211px 211px, 137px 137px, 137px 137px, 100% 100%;
+    animation: estrellas 50s linear infinite; }
+  @keyframes estrellas {
+    from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
+    to { background-position: -211px 211px, -211px 211px, -211px 211px, -211px 211px, -211px 211px, -274px 274px, -274px 274px, 0 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .capa { animation: none; } }
   .capa[hidden] { display: none; }
-  .caja { width: min(440px, 92vw); max-height: 88vh; overflow: auto; padding: 18px; border-radius: 12px; background: #1d1a1a; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
-  .caja h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: 1px; color: #f1c6a2; }
-  .caja h2 { margin: 16px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #a9a29c; }
-  .caja p { margin: 6px 0; color: #c9c2bb; font-size: 14px; line-height: 1.4; }
-  .btn { padding: 10px 14px; border: 0; border-radius: 8px; background: #3a3434; color: #fff; font-weight: 600; }
-  .btn.primario { background: #e0763a; }
+  .caja { box-sizing: border-box; width: min(580px, 94vw); max-height: 92vh; overflow: auto; margin: auto; padding: 16px 18px 12px; background: rgba(3, 9, 58, 0.84); border: 2px solid var(--borde); outline: 1px solid #000; box-shadow: inset 0 0 0 1px var(--borde2), 0 10px 34px rgba(0, 0, 0, 0.55); border-radius: 3px; color: var(--texto); }
+  .caja h1 { margin: 0 0 8px; text-align: center; font: 700 21px var(--letra); color: var(--amarillo); text-shadow: 2px 2px 0 #000; }
+  .caja h1.logo { margin: 4px 0 6px; font: 900 48px/1 'Arial Black', Impact, system-ui, sans-serif; letter-spacing: 3px; -webkit-text-stroke: 2px #5a1d00; text-shadow: 0 3px 0 #d0500f, 0 6px 0 #5a1d00, 0 10px 16px rgba(0, 0, 0, 0.6); }
+  .caja h2 { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; font: 700 11px var(--letra); text-transform: uppercase; letter-spacing: 0.08em; color: #c8d4ff; }
+  .caja h2::before, .caja h2::after { content: ''; flex: 1; height: 1px; background: #5f74b8; }
+  .caja p { margin: 6px 0; color: #c9d3ff; font-size: 13px; line-height: 1.45; }
+  .caja p.sub { text-align: center; }
+  .pista { min-height: 1.4em; margin: 12px 0 0 !important; text-align: center; color: var(--pista) !important; font-size: 12px !important; }
+  .btn { padding: 7px 16px; border: 1px solid var(--borde); border-radius: 0; background: #000; color: #fff; font: 700 13px var(--letra); box-shadow: inset 0 0 0 1px #1d2a66, 0 0 0 1px #000; }
+  .btn:hover:not(:disabled), .btn:focus-visible { background: #0e1f86; color: var(--amarillo); border-color: #fff; outline: none; }
+  .btn.primario { color: var(--amarillo); }
   .btn:disabled { opacity: 0.45; cursor: default; }
-  .fila { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 6px 0; border-radius: 8px; background: #2a2525; }
+  .fila { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin: 6px 0; border: 1px solid var(--borde2); background: rgba(0, 0, 20, 0.55); font-size: 13px; }
   .fila .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .acc { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .acc { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
   .punto { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-  #hud { position: fixed; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: 8px; pointer-events: none; z-index: 2; }
-  #equipos { display: grid; gap: 3px; font-size: 12px; }
-  .eq { display: flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.5); }
-  .eq .barra { width: 90px; height: 7px; border-radius: 4px; background: #333; overflow: hidden; }
-  .eq .barra i { display: block; height: 100%; }
-  .eq.turno { outline: 2px solid #ffd23f; }
-  #reloj { min-width: 56px; padding: 4px 10px; border-radius: 8px; background: rgba(0,0,0,0.65); font: 700 22px monospace; text-align: center; }
-  #viento { margin-top: 4px; width: 120px; height: 10px; border-radius: 5px; background: rgba(0,0,0,0.6); position: relative; overflow: hidden; }
-  #viento i { position: absolute; top: 0; bottom: 0; background: #6ec1ff; }
-  #aviso { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: rgba(0,0,0,0.7); font-size: 15px; z-index: 2; pointer-events: none; transition: opacity 0.3s; }
-  #armas { position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; gap: 6px; z-index: 2; }
-  #armas button { min-width: 64px; padding: 6px 8px; border: 2px solid transparent; border-radius: 8px; background: rgba(0,0,0,0.65); color: #eee; font-size: 12px; }
-  #armas button.sel { border-color: #ffd23f; }
-  #armas button:disabled { opacity: 0.35; }
-  #carga { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); width: 200px; height: 10px; border-radius: 5px; background: rgba(0,0,0,0.6); overflow: hidden; z-index: 2; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 2px; }
+  .tile { display: flex; flex-direction: column; padding: 0; border: 2px solid var(--borde); background: #000; color: #fff; font: 700 13px var(--letra); box-shadow: 0 0 0 1px #000; transition: transform 0.12s, border-color 0.12s, color 0.12s; }
+  .tile canvas { width: 100%; height: auto; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--borde2); }
+  .tile span { padding: 7px 4px; }
+  .tile:hover, .tile:focus-visible { border-color: var(--amarillo); color: var(--amarillo); transform: translateY(-2px); outline: none; }
+  @media (max-width: 520px) { .tiles { grid-template-columns: 1fr 1fr; } .tile:last-child { grid-column: span 2; justify-self: center; width: calc(50% - 6px); } .caja h1.logo { font-size: 38px; } }
+  .teclas { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .teclas td { padding: 4px 6px; border-bottom: 1px solid rgba(142, 162, 221, 0.18); color: #dfe6ff; vertical-align: top; }
+  .teclas td:first-child { color: var(--amarillo); font-weight: 700; white-space: nowrap; }
+
+  /* ── En el juego: reloj abajo a la izquierda, equipos al medio, armas y viento a la derecha ── */
+  #hud { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 8px; pointer-events: none; z-index: 2; }
+  #hud[hidden] { display: none; }
+  .marco { background: rgba(0, 0, 0, 0.82); border: 1px solid #e6e6e6; box-shadow: 0 0 0 1px #000; }
+  #reloj { min-width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 6px; box-sizing: border-box; font: 700 24px var(--letra); }
+  #centro { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+  #equipos { display: grid; gap: 2px; }
+  .eq { display: flex; align-items: center; gap: 4px; }
+  .eq .nom { box-sizing: border-box; width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 5px; background: rgba(0, 0, 0, 0.82); border: 1px solid rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 1px #000; font: 700 11px var(--letra); text-align: center; }
+  .eq.turno .nom { border-color: var(--amarillo); }
+  .eq .barra { width: 120px; height: 11px; }
+  .eq .barra i { display: block; box-sizing: border-box; height: 100%; min-width: 2px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px #000; transition: width 0.4s; }
+  .eq.muerta { opacity: 0.35; }
+  #carga { width: 200px; height: 10px; }
+  #carga[hidden] { display: none; }
   #carga i { display: block; height: 100%; background: linear-gradient(90deg, #ffd23f, #ff5a2f); }
-  .tactil { position: fixed; left: 0; right: 0; bottom: 52px; display: none; justify-content: space-between; padding: 8px; pointer-events: none; z-index: 3; }
+  #der { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  #armaBtn { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; color: #fff; font: 700 12px var(--letra); border-radius: 0; pointer-events: auto; }
+  #armaBtn:hover { border-color: var(--amarillo); }
+  #armaBtn canvas { width: 26px; height: 26px; }
+  #viento { width: 130px; height: 14px; position: relative; overflow: hidden; }
+  #viento::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #777; }
+  #viento i { position: absolute; top: 2px; bottom: 2px; background: repeating-linear-gradient(90deg, #6ec1ff 0 4px, #2a6fe0 4px 8px); }
+  #armas { position: absolute; right: 0; bottom: calc(100% + 6px); pointer-events: auto; }
+  #armas[hidden] { display: none; }
+  .grilla { display: grid; grid-template-columns: 38px repeat(5, 36px); }
+  .rot, .celda { box-sizing: border-box; height: 36px; border: 0; border-right: 1px solid #4a4a4a; border-bottom: 1px solid #4a4a4a; }
+  .rot { display: flex; align-items: center; padding-left: 5px; font: 11px var(--letra); color: #ddd; }
+  .celda { display: flex; align-items: center; justify-content: center; padding: 0; background: transparent; }
+  .celda canvas { width: 30px; height: 30px; }
+  .celda:disabled { cursor: default; }
+  .celda:disabled canvas { opacity: 0.45; filter: grayscale(0.7); }
+  .celda:not(:disabled):hover { background: #22306c; }
+  .celda.sel { background: #3a2f00; box-shadow: inset 0 0 0 1px var(--amarillo); }
+  .pie { display: flex; justify-content: space-between; gap: 10px; padding: 4px 6px; font: 700 12px var(--letra); color: #fff; }
+  #aviso { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); padding: 5px 14px; font: 700 14px var(--letra); white-space: nowrap; z-index: 6; pointer-events: none; transition: opacity 0.3s; }
+
+  /* ── Controles tactiles ── */
+  .tactil { position: fixed; left: 0; right: 0; bottom: 8px; display: none; justify-content: space-between; padding: 8px; pointer-events: none; z-index: 3; }
   .tactil div { display: grid; gap: 6px; pointer-events: auto; }
-  .tactil button { width: 52px; height: 52px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.14); color: #fff; font-size: 17px; }
+  .tactil button { width: 52px; height: 52px; border: 1px solid rgba(230, 230, 230, 0.5); border-radius: 4px; background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 17px; }
   .tactil .izq { grid-template-columns: repeat(3, 52px); }
   .tactil .der { grid-template-columns: repeat(2, 52px); }
-  @media (pointer: coarse) { .tactil { display: flex; } }
-  .ayuda { font-size: 12px; color: #a9a29c; line-height: 1.5; }
-  .ayuda b { color: #f1c6a2; }
+  @media (pointer: coarse) {
+    .tactil { display: flex; }
+    /* con los botones abajo, el HUD va arriba */
+    #hud { top: 0; bottom: auto; align-items: flex-start; }
+    #der { flex-direction: column-reverse; }
+    #armas { top: calc(100% + 6px); bottom: auto; }
+    #aviso { top: 64px; }
+  }
+  .tactil[hidden] { display: none; }
+  @media (max-width: 600px) {
+    .eq .nom { width: 84px; }
+    .eq .barra { width: 64px; }
+    #viento { width: 88px; }
+    #carga { width: 130px; }
+    #armaBtn span { display: none; }
+    #armaBtn { padding: 2px; }
+  }
 </style>
 </head>
 <body>
 <canvas id="lienzo"></canvas>
-<div id="hud" hidden><div id="equipos"></div><div><div id="reloj">30</div><div id="viento"><i></i></div></div></div>
-<div id="aviso" style="opacity:0"></div>
-<div id="carga" hidden><i></i></div>
-<div id="armas" hidden></div>
+<div id="hud" hidden>
+  <div id="reloj" class="marco">30</div>
+  <div id="centro"><div id="carga" class="marco" hidden><i></i></div><div id="equipos"></div></div>
+  <div id="der">
+    <div id="armas" class="marco" hidden></div>
+    <button id="armaBtn" class="marco" type="button" title="Armas (Tab o clic derecho)"><canvas width="52" height="52"></canvas><span></span></button>
+    <div id="viento" class="marco" title="Viento"><i></i></div>
+  </div>
+</div>
+<div id="aviso" class="marco" style="opacity:0"></div>
 <div class="tactil" id="tactil" hidden>
   <div class="izq"><span></span><button data-k="arr">↑</button><span></span><button data-k="izq">←</button><button data-k="aba">↓</button><button data-k="der">→</button></div>
   <div class="der"><button data-k="enter">⤴</button><button data-k="retro">⤒</button><button data-k="espacio">●</button><button data-k="fin">⏭</button></div>
 </div>
 <div class="capa" id="menu" hidden></div>
-<script src="motor.js?v=6"></script>
-<script src="mapas.js?v=6"></script>
-<script src="juego.js?v=6"></script>
+<script src="motor.js?v=7"></script>
+<script src="mapas.js?v=7"></script>
+<script src="juego.js?v=7"></script>
 </body>
 </html>
