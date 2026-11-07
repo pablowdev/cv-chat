@@ -44,15 +44,24 @@ fi
 # Mantener solo las 3 copias locales mas recientes de cada tipo
 for p in haven-db_ haven-config_ foro-db_ foro-config_; do ls -1t "$OUT"/$p* 2>/dev/null | tail -n +4 | xargs -r rm -f; done
 
-timeout 1h rclone copy "$OUT" "$REMOTE" --include "*_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5
-rclone delete "$REMOTE" --min-age 30d --exclude "uploads/**" --config /opt/haven/tools/rclone.conf
+# Sube las copias locales que todavia no estan en Drive (no solo las de hoy): si una noche Google
+# no dejo subir alguna, se completa sola la noche siguiente. Si falla, se sigue igual con lo demas
+# (la segunda copia sobre todo) y al final queda anotado como error.
+ERROR1=""
+if ! timeout 1h rclone copy "$OUT" "$REMOTE" --max-depth 1 --include "haven-db_*" --include "haven-config_*" --include "foro-db_*" --include "foro-config_*" \
+     --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5; then
+  ERROR1="la subida a Drive no termino (Google limito la cantidad de pedidos); lo que falto se sube la noche siguiente"
+  echo "!! $ERROR1"
+fi
+rclone delete "$REMOTE" --min-age 30d --exclude "uploads/**" --config /opt/haven/tools/rclone.conf || echo "!! no pude borrar las copias viejas de Drive"
 # Los archivos subidos (fotos, videos, el historial de Discord): solo los que faltan.
 # Mientras corre la subida inicial (cv-respaldo-inicial) no: dos copias a la vez duplican archivos en Drive
 if systemctl is-active -q cv-respaldo-inicial 2>/dev/null; then
   echo "archivos subidos: los esta copiando la subida inicial"
 else
   timeout 80m rclone copy haven-data/uploads "$REMOTE/uploads" --config /opt/haven/tools/rclone.conf \
-    --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part"
+    --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part" \
+    || echo "!! los archivos subidos no terminaron de copiarse; siguen la noche siguiente"
 fi
 # Segunda copia, solo la base de datos y 7 dias, en la cuenta del club (BACKUP_REMOTE2, por defecto
 # gdrive:Haven-backups, 15 GB): si falla, la principal ya esta y solo queda anotado
@@ -62,6 +71,10 @@ if ! { timeout 30m rclone copy "$OUT" "$REMOTE2" --include "haven-db_$STAMP.*" -
        && rclone delete "$REMOTE2" --min-age 7d --config /opt/haven/tools/rclone.conf; }; then
   AVISO2=',"aviso":"la segunda copia (cuenta del club) no se pudo subir"'
 fi
-printf '{"ok":true,"fecha":"%s"%s}\n' "$(date -u +%FT%TZ)" "$AVISO2" > "$ESTADO"
+if [ -n "$ERROR1" ]; then
+  printf '{"ok":false,"fecha":"%s","error":"%s"%s}\n' "$(date -u +%FT%TZ)" "$ERROR1" "$AVISO2" > "$ESTADO"
+else
+  printf '{"ok":true,"fecha":"%s"%s}\n' "$(date -u +%FT%TZ)" "$AVISO2" > "$ESTADO"
+fi
 chmod 644 "$ESTADO" # (lo lee el chat, que no corre como root)
 echo "== $(date -u '+%F %T') ok: $(du -h "$OUT"/haven-db_$STAMP.db.zst | cut -f1) base de datos, $(du -h "$OUT"/haven-config_$STAMP.tar.zst | cut -f1) configuracion$( [ -f "$OUT/foro-db_$STAMP.sql.zst" ] && echo ", foro $(du -h "$OUT"/foro-db_$STAMP.sql.zst | cut -f1)")"
