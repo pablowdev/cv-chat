@@ -15,7 +15,7 @@
   // ── El estado de la partida ──
   let J = null, def = null, fondo = null, jug = [], turno = 0, fase = 'menu', tiempo = 0, quietos = 0;
   let cajaTomada = false, ataco = false, arma = 'soga', carga = null, semilla = 1, cajaN = 0, nTurno = 0;
-  let textos = [], online = null, ultimaFoto = 0, vidaAntes = null, eqN = -1;
+  let textos = [], online = null, ultimaFoto = 0, vidaAntes = null, eqN = -1, iconoMano = null;
   const cam = { x: 960, y: 450, z: 2 };
 
   // ── Azar con semilla (las cajas, en el mismo orden para todos) ──
@@ -38,7 +38,8 @@
     const r = azar(semilla + 5), salidas = def.salidas.map((p, i) => [r(), p]).sort((a, b) => a[0] - b[0]).map(z => z[1]);
     jug = nombres.map((n, i) => {
       const p = salidas[i % salidas.length], s = new M.Serpiente(p[0], p[1] - 9);
-      s.vida = VIDA; s.dir = p[0] < def.w / 2 ? 1 : -1;
+      // (al aparecer caen hasta el piso: esa primera caida no lastima)
+      s.vida = VIDA; s.dir = p[0] < def.w / 2 ? 1 : -1; s.sinCaida = true;
       return { nombre: n, color: COLORES[i % COLORES.length], armas: { bazooka: 0, granada: 0 }, serp: s };
     });
     J.serps = jug.map(j => j.serp);
@@ -57,15 +58,23 @@
     cajaN++;
   }
 
+  // antes de cada turno, como en el juego clasico: 5 segundos para prepararse (el reloj queda gris y arriba
+  // dice cuanto falta); el turno arranca con la primera tecla o cuando se acaban
+  const LISTO = 5;
+  let listo = 0, comentario = null;
   function empezarTurno(viento) {
-    fase = 'mover'; tiempo = TURNO * 50; quietos = 0; cajaTomada = false; ataco = false; arma = 'soga'; carga = null;
+    fase = 'listo'; listo = LISTO * 50; tiempo = TURNO * 50; quietos = 0; cajaTomada = false; ataco = false; arma = 'soga'; carga = null;
     nTurno++;
     J.viento = viento != null ? viento : Math.round(azar(semilla + nTurno * 31)() * 140 - 70);
     const s = jug[turno].serp;
     s.estado = s.estado === 'muerta' ? 'muerta' : 'aire'; s.vx = 0; s.vy = 0; s.soga = null; s.gancho = null; s.sogaAng = null; s.sinControl = false;
     vidaAntes = s.vida;
     if (simulaYo() && J.cosas.filter(g => g.tipo === 'caja').length < MAX_CAJAS) soltarCaja();
-    aviso(`Le toca a ${jug[turno].nombre}${online && turno === online.miSeat ? ' (vos)' : ''}`);
+    // (lo que se apreto mirando el turno de otro no cuenta para arrancar)
+    for (const k in recien) recien[k] = false;
+    // si recien se murio alguna, primero se comenta eso (la cuenta sigue al segundo siguiente)
+    if (comentario) { aviso(comentario[0], comentario[1]); comentario = null; }
+    else aviso(`${jug[turno].nombre}${online && turno === online.miSeat ? ' (vos)' : ''}: ${LISTO} seg`, jug[turno].color);
     pintarArmas();
   }
 
@@ -80,7 +89,7 @@
     if (e.target && /input|textarea/i.test(e.target.tagName)) return;
     const k = TECLAS[e.key];
     if (k) { e.preventDefault(); if (!apretada[k]) recien[k] = true; apretada[k] = true; return; }
-    if (/^[1-5]$/.test(e.key) && J) J.mecha = Number(e.key);
+    if (/^[1-5]$/.test(e.key) && J) { J.mecha = Number(e.key); if (arma === 'granada' && juegoYo()) aviso(`Granada, ${J.mecha} seg`, jug[turno].color); }
     if (e.key === 'q' || e.key === 'Q') ciclarArma(-1);
     if (e.key === 'e' || e.key === 'E') ciclarArma(1);
     if (e.key === 'r' || e.key === 'R') elegirArma('soga');
@@ -99,14 +108,20 @@
   addEventListener('blur', () => { for (const k in apretada) apretada[k] = false; });
   for (const b of document.querySelectorAll('[data-k]')) {
     const k = b.dataset.k;
-    const on = (e) => { e.preventDefault(); if (k === 'fin') { if (juegoYo() && fase === 'mover') { fase = 'esperando'; } return; } if (!apretada[k]) recien[k] = true; apretada[k] = true; };
+    const on = (e) => { e.preventDefault(); if (k === 'fin') { if (juegoYo() && (fase === 'mover' || fase === 'listo')) { fase = 'esperando'; } return; } if (!apretada[k]) recien[k] = true; apretada[k] = true; };
     const off = (e) => { e.preventDefault(); apretada[k] = false; };
     b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
   }
 
   const ARMAS_ORDEN = ['soga', 'bazooka', 'granada'];
   function puede(a) { return a === 'soga' || (jug[turno] && jug[turno].armas[a] > 0); }
-  function elegirArma(a) { if (!juegoYo() || !puede(a)) return; arma = a; carga = null; pintarArmas(); }
+  // elegir un arma (arranca el turno si estaba preparandose) y avisarlo arriba, como en el juego clasico
+  function elegirArma(a) {
+    if (!juegoYo() || !puede(a)) return;
+    if (fase === 'listo') fase = 'mover';
+    const cambio = arma !== a; arma = a; carga = null; pintarArmas();
+    if (cambio) aviso(a === 'granada' ? `Granada, ${J.mecha || 3} seg` : `${NOMBRE_ARMA[a]} (${cantidad(a)})`, jug[turno].color);
+  }
   function ciclarArma(d) { let i = ARMAS_ORDEN.indexOf(arma); for (let k = 0; k < 3; k++) { i = (i + d + 3) % 3; if (puede(ARMAS_ORDEN[i])) return elegirArma(ARMAS_ORDEN[i]); } }
   // ── El panel de armas: una grilla con una fila por tecla (Util = la soga, F1, F2) ──
   const NOMBRE_ARMA = { soga: 'Soga', bazooka: 'Bazuca', granada: 'Granada' };
@@ -186,7 +201,7 @@
   function entradaDelPaso() {
     const s = jug[turno].serp;
     const e = { izq: apretada.izq, der: apretada.der, arr: apretada.arr, aba: apretada.aba, shift: apretada.shift, enter: recien.enter, retro: recien.retro, soga: false };
-    if (fase === 'esperando') { for (const k in recien) recien[k] = false; return {}; }
+    if (fase === 'esperando' || fase === 'listo') { for (const k in recien) recien[k] = false; return {}; }
     if (arma === 'soga') e.soga = recien.espacio;
     else if (s.estado === 'suelo') {
       // en el piso: Espacio carga y al soltar tira
@@ -207,6 +222,12 @@
   // ── Un paso del juego (el que simula) ──
   function paso() {
     const yo = jug[turno], s = yo.serp;
+    // preparandose: la primera tecla (o el fin de la cuenta) arranca el turno
+    if (fase === 'listo') {
+      const algo = Object.keys(recien).some(k => recien[k]); // (solo teclas apretadas en este turno)
+      if (algo || --listo <= 0) fase = 'mover';
+      else if (listo % 50 === 0) aviso(`${yo.nombre}: ${listo / 50} seg`, yo.color);
+    }
     const entradas = jug.map((j, i) => (i === turno ? entradaDelPaso() : {}));
     M.pasoJuego(J, entradas);
     // agarrar cajas
@@ -220,6 +241,8 @@
     J.cosas = J.cosas.filter(g => !g.fin);
     for (const ev of J.eventos) if (ev.tipo === 'dano') texto(ev.x, ev.y, '-' + ev.n, '#ff8a8a');
     J.eventos = [];
+    // al agua: se comenta arriba
+    for (const j of jug) { if (j.serp.estado === 'muerta' && j.estAnt && j.estAnt !== 'muerta' && !j.comentada) { j.comentada = true; aviso(frase(AL_AGUA, j.nombre), j.color); } j.estAnt = j.serp.estado; }
     // la caida que lastima corta el turno (como en el juego clasico)
     if (fase === 'mover' || fase === 'retirada') {
       if (s.vida < vidaAntes && s.caida) { fase = 'esperando'; aviso('¡Se golpeó!'); s.caida = 0; }
@@ -237,7 +260,7 @@
 
   function terminarTurno() {
     // las que quedaron sin vida, mueren
-    for (const j of jug) if (j.serp.vida <= 0 && j.serp.estado !== 'muerta') { j.serp.estado = 'muerta'; texto(j.serp.x, j.serp.y - 20, '💀', '#fff'); }
+    for (const j of jug) if (j.serp.vida <= 0 && j.serp.estado !== 'muerta') { j.serp.estado = 'muerta'; j.comentada = true; texto(j.serp.x, j.serp.y - 20, '💀', '#fff'); comentario = [frase(SE_MUERE, j.nombre), j.color]; aviso(comentario[0], comentario[1]); }
     fase = 'pasando';
     if (online) { online.socket.emit('shoppa:finTurno', { id: online.id, snapshot: foto() }); return; }
     const vivos = jug.map((j, i) => i).filter(i => jug[i].serp.estado !== 'muerta');
@@ -269,7 +292,7 @@
       serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, sogaAng: s.sogaAng, sinControl: s.sinControl, rueda: s.rueda, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
       cosas: J.cosas.map(g => ({ ...g })),
       efectos: J.efectos.filter(e => e.t < 3),
-      textos: textos.filter(t => t.v > 1.6).map(t => ({ ...t })),
+      textos: textos.filter(t => t.v > 1.6).map(t => ({ ...t })), aviso: avisoUlt,
     };
   }
   function aplicar(f) {
@@ -285,6 +308,9 @@
     J.cosas = (f.cosas || []).map(g => ({ ...g }));
     for (const e of f.efectos || []) if (!J.efectos.some(z => z.x === e.x && z.y === e.y)) J.efectos.push({ ...e });
     for (const t of f.textos || []) if (!textos.some(z => z.x === t.x && z.y === t.y && z.s === t.s)) textos.push({ ...t });
+    // el mensaje de arriba del que juega (y las que ya murieron no se vuelven a comentar aca)
+    if (f.aviso && f.aviso.id !== avisoVisto) { avisoVisto = f.aviso.id; mostrarAviso(f.aviso.t, f.aviso.c); }
+    for (const j of jug) { j.estAnt = j.serp.estado; if (j.serp.estado === 'muerta') j.comentada = true; }
     pintarArmas();
   }
 
@@ -309,7 +335,15 @@
   // ── El dibujo ──
   function texto(px, py, s, col) { textos.push({ x: px, y: py, s, col, v: 1.8 }); }
   let avisoT = null;
-  function aviso(t) { const a = $('aviso'); a.textContent = t; a.style.opacity = 1; clearTimeout(avisoT); avisoT = setTimeout(() => { a.style.opacity = 0; }, 2200); }
+  // el mensaje de arriba (en el color del equipo, como en el juego clasico)
+  let avisoUlt = null, avisoVisto = null, avisoN = 0;
+  function mostrarAviso(t, color) { const a = $('aviso'); a.textContent = t; a.style.color = color || '#fff'; a.style.opacity = 1; clearTimeout(avisoT); avisoT = setTimeout(() => { a.style.opacity = 0; }, 2200); }
+  // (el mensaje viaja en la foto: los demas jugadores lo ven igual)
+  function aviso(t, color) { mostrarAviso(t, color); avisoUlt = { id: Date.now().toString(36) + '-' + (++avisoN), t, c: color || '#fff' }; }
+  // lo que se comenta cuando una se muere (frases propias)
+  const AL_AGUA = ['{n} se tiró a nadar sin flotador', 'Glu, glu… {n}', '{n} se fue a pescar y no volvió'];
+  const SE_MUERE = ['¡Chau, {n}!', '{n} pasó a mejor vida', 'Pobre {n}…'];
+  const frase = (l, n) => l[Math.floor(Math.random() * l.length)].replace('{n}', n);
 
   // la inclinacion del piso debajo (las serpientes se acuestan con la pendiente, hasta ~30 grados)
   function pendiente(s) {
@@ -445,25 +479,51 @@
     }
     for (const e of J.efectos) { e.t = (e.t || 0) + 1; x.fillStyle = `rgba(255,${180 - e.t * 6},60,${Math.max(0, 0.85 - e.t / 22)})`; x.beginPath(); x.arc(e.x, e.y, e.r * Math.min(1, e.t / 5), 0, Math.PI * 2); x.fill(); }
     J.efectos = J.efectos.filter(e => e.t < 22);
-    // nombres y vida arriba de cada una
-    x.font = 'bold 7px system-ui, sans-serif'; x.textAlign = 'center';
-    jug.forEach((j, i) => {
+    // nombres y vida arriba de cada una: dos cartelitos negros con borde, en el color del equipo (como en el juego
+    // clasico: el nombre arriba y la vida abajo)
+    x.font = 'bold 7px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const cartel = (cx, cy, txt, col) => {
+      const w = Math.ceil(x.measureText(txt).width) + 6;
+      x.fillStyle = 'rgba(0,0,0,0.85)'; x.fillRect(cx - w / 2, cy - 5, w, 10);
+      x.strokeStyle = 'rgba(190,190,190,0.85)'; x.lineWidth = 0.5; x.strokeRect(cx - w / 2, cy - 5, w, 10);
+      x.fillStyle = col; x.fillText(txt, cx, cy + 0.5);
+    };
+    jug.forEach((j) => {
       const s = j.serp; if (s.estado === 'muerta') return;
-      const w = Math.max(24, x.measureText(j.nombre).width + 6);
-      x.fillStyle = 'rgba(0,0,0,0.8)'; x.fillRect(s.x - w / 2, s.y - 33, w, 18);
-      x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 0.5; x.strokeRect(s.x - w / 2, s.y - 33, w, 18);
-      x.fillStyle = j.color; x.fillText(j.nombre, s.x, s.y - 26); x.fillText(String(Math.max(0, s.vida)), s.x, s.y - 18);
+      cartel(s.x, s.y - 33, j.nombre, j.color); cartel(s.x, s.y - 21, String(Math.max(0, s.vida)), j.color);
     });
+    x.textBaseline = 'alphabetic';
+    // colgada: el arma en la mano en un cuadradito al lado (lo que suelta con Enter), como en el juego clasico
+    if (s0 && s0.soga && s0.estado !== 'muerta') {
+      if (!iconoMano || iconoMano.a !== arma) { iconoMano = document.createElement('canvas'); iconoMano.width = iconoMano.height = 48; iconoMano.a = arma; icono(iconoMano, arma); }
+      const bx = s0.x - s0.dir * 20 - 7, by = s0.y - 30;
+      x.fillStyle = 'rgba(0,0,0,0.85)'; x.fillRect(bx, by, 14, 14); x.strokeStyle = 'rgba(190,190,190,0.85)'; x.lineWidth = 0.5; x.strokeRect(bx, by, 14, 14);
+      x.drawImage(iconoMano, bx + 1, by + 1, 12, 12);
+    }
     // la flecha: a quien le toca (baja y sube)
-    if (s0 && s0.estado !== 'muerta' && (fase === 'mover' || fase === 'retirada')) {
-      const b = Math.sin(t / 160) * 3, ay = s0.y - 46 + b;
+    if (s0 && s0.estado !== 'muerta' && (fase === 'listo' || fase === 'mover' || fase === 'retirada')) {
+      const b = Math.sin(t / 160) * 3, ay = s0.y - 50 + b;
       x.fillStyle = jug[turno].color; x.strokeStyle = '#000'; x.lineWidth = 1;
       x.beginPath(); x.moveTo(s0.x - 6, ay - 8); x.lineTo(s0.x + 6, ay - 8); x.lineTo(s0.x + 6, ay - 2); x.lineTo(s0.x + 10, ay - 2); x.lineTo(s0.x, ay + 7); x.lineTo(s0.x - 10, ay - 2); x.lineTo(s0.x - 6, ay - 2); x.closePath(); x.fill(); x.stroke();
     }
     // la mira (si es tu turno y no estas colgada; en el aire despues de una soga no: la proxima sale espejada)
-    if (s0 && juegoYo() && s0.estado !== 'soga' && s0.estado !== 'muerta' && (arma !== 'soga' || (s0.sogaAng == null && !s0.sinControl)) && fase === 'mover') {
-      const a = arma === 'soga' ? Math.min(0, s0.mira) : s0.mira;
-      x.strokeStyle = '#ff4d6d'; x.lineWidth = 1; x.beginPath(); x.arc(s0.x + Math.cos(a) * s0.dir * 30, s0.y - 4 + Math.sin(a) * 30, 3, 0, Math.PI * 2); x.stroke();
+    if (s0 && juegoYo() && s0.estado !== 'soga' && s0.estado !== 'muerta' && (arma !== 'soga' || (s0.sogaAng == null && !s0.sinControl)) && (fase === 'mover' || fase === 'listo')) {
+      // en el color del equipo, un circulito con una cruz (como en el juego clasico)
+      const a = arma === 'soga' ? Math.min(0, s0.mira) : s0.mira, col = jug[turno].color;
+      const mx = s0.x + Math.cos(a) * s0.dir * 30, my = s0.y - 4 + Math.sin(a) * 30;
+      x.lineWidth = 1.6; x.strokeStyle = 'rgba(0,0,0,0.55)';
+      x.beginPath(); x.arc(mx, my, 3.4, 0, Math.PI * 2); x.moveTo(mx - 2.4, my - 2.4); x.lineTo(mx + 2.4, my + 2.4); x.moveTo(mx + 2.4, my - 2.4); x.lineTo(mx - 2.4, my + 2.4); x.stroke();
+      x.lineWidth = 0.9; x.strokeStyle = col;
+      x.beginPath(); x.arc(mx, my, 3.4, 0, Math.PI * 2); x.moveTo(mx - 2.4, my - 2.4); x.lineTo(mx + 2.4, my + 2.4); x.moveTo(mx + 2.4, my - 2.4); x.lineTo(mx - 2.4, my + 2.4); x.stroke();
+      // la fuerza del tiro: una fila de puntos que crece de la serpiente hacia la mira, de amarillo a rojo
+      if (carga !== null) {
+        const n = Math.max(1, Math.round(carga * 12));
+        for (let k = 0; k < n; k++) {
+          const d = 8 + k * 2.6, r = 0.8 + k * 0.22, u = k / 11;
+          x.fillStyle = `rgb(255,${Math.round(225 - u * 185)},${Math.round(60 - u * 40)})`;
+          x.beginPath(); x.arc(s0.x + Math.cos(a) * s0.dir * d, s0.y - 4 + Math.sin(a) * d, r, 0, Math.PI * 2); x.fill();
+        }
+      }
     }
     // los textos que suben (daño, +1 arma)
     for (const tx of textos) { tx.v -= 0.016; tx.y -= 0.3; x.globalAlpha = Math.max(0, Math.min(1, tx.v)); x.fillStyle = tx.col; x.font = 'bold 9px system-ui'; x.fillText(tx.s, tx.x, tx.y); }
@@ -473,28 +533,36 @@
     for (let i = -200; i <= def.w + 200; i += 8) x.lineTo(i, def.agua + Math.sin(i / 34 + t / 420) * 2.5);
     x.lineTo(def.w + 200, def.h + 300); x.closePath(); x.fill();
     // el HUD
-    $('reloj').textContent = String(Math.max(0, Math.ceil(tiempo / 50)));
-    $('reloj').style.color = fase === 'retirada' ? '#ffd23f' : (jug[turno] ? jug[turno].color : '#fff');
+    // el reloj: blanco; gris y quieto mientras se prepara o entre turnos; rojo en los ultimos 5 segundos
+    const seg = Math.max(0, Math.ceil(tiempo / 50)), rl = $('reloj');
+    if (rl.textContent !== String(seg)) rl.textContent = String(seg);
+    rl.classList.toggle('gris', fase !== 'mover' && fase !== 'retirada');
+    rl.classList.toggle('rojo', (fase === 'mover' || fase === 'retirada') && seg <= 5);
+    // el viento: flechas desde el medio, rojas para la derecha y azules para la izquierda
     const vi = $('viento').firstChild, vv = (J.viento || 0) / 70;
     vi.style.left = vv < 0 ? (50 + vv * 50) + '%' : '50%'; vi.style.width = Math.abs(vv) * 50 + '%';
+    vi.className = vv < 0 ? 'izq' : 'der';
     // los equipos: el nombre en un cartelito y la barra de vida (se arman una vez y despues solo se actualizan)
     const eqs = $('equipos');
     if (eqN !== jug.length) {
       eqs.textContent = '';
       for (const j of jug) {
-        const r = div('eq'), n = h('span', j.nombre), b = document.createElement('span'), ii = document.createElement('i');
-        n.className = 'nom'; n.style.color = j.color; b.className = 'barra'; ii.style.background = j.color;
-        b.appendChild(ii); r.append(n, b); eqs.appendChild(r);
+        const r = div('eq'), n = h('span', j.nombre), f = document.createElement('span'), b = document.createElement('span'), ii = document.createElement('i');
+        n.className = 'nom'; n.style.color = j.color; f.className = 'band'; f.style.backgroundColor = j.color; b.className = 'barra'; ii.style.background = j.color;
+        b.appendChild(ii); r.append(n, f, b); eqs.appendChild(r);
       }
       eqN = jug.length;
     }
+    // ordenados por la vida que les queda (como en el juego clasico)
+    const orden = jug.map((j, i) => i).sort((a, b) => Math.max(0, jug[b].serp.vida) - Math.max(0, jug[a].serp.vida) || a - b);
     jug.forEach((j, i) => {
       const r = eqs.children[i]; if (!r) return;
       r.classList.toggle('turno', i === turno); r.classList.toggle('muerta', j.serp.estado === 'muerta');
+      const o = String(orden.indexOf(i)); if (r.style.order !== o) r.style.order = o;
       const w = Math.max(0, j.serp.vida) / VIDA * 100 + '%', ii = r.lastChild.firstChild;
       if (ii.style.width !== w) ii.style.width = w;
     });
-    $('carga').hidden = carga === null; if (carga !== null) $('carga').firstChild.style.width = carga * 100 + '%';
+    $('carga').hidden = true;
   }
 
   // ── Los menus ──

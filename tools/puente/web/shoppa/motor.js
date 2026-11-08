@@ -22,7 +22,9 @@
     REBOTE: 0.6,              // al chocar volando contra una pared (como en Proyecto Gusanos)
     ROCE: 0.96,               // deslizando por el piso (pierde 4% por paso)
     CAIDA_DESDE: 8, CAIDA_COEF: 50, // daño por caida: ((v - 8) * coef + 18) / 18
-    MIRA: 0.049,              // radianes por paso al apuntar
+    // al apuntar: 1/256 de vuelta por paso (70 grados por segundo). Medido en una partida filmada: 69-78 grados/s
+    // en 6 tramos limpios (antes 0.049, el doble de rapido)
+    MIRA: 2 * Math.PI / 256,
     // la soga (5 estrellas: 462 px y tiros ilimitados). Una soga de un solo lado: tira pero se afloja
     // (medido en partidas filmadas). Acortar y alargar: ~4 px por paso (medido: 200-225 px/s)
     // Medido cuadro por cuadro en una partida de Shopper filmada a 60 cuadros, con la camara quieta y escala 1:1

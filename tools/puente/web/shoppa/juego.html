@@ -59,12 +59,18 @@
   #hud { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 8px; pointer-events: none; z-index: 2; }
   #hud[hidden] { display: none; }
   .marco { background: rgba(0, 0, 0, 0.82); border: 1px solid #e6e6e6; box-shadow: 0 0 0 1px #000; }
-  #reloj { min-width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 6px; box-sizing: border-box; font: 700 24px var(--letra); }
+  #reloj { min-width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 6px; box-sizing: border-box; font: 700 24px var(--letra); color: #fff; }
+  /* gris y quieto mientras se prepara o entre turnos; rojo en los ultimos 5 segundos (como en el juego clasico) */
+  #reloj.gris { color: #8a8a8a; }
+  #reloj.rojo { color: #ff3b30; background: rgba(70, 0, 0, 0.9); }
   #centro { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
   #equipos { display: grid; gap: 2px; }
   .eq { display: flex; align-items: center; gap: 4px; }
   .eq .nom { box-sizing: border-box; width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 5px; background: rgba(0, 0, 0, 0.82); border: 1px solid rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 1px #000; font: 700 11px var(--letra); text-align: center; }
   .eq.turno .nom { border-color: var(--amarillo); }
+  .eq .nom { text-align: right; }
+  /* el cuadradito del equipo (en el juego clasico, la bandera) */
+  .eq .band { width: 11px; height: 11px; flex: none; border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px #000; background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0 40%, transparent 40% 60%, rgba(0, 0, 0, 0.3) 60%); }
   .eq .barra { width: 120px; height: 11px; }
   .eq .barra i { display: block; box-sizing: border-box; height: 100%; min-width: 2px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px #000; transition: width 0.4s; }
   .eq.muerta { opacity: 0.35; }
@@ -77,7 +83,14 @@
   #armaBtn canvas { width: 26px; height: 26px; }
   #viento { width: 130px; height: 14px; position: relative; overflow: hidden; }
   #viento::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: #777; }
-  #viento i { position: absolute; top: 2px; bottom: 2px; background: repeating-linear-gradient(90deg, #6ec1ff 0 4px, #2a6fe0 4px 8px); }
+  /* el viento: flechitas que corren desde el medio, rojas para la derecha y azules para la izquierda */
+  #viento { background: #000; }
+  #viento i { position: absolute; top: 2px; bottom: 2px; background-repeat: repeat-x; background-size: 8px 100%; animation: viento-der 0.45s linear infinite; }
+  #viento i.der { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='10' preserveAspectRatio='none'><path d='M1.5 1 L7 5 L1.5 9 Z' fill='%23ff5a3c'/></svg>"); }
+  #viento i.izq { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='10' preserveAspectRatio='none'><path d='M6.5 1 L1 5 L6.5 9 Z' fill='%234f7dff'/></svg>"); animation-name: viento-izq; }
+  @keyframes viento-der { from { background-position: 0 0; } to { background-position: 8px 0; } }
+  @keyframes viento-izq { from { background-position: 0 0; } to { background-position: -8px 0; } }
+  @media (prefers-reduced-motion: reduce) { #viento i { animation: none; } }
   #armas { position: absolute; right: 0; bottom: calc(100% + 6px); pointer-events: auto; }
   #armas[hidden] { display: none; }
   .grilla { display: grid; grid-template-columns: 38px repeat(5, 36px); }
@@ -108,7 +121,7 @@
   }
   .tactil[hidden] { display: none; }
   @media (max-width: 600px) {
-    .eq .nom { width: 84px; }
+    .eq .nom { width: 68px; }
     .eq .barra { width: 64px; }
     #viento { width: 88px; }
     #carga { width: 130px; }
@@ -134,8 +147,8 @@
   <div class="der"><button data-k="enter">⤴</button><button data-k="retro">⤒</button><button data-k="espacio">●</button><button data-k="fin">⏭</button></div>
 </div>
 <div class="capa" id="menu" hidden></div>
-<script src="motor.js?v=9"></script>
+<script src="motor.js?v=10"></script>
 <script src="mapas.js?v=7"></script>
-<script src="juego.js?v=9"></script>
+<script src="juego.js?v=10"></script>
 </body>
 </html>
