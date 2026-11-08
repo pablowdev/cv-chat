@@ -734,7 +734,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|gusanos|juegos|chat)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|gusanos|worgs|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -777,14 +777,15 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
-  // Shoppa: el juego (juego.html, motor.js, mapas.js...) y la pagina de prueba de la fisica, en web/shoppa/.
-  // Se sirve solo lo que esta adentro de esa carpeta y con los tipos conocidos. (Proyecto Gusanos se saco.)
-  const carpetaJuego = req.method === 'GET' && /^\/puente\/(shoppa)\//.exec(p);
+  // WORGS: el juego (juego.html, motor.js, mapas.js...) y la pagina de prueba de la fisica, en web/worgs/.
+  // Se sirve solo lo que esta adentro de esa carpeta y con los tipos conocidos. /puente/shoppa/ (el nombre de antes)
+  // sigue andando, para los enlaces viejos. (Proyecto Gusanos se saco.)
+  const carpetaJuego = req.method === 'GET' && /^\/puente\/(worgs|shoppa)\//.exec(p);
   if (carpetaJuego) {
     let rel = p.slice(('/puente/' + carpetaJuego[1] + '/').length);
     try { rel = decodeURIComponent(rel); } catch { return send(res, 400, 'text/plain; charset=utf-8', 'Ruta inválida'); }
     if (rel === '') rel = 'index.html';
-    const raiz = path.join(STATIC, carpetaJuego[1]);
+    const raiz = path.join(STATIC, 'worgs');
     const file = path.join(raiz, rel);
     const dentro = file.startsWith(raiz + path.sep);
     if (!dentro || !/^(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+$/.test(rel) || rel.split('/').some(x => x === '.' || x === '..')) {
@@ -1439,6 +1440,7 @@ const JUEGOS_ENLACE = {
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
   globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
   pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
+  worgs: { nombre: 'WORGS', desc: 'Serpientes, sogas y explosiones: modo Shoppa o normal, con gente del chat o contra la máquina.' },
 };
 function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;
@@ -1454,11 +1456,12 @@ function shareTags(html, url) {
   const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x)) : [];
   if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
-  const juego = q && JUEGOS_ENLACE[q[1] || 'juegos'];
-  if (juego && fs.existsSync(path.join(STATIC, 'tapas', (q[1] || 'juegos') + '.jpg'))) {
+  const qj = q && (q[1] === 'shoppa' ? 'worgs' : q[1]);
+  const juego = q && JUEGOS_ENLACE[qj || 'juegos'];
+  if (juego && fs.existsSync(path.join(STATIC, 'tapas', (qj || 'juegos') + '.jpg'))) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;
-    image = `/puente/tapas/${q[1] || 'juegos'}.jpg`; grande = true;
-    enlace = q[1] ? `/app?juegos=${q[1]}` : '/app?juegos';
+    image = `/puente/tapas/${qj || 'juegos'}.jpg`; grande = true;
+    enlace = qj ? `/app?juegos=${qj}` : '/app?juegos';
     // con algo mas (?juegos=pool&v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
     const extra = new URL(String(url), 'http://x').searchParams;
     const resto = [...extra].filter(([k, x]) => k !== 'juegos' && /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x));

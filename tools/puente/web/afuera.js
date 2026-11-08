@@ -10,7 +10,7 @@
 (function () {
   'use strict';
   var q = new URLSearchParams(location.search);
-  var juegos = ['juegos', 'truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa'].some(function (k) { return q.has(k); });
+  var juegos = ['juegos', 'truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa', 'worgs'].some(function (k) { return q.has(k); });
   if ((!q.has('mercado') && !juegos) || window.name === 'cv-ventana' || window.top !== window) return;
   try { if (localStorage.getItem('haven_token')) return; } catch (e) { return; }
   // la sesion de la web o el foro (la cookie del dominio): sincronico, para llegar antes que Haven

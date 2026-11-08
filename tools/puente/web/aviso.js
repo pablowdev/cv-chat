@@ -3566,9 +3566,9 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['WORGS', '#e0763a'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa'];
-  const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['WORGS: Shoppa', '#e0763a'], worgsnormal: ['WORGS: Normal', '#2fb3c9'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa', 'worgsnormal'];
+  const MOTIVO_JG = { puntos: 'Llegó a los puntos', ultimo: 'Quedó un solo equipo',abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
   const nombreJg = (id) => (JG[id] || [id])[0];
@@ -10537,7 +10537,7 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'shJuego' ? 'shoppa' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'shJuego' ? usoWorgs() : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
   window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
@@ -10802,8 +10802,12 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
-    { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
+    { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/worgs/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
   ];
+  // WORGS se llamaba Shoppa: por dentro sigue siendo "shoppa" (las salas, el tiempo de uso), pero el enlace dice worgs
+  const aliasJuego = (j) => (j === 'worgs' ? 'shoppa' : j);
+  // las salas de WORGS dicen el modo: "WORGS: Shoppa" o "WORGS: Normal"
+  const nombreMesa = (j, m) => (j.id === 'shoppa' && m ? 'WORGS: ' + (m.modo === 'normal' ? 'Normal' : 'Shoppa') : j.nombre);
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
   async function biblioteca() {
@@ -10858,7 +10862,7 @@ document.addEventListener('pointerdown', (ev) => {
       const who = m.rival || m.invitado || { nombre: '?' };
       const r = el('button', 'jg-fila'); r.type = 'button';
       const tx = el('div', 'jg-ftexto');
-      tx.append(el('div', 'jg-fnombre', m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`), el('div', 'jg-fmeta', j.nombre));
+      tx.append(el('div', 'jg-fnombre', m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`), el('div', 'jg-fmeta', nombreMesa(j, m)));
       r.append(avatar(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who), tx);
       if (m.teToca) r.appendChild(el('span', 'jg-chip amarillo', 'Te toca'));
       r.addEventListener('click', () => go(j.mesa || 'mesa', m.id));
@@ -10879,21 +10883,24 @@ document.addEventListener('pointerdown', (ev) => {
       const quien = a.creador || { nombre: '?' };
       const r = el('button', 'jg-fila'); r.type = 'button';
       const tx = el('div', 'jg-ftexto');
-      tx.append(el('div', 'jg-fnombre', a.paraVos ? `${quien.nombre} te desafía` : quien.nombre), el('div', 'jg-fmeta', j.nombre));
+      tx.append(el('div', 'jg-fnombre', a.paraVos ? `${quien.nombre} te desafía` : quien.nombre), el('div', 'jg-fmeta', nombreMesa(j, a)));
       r.append(avatar(quien), tx, el('span', 'jg-chip ' + (a.paraVos ? 'amarillo' : 'azul'), 'Jugar'));
       r.addEventListener('click', () => { const f = unirse[j.id]; if (f) f(a.id); else go('inicio', j.id); });
       l.appendChild(r);
     }
     if (lista.length > 8) box.appendChild(el('div', 'jg-fmeta jg-mesas-mas', `y ${lista.length - 8} más: entrá a cada juego para verlas`));
   }
-  // ── Shoppa (en prueba) ──
-  // En un iframe del mismo origen (web/shoppa/juego.html): su CSS y su JS no se mezclan con el chat. Las salas y
+  // ── WORGS (en prueba; antes se llamaba Shoppa) ──
+  // En un iframe del mismo origen (web/worgs/juego.html): su CSS y su JS no se mezclan con el chat. Las salas y
   // los turnos los lleva shoppa.js. Los eventos de adentro no llegan al chat, así que se le avisa al tiempo de uso
-  // (uso.js) para que cuente mientras se juega. (Proyecto Gusanos se sacó: Shoppa es el que lo reemplaza.)
+  // (uso.js) para que cuente mientras se juega. (Proyecto Gusanos se sacó: WORGS es el que lo reemplaza.)
+  let worgsIfr = null;
+  const usoWorgs = () => { try { const w = worgsIfr && worgsIfr.isConnected && worgsIfr.contentWindow; return w && w.worgsModo && w.worgsModo() === 'normal' ? 'worgsnormal' : 'shoppa'; } catch { return 'shoppa'; } };
   function shJuego(mesa) {
-    page.appendChild(head('WORGS', botonEnlace('/app?juegos=shoppa', 'WORGS · __PUENTE_APP__')));
+    page.appendChild(head('WORGS', botonEnlace('/app?juegos=worgs', 'WORGS · __PUENTE_APP__')));
     const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
-    ifr.src = '/puente/shoppa/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
+    ifr.src = '/puente/worgs/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
+    worgsIfr = ifr;
     ifr.title = 'WORGS'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
     let ultimo = 0;
     const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
@@ -13427,6 +13434,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },
       globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.', v: '' },
       pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '?v=3' },
+      worgs: { nombre: 'WORGS', desc: 'Serpientes, sogas y explosiones: modo Shoppa o normal, con gente del chat o contra la máquina.', v: '?v=1' },
     };
     const escH = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const tarjetas = () => {
@@ -13434,7 +13442,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         if (l.closest('.link-preview')) continue;
         let u; try { u = new URL(l.href); } catch { continue; }
         if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
-        const id = u.searchParams.get('juegos') || 'juegos', t = TARJETA[id];
+        const id0 = u.searchParams.get('juegos') || 'juegos', id = id0 === 'shoppa' ? 'worgs' : id0, t = TARJETA[id];
         const box = t && l.closest('.message-content, .thread-msg-content');
         if (!box || [...box.querySelectorAll('.link-preview')].some(x => x.dataset.url === l.href)) continue;
         try {
@@ -13466,7 +13474,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       const ok = u.origin === location.origin && /^\/app/.test(u.pathname);
       // La biblioteca (/app?juegos) o la sala de un juego (/app?juegos=truco)
       if (ok && u.searchParams.has('juegos')) {
-        const j = u.searchParams.get('juegos'), mesa = u.searchParams.get('mesa');
+        const j = aliasJuego(u.searchParams.get('juegos')), mesa = u.searchParams.get('mesa');
         if (j && !JUEGOS.some(x => x.id === j)) return;
         e.preventDefault(); e.stopPropagation(); stack = [];
         if (j === 'shoppa' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { go('shJuego', mesa); return; }
@@ -13485,7 +13493,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     }, true);
     const sp = new URLSearchParams(location.search).get('truco');
     if (sp && /^[a-f0-9]{6,20}$/.test(sp)) setTimeout(() => { stack = []; go('mesa', sp); }, 1500);
-    const jq = new URLSearchParams(location.search), jp = jq.get('juegos'), jm = jq.get('mesa');
+    const jq = new URLSearchParams(location.search), jp = aliasJuego(jq.get('juegos')), jm = jq.get('mesa');
     if (jq.has('juegos') && (!jp || JUEGOS.some(x => x.id === jp))) {
       if (jp === 'shoppa' && jm && /^[a-f0-9]{6,20}$/.test(jm)) setTimeout(() => { stack = []; go('shJuego', jm); }, 1500);
       else setTimeout(() => { stack = []; go('inicio', jp || undefined); }, 1500);
@@ -16893,7 +16901,7 @@ var puenteSinUbicacion = (function () {
   const TICK = 5000, QUIETO = 120000, PAUSA = 30 * 60000;
   let ultimoInput = Date.now(), suma = {}, visitas = 0;
   const marcar = () => { ultimoInput = Date.now(); };
-  // Los juegos en iframe (Shoppa) avisan por aca: esos eventos no salen del iframe
+  // Los juegos en iframe (WORGS) avisan por aca: esos eventos no salen del iframe
   window.__puenteUsoActivo = marcar;
   for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll']) window.addEventListener(ev, marcar, { passive: true, capture: true });
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };

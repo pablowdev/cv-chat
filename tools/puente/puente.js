@@ -160,7 +160,7 @@ function start(deps) {
   require('./ajedrez.js').setup({ db, io, log, warn });
   require('./misionrisk.js').setup({ db, io, log, warn });
   require('./pool.js').setup({ db, io, log, warn });
-  require('./shoppa.js').setup({ db, io, log, warn }); // (Shoppa, el juego nuevo: salas y turnos)
+  require('./shoppa.js').setup({ db, io, log, warn }); // (WORGS, antes Shoppa: salas y turnos)
   require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });

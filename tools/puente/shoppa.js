@@ -1,5 +1,5 @@
-// Shoppa online (parte del puente), para la seccion Juegos de la app.
-// El juego en si corre en web/shoppa/ (dentro de un iframe del mismo origen). Aca viven las salas:
+// WORGS online (antes se llamaba Shoppa; el modulo y los eventos shoppa:* conservan el nombre de antes), para la
+// seccion Juegos de la app. El juego en si corre en web/worgs/ (dentro de un iframe del mismo origen). Aca viven las salas:
 // quien esta, los listos, el mapa, el turno y el chat. La fisica la simula el jugador que tiene el
 // turno y les manda snapshots a los demas; el servidor solo valida el orden y retransmite.
 //
@@ -45,6 +45,7 @@ function setup(ctx) {
   ({ db, io, log, warn } = ctx);
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_shoppa_mesas (id TEXT PRIMARY KEY, estado TEXT NOT NULL, actualizado INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS puente_worgs_partidas (id TEXT PRIMARY KEY, modo TEXT NOT NULL, jugadores TEXT NOT NULL, ganador INTEGER, motivo TEXT, inicio INTEGER, fin INTEGER NOT NULL);
   `);
   for (const r of db.prepare('SELECT id, estado FROM puente_shoppa_mesas').all()) {
     try {
@@ -465,6 +466,13 @@ function finish(g, ganador, motivo, extra) {
   if (extra && extra.abandono) g.abandono = extra.abandono;
   clearTimeout(timers.get(g.id)); timers.delete(g.id);
   save(g);
+  // la partida, para las estadisticas de los juegos (juegos-estadisticas.js): WORGS: Shoppa o WORGS: Normal
+  try {
+    if (g.inicio) {
+      db.prepare('INSERT OR REPLACE INTO puente_worgs_partidas (id, modo, jugadores, ganador, motivo, inicio, fin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(g.id, g.modo === 'normal' ? 'normal' : 'shopper', JSON.stringify(g.jugadores), g.ganador != null && g.jugadores[g.ganador] ? g.jugadores[g.ganador] : null, g.motivo, g.inicio, g.fin);
+    }
+  } catch (err) { warn('shoppa: guardar la partida:', err.message); }
   const nombreGanador = g.ganador != null && g.jugadores[g.ganador] ? nameOf(g.jugadores[g.ganador]).nombre : null;
   for (const [, s] of io.sockets.sockets) {
     if (!s.user || !s.user.id) continue;

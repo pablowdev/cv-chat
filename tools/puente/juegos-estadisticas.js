@@ -15,6 +15,8 @@ const JUEGOS = [
   { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
   { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
   { id: 'pool', nombre: 'Pool' }, { id: 'gusanos', nombre: 'Gusanos' },
+  // WORGS: los dos modos como dos juegos (el tiempo de uso de antes, cuando solo habia Shoppa, queda en Shoppa)
+  { id: 'shoppa', nombre: 'WORGS: Shoppa' }, { id: 'worgsnormal', nombre: 'WORGS: Normal' },
 ];
 const COMPU = -1;
 const TOPE_PARTIDA = 2 * 3600 * 1000; // una partida que quedo abierta dias (el truco por turnos) no cuenta como horas jugando
@@ -46,6 +48,12 @@ function partidas() {
   for (const r of filas('SELECT id, j1, j2, ganador, motivo, tiros, inicio, fin, compu FROM puente_pool_partidas')) {
     out.push({ juego: 'pool', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
       detalle: ['8 bolas'], jugadas: r.tiros });
+  }
+  // WORGS: de 2 a 5 personas; el modo decide en cual de los dos juegos cuenta
+  for (const r of filas('SELECT id, modo, jugadores, ganador, motivo, inicio, fin FROM puente_worgs_partidas')) {
+    let humanos = []; try { humanos = (JSON.parse(r.jugadores) || []).filter(x => x > 0); } catch { /* sin jugadores */ }
+    out.push({ juego: r.modo === 'normal' ? 'worgsnormal' : 'shoppa', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: false, humanos, ganador: r.ganador || null, motivo: r.motivo || '',
+      detalle: [humanos.length + ' jugadores'] });
   }
   // GlobalSiege: los asientos (0 = la compu) y quien gano cada uno (puente_mr_resultados)
   const res = new Map();
