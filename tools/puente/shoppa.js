@@ -5,7 +5,7 @@
 //
 // Por el socket de Haven (con respuesta):
 //   shoppa:inicio                     -> { abiertas, mias }
-//   shoppa:crear    { mapa }          -> { id }
+//   shoppa:crear    { modo }          -> { id }   (modo: shopper | normal; el mapa sale del modo)
 //   shoppa:unirse   { id }            -> { id }
 //   shoppa:ver      { id }            -> { partida }  (con snapshot si esta en juego)
 //   shoppa:listo    { id, listo }     -> { ok }
@@ -26,7 +26,10 @@ const CP = require('./chat-partida.js');
 
 const MIN = 2;
 const MAX = 5;
-const MAPAS = new Set(['fabrica']);
+const MAPAS = new Set(['fabrica', 'isla']);
+// los modos de juego y su mapa: Shopper en la fabrica; el normal en una isla al azar (sale de la semilla)
+const MODOS = { shopper: 'fabrica', normal: 'isla' };
+const esModo = (m) => typeof m === 'string' && Object.prototype.hasOwnProperty.call(MODOS, m);
 const MAX_SNAPSHOT = 262144;       // 256 KB: mas que eso es un estado roto
 const ESPERA_TURNO = 90e3;         // anti-trabado: 30 s de turno + 10 de retirada y margen
 const GRACIA_SALA = 24 * 3600e3;   // una sala esperando sin empezar se borra al dia
@@ -101,7 +104,8 @@ function normalizar(g) {
   while (g.revancha.length < g.jugadores.length) g.revancha.push(false);
   g.chat = Array.isArray(g.chat) ? g.chat : [];
   g.chatT = g.chatT && typeof g.chatT === 'object' ? g.chatT : {};
-  if (!g.mapa || !MAPAS.has(g.mapa)) g.mapa = 'fabrica';
+  if (!esModo(g.modo)) g.modo = 'shopper';
+  if (!g.mapa || !MAPAS.has(g.mapa)) g.mapa = MODOS[g.modo];
   if (g.ronda == null) g.ronda = 1;
   if (g.viento == null) g.viento = 0;
   if (g.ultimoMovimiento == null) g.ultimoMovimiento = Date.now();
@@ -153,7 +157,7 @@ function view(g, me, conSnapshot) {
   const nombre = (k) => ({ quien: k === me ? 'Vos' : nameOf(k).nombre });
   const rival = jugadores.find((_, k) => k !== i) || null;
   const out = {
-    id: g.id, estado: g.estado, mapa: g.mapa, creado: g.creado || null, inicio: g.inicio || null,
+    id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, creado: g.creado || null, inicio: g.inicio || null,
     fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
     abandono: g.abandono || null, ronda: g.ronda || 1, turno: g.turno != null ? g.turno : null,
     viento: g.viento || 0, semilla: g.semilla || 0, jugadores, rival,
@@ -166,7 +170,7 @@ function view(g, me, conSnapshot) {
   };
   if (g.estado === 'jugando') out.teToca = soy && g.turno === i;
   if (g.estado === 'terminada') out.ganaste = soy ? g.ganador === i : null;
-  if (conSnapshot && g.estado === 'jugando' && soy) out.snapshot = g.ultimo || null;
+  if (conSnapshot && g.estado === 'jugando' && soy) { out.snapshot = g.ultimo || null; out.cr = g.cr || []; }
   return out;
 }
 
@@ -196,7 +200,7 @@ function lobby(me) {
     .sort((a, b) => (b.creado || 0) - (a.creado || 0)).slice(0, 30)
     .map(g => {
       const activos = jugadoresActivos(g);
-      return { id: g.id, mapa: g.mapa, jugadores: activos.length, creador: nameOf(activos[0] ? activos[0].id : g.jugadores[0]) };
+      return { id: g.id, mapa: g.mapa, modo: g.modo, jugadores: activos.length, creador: nameOf(activos[0] ? activos[0].id : g.jugadores[0]) };
     });
   const mias = all
     .filter(g => g.jugadores.includes(me))
@@ -206,7 +210,7 @@ function lobby(me) {
       const i = seat(g, me);
       const jugadores = g.jugadores.map(nameOf);
       return {
-        id: g.id, estado: g.estado, mapa: g.mapa, jugadores: jugadoresActivos(g).length,
+        id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, jugadores: jugadoresActivos(g).length,
         teToca: g.estado === 'jugando' && g.turno === i,
         ganaste: g.estado === 'terminada' ? g.ganador === i : null,
         rival: jugadores.find((_, k) => k !== i) || null,
@@ -222,9 +226,10 @@ function create(me, d) {
   if ([...games.values()].filter(g => g.jugadores[0] === me && g.estado === 'esperando').length >= 10) {
     return { error: 'Tenés muchas salas abiertas. Cerrá alguna.' };
   }
-  const mapa = MAPAS.has(String(d.mapa)) ? String(d.mapa) : 'fabrica';
+  const modo = esModo(d.modo) ? d.modo : 'shopper';
+  const mapa = MODOS[modo];
   const g = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo,
     jugadores: [me], listos: [false], fuera: [false], revancha: [false],
     estado: 'esperando', ronda: 1, turno: null, viento: 0, ultimo: null,
     chat: [], chatT: {}, ultimoMovimiento: Date.now(),
@@ -233,7 +238,7 @@ function create(me, d) {
   save(g); changed();
   const nombre = nameOf(me).nombre;
   // (en prueba: sin aviso en #que-paso)
-  log(`shoppa: ${nombre} creó una sala (${mapa})`);
+  log(`shoppa: ${nombre} creó una sala (${modo})`);
   return { ok: true, id: g.id };
 }
 
@@ -301,9 +306,12 @@ function comenzar(g, revancha) {
   g.semilla = rng(1e9); // (las cajas caen en el mismo orden para todos)
   g.viento = rng(141) - 70;
   g.ultimo = null;
+  g.cr = [];
+  g.turnoDesde = Date.now();
   g.revancha = g.jugadores.map(() => false);
   for (const i of elegidos) g.listos[i] = true;
   save(g);
+  armar(g); // (el anti-trabado, desde el primer turno)
   enviarTurno(g, true);
   push(g, true);
   const nombres = activos.map(x => nameOf(x.id).nombre).join(', ');
@@ -318,21 +326,28 @@ function enviarTurno(g, inicio) {
     const i = seat(g, s.user.id);
     if (!activo(g, i)) continue;
     const d = {
-      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa,
-      miSeat: i, jugadores: jugadoresDe(g, s.user.id), snapshot: g.ultimo || null,
+      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa, modo: g.modo,
+      miSeat: i, jugadores: jugadoresDe(g, s.user.id), snapshot: g.ultimo || null, cr: g.cr || [],
     };
     try { s.emit('shoppa:turno', d); } catch { /* sesion cerrada */ }
   }
 }
 
-function armar(g) {
+function armar(g, corto) {
   clearTimeout(timers.get(g.id));
   if (g.estado !== 'jugando') return;
   const desde = g.ultimoMovimiento || Date.now();
-  const espera = Math.max(5000, ESPERA_TURNO - (Date.now() - desde));
+  const espera = corto ? 10e3 : Math.max(5000, ESPERA_TURNO - (Date.now() - desde));
   timers.set(g.id, setTimeout(() => {
     const x = games.get(g.id);
     if (!x || x.estado !== 'jugando') return;
+    if (Date.now() - (x.ultimoMovimiento || 0) < 20e3 && Date.now() - (x.turnoDesde || 0) < 180e3) { armar(x, true); return; }
+    x.pasesSolos = (x.pasesSolos || 0) + 1;
+    if (x.pasesSolos >= Math.max(4, 2 * jugadoresActivos(x).length)) {
+      warn(`shoppa: la sala ${x.id} no juega nadie; se cierra`);
+      finish(x, null, 'abandono', { abandono: 'Todos' });
+      return;
+    }
     warn(`shoppa: se trabó el turno de la sala ${x.id}; pasa al siguiente`);
     pasarTurno(x);
   }, espera));
@@ -371,6 +386,7 @@ function pasarTurno(g) {
     return;
   }
   g.turno = next;
+  g.turnoDesde = Date.now();
   g.ronda = (g.ronda || 1) + 1;
   g.viento = rng(141) - 70;
   g.ultimoMovimiento = Date.now();
@@ -410,7 +426,17 @@ function normalizeSnapshot(g, me, d) {
   if (raw.length > MAX_SNAPSHOT) return false;
   if (s.mapa && s.mapa !== g.mapa) return false;
   g.ultimo = s;
+  g.pasesSolos = 0;
+  guardarCrateres(g, s);
   return true;
+}
+
+// los huecos: la foto completa trae todos; las otras, los del turno desde cr0
+function guardarCrateres(g, s) {
+  const ok = (l) => Array.isArray(l) && l.every(c => Array.isArray(c) && c.length === 3 && c.every(Number.isFinite));
+  const base = Array.isArray(g.cr) ? g.cr : [];
+  if (ok(s.cr)) { if (s.cr.length >= base.length) g.cr = s.cr; return; }
+  if (ok(s.crU) && Number.isInteger(s.cr0) && s.cr0 >= 0 && s.cr0 <= base.length && s.cr0 + s.crU.length >= base.length) g.cr = base.slice(0, s.cr0).concat(s.crU);
 }
 
 function finTurno(me, d) {
@@ -419,9 +445,9 @@ function finTurno(me, d) {
   const i = seat(g, me);
   if (!activo(g, i) || g.turno !== i) return { error: 'No es tu turno.' };
   // el snapshot final es el que manda: sin el no se puede saber quien quedo vivo
-  if (d.snapshot && typeof d.snapshot === 'object') {
+  if (d.snapshot && typeof d.snapshot === 'object' && (!d.snapshot.mapa || d.snapshot.mapa === g.mapa)) {
     try {
-      if (JSON.stringify(d.snapshot).length <= MAX_SNAPSHOT) g.ultimo = d.snapshot;
+      if (JSON.stringify(d.snapshot).length <= MAX_SNAPSHOT) { g.ultimo = d.snapshot; guardarCrateres(g, d.snapshot); }
     } catch { /* snapshot roto: se usa el anterior */ }
   }
   g.ultimoMovimiento = Date.now();
@@ -524,7 +550,7 @@ function revancha(me, d) {
 
   // Sala nueva (los que se quedaron, con los asientos acomodados) y arranca enseguida.
   const n = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa, modo: g.modo,
     jugadores: activos.map(x => g.jugadores[x.i]),
     listos: [], fuera: [], revancha: [], estado: 'esperando', ronda: g.ronda || 1,
     turno: null, viento: 0, ultimo: null, chat: [], chatT: {}, ultimoMovimiento: Date.now(),

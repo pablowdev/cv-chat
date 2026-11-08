@@ -127,12 +127,16 @@
       if (e.aba) s.mira = Math.min(Math.PI / 2, s.mira + C.MIRA);
     }
     // la soga: tirarla (o soltarla si ya esta colgada; al soltarla se acuerda del angulo al que colgaba)
-    if (e.soga) {
+    if (e.paracaidas && s.estado === 'aire' && !s.soga) s.paracaidas = !s.paracaidas;
+    if (e.soga && !s.soplete && !s.puno) {
       if (s.estado === 'soga') { s.estado = 'aire'; s.soga = null; }
       else if (!s.gancho && !s.sinControl) tirarGancho(s);
     }
 
-    if (s.estado === 'suelo') pasoSuelo(J, s, e);
+    // el soplete y el puñetazo manejan a la serpiente mientras duran
+    if (s.soplete) pasoSoplete(J, s, e);
+    else if (s.puno) pasoPuno(J, s);
+    else if (s.estado === 'suelo') pasoSuelo(J, s, e);
     else if (s.estado === 'desliza') pasoDesliza(J, s);
     else if (s.estado === 'aire') pasoAire(J, s);
     else if (s.estado === 'soga') pasoSoga(J, s, e);
@@ -140,7 +144,7 @@
     if (s.gancho) volarGancho(J, s);
 
     // el agua
-    if (s.y - 4 > T.agua) { s.estado = 'muerta'; s.vida = 0; s.soga = null; s.gancho = null; }
+    if (s.y - 4 > T.agua) { s.estado = 'muerta'; s.vida = 0; s.soga = null; s.gancho = null; s.soplete = null; s.puno = null; }
     // la cola, para el dibujo
     const u = s.cola[0];
     if (!u || Math.abs(u[0] - s.x) + Math.abs(u[1] - s.y) >= 1.2) { s.cola.unshift([s.x, s.y]); if (s.cola.length > 40) s.cola.pop(); }
@@ -240,15 +244,15 @@
     return null;
   }
 
-  function aterrizar(s) {
+  function aterrizar(s, J) {
     const v = s.vy;
     if (s.sinCaida) s.sinCaida = false;
     else if (v > C.CAIDA_DESDE) {
       const dano = Math.floor(((v - C.CAIDA_DESDE + 1 / 65536) * C.CAIDA_COEF + 18) / 18);
       s.caida = dano; s.vida = Math.max(0, s.vida - dano); s.golpe = (s.golpe || 0) + dano;
-      if (s.J) s.J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n: dano, caida: true });
+      if (J) J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n: dano, caida: true });
     }
-    s.vy = 0; s.atras = false; s.giro = 0;
+    s.vy = 0; s.atras = false; s.giro = 0; s.paracaidas = false;
     // los saltos aterrizan quietos; lo que venia volando rapido (una explosion) se desliza
     s.estado = Math.abs(s.vx) > 2.5 ? 'desliza' : 'suelo';
     if (s.estado === 'suelo') s.vx = 0;
@@ -261,6 +265,11 @@
     const T = J.T;
     s.vy = Math.min(C.VMAX, s.vy + C.GRAV);
     s.vx = Math.max(-C.VMAX, Math.min(C.VMAX, s.vx));
+    // con el paracaidas abierto: cae despacio y la lleva el viento
+    if (s.paracaidas) {
+      const P = ARMAS.paracaidas;
+      s.vy = Math.min(s.vy, P.caida); s.vx = s.vx * P.roce + (J.viento || 0) * P.viento;
+    }
     // en el aire no se da vuelta (en el juego clasico sigue mirando para donde miraba, aunque vuele para el otro lado)
     s.aireT = (s.aireT || 0) + 1;
     // despues de soltar la soga va enrollada y rueda con lo que avanza
@@ -269,7 +278,7 @@
     for (let i = 0; i < n && s.estado === 'aire'; i++) {
       if (s.vx) moverX(T, s, s.vx / n, C.REBOTE);
       const r = moverY(T, s, s.vy / n);
-      if (r === 'piso') { aterrizar(s); break; }
+      if (r === 'piso') { aterrizar(s, J); break; }
       if (r === 'techo') {
         s.vy = 0;
         // golpearse la cabeza despues de soltar la soga: pierde el control (como en el juego clasico por defecto)
@@ -294,7 +303,7 @@
   }
   function tirarGancho(s) {
     const [dx, dy] = direccionSoga(s);
-    s.gancho = { x: s.x, y: s.y - 2, dx, dy, d: 0 };
+    s.gancho = { x: s.x, y: s.y - 2, dx, dy, d: 0 }; s.sinCaida = false;
   }
   // el gancho sale SOGA_VEL px por paso desde la serpiente y la acompaña si se mueve (medido: aunque la serpiente
   // caiga, la soga sigue saliendo con el mismo angulo desde ella)
@@ -309,7 +318,7 @@
         s.gancho = null;
         if (L < 20 || !T.libre(ox, oy, hx, hy, 2)) return;
         s.soga = { piv: [{ x: hx, y: hy, s: 0 }], L: Math.max(C.SOGA_MIN, Math.min(C.SOGA_LARGO, L)), fijo: 0 };
-        s.estado = 'soga'; s.salto = null;
+        s.estado = 'soga'; s.salto = null; s.paracaidas = false;
         s.sogaAng = Math.atan2(s.x - hx, s.y - hy); s.rueda = null; s.giro = 0; s.atras = false;
         return;
       }
@@ -470,84 +479,351 @@
     }
   }
 
-  // ── Las armas y las cajas ──
-  // ARMAS: lo que sale de las cajas. v: velocidad con la carga llena; viento: cuanto la lleva el viento;
-  // mecha: segundos (rebota hasta explotar); si no tiene mecha, explota al tocar algo. r: radio; dano: maximo
+  // ── Las armas, las cajas y lo que anda suelto por el mapa ──
+  // ARMAS: v: velocidad con la carga llena; viento: cuanto la lleva el viento (por punto de viento y por paso);
+  // choque: explota al tocar algo; mecha: explota a los segundos (rebota hasta entonces; seg: mecha fija, si no
+  // la que se elige con 1 a 5); r: radio de la explosion; dano: daño en el centro; empuje: lo que tira en el centro;
+  // hijos: lo que larga al explotar (n pedazos con velocidad hasta vh). reboteX/Y: lo que conserva al rebotar
+  // (reboteMax: con el rebote al maximo)
+  // Los numeros: el daño maximo de cada arma es el de su radio de explosion (bazuca y granada 50, cada bombita del
+  // racimo 30, la mandarina y sus gajos 75 como la banana del juego clasico, dinamita 75, mina 50, cada misil del
+  // ataque aereo 30, escopeta 25 por tiro, bate 30), sacados de la tabla de armas del juego clasico y de su esquema
+  // "intermedio". El viento solo lleva a la bazuca (y al fuego). El barril tiene 50 de vida: el primer golpe lo prende
+  // y se quema solo hasta explotar (asi un tiro de escopeta lo hace volar enseguida)
   const ARMAS = {
-    bazooka: { nombre: 'Bazuca', v: 15, viento: 0.0008, r: 50, dano: 50, empuje: 7 },
-    granada: { nombre: 'Granada', v: 12, viento: 0, mecha: true, r: 48, dano: 50, empuje: 7, reboteX: 0.96, reboteY: 0.6 },
+    bazooka: { nombre: 'Bazuca', v: 15, viento: 0.0008, choque: true, r: 50, dano: 50, empuje: 7 },
+    granada: { nombre: 'Granada', v: 12, viento: 0, mecha: true, r: 50, dano: 50, empuje: 7, reboteX: 0.96, reboteY: 0.6, reboteMax: 0.9 },
+    racimo: { nombre: 'Racimo', v: 12, viento: 0, mecha: true, r: 20, dano: 20, empuje: 4, reboteX: 0.96, reboteY: 0.6, reboteMax: 0.9, hijos: { tipo: 'racimito', n: 5, vh: 3.5 } },
+    racimito: { nombre: 'Racimito', viento: 0, choque: true, r: 30, dano: 30, empuje: 5, sinDueno: true, gracia: 16 },
+    mandarina: { nombre: 'Mandarina', v: 12, viento: 0, mecha: true, r: 75, dano: 75, empuje: 9, reboteX: 0.96, reboteY: 0.6, reboteMax: 0.95, hijos: { tipo: 'gajo', n: 5, vh: 6 } },
+    gajo: { nombre: 'Gajo', viento: 0, choque: true, r: 75, dano: 75, empuje: 9, sinDueno: true, gracia: 16 },
+    dinamita: { nombre: 'Dinamita', v: 0, viento: 0, mecha: true, seg: 5, r: 75, dano: 75, empuje: 10, reboteX: 0.3, reboteY: 0.2 },
+    mina: { nombre: 'Mina', v: 0, viento: 0, r: 50, dano: 50, empuje: 7, reboteX: 0.5, reboteY: 0.3, arma: 75, cuenta: 150, radio: 28, falla: 1 / 8 },
+    misil: { nombre: 'Misil', viento: 0, choque: true, r: 30, dano: 30, empuje: 5, sinDueno: true },
+    escopeta: { nombre: 'Escopeta', dano: 25, r: 5, empuje: 3.2, tiros: 2, alcance: 900 },
+    bate: { nombre: 'Bate', dano: 30, empuje: 9 },
+    // la granadota (como la granada grande del juego clasico): mecha fija de 3 s, rebota poco, 100 de daño
+    granadota: { nombre: 'Granadota', v: 12, viento: 0, mecha: true, seg: 3, r: 100, dano: 100, empuje: 12, reboteX: 0.5, reboteY: 0.3 },
+    // el paracaidas: abierto, cae a lo sumo 1,3 px por paso y el viento lo corre (valores a ojo)
+    paracaidas: { nombre: 'Paracaídas', caida: 1.3, roce: 0.97, viento: 0.0006 },
+    // el puñetazo (el de fuego del juego clasico): sube derecho unos 60 px golpeando lo que tiene adelante: 30 de daño
+    // y las manda para arriba
+    puno: { nombre: 'Puñetazo', dano: 30, sube: 5, pasos: 12, empuje: [2.5, -7] },
+    // el soplete (medido en un duelo de soplete filmado con la camara quieta): 5 s cavando un tunel del alto de una
+    // serpiente (~20 px), avanzando 0,45 px por paso (21-23 px/s); arriba/abajo cambian el angulo mientras cava
+    // (en el video, de unos 25 grados para arriba a horizontal y bajadas de ~25 grados). Quema a la que toca: 15
+    soplete: { nombre: 'Soplete', dura: 250, vel: 0.45, r: 10, cada: 5, adelante: 6, angMax: Math.PI / 4, dano: 15, empuje: 2.5 },
+    aereo: { nombre: 'Ataque aéreo', n: 5, sep: 22, vx: 5, vy: 2 },
+    barril: { nombre: 'Barril', r: 75, dano: 75, empuje: 9, vida: 50, quema: 0.5, llamas: 20 },
+    llama: { dura: [150, 300], dano: 2, cada: 10, radio: 7 },
+    muerte: { r: 24, dano: 10, empuje: 3 },  // la que explota al quedarse sin vida
+    caja: { r: 40, dano: 30, empuje: 6 },    // una caja que revienta (modo normal)
   };
+  // las cosas que no son proyectiles: se mueven como piedras (rebotan poco y se quedan quietas)
+  const SUELTAS = { lapida: { reboteX: 0.3, reboteY: 0.15 }, mina: ARMAS.mina, barril: { reboteX: 0.3, reboteY: 0.15 } };
+
+  function nueva(J, s, tipo, x, y, vx, vy) {
+    const A = ARMAS[tipo] || {}, g = { tipo, x, y, vx, vy, de: J.serps.indexOf(s) };
+    g.t = A.seg ? A.seg * 50 : (J.mecha || 3) * 50;
+    if (A.reboteMax && J.rebote === 'max') g.max = true;
+    if (tipo === 'mina') { g.arma = A.arma; g.cuenta = null; g.quieta = false; g.falla = Math.random() < A.falla; }
+    return g;
+  }
   // tirar con carga (0 a 1), para donde apunta
   function lanzar(J, s, carga, tipo) {
     const A = ARMAS[tipo || 'granada'], v = A.v * Math.max(0.1, carga), a = s.mira;
-    J.cosas.push({ tipo: tipo || 'granada', x: s.x + s.dir * 6, y: s.y - 4, vx: Math.cos(a) * s.dir * v, vy: Math.sin(a) * v, t: (J.mecha || 3) * 50, de: J.serps.indexOf(s) });
+    J.cosas.push(nueva(J, s, tipo || 'granada', s.x + s.dir * 6, s.y - 4, Math.cos(a) * s.dir * v, Math.sin(a) * v));
   }
   // soltarla desde la soga (o en el aire): sale con la velocidad de la serpiente
   function soltar(J, s, tipo) {
-    J.cosas.push({ tipo, x: s.x, y: s.y + 4, vx: s.vx, vy: s.vy, t: (J.mecha || 3) * 50, de: J.serps.indexOf(s) });
+    J.cosas.push(nueva(J, s, tipo, s.x, s.y + 4, s.vx, s.vy));
+  }
+  // dejarla en el piso, adelante (la dinamita y la mina)
+  function poner(J, s, tipo) {
+    let px = s.x + s.dir * 7, py = s.y + 2;
+    if (J.T.solido(px, py)) { px = s.x; py = s.y; }
+    J.cosas.push(nueva(J, s, tipo, px, py, s.dir * 0.5, -1));
   }
   // una caja que cae del cielo en el punto x (y se apoya en lo primero que encuentra)
   function caja(J, x, y, n) { J.cosas.push({ tipo: 'caja', x, y, vx: 0, vy: 0, n }); }
 
+  function danar(J, s, n) {
+    s.vida = Math.max(0, s.vida - n); s.golpe = (s.golpe || 0) + n;
+    J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n });
+  }
+  // un golpe la saca volando (de la soga tambien) y pierde el control hasta tocar el piso, como en el juego clasico
+  function golpear(s, vx, vy) {
+    s.soga = null; s.gancho = null; s.estado = 'aire'; s.sinCaida = true; s.salto = null; s.sinControl = true;
+    s.soplete = null; s.puno = null; s.paracaidas = false;
+    s.vx += vx; s.vy += vy;
+  }
+  // un hueco en el terreno (las explosiones, con el terreno que se rompe). Redondeado: asi el mismo hueco da lo mismo
+  // en todas las compus (la lista viaja en la foto)
+  function crater(J, cx, cy, r) {
+    cx = Math.round(cx); cy = Math.round(cy); r = Math.round(r);
+    if (r < 1) return;
+    J.T.borrar(cx, cy, r);
+    J.crateres.push([cx, cy, r]); J.borrados.push([cx, cy, r]);
+  }
+
   function pasoCosas(J) {
     const T = J.T;
     for (const g of J.cosas) {
+      if (g.fin) continue;
       if (g.tipo === 'caja') {
-        // cae con paracaidas (lento) hasta apoyarse
-        if (g.quieta) continue;
+        // cae con paracaidas (lento) hasta apoyarse (si se rompe el piso, vuelve a caer)
+        if (g.quieta) {
+          if (g.y > T.agua) { g.fin = true; continue; }
+          if (!(J.rompe || C.ROMPE) || T.solido(g.x, g.y + 8) || T.solido(g.x - 6, g.y + 8) || T.solido(g.x + 6, g.y + 8)) continue;
+          g.quieta = false;
+        }
         g.vy = Math.min(2, g.vy + C.GRAV);
         for (let k = 0; k < Math.ceil(g.vy); k++) { if (T.solido(g.x, g.y + 8) || T.solido(g.x - 6, g.y + 8) || T.solido(g.x + 6, g.y + 8)) { g.quieta = true; g.vy = 0; break; } g.y += g.vy / Math.ceil(g.vy); }
         if (g.y > T.agua) g.fin = true;
         continue;
       }
+      if (g.tipo === 'llama') { pasoLlama(J, g); continue; }
+      if (SUELTAS[g.tipo]) {
+        rodar(J, g, SUELTAS[g.tipo]);
+        if (g.tipo === 'mina') pasoMina(J, g);
+        else if (g.tipo === 'barril' && g.prendido && !g.fin) romperBarril(J, g, ARMAS.barril.quema);
+        continue;
+      }
       const A = ARMAS[g.tipo];
+      if (!A) { g.fin = true; continue; }
       g.vy = Math.min(C.VMAX, g.vy + C.GRAV);
-      g.vx += (J.viento || 0) * A.viento;
+      g.vx += (J.viento || 0) * (A.viento || 0);
       const n = Math.max(1, Math.ceil(Math.max(Math.abs(g.vx), Math.abs(g.vy))));
+      const rx = A.reboteX, ry = g.max ? Math.max(A.reboteY, A.reboteMax) : A.reboteY, rxx = g.max ? Math.max(rx, A.reboteMax) : rx;
       for (let i = 0; i < n && !g.fin; i++) {
         const mx = g.vx / n, my = g.vy / n;
-        if (!A.mecha) {
-          // explota al tocar el terreno o una serpiente (que no sea la que la tiro, al salir)
+        if (A.choque) {
+          // explota al tocar el terreno, una serpiente (que no sea la que la tiro, al salir) o un barril
           g.x += mx; g.y += my; g.vida = (g.vida || 0) + 1;
-          const toca = J.serps.some((o, k) => o.estado !== 'muerta' && (k !== g.de || g.vida > 12) && Math.abs(o.x - g.x) < 6 && Math.abs(o.y - g.y) < 10);
-          if (T.solido(g.x, g.y) || toca) { g.fin = true; explotar(J, g.x, g.y, A); }
+          const toca = J.serps.some((o, k) => o.estado !== 'muerta' && (A.sinDueno ? g.vida > (A.gracia || 6) : (k !== g.de || g.vida > 12)) && Math.abs(o.x - g.x) < 6 && Math.abs(o.y - g.y) < 10)
+            || J.cosas.some(b => b.tipo === 'barril' && !b.fin && Math.abs(b.x - g.x) < 6 && g.y > b.y - 13 && g.y < b.y + 1);
+          if (T.solido(g.x, g.y) || toca) estallar(J, g, A);
           continue;
         }
-        if (T.solido(g.x + mx, g.y)) g.vx = -g.vx * A.reboteX; else g.x += mx;
-        if (T.solido(g.x, g.y + my)) { g.vy = -g.vy * A.reboteY; g.vx *= A.reboteX; } else g.y += my;
+        if (T.solido(g.x + mx, g.y)) g.vx = -g.vx * rxx; else g.x += mx;
+        if (T.solido(g.x, g.y + my)) { g.vy = -g.vy * ry; g.vx *= rxx; } else g.y += my;
       }
-      if (A.mecha && --g.t <= 0) { g.fin = true; if (g.y <= T.agua) explotar(J, g.x, g.y, A); }
-      if (g.y > T.agua + 20 || g.x < -200 || g.x > T.w + 200) g.fin = true;
+      if (A.mecha && !g.fin && --g.t <= 0) { if (g.y <= T.agua) estallar(J, g, A); else g.fin = true; }
+      const lejos = g.tipo === 'misil' ? 900 : 200;
+      if (g.y > T.agua + 20 || g.x < -lejos || g.x > T.w + lejos) g.fin = true;
     }
     J.cosas = J.cosas.filter(g => !g.fin);
+    // lo que revento por otra explosion (barriles, cajas), un paso despues (asi se ve la cadena)
+    if (J.pend && J.pend.length) {
+      const p = J.pend; J.pend = [];
+      for (const [x, y, tipo] of p) { explotar(J, x, y, ARMAS[tipo]); if (tipo === 'barril') llamas(J, x, y - 6, ARMAS.barril.llamas); }
+    }
   }
+
+  function estallar(J, g, A) {
+    g.fin = true;
+    explotar(J, g.x, g.y, A);
+    if (A.hijos) {
+      const H = A.hijos;
+      for (let k = 0; k < H.n; k++) {
+        // abiertos hacia arriba, como un abanico (al azar, pero el azar es del que simula: viaja en la foto)
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6, v = H.vh * (0.55 + Math.random() * 0.45);
+        J.cosas.push({ tipo: H.tipo, x: g.x, y: g.y - 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, de: g.de, t: 999 });
+      }
+    }
+  }
+
+  // ── Lo que anda suelto: lapidas, minas y barriles caen, rebotan poco y se quedan quietos ──
+  function rodar(J, g, P) {
+    const T = J.T;
+    if (g.quieta) {
+      if (g.y > T.agua) { g.fin = true; return; }
+      if (T.solido(g.x, g.y + 1) || T.solido(g.x - 2, g.y + 1) || T.solido(g.x + 2, g.y + 1)) return;
+      g.quieta = false;
+    }
+    g.vy = Math.min(C.VMAX, g.vy + C.GRAV);
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(g.vx), Math.abs(g.vy))));
+    for (let i = 0; i < n; i++) {
+      const mx = g.vx / n, my = g.vy / n;
+      if (T.solido(g.x + mx, g.y)) g.vx = -g.vx * P.reboteX; else g.x += mx;
+      if (T.solido(g.x, g.y + my)) { g.vy = -g.vy * P.reboteY; g.vx *= P.reboteX; } else g.y += my;
+    }
+    if (Math.abs(g.vx) < 0.08 && Math.abs(g.vy) < 0.6 && T.solido(g.x, g.y + 1)) { g.vx = 0; g.vy = 0; g.quieta = true; }
+    if (g.y > T.agua + 20 || g.x < -200 || g.x > T.w + 200) g.fin = true;
+  }
+  // la mina: se arma al rato de caer; despues, si se le acerca una serpiente, cuenta y explota
+  function pasoMina(J, g) {
+    const A = ARMAS.mina;
+    if (g.fin) return;
+    if (g.arma > 0) { if (g.quieta) g.arma--; }
+    else if (g.cuenta == null && J.serps.some(o => o.estado !== 'muerta' && (o.x - g.x) * (o.x - g.x) + (o.y - g.y) * (o.y - g.y) < A.radio * A.radio)) g.cuenta = A.cuenta;
+    if (g.cuenta != null && --g.cuenta <= 0) {
+      g.fin = true;
+      if (g.falla) { J.efectos.push({ x: g.x, y: g.y - 3, r: 6, t: 0, humo: true }); J.eventos.push({ tipo: 'falla', x: g.x, y: g.y }); }
+      else explotar(J, g.x, g.y - 2, A);
+    }
+  }
+  // el fuego (de los barriles): cada llama cae, se queda en el piso, se corre con el viento, quema a la que la toca
+  // y se apaga sola
+  function llamas(J, x, y, n) {
+    const L = ARMAS.llama;
+    for (let k = 0; k < n; k++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = 2 + Math.random() * 4;
+      J.cosas.push({ tipo: 'llama', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: L.dura[0] + Math.floor(Math.random() * (L.dura[1] - L.dura[0])) });
+    }
+  }
+  function pasoLlama(J, g) {
+    const T = J.T, L = ARMAS.llama;
+    if (--g.t <= 0) { g.fin = true; return; }
+    g.vy = Math.min(4, g.vy + C.GRAV * 0.5);
+    g.vx += (J.viento || 0) * 0.0004;
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(g.vx), Math.abs(g.vy))));
+    for (let i = 0; i < n; i++) {
+      const mx = g.vx / n, my = g.vy / n;
+      if (T.solido(g.x + mx, g.y)) g.vx = 0; else g.x += mx;
+      if (T.solido(g.x, g.y + my)) {
+        // en el piso: se desliza para abajo si hay pendiente
+        g.vy = 0; g.vx *= 0.8;
+        if (!T.solido(g.x - 1, g.y + 1)) g.vx -= 0.05; else if (!T.solido(g.x + 1, g.y + 1)) g.vx += 0.05;
+      } else g.y += my;
+    }
+    if (g.y > T.agua) { g.fin = true; return; }
+    // quema (cada tanto, a las que estan cerca)
+    if (g.t % L.cada === 0) for (const s of J.serps) {
+      if (s.estado === 'muerta' || Math.abs(s.x - g.x) > L.radio || Math.abs(s.y - g.y) > 10) continue;
+      danar(J, s, L.dano);
+    }
+    if (g.t % L.cada === 0) for (const b of J.cosas) if (b.tipo === 'barril' && !b.fin && Math.abs(b.x - g.x) < 8 && g.y > b.y - 16 && g.y < b.y + 3) romperBarril(J, b, L.dano);
+  }
+
+  // la escopeta: un tiro derecho, al primero que encuentra (serpiente, barril o terreno)
+  function escopetazo(J, s) {
+    const A = ARMAS.escopeta, T = J.T;
+    const ux = Math.cos(s.mira) * s.dir, uy = Math.sin(s.mira);
+    const x0 = s.x + ux * 7, y0 = s.y - 4 + uy * 7;
+    let px = x0, py = y0, blanco = null, barril = null, pared = false;
+    for (let i = 0; i < A.alcance; i++) {
+      px = x0 + ux * i; py = y0 + uy * i;
+      if (px < -50 || px > T.w + 50 || py < -400 || py > T.agua + 10) break;
+      blanco = J.serps.find(o => o !== s && o.estado !== 'muerta' && Math.abs(o.x - px) < 5 && Math.abs(o.y - py) < 9);
+      if (blanco) break;
+      barril = J.cosas.find(b => b.tipo === 'barril' && !b.fin && Math.abs(b.x - px) < 6 && py > b.y - 13 && py < b.y + 1);
+      if (barril) break;
+      if (T.solido(px, py)) { pared = true; break; }
+    }
+    J.eventos.push({ tipo: 'tiro', x0, y0, x1: px, y1: py });
+    J.efectos.push({ x: px, y: py, r: A.r, t: 0 });
+    if (blanco) { danar(J, blanco, A.dano); golpear(blanco, ux * A.empuje, uy * A.empuje - 1); }
+    else if (barril) romperBarril(J, barril, A.dano);
+    else if (pared && (J.rompe || C.ROMPE)) crater(J, px, py, A.r);
+  }
+  // el bate: a las que estan justo adelante, las manda volando para donde apunta
+  function batazo(J, s) {
+    const A = ARMAS.bate;
+    const ux = Math.cos(s.mira) * s.dir, uy = Math.sin(s.mira);
+    const cx = s.x + s.dir * 12, cy = s.y - 3;
+    J.eventos.push({ tipo: 'bate', x: cx, y: cy, dir: s.dir });
+    for (const o of J.serps) {
+      if (o === s || o.estado === 'muerta') continue;
+      if (Math.abs(o.x - cx) < 14 && Math.abs(o.y - cy) < 15) { danar(J, o, A.dano); golpear(o, ux * A.empuje, uy * A.empuje); }
+    }
+    for (const b of J.cosas) if ((b.tipo === 'mina' || b.tipo === 'barril' || b.tipo === 'lapida') && Math.abs(b.x - cx) < 12 && Math.abs(b.y - 6 - cy) < 14) { b.vx += ux * A.empuje; b.vy += uy * A.empuje; b.quieta = false; }
+  }
+  // el ataque aereo: n misiles que caen desde arriba del punto elegido, en fila, viniendo del lado elegido. Salen
+  // de forma que sin viento caigan sobre el punto (con viento se corren, como en el juego clasico)
+  function ataqueAereo(J, s, x, y, dir) {
+    const A = ARMAS.aereo, y0 = -60, g = C.GRAV / 2;
+    const t = (-A.vy + Math.sqrt(A.vy * A.vy + 4 * g * Math.max(0, y - y0))) / (2 * g);
+    for (let k = 0; k < A.n; k++) {
+      const off = (k - (A.n - 1) / 2) * A.sep;
+      J.cosas.push({ tipo: 'misil', x: x + off - dir * A.vx * t, y: y0, vx: dir * A.vx, vy: A.vy, de: J.serps.indexOf(s), t: 999 });
+    }
+  }
+  // ── El soplete: la serpiente avanza cavando ──
+  function soplete(J, s) {
+    s.soplete = { t: ARMAS.soplete.dura, ang: Math.max(-ARMAS.soplete.angMax, Math.min(ARMAS.soplete.angMax, s.mira)), tocadas: [], aire: 0 };
+    s.vx = 0; s.vy = 0; s.salto = null; s.gancho = null; s.soga = null;
+  }
+  function pasoSoplete(J, s, e) {
+    const T = J.T, S = s.soplete, A = ARMAS.soplete;
+    if (e.arr) S.ang = Math.max(-A.angMax, S.ang - C.MIRA);
+    if (e.aba) S.ang = Math.min(A.angMax, S.ang + C.MIRA);
+    s.mira = S.ang;
+    const ux = Math.cos(S.ang) * s.dir, uy = Math.sin(S.ang);
+    // el tunel: un circulo adelante, del alto de la serpiente, con el piso justo debajo de ella. ¿Queda algo para
+    // cavar adelante? (si sale al aire libre un rato, se apaga y se cae)
+    const cx = s.x + ux * A.adelante, cy = s.y - 2 + uy * A.adelante;
+    let hay = false;
+    for (let k = -A.r; k <= A.r && !hay; k += 4) hay = T.solido(cx + ux * (A.r - 2), cy + k) || T.solido(cx + ux * k * 0.5, cy + A.r - 1);
+    S.aire = hay ? 0 : S.aire + 1;
+    if (S.t % A.cada === 0 && (J.rompe || C.ROMPE)) crater(J, cx, cy, A.r);
+    const nx = s.x + ux * A.vel, ny = s.y + uy * A.vel;
+    if (!choca(T, nx, ny)) { s.x = nx; s.y = ny; } else if (!choca(T, nx, ny - 1)) { s.x = nx; s.y = ny - 1; }
+    // quema a las que tiene adelante (una vez a cada una)
+    J.serps.forEach((o, k) => {
+      if (o === s || o.estado === 'muerta' || S.tocadas.includes(k)) return;
+      if (Math.abs(o.x - (s.x + ux * 10)) < 9 && Math.abs(o.y - (s.y + uy * 10)) < 12) { S.tocadas.push(k); danar(J, o, A.dano); golpear(o, ux * A.empuje, -2); }
+    });
+    if (--S.t <= 0 || S.aire > 25) { s.soplete = null; s.estado = apoyada(T, s.x, s.y) ? 'suelo' : 'aire'; s.vx = 0; s.vy = 0; }
+  }
+  // ── El puñetazo: sube derecho golpeando ──
+  function punetazo(J, s) {
+    s.puno = { t: ARMAS.puno.pasos, tocadas: [], y0: s.y }; s.estado = 'aire'; s.vx = 0; s.vy = 0; s.salto = null; s.sinCaida = true; s.gancho = null; s.soga = null;
+  }
+  function pasoPuno(J, s) {
+    const T = J.T, P = s.puno, A = ARMAS.puno;
+    const arriba = s.y - 24, abajo = Math.max(s.y, P.y0 == null ? s.y : P.y0) + 10, fx = s.x + s.dir * 7;
+    J.serps.forEach((o, k) => {
+      if (o === s || o.estado === 'muerta' || P.tocadas.includes(k)) return;
+      if (Math.abs(o.x - fx) < 10 && o.y > arriba && o.y < abajo) { P.tocadas.push(k); danar(J, o, A.dano); golpear(o, s.dir * A.empuje[0], A.empuje[1]); }
+    });
+    for (const b of J.cosas) if (b.tipo === 'barril' && !b.fin && !b.punado && Math.abs(b.x - fx) < 10 && b.y - 6 > arriba && b.y - 6 < abajo) { b.punado = true; romperBarril(J, b, A.dano); }
+    for (let k = 0; k < A.sube; k++) if (!choca(T, s.x, s.y - 1)) s.y -= 1; else { P.t = 0; break; }
+    if (--P.t <= 0) { s.puno = null; s.estado = 'aire'; s.vy = 0; }
+  }
+  function romperBarril(J, b, n) {
+    b.vida = (b.vida == null ? ARMAS.barril.vida : b.vida) - n; b.prendido = true;
+    if (b.vida <= 0 && !b.fin) { b.fin = true; (J.pend || (J.pend = [])).push([b.x, b.y - 6, 'barril']); }
+  }
+
   function explotar(J, x, y, A) {
     A = A || ARMAS.granada;
     const T = J.T, R = A.r;
-    if (C.ROMPE) { T.borrar(x, y, R * 0.75); J.borrados.push([x, y, R * 0.75]); }
+    if (J.rompe || C.ROMPE) crater(J, x, y, R * 0.75);
     J.efectos.push({ x, y, r: R, t: 0 });
-    J.eventos.push({ tipo: 'explosion', x, y });
+    J.eventos.push({ tipo: 'explosion', x, y, r: R });
     for (const s of J.serps) {
       if (s.estado === 'muerta') continue;
       const dx = s.x - x, dy = s.y - y, d = Math.hypot(dx, dy);
       if (d > R) continue;
       const k = 1 - d / R, dano = Math.max(1, Math.round(A.dano * k));
-      s.vida = Math.max(0, s.vida - dano); s.golpe = (s.golpe || 0) + dano;
-      J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n: dano });
+      danar(J, s, dano);
       const ux = d ? dx / d : 0, uy = d ? dy / d : -1;
       // (si la saca de la soga, pierde el control como en el juego clasico: no puede volver a tirarla hasta el piso)
-      s.soga = null; s.gancho = null; s.estado = 'aire'; s.sinCaida = true; s.salto = null; s.sinControl = true;
-      s.vx += ux * A.empuje * k; s.vy += uy * A.empuje * k - 1.5 * k;
+      golpear(s, ux * A.empuje * k, uy * A.empuje * k - 1.5 * k);
+    }
+    // lo suelto sale volando; los barriles y las cajas (modo normal) revientan
+    for (const g of J.cosas) {
+      if (g.fin) continue;
+      const dx = g.x - x, dy = g.y - y, d2 = dx * dx + dy * dy;
+      if (d2 > R * R) continue;
+      if (g.tipo === 'caja') { if (J.rompe) { g.fin = true; (J.pend || (J.pend = [])).push([g.x, g.y, 'caja']); } continue; }
+      const d = Math.sqrt(d2), k = 1 - d / R;
+      if (g.tipo === 'barril') { romperBarril(J, g, Math.max(1, Math.round(A.dano * k))); if (g.fin) continue; }
+      if (ARMAS[g.tipo] && ARMAS[g.tipo].choque) continue;
+      const ux = d ? dx / d : 0, uy = d ? dy / d : -1;
+      g.vx += ux * A.empuje * k; g.vy += uy * A.empuje * k - 1.5 * k; g.quieta = false;
     }
   }
-  // ¿quedo todo quieto? (para pasar el turno: nada volando, ninguna serpiente en el aire)
+  // ¿quedo todo quieto? (para pasar el turno: nada volando ni ardiendo, ninguna serpiente en el aire)
   function quieto(J) {
-    if (J.cosas.some(g => g.tipo !== 'caja' || !g.quieta)) return false;
-    return J.serps.every(s => s.estado === 'muerta' || s.estado === 'suelo' || s.estado === 'soga');
+    if (J.cosas.some(g => !(g.quieta && (g.tipo !== 'mina' || g.cuenta == null) && !g.prendido))) return false;
+    if (J.pend && J.pend.length) return false;
+    return J.serps.every(s => s.estado === 'muerta' || ((s.estado === 'suelo' || s.estado === 'soga') && !s.soplete && !s.puno));
   }
 
-  function nuevoJuego(T) {
-    return { T, serps: [], cosas: [], efectos: [], borrados: [], eventos: [], mecha: 3, paso: 0, viento: 0 };
+  function nuevoJuego(T, op) {
+    return { T, serps: [], cosas: [], efectos: [], borrados: [], crateres: [], pend: [], eventos: [], mecha: 3, rebote: 'min', paso: 0, viento: 0, rompe: !!(op && op.rompe) };
   }
   function pasoJuego(J, entradas) {
     J.paso++;
@@ -555,7 +831,7 @@
     pasoCosas(J);
   }
 
-  const API = { C, ARMAS, Terreno, Serpiente, nuevoJuego, pasoJuego, lanzar, soltar, caja, explotar, quieto, choca };
+  const API = { C, ARMAS, Terreno, Serpiente, nuevoJuego, pasoJuego, lanzar, soltar, poner, caja, explotar, crater, quieto, choca, escopetazo, batazo, ataqueAereo, soplete, punetazo, danar, golpear };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else raiz.ShoppaMotor = API;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -45,12 +45,14 @@
   .fila .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acc { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 14px; }
   .punto { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0 2px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0 2px; }
+  .caja:has(.tiles) { width: min(680px, 96vw); }
   .tile { display: flex; flex-direction: column; padding: 0; border: 2px solid var(--borde); background: #000; color: #fff; font: 700 13px var(--letra); box-shadow: 0 0 0 1px #000; transition: transform 0.12s, border-color 0.12s, color 0.12s; }
   .tile canvas { width: 100%; height: auto; aspect-ratio: 16 / 9; border-bottom: 1px solid var(--borde2); }
   .tile span { padding: 7px 4px; }
   .tile:hover, .tile:focus-visible { border-color: var(--amarillo); color: var(--amarillo); transform: translateY(-2px); outline: none; }
-  @media (max-width: 520px) { .tiles { grid-template-columns: 1fr 1fr; } .tile:last-child { grid-column: span 2; justify-self: center; width: calc(50% - 6px); } .caja h1.logo { font-size: 38px; } }
+  @media (max-width: 560px) { .tiles { grid-template-columns: 1fr 1fr; } .caja h1.logo { font-size: 38px; } }
+  .modos .btn.elegido { background: #0e1f86; border-color: var(--amarillo); }
   .teclas { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .teclas td { padding: 4px 6px; border-bottom: 1px solid rgba(142, 162, 221, 0.18); color: #dfe6ff; vertical-align: top; }
   .teclas td:first-child { color: var(--amarillo); font-weight: 700; white-space: nowrap; }
@@ -59,10 +61,19 @@
   #hud { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 8px; pointer-events: none; z-index: 2; }
   #hud[hidden] { display: none; }
   .marco { background: rgba(0, 0, 0, 0.82); border: 1px solid #e6e6e6; box-shadow: 0 0 0 1px #000; }
+  #izqHud { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
   #reloj { min-width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 6px; box-sizing: border-box; font: 700 24px var(--letra); color: #fff; }
   /* gris y quieto mientras se prepara o entre turnos; rojo en los ultimos 5 segundos (como en el juego clasico) */
   #reloj.gris { color: #8a8a8a; }
   #reloj.rojo { color: #ff3b30; background: rgba(70, 0, 0, 0.9); }
+  /* el reloj de la ronda (modo normal), chiquito arriba del del turno */
+  #ronda { min-width: 44px; box-sizing: border-box; padding: 1px 5px; font: 700 11px var(--letra); color: #ddd; text-align: center; }
+  #ronda[hidden] { display: none; }
+  #ronda.rojo { color: #ff6b5e; }
+  #practica { display: flex; gap: 4px; pointer-events: auto; }
+  #practica[hidden] { display: none; }
+  #practica button { padding: 3px 8px; border: 1px solid #e6e6e6; border-radius: 0; background: rgba(0, 0, 0, 0.82); color: #fff; font: 700 11px var(--letra); }
+  #practica button:hover { border-color: var(--amarillo); color: var(--amarillo); }
   #centro { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
   #equipos { display: grid; gap: 2px; }
   .eq { display: flex; align-items: center; gap: 4px; }
@@ -71,6 +82,7 @@
   .eq .nom { text-align: right; }
   /* el cuadradito del equipo (en el juego clasico, la bandera) */
   .eq .band { width: 11px; height: 11px; flex: none; border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px #000; background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0 40%, transparent 40% 60%, rgba(0, 0, 0, 0.3) 60%); }
+  .eq .band.foto { width: 15px; height: 15px; padding: 0; object-fit: cover; background: #000; border: 1px solid; box-sizing: border-box; }
   .eq .barra { width: 120px; height: 11px; }
   .eq .barra i { display: block; box-sizing: border-box; height: 100%; min-width: 2px; border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px #000; transition: width 0.4s; }
   .eq.muerta { opacity: 0.35; }
@@ -133,7 +145,7 @@
 <body>
 <canvas id="lienzo"></canvas>
 <div id="hud" hidden>
-  <div id="reloj" class="marco">30</div>
+  <div id="izqHud"><div id="practica" hidden><button id="reiniciar" type="button" title="Empezar de nuevo (N)">Reiniciar</button><button id="salirPractica" type="button">Salir</button></div><div id="ronda" class="marco" hidden title="Lo que queda de la ronda">20:00</div><div id="reloj" class="marco">30</div></div>
   <div id="centro"><div id="carga" class="marco" hidden><i></i></div><div id="equipos"></div></div>
   <div id="der">
     <div id="armas" class="marco" hidden></div>
@@ -147,8 +159,9 @@
   <div class="der"><button data-k="enter">⤴</button><button data-k="retro">⤒</button><button data-k="espacio">●</button><button data-k="fin">⏭</button></div>
 </div>
 <div class="capa" id="menu" hidden></div>
-<script src="motor.js?v=10"></script>
-<script src="mapas.js?v=7"></script>
-<script src="juego.js?v=10"></script>
+<script src="motor.js?v=11"></script>
+<script src="mapas.js?v=8"></script>
+<script src="ia.js?v=1"></script>
+<script src="juego.js?v=11"></script>
 </body>
 </html>
