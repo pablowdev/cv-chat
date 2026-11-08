@@ -14,7 +14,7 @@ const RANGOS = { '7d': { dias: 7, paso: 'dia' }, '4s': { dias: 28, paso: 'dia' }
 const JUEGOS = [
   { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
   { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
-  { id: 'pool', nombre: 'Pool' }, { id: 'gusanos', nombre: 'Gusanos' },
+  { id: 'pool', nombre: 'Pool' },
   // WORGS: los dos modos como dos juegos (el tiempo de uso de antes, cuando solo habia Shoppa, queda en Shoppa)
   { id: 'shoppa', nombre: 'WORGS: Shoppa' }, { id: 'worgsnormal', nombre: 'WORGS: Normal' },
 ];

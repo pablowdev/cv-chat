@@ -46,7 +46,8 @@ async function handle(req, res, p, u, h) {
   const filas = [];
   for (const [k, v] of Object.entries(body.s || {}).slice(0, 12)) {
     const seg = Math.floor(Number(v));
-    if (!SECCION.test(k) || !Number.isFinite(seg) || seg <= 0) continue;
+    // (j:gusanos: el juego que WORGS reemplazo; una pestaña vieja abierta lo seguiria mandando)
+    if (!SECCION.test(k) || k === 'j:gusanos' || !Number.isFinite(seg) || seg <= 0) continue;
     const n = Math.min(seg, MAX_POR_ENVIO - total, lugar);
     if (n <= 0) break;
     total += n; lugar -= n;

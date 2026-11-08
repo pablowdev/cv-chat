@@ -391,7 +391,7 @@ function injectScript(req, res, src) {
         // Un enlace al Marketplace sin la sesion del chat: al Marketplace de la web, que se ve sin cuenta; uno
         // de los juegos: a jugar como invitado (afuera.js, antes que Haven; origen.js primero, para que cuente de
         // donde llego)
-        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?(?:mercado|juegos|truco|funball|ajedrez|globalsiege|pool|gusanos)(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
+        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?(?:mercado|juegos|truco|funball|ajedrez|globalsiege|pool)(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
         // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
         // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
         if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
@@ -734,7 +734,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|gusanos|worgs|juegos|chat)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|worgs|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
@@ -1456,7 +1456,7 @@ function shareTags(html, url) {
   const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x)) : [];
   if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
-  const qj = q && (q[1] === 'shoppa' ? 'worgs' : q[1]);
+  const qj = q && (q[1] === 'shoppa' || q[1] === 'gusanos' ? 'worgs' : q[1]);
   const juego = q && JUEGOS_ENLACE[qj || 'juegos'];
   if (juego && fs.existsSync(path.join(STATIC, 'tapas', (qj || 'juegos') + '.jpg'))) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;

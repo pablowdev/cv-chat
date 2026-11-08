@@ -3567,8 +3567,8 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['WORGS: Shoppa', '#e0763a'], worgsnormal: ['WORGS: Normal', '#2fb3c9'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa', 'worgsnormal'];
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], shoppa: ['WORGS: Shoppa', '#e0763a'], worgsnormal: ['WORGS: Normal', '#2fb3c9'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'shoppa', 'worgsnormal'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', ultimo: 'Quedó un solo equipo',abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
@@ -10806,7 +10806,8 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/worgs/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
   ];
   // WORGS se llamaba Shoppa: por dentro sigue siendo "shoppa" (las salas, el tiempo de uso), pero el enlace dice worgs
-  const aliasJuego = (j) => (j === 'worgs' ? 'shoppa' : j);
+  // (los enlaces viejos del juego que WORGS reemplazo tambien abren WORGS)
+  const aliasJuego = (j) => (j === 'worgs' || j === 'gusanos' ? 'shoppa' : j);
   // las salas de WORGS dicen el modo: "WORGS: Shoppa" o "WORGS: Normal"
   const nombreMesa = (j, m) => (j.id === 'shoppa' && m ? 'WORGS: ' + (m.modo === 'normal' ? 'Normal' : 'Shoppa') : j.nombre);
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
@@ -13443,7 +13444,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
         if (l.closest('.link-preview')) continue;
         let u; try { u = new URL(l.href); } catch { continue; }
         if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
-        const id0 = u.searchParams.get('juegos') || 'juegos', id = id0 === 'shoppa' ? 'worgs' : id0, t = TARJETA[id];
+        const id0 = u.searchParams.get('juegos') || 'juegos', id = id0 === 'shoppa' || id0 === 'gusanos' ? 'worgs' : id0, t = TARJETA[id];
         const box = t && l.closest('.message-content, .thread-msg-content');
         if (!box || [...box.querySelectorAll('.link-preview')].some(x => x.dataset.url === l.href)) continue;
         try {
