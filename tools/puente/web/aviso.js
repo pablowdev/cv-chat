@@ -10802,7 +10802,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
-    { id: 'shoppa', nombre: 'WORGS', sub: 'Shopper, normal o contra la máquina · en prueba', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
+    { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
   ];
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
