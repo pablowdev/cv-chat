@@ -3321,10 +3321,11 @@ function leido(sc) {
     cab.appendChild(el('div', 'pmz-estado' + (datos.estado === 'activo' ? ' activo' : ''),
       datos.estado === 'activo' ? 'En marcha: el servidor cumple el cronograma solo, aunque nadie tenga la compu prendida.' : 'En pausa: no se hace nada hasta que lo reanudes.'));
     if (datos.ensayo) cab.appendChild(el('div', 'pmz-ensayo', 'Copia de prueba: no toca Discord ni manda emails, solo anota lo que haría.'));
+    if (datos.esperarPlay) cab.appendChild(el('div', 'pmz-ensayo', 'El anuncio principal espera a que la app esté publicada en Google Play: si a esa hora todavía no está, todo lo que falta se corre un día.'));
     const acc = el('div', 'pmz-acciones');
     const boton = (txt, cls, fn) => { const b = el('button', 'pmz-btn' + (cls ? ' ' + cls : ''), txt); b.type = 'button'; b.addEventListener('click', fn); acc.appendChild(b); };
     boton(datos.estado === 'activo' ? 'Pausar todo' : 'Reanudar', datos.estado === 'activo' ? '' : 'pmz-azul', () => hacer({ accion: datos.estado === 'activo' ? 'pausar' : 'reanudar' }));
-    boton('Posponer una semana', '', () => hacer({ accion: 'posponer', dias: 7 }, 'Se corre una semana todo lo que falta. Los anuncios dicen fechas: después revisá los textos. ¿Seguimos?'));
+    boton('Posponer una semana', '', () => hacer({ accion: 'posponer', dias: 7 }, 'Se corre una semana todo lo que falta. Las fechas escritas con {corte} se acomodan solas; si escribiste otras a mano, después revisá esos textos. ¿Seguimos?'));
     if (datos.soloLectura || datos.lento) boton('Deshacer en Discord', 'pmz-rojo', () => hacer({ accion: 'deshacer' }, 'Los permisos y el modo lento de Discord vuelven a como estaban antes de la mudanza. ¿Seguimos?'));
     cab.appendChild(acc);
     cuerpo.appendChild(cab);
@@ -3361,7 +3362,7 @@ function leido(sc) {
       const box = el('div', 'pmz-editor');
       const ta = el('textarea', 'pmz-texto'); ta.value = p.texto; ta.readOnly = p.estado !== 'pendiente'; ta.rows = Math.min(16, p.texto.split('\n').length + 2);
       box.appendChild(ta);
-      box.appendChild(el('div', 'pmz-ayuda', '{enlace} es el enlace para pasarse; {copa}, {cuentas}, {fundadores} y {campeon} se completan solos al mandarlo.'));
+      box.appendChild(el('div', 'pmz-ayuda', '{enlace} es el enlace para pasarse; {corte} es el día del corte ("martes 1/12") y {corte_fecha} solo la fecha ("1/12"); {play} es la app en Google Play; {cuentas} y {fundadores} se completan solos al mandarlo.'));
       if (p.estado === 'pendiente') { const g = el('button', 'pmz-btn pmz-azul', 'Guardar el texto'); g.type = 'button'; g.addEventListener('click', () => hacer({ accion: 'texto', clave: p.clave, texto: ta.value })); box.appendChild(g); }
       fila.appendChild(box);
     }

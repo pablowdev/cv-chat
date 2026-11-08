@@ -1,6 +1,12 @@
-// La mudanza a CV Chat con fecha (del 9/11 al 24/11/2026): un cronograma que el servidor cumple solo,
-// aunque nadie tenga la compu prendida. Cada paso tiene dia y hora (de Argentina) y se hace una sola
-// vez; si el chat se reinicia, sigue donde quedo.
+// La mudanza a CV Chat con fecha (del 16/11 al 1/12/2026; era del 9/11 al 24/11 y se corrio una semana
+// para esperar a Google Play): un cronograma que el servidor cumple solo, aunque nadie tenga la compu
+// prendida. Cada paso tiene dia y hora (de Argentina) y se hace una sola vez; si el chat se reinicia,
+// sigue donde quedo.
+//
+// Google Play: con esperar_play = 1 (puente_mudanza_config), el anuncio principal no sale hasta que la
+// app este publicada en Google Play (su pagina publica contesta 200); si a esa hora todavia no esta,
+// todo lo que falta se corre un dia. Los textos dicen la fecha del corte con {corte}, asi que se
+// acomodan solos.
 //
 //  - anuncio:      el bot publica en #círculo-vicioso de Discord (con @everyone o @here si el paso lo
 //                  dice) y el mismo mensaje entra a CV Chat
@@ -36,12 +42,14 @@ const ESCRIBIR = P.SEND | P.SEND_IN_THREADS | P.CREATE_PUBLIC_THREADS | P.CREATE
 const TIPOS_TEXTO = new Set([0, 5, 15, 16]); // texto, anuncios, foro, multimedia (la voz no se toca)
 
 // ── Textos ──────────────────────────────────────────────────────────────────
-// {enlace} {cuentas} {copa} {fundadores} {campeon} se completan al mandar. Se pueden cambiar desde el panel.
+// {enlace} {cuentas} {copa} {fundadores} {campeon} se completan al mandar, y tambien {corte} (el dia del
+// corte: "martes 1/12"), {corte_fecha} ("1/12") y {play} (la app en Google Play). Se pueden cambiar
+// desde el panel.
 const T = {
   principal: [
     '🏠 **Nos mudamos del todo a CV Chat** @everyone',
     '',
-    'Desde el **martes 24/11 a las 12**, este Discord queda **solo para leer**. Para seguir charlando, entrá a CV Chat: es un clic con tu cuenta de Discord, y **todos tus mensajes de antes pasan a tu cuenta**, con tu nombre y tu foto.',
+    'Desde el **{corte} a las 12**, este Discord queda **solo para leer**. Para seguir charlando, entrá a CV Chat: es un clic con tu cuenta de Discord, y **todos tus mensajes de antes pasan a tu cuenta**, con tu nombre y tu foto.',
     '',
     '**¿Por qué?** Porque CV siempre fue así: lo hacemos nosotros, a nuestra manera.',
     '🛠️ **Es nuestro.** CV Chat corre en un servidor propio. No dependemos de una empresa que mañana cambie las reglas, nos llene de publicidad, nos cobre por subir un video o nos cierre el servidor.',
@@ -50,24 +58,24 @@ const T = {
     '',
     'Además: juegos (truco, ajedrez, funball), marketplace, guardados, archivos más pesados y el foro integrado. Sin publicidad y gratis.',
     '',
-    '🏅 Quien escriba en CV Chat antes del 24/11 se lleva la insignia **Fundador**.',
+    '🏅 Quien escriba en CV Chat antes del {corte_fecha} se lleva la insignia **Fundador**.',
     '',
-    '📱 ¿Usás Android? La app de CV Chat ya está en Google Play, en prueba: sumate como tester en https://circulovicioso.club/descargar#play',
+    '📱 ¿Usás Android? La app de CV Chat ya está en Google Play: {play}',
     '',
     '👉 Entrá acá: {enlace}',
   ].join('\n'),
   recordatorio: [
-    '@here 🏠 Recordatorio: desde el **martes 24/11** este Discord queda solo para leer y la charla sigue en CV Chat. Es un clic con tu Discord y tus mensajes de siempre se vienen con vos: {enlace}',
+    '@here 🏠 Recordatorio: desde el **{corte}** este Discord queda solo para leer y la charla sigue en CV Chat. Es un clic con tu Discord y tus mensajes de siempre se vienen con vos: {enlace}',
     'CV Chat es nuestro: servidor propio, reglas propias y la historia del club guardada para siempre.',
   ].join('\n'),
   semana: [
-    '@everyone ⏳ **Falta una semana.** El **martes 24/11 a las 12** este Discord queda solo para leer.',
+    '@everyone ⏳ **Falta una semana.** El **{corte} a las 12** este Discord queda solo para leer.',
     'Desde hoy, acá hay **modo lento** (un mensaje por minuto). En CV Chat no hay límites.',
     'Ya somos **{cuentas}** en CV Chat. Pasate en un clic con tu Discord, con todo tu historial: {enlace}',
-    '🏅 Quien escriba en CV Chat antes del 24/11 queda como **Fundador**.',
+    '🏅 Quien escriba en CV Chat antes del {corte_fecha} queda como **Fundador**.',
   ].join('\n'),
   martes: [
-    '@here 📅 **El martes 24/11 a las 12, este Discord queda solo para leer.**',
+    '@here 📅 **El {corte} a las 12, este Discord queda solo para leer.**',
     'Cómo pasarte (un minuto):',
     '1. Entrá a {enlace}',
     '2. Tocá "Entrar con Discord" y aceptá.',
@@ -85,19 +93,19 @@ const T = {
     '¿Te quedaste afuera? Entrá con tu Discord en {enlace} o escribí en #pasate-a-cv-chat.',
   ].join('\n'),
   privados1: [
-    '👋 ¡Hola! Te escribo desde el servidor **Círculo Vicioso**. Desde el **martes 24/11** el Discord queda solo para leer: la charla sigue en **CV Chat**, nuestro chat propio.',
+    '👋 ¡Hola! Te escribo desde el servidor **Círculo Vicioso**. Desde el **{corte}** el Discord queda solo para leer: la charla sigue en **CV Chat**, nuestro chat propio.',
     'Pasarte es un clic con tu cuenta de Discord, y tus mensajes de siempre quedan en tu cuenta: {enlace}',
     'CV Chat es del club: servidor propio, reglas propias y toda la historia guardada. Además tiene juegos, marketplace y el foro.',
   ].join('\n'),
   privados2: [
-    '👋 Último aviso: el **martes 24/11 a las 12** el Discord de **Círculo Vicioso** queda solo para leer. Para seguir charlando, pasate a CV Chat en un clic con tu Discord: {enlace}',
-    'Si escribís antes del 24 te llevás la insignia **Fundador**.',
+    '👋 Último aviso: el **{corte} a las 12** el Discord de **Círculo Vicioso** queda solo para leer. Para seguir charlando, pasate a CV Chat en un clic con tu Discord: {enlace}',
+    'Si escribís antes del {corte_fecha} te llevás la insignia **Fundador**.',
   ].join('\n'),
   email: [
     '¡Hola {nombre}! Ya tenés tu cuenta en CV Chat, con tu Discord vinculado, pero seguís escribiendo desde Discord.',
-    'Desde el martes 24/11 a las 12, el Discord del club queda solo para leer: para seguir charlando hay que estar en CV Chat.',
+    'Desde el {corte} a las 12, el Discord del club queda solo para leer: para seguir charlando hay que estar en CV Chat.',
     'Ahí está todo: los mismos canales y tu historial completo, y además juegos, marketplace, guardados y el foro. Es del club: servidor propio, reglas propias y nada se pierde.',
-    'Entrá con el mismo usuario de siempre. Si escribís antes del 24/11 te llevás la insignia Fundador.',
+    'Entrá con el mismo usuario de siempre. Si escribís antes del {corte_fecha} te llevás la insignia Fundador.',
   ].join('\n\n'),
   canal: '🔒 **Este canal quedó solo para leer.** La charla sigue en CV Chat, con los mismos canales y todo el historial. Pasate en un clic con tu Discord: {enlace}',
   pasate: [
@@ -112,21 +120,23 @@ const T = {
 
 // El cronograma (se carga una sola vez; despues manda lo que esta en la base)
 const PLAN = [
-  ['anuncio-principal', '2026-11-09T12:30', 'anuncio', 'Anuncio principal (@everyone, fijado)', T.principal, { menciona: 'everyone', fijar: true }],
-  ['privados-1', '2026-11-10T13:00', 'privados', 'Privados del bot a quienes escriben sin cuenta', T.privados1, { ronda: 1 }],
-  ['emails', '2026-11-11T13:00', 'emails', 'Email a los que tienen cuenta y siguen en Discord', T.email, {}],
-  ['recordatorio', '2026-11-13T23:00', 'anuncio', 'Recordatorio (@here)', T.recordatorio, { menciona: 'here' }],
-  ['falta-semana', '2026-11-16T12:30', 'anuncio', 'Falta una semana (@everyone)', T.semana, { menciona: 'everyone' }],
-  ['modo-lento', '2026-11-16T12:31', 'lento', 'Modo lento en Discord (1 por minuto)', null, {}],
-  ['privados-2', '2026-11-18T13:00', 'privados', 'Último privado del bot a quienes siguen sin cuenta', T.privados2, { ronda: 2 }],
-  ['como-pasarse', '2026-11-20T13:00', 'anuncio', 'Cómo pasarse, paso a paso (@here)', T.martes, { menciona: 'here' }],
-  ['ultimo-aviso', '2026-11-23T22:00', 'anuncio', 'Último aviso (@everyone)', T.ultimo, { menciona: 'everyone' }],
-  ['solo-lectura', '2026-11-24T12:00', 'solo_lectura', 'Discord solo para leer + #pasate-a-cv-chat', null, {}],
-  ['anuncio-corte', '2026-11-24T12:02', 'anuncio', 'Anuncio del corte, con los Fundadores', T.corte, {}],
-  ['resumen-1', '2026-12-01T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
-  ['resumen-2', '2026-12-08T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
-  ['resumen-3', '2026-12-15T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
+  ['anuncio-principal', '2026-11-16T12:30', 'anuncio', 'Anuncio principal (@everyone, fijado)', T.principal, { menciona: 'everyone', fijar: true }],
+  ['privados-1', '2026-11-17T13:00', 'privados', 'Privados del bot a quienes escriben sin cuenta', T.privados1, { ronda: 1 }],
+  ['emails', '2026-11-18T13:00', 'emails', 'Email a los que tienen cuenta y siguen en Discord', T.email, {}],
+  ['recordatorio', '2026-11-20T23:00', 'anuncio', 'Recordatorio (@here)', T.recordatorio, { menciona: 'here' }],
+  ['falta-semana', '2026-11-23T12:30', 'anuncio', 'Falta una semana (@everyone)', T.semana, { menciona: 'everyone' }],
+  ['modo-lento', '2026-11-23T12:31', 'lento', 'Modo lento en Discord (1 por minuto)', null, {}],
+  ['privados-2', '2026-11-25T13:00', 'privados', 'Último privado del bot a quienes siguen sin cuenta', T.privados2, { ronda: 2 }],
+  ['como-pasarse', '2026-11-27T13:00', 'anuncio', 'Cómo pasarse, paso a paso (@here)', T.martes, { menciona: 'here' }],
+  ['ultimo-aviso', '2026-11-30T22:00', 'anuncio', 'Último aviso (@everyone)', T.ultimo, { menciona: 'everyone' }],
+  ['solo-lectura', '2026-12-01T12:00', 'solo_lectura', 'Discord solo para leer + #pasate-a-cv-chat', null, {}],
+  ['anuncio-corte', '2026-12-01T12:02', 'anuncio', 'Anuncio del corte, con los Fundadores', T.corte, {}],
+  ['resumen-1', '2026-12-08T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
+  ['resumen-2', '2026-12-15T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
+  ['resumen-3', '2026-12-22T10:00', 'resumen', 'Resumen por email a los admins', null, {}],
 ];
+// La app en Google Play (el anuncio principal la espera si esperar_play = 1)
+const PLAY = 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat';
 const INICIO_COPA = ar('2026-11-09T12:30');
 const CORTE = 'solo-lectura';
 
@@ -161,7 +171,14 @@ function cfg(clave, valor) {
 const paso = (clave) => db.prepare('SELECT * FROM puente_mudanza_pasos WHERE clave = ?').get(clave);
 const marcar = (clave, estado, detalle) => db.prepare('UPDATE puente_mudanza_pasos SET estado = ?, detalle = ?, hecho = CASE WHEN ? IN (\'hecho\', \'error\', \'vencido\') THEN ? ELSE hecho END WHERE clave = ?')
   .run(estado, detalle == null ? null : String(detalle).slice(0, 2000), estado, Date.now(), clave);
-const corteMs = () => (paso(CORTE) || {}).cuando || ar('2026-11-24T12:00');
+const corteMs = () => (paso(CORTE) || {}).cuando || ar('2026-12-01T12:00');
+// El dia del corte en hora de Argentina: { dia: 'martes 1/12', fecha: '1/12', anio: 2026 }
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+function diaCorte() {
+  const d = new Date(corteMs() - 3 * HORA);
+  const fecha = d.getUTCDate() + '/' + (d.getUTCMonth() + 1);
+  return { dia: DIAS[d.getUTCDay()] + ' ' + fecha, fecha, anio: d.getUTCFullYear() };
+}
 // (con su etiqueta: la app de Discord y los mails abren el enlace sin decir de donde se viene)
 const enlace = (de = 'discord') => (publicUrl || 'https://chat.circulovicioso.club') + '/puente/entrar?de=' + de;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -176,7 +193,27 @@ async function tick() {
   // Un anuncio o un envio de hace mas de 12 h ya no tiene sentido (el chat estuvo apagado): se saltea.
   // Lo de Discord (modo lento, solo lectura) se hace igual.
   if (['anuncio', 'privados', 'emails', 'resumen'].includes(p.tipo) && Date.now() - p.cuando > 12 * HORA) { marcar(p.clave, 'vencido', 'El chat estaba apagado a esa hora; se salteó.'); return; }
+  // El anuncio principal espera a la app en Google Play: si todavia no esta, todo se corre un dia
+  if (p.clave === 'anuncio-principal' && cfg('esperar_play') === '1' && !ENSAYO) {
+    corriendo = true;
+    let publicada = false;
+    try { publicada = await enPlay(); } finally { corriendo = false; }
+    if (!publicada) {
+      db.prepare("UPDATE puente_mudanza_pasos SET cuando = cuando + ? WHERE estado = 'pendiente'").run(DIA);
+      log('mudanza: la app todavía no está publicada en Google Play; todo lo que falta se corre un día');
+      return;
+    }
+    if (cfg('estado') !== 'activo') return;
+  }
   await ejecutar(p.clave);
+}
+// La pagina publica de la app en Google Play contesta 200 recien cuando esta publicada (en la prueba
+// cerrada da 404). Si no se puede saber (sin internet, tarda), se toma como que no.
+async function enPlay() {
+  try {
+    const r = await fetch(PLAY + '&hl=es_419', { redirect: 'manual', signal: AbortSignal.timeout(20e3), headers: { 'user-agent': 'Mozilla/5.0 (CV Chat)' } });
+    return r.status === 200;
+  } catch { return false; }
 }
 
 async function ejecutar(clave) {
@@ -236,8 +273,10 @@ function copaTexto() {
 }
 function completar(texto, extra = {}) {
   const campeones = db.prepare('SELECT user_id FROM puente_mudanza_campeones').all().map(r => (db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(r.user_id) || {}));
+  const c = diaCorte();
   const v = {
     enlace: enlace(), cuentas: String(cuentas()), fundadores: String(db.prepare('SELECT COUNT(*) n FROM puente_mudanza_fundadores').get().n),
+    corte: c.dia, corte_fecha: c.fecha, play: PLAY,
     campeon: campeones.length ? campeones.map(u => u.display_name || u.username).join(' y ') : '—', ...extra,
   };
   return String(texto || '').replace(/\{(\w+)\}/g, (m, k) => (k === 'copa' ? copaTexto() : v[k] !== undefined ? v[k] : m));
@@ -291,7 +330,7 @@ function actualizarFundadores() {
 // Las insignias de la mudanza de una persona (logros.js): [id, emoji, nombre, detalle]
 function insignias(userId) {
   const out = [];
-  if (db.prepare('SELECT 1 FROM puente_mudanza_fundadores WHERE user_id = ?').get(userId)) out.push(['fundador', '🏠', 'Fundador', 'Se pasó a CV Chat antes de la mudanza (24/11/2026)']);
+  if (db.prepare('SELECT 1 FROM puente_mudanza_fundadores WHERE user_id = ?').get(userId)) { const c = diaCorte(); out.push(['fundador', '🏠', 'Fundador', `Se pasó a CV Chat antes de la mudanza (${c.fecha}/${c.anio})`]); }
   if (db.prepare('SELECT 1 FROM puente_mudanza_campeones WHERE user_id = ?').get(userId)) out.push(['campeon-mudanza', '🏆', 'Campeón de la Copa', 'Ganó la Copa Mudanza de truco (noviembre 2026)']);
   return out;
 }
@@ -594,6 +633,7 @@ async function handle(req, res, p, u, h) {
   if (!adm || !adm.is_admin) return h.json(res, 403, { error: 'solo administradores' });
   const estado = () => ({
     estado: cfg('estado'), ensayo: ENSAYO, soloLectura: cfg('solo_lectura') === '1', lento: cfg('lento') === '1', corriendo,
+    esperarPlay: cfg('esperar_play') === '1' && (paso('anuncio-principal') || {}).estado === 'pendiente',
     pasos: db.prepare('SELECT clave, cuando, tipo, nombre, texto, estado, hecho, detalle FROM puente_mudanza_pasos ORDER BY cuando').all(),
     numeros: numeros(),
   });
@@ -605,7 +645,7 @@ async function handle(req, res, p, u, h) {
   if (b.accion === 'pausar') cfg('estado', 'pausado');
   else if (b.accion === 'reanudar') cfg('estado', 'activo');
   else if (b.accion === 'posponer') {
-    // Corre todo lo que falta: los anuncios dicen fechas, asi que hay que revisar los textos
+    // Corre todo lo que falta (los textos que dicen la fecha con {corte} o {corte_fecha} se acomodan solos)
     const dias = Math.max(1, Math.min(60, Number(b.dias) || 7));
     db.prepare("UPDATE puente_mudanza_pasos SET cuando = cuando + ? WHERE estado = 'pendiente'").run(dias * DIA);
   } else if (b.accion === 'texto') {
@@ -642,4 +682,4 @@ async function handle(req, res, p, u, h) {
 // Para probar desde un script (sin el reloj): prepara el modulo con lo que necesita
 function preparar(ctx) { ({ db, api, log, warn, appName, publicUrl, getGuildId, getBotUserId, postInHaven } = ctx); }
 
-module.exports = { setup, handle, insignias, enPasate, canalExcluido, _test: { preparar, soloLectura, deshacer, completar, copa, numeros, actualizarFundadores, T, PLAN } };
+module.exports = { setup, handle, insignias, enPasate, canalExcluido, _test: { preparar, soloLectura, deshacer, completar, copa, numeros, actualizarFundadores, tick, diaCorte, T, PLAN } };

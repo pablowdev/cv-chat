@@ -2,7 +2,8 @@
 
 Las dos son una ventana propia que abre la página de CV Chat (`/app`), así que se actualizan
 solas con cada cambio del servidor y no hace falta reinstalarlas. Se descargan desde
-`/puente/descargar` (sin tiendas). En iPhone y iPad se instala desde Safari ("Agregar a inicio").
+`/puente/descargar`; la de Windows también está en la Microsoft Store y la de Android, en camino a
+Google Play. En iPhone y iPad se instala desde Safari ("Agregar a inicio").
 
 Las imágenes (íconos) y la clave de firma son propias de cada servidor y no están acá.
 
@@ -23,7 +24,9 @@ pasarle `--oculto`; pide Windows 10 2004 o más nuevo). Se prende o apaga en Con
 
 El `.exe` no está firmado y Windows lo avisa al instalarlo. La versión de la Microsoft Store la firma
 Microsoft, así que no sale ningún aviso, y se actualiza desde la Store (`process.windowsStore`: sin el
-actualizador propio).
+actualizador propio). Está publicada en https://apps.microsoft.com/detail/9P65MDQMNRRR (la 1.0.3 desde
+noviembre de 2026, actualizada a la 1.0.4); `/puente/descargar` y la web llevan ahí, con el `.exe` como
+alternativa.
 
 1. Cuenta de desarrollador en Partner Center (para personas es gratis), y "Reservar nombre": CV Chat.
 2. En la app, "Administración del producto → Identidad del producto": copiar `Package/Identity/Name`
