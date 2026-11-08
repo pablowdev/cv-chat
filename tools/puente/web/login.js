@@ -326,7 +326,7 @@
   // Los juegos tienen su propia pagina (juegos.<dominio>, juegos.html): ahi se elige el juego o la mesa, y se
   // llega aca (por afuera.js) solo a poner el nombre: la tarjeta flotando, con la tapa del juego (html.puente-nombre)
   const PAGINA_JUEGOS = 'https://juegos.' + location.hostname.replace(/^chat\./, '') + '/';
-  const NOMBRES = { truco: 'Truco', funball: 'Funball', ajedrez: 'Ajedrez', globalsiege: 'GlobalSiege', pool: 'Pool', gusanos: 'Gusanos', shoppa: 'Shoppa' };
+  const NOMBRES = { truco: 'Truco', funball: 'Funball', ajedrez: 'Ajedrez', globalsiege: 'GlobalSiege', pool: 'Pool', gusanos: 'Gusanos', shoppa: 'WORGS' };
   function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); location.href = PAGINA_JUEGOS; }
   let portada = null;
   const datos = () => portada || (portada = fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).catch(() => null));

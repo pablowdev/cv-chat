@@ -1334,12 +1334,12 @@
   function menuPrincipal() {
     online = null; practica = null;
     const c = caja();
-    const logo = h('h1', 'SHOPPA'); logo.className = 'logo';
+    const logo = h('h1', 'WORGS'); logo.className = 'logo';
     const sub = p('Serpientes, sogas y cajas.'); sub.className = 'sub';
     const sock = socketDelChat();
     const t = div('tiles');
     t.append(
-      tarjeta('Jugar online', 'Partidas con la gente de CV Chat, de 2 a 5 jugadores: Shopper o normal.', DIBUJOS.online, () => (sock ? menuOnline() : aviso('Abrí Shoppa desde la sección Juegos de CV Chat para jugar online'))),
+      tarjeta('Jugar online', 'Partidas con la gente de CV Chat, de 2 a 5 jugadores: Shopper o normal.', DIBUJOS.online, () => (sock ? menuOnline() : aviso('Abrí WORGS desde la sección Juegos de CV Chat para jugar online'))),
       tarjeta('En esta compu', 'De 2 a 4 jugadores pasándose el teclado, o contra la máquina.', DIBUJOS.local, () => menuLocal()),
       tarjeta('Práctica', 'Solo, sin reloj y con todas las armas.', DIBUJOS.practica, () => menuPractica()),
       tarjeta('Cómo se juega', 'Las reglas y las teclas.', DIBUJOS.ayuda, () => menuAyuda()),

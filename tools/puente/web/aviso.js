@@ -3566,7 +3566,7 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['Shoppa', '#e0763a'] };
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], gusanos: ['Gusanos', '#a56ae0'], shoppa: ['WORGS', '#e0763a'] };
   const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'gusanos', 'shoppa'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
@@ -10802,7 +10802,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
-    { id: 'shoppa', nombre: 'Shoppa', sub: 'Shopper con serpientes · en prueba', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.png?v=1', fondo: '#2a1510', mesa: 'shJuego' },
+    { id: 'shoppa', nombre: 'WORGS', sub: 'Shopper, normal o contra la máquina · en prueba', evento: 'shoppa:inicio', tapa: () => '/puente/shoppa/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
   ];
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
@@ -10891,10 +10891,10 @@ document.addEventListener('pointerdown', (ev) => {
   // los turnos los lleva shoppa.js. Los eventos de adentro no llegan al chat, así que se le avisa al tiempo de uso
   // (uso.js) para que cuente mientras se juega. (Proyecto Gusanos se sacó: Shoppa es el que lo reemplaza.)
   function shJuego(mesa) {
-    page.appendChild(head('Shoppa', botonEnlace('/app?juegos=shoppa', 'Shoppa · __PUENTE_APP__')));
+    page.appendChild(head('WORGS', botonEnlace('/app?juegos=shoppa', 'WORGS · __PUENTE_APP__')));
     const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
     ifr.src = '/puente/shoppa/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
-    ifr.title = 'Shoppa'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+    ifr.title = 'WORGS'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
     let ultimo = 0;
     const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
     ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
@@ -13421,7 +13421,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     // de los enlaces a su misma direccion, asi que va aca la tarjeta de siempre (la de los demas enlaces), con
     // la tapa del juego y el texto que ven WhatsApp o X (vincular.js, JUEGOS_ENLACE). Al tocarla abre el juego.
     const TARJETA = {
-      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y Shoppa para jugar con la gente del chat.', v: '' },
+      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y WORGS para jugar con la gente del chat.', v: '' },
       truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },

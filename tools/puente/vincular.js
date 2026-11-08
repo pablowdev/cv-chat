@@ -1433,7 +1433,7 @@ async function handle(req, res) {
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
 // muestran la tapa del juego en vez del logo.
 const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y Shoppa para jugar con la gente del chat.' },
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y WORGS para jugar con la gente del chat.' },
   truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },

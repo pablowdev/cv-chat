@@ -222,7 +222,7 @@ function lobby(me) {
 
 function create(me, d) {
   const otra = [...games.values()].find(g => g.estado !== 'terminada' && activo(g, seat(g, me)));
-  if (otra) return { error: 'Ya estás en una partida de Shoppa. Terminá esa o salí de la sala.' };
+  if (otra) return { error: 'Ya estás en una partida de WORGS. Terminá esa o salí de la sala.' };
   if ([...games.values()].filter(g => g.jugadores[0] === me && g.estado === 'esperando').length >= 10) {
     return { error: 'Tenés muchas salas abiertas. Cerrá alguna.' };
   }
@@ -254,7 +254,7 @@ function join(me, d) {
   if (!g.publica) return { error: 'Esa sala es privada.' };
   if (jugadoresActivos(g).length >= MAX) return { error: 'La sala está llena (5 jugadores).' };
   const otra = [...games.values()].find(x => x !== g && x.estado !== 'terminada' && activo(x, seat(x, me)));
-  if (otra) return { error: 'Ya estás en otra partida de Shoppa. Terminá esa primero.' };
+  if (otra) return { error: 'Ya estás en otra partida de WORGS. Terminá esa primero.' };
   g.jugadores.push(me);
   g.listos.push(false);
   g.fuera.push(false);
