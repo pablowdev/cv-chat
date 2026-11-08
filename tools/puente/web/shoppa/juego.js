@@ -266,7 +266,7 @@
       mapa: 'fabrica', turno, fase, tiempo, cajaN, nTurno, cajaTomada, ataco, arma, viento: J.viento,
       gusanos: jug.map((j, i) => ({ equipo: i, muerto: j.serp.estado === 'muerta' })),
       armas: jug.map(j => j.armas),
-      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, sogaAng: s.sogaAng, sinControl: s.sinControl, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
+      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, sogaAng: s.sogaAng, sinControl: s.sinControl, rueda: s.rueda, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
       cosas: J.cosas.map(g => ({ ...g })),
       efectos: J.efectos.filter(e => e.t < 3),
       textos: textos.filter(t => t.v > 1.6).map(t => ({ ...t })),
@@ -332,6 +332,39 @@
       if (s.inc !== undefined) s.inc = Math.atan2(Math.sin(s.inc), Math.cos(s.inc));
       s.inc = (s.inc === undefined ? inc : s.inc + (inc - s.inc) * 0.35);
     }
+    // colgada (como en el juego clasico, medido en video): agarrada de la soga con la cabeza, el cuerpo casi
+    // perpendicular a la soga, para atras de donde mira, y todo gira con la soga. Despues de soltarla va
+    // enrollada y rueda (s.rueda, del motor)
+    const pose = s.soga ? 'colgada' : (s.estado === 'aire' && Number.isFinite(s.sogaAng) && !s.giro ? 'rueda' : null);
+    if (pose === 'colgada') {
+      const p = s.soga.piv[s.soga.piv.length - 1];
+      s.inc = undefined;
+      x.save(); x.translate(s.x, s.y - 6); x.rotate(Math.atan2(p.x - s.x, (s.y - 6) - p.y));
+    } else if (pose === 'rueda') {
+      // el giro se lleva en el dibujo, con el tiempo (1/16 de radian por pixel, a 50 pasos por segundo): asi
+      // tambien se ve bien en las pantallas de los demas, que reciben la velocidad cada tanto
+      s.inc = undefined;
+      const pasos = s.tRueda ? Math.min(6, (t - s.tRueda) / 20) : 0;
+      s.ruedaVis = (s.ruedaVis || 0) + s.vx * M.C.RUEDA * pasos; s.tRueda = t;
+      x.save(); x.translate(s.x, s.y); x.rotate(s.ruedaVis);
+    }
+    if (pose !== 'rueda') s.tRueda = 0;
+    if (pose) {
+      // los puntos del cuerpo (de la cola a la cabeza) y donde va la cabeza
+      let ctrl, hx, hy;
+      if (pose === 'colgada') {
+        ctrl = [[-D * 16.5, 2.6], [-D * 13.2, 4.6], [-D * 9.6, 5.8], [-D * 6.0, 6.2], [-D * 2.8, 5.6], [-D * 0.4, 4.6], [D * 1.4, 4.2], [D * 1.6, 3.6]];
+        hx = D * 1.8; hy = 2.6;
+      } else {
+        // enrollada como una C (la cola y la cabeza casi se tocan)
+        const arco = (g) => { const a = g * Math.PI / 180; return [D * Math.cos(a) * 6.2, -Math.sin(a) * 6.2 + 1]; };
+        ctrl = [205, 167, 129, 91, 53, 15, -23, -61].map(arco);
+        [hx, hy] = arco(-98);
+      }
+      dibujarCuerpo(ctrl, hx, hy, D);
+      x.restore();
+      return;
+    }
     const mov = s.estado === 'suelo' && s.cola.length > 1 && Math.abs(s.cola[0][0] - s.cola[1][0]) > 0.1;
     // caminando: como en el juego clasico, avanza de a empujones; en el empujon el cuerpo se estira para
     // adelante y baja la cabeza, y despues se vuelve a juntar (sigue el paso del motor, s.fase de 18)
@@ -343,6 +376,12 @@
     // la forma (de la cola a la cabeza): punta de la cola apoyada atras, una joroba, la panza abajo,
     // el pecho que sale para adelante y el cuello que sube a la cabeza; caminando la joroba se aplana
     const ctrl = [[-D * (7.8 + e2 * 0.5), 7.2], [-D * (7.0 + e2 * 0.4), 4.6 + e1 * 0.5], [-D * (5.2 + e2 * 0.3), 2.6 + e1 * 1.0], [-D * (3.4 + e2 * 0.2), 5.8 + e1 * 0.4], [-D * 1.0, 6.9], [D * (1.3 + e1 * 0.5), 4.0 + e2 * 0.3 + o * 0.2], [D * (0.6 + e1 * 0.9) + o, 0.0 + e2 * 0.7], [D * (1.0 + e1 * 1.3) + o * 0.5, -3.6 + e2 * 1.1]];
+    dibujarCuerpo(ctrl, D * (0.8 + e1 * 1.3), -7.6 + e2 * 1.1, D);
+    x.restore();
+  }
+
+  // el cuerpo y la cabeza de una serpiente, ya ubicada y girada: ctrl son los puntos de la cola a la cabeza
+  function dibujarCuerpo(ctrl, hx, hy, D) {
     const anchos = [3.2, 3.0, 3.4, 4.0, 4.8, 5.0, 4.8, 5.2];
     const pts = [], an = [];
     for (let k = 0; k < ctrl.length - 1; k++) {
@@ -355,8 +394,7 @@
     pts.push(ctrl[ctrl.length - 1]); an.push(anchos[anchos.length - 1]);
     const trazo = (extra, color) => { x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round'; for (let k = 1; k < pts.length; k++) { x.lineWidth = an[k] + extra; x.beginPath(); x.moveTo(pts[k - 1][0], pts[k - 1][1]); x.lineTo(pts[k][0], pts[k][1]); x.stroke(); } };
     // cabeza y cuerpo son una sola pieza: primero el borde de todo junto, despues el relleno de todo
-    const hx = D * (0.8 + e1 * 1.3), hy = -7.6 + e2 * 1.1;
-    const cab = (extra, color) => { x.fillStyle = color; x.beginPath(); x.ellipse(hx, hy, 4.6 + extra, 4.9 + extra, D * 0.15, 0, Math.PI * 2); x.fill(); };
+    const cab =(extra, color) => { x.fillStyle = color; x.beginPath(); x.ellipse(hx, hy, 4.6 + extra, 4.9 + extra, D * 0.15, 0, Math.PI * 2); x.fill(); };
     trazo(1.4, '#b9805c'); cab(0.7, '#b9805c'); trazo(0, '#f1c6a2'); cab(0, '#f1c6a2');
     x.strokeStyle = '#fbe4cf'; x.lineWidth = 0.9; x.beginPath(); const k0 = Math.floor(pts.length * 0.55); x.moveTo(pts[k0][0] + D * 1.2, pts[k0][1]); for (let k = k0 + 1; k < pts.length - 2; k++) x.lineTo(pts[k][0] + D * 1.1, pts[k][1]); x.stroke();
     // los ojos grandes (el de adelante un poco mas chico), mirando para donde va
@@ -370,7 +408,6 @@
     x.strokeStyle = '#3a2418'; x.lineWidth = 0.75; x.lineCap = 'round'; x.beginPath();
     x.moveTo(hx - D * 0.2, hy - 3.0); x.lineTo(hx + D * 1.8, hy - 3.4); x.moveTo(hx + D * 2.6, hy - 3.4); x.lineTo(hx + D * 4.0, hy - 3.0); x.stroke();
     x.strokeStyle = '#9c6648'; x.lineWidth = 0.5; x.beginPath(); x.arc(hx + D * 2.6, hy + 1.9, 1.1, 0.2 * Math.PI, 0.8 * Math.PI); x.stroke();
-    x.restore();
   }
 
   function dibujar(t) {

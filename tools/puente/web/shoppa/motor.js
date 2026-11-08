@@ -37,7 +37,12 @@
     SOGA_EMPUJE: 0.08,        // el balanceo: empujon horizontal
     SOGA_ROCE: 0.985,         // lo que queda de la velocidad en cada paso colgada
     SOGA_VMAX: 16,            // tope de velocidad colgado (el valor por defecto del juego clasico: 16 px/paso)
-    SOGA_REBOTE: 0.6,         // al chocar colgado contra el terreno (tambien contra el techo: asi sale el "spike")
+    // al chocar colgado contra el terreno (paredes y techo: asi sale el "spike"). Medido en 28 rebotes del tutorial
+    // de "power roping": sin flechas conserva ~0,4 de la velocidad; con izquierda o derecha apretada, ~1
+    SOGA_REBOTE: 0.4, SOGA_REBOTE_TECLA: 1.0,
+    // el giro en el aire despues de soltar la soga ("rope roll"): enrollada, rueda 1/16 de radian por cada pixel
+    // que avanza en horizontal (medido en 14 vuelos: 3,58 grados por pixel)
+    RUEDA: 1 / 16,
     // Volver a tirarla en el aire (medido cuadro por cuadro en un tutorial con las teclas en pantalla, 28 tiros):
     // sale espejada respecto de la vertical, para el lado en que colgaba la serpiente del enganche anterior y con el
     // mismo angulo, hasta un maximo de ~36 grados de la vertical (colgando mas acostada, o por encima del enganche,
@@ -247,15 +252,17 @@
     if (s.estado === 'suelo') s.vx = 0;
     s.tiros = Infinity; // al tocar el piso, la soga vuelve a tener todos sus tiros
     // y se olvida la anterior: la proxima se apunta con la mira. Una soga que venia saliendo se corta
-    s.sogaAng = null; s.sinControl = false; s.gancho = null;
+    s.sogaAng = null; s.sinControl = false; s.gancho = null; s.rueda = null;
   }
 
   function pasoAire(J, s) {
     const T = J.T;
     s.vy = Math.min(C.VMAX, s.vy + C.GRAV);
     s.vx = Math.max(-C.VMAX, Math.min(C.VMAX, s.vx));
-    if (Math.abs(s.vx) > 0.05 && !s.atras) s.dir = s.vx > 0 ? 1 : -1;
+    // en el aire no se da vuelta (en el juego clasico sigue mirando para donde miraba, aunque vuele para el otro lado)
     s.aireT = (s.aireT || 0) + 1;
+    // despues de soltar la soga va enrollada y rueda con lo que avanza
+    if (Number.isFinite(s.sogaAng)) s.rueda = (s.rueda || 0) + s.vx * C.RUEDA;
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(s.vx), Math.abs(s.vy))));
     for (let i = 0; i < n && s.estado === 'aire'; i++) {
       if (s.vx) moverX(T, s, s.vx / n, C.REBOTE);
@@ -301,7 +308,7 @@
         if (L < 20 || !T.libre(ox, oy, hx, hy, 2)) return;
         s.soga = { piv: [{ x: hx, y: hy, s: 0 }], L: Math.max(C.SOGA_MIN, Math.min(C.SOGA_LARGO, L)), fijo: 0 };
         s.estado = 'soga'; s.salto = null;
-        s.sogaAng = Math.atan2(s.x - hx, s.y - hy);
+        s.sogaAng = Math.atan2(s.x - hx, s.y - hy); s.rueda = null; s.giro = 0; s.atras = false;
         return;
       }
       g.d = nd; g.x = nx; g.y = ny;
@@ -314,11 +321,15 @@
     const ultimo = () => R.piv[R.piv.length - 1];
     // acortar / alargar (medido en partidas: unos 4 px por paso en los dos sentidos)
     if (e.arr) acortar(T, s);
-    if (e.aba) R.L = Math.min(C.SOGA_LARGO, R.L + C.SOGA_ALARGA);
+    if (e.aba) alargar(T, s);
     // el balanceo: un empujon horizontal chico para el lado que se aprieta (la soga se queda con lo que va
-    // hacia afuera; abajo empuja entero y con la soga acostada casi no hace nada, como en el juego clasico)
+    // hacia afuera; abajo empuja entero y con la soga acostada casi no hace nada, como en el juego clasico).
+    // No la da vuelta: colgada sigue mirando para donde miraba (medido)
     const d = (e.izq ? -1 : 0) + (e.der ? 1 : 0);
-    if (d) { s.vx += d * C.SOGA_EMPUJE; s.dir = d; }
+    if (d) s.vx += d * C.SOGA_EMPUJE;
+    // al chocar colgada: con izquierda o derecha apretada rebota casi sin perder (medido: ~1, la "potencia" de
+    // los power moves); sin apretar nada pierde mas de la mitad (~0,4)
+    const reb = d ? C.SOGA_REBOTE_TECLA : C.SOGA_REBOTE;
     s.vy += C.GRAV;
     // el tope de velocidad colgada (en cualquier direccion)
     const v = Math.hypot(s.vx, s.vy);
@@ -328,11 +339,11 @@
     let apoyada = false;
     for (let i = 0; i < n && s.estado === 'soga'; i++) {
       const ax = s.x, ay = s.y;
-      if (s.vx) moverX(T, s, s.vx / n, C.SOGA_REBOTE);
+      if (s.vx) moverX(T, s, s.vx / n, reb);
       const r = moverY(T, s, s.vy / n);
       if (r === 'piso') { apoyada = true; s.vy = 0; }
-      // contra el techo rebota (medido: sube a ~7 px/cuadro, baja a ~5): el "spike", que despues cae casi derecho
-      else if (r === 'techo') s.vy = -s.vy * C.SOGA_REBOTE;
+      // contra el techo rebota: el "spike", que despues cae casi derecho
+      else if (r === 'techo') s.vy = -s.vy * reb;
       enrollar(T, s, ax, ay);
       restringir(T, s, ax, ay);
     }
@@ -358,6 +369,18 @@
       const vr = s.vx * ux + s.vy * uy;
       if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
     }
+    R.L = nL;
+  }
+  // alargar: la vara empuja a la serpiente hacia afuera 4 px (si el terreno no lo impide; si lo impide, no se
+  // alarga: en el juego clasico la soga sale de a 4 px y puede quedar corta del piso)
+  function alargar(T, s) {
+    const R = s.soga, p = R.piv[R.piv.length - 1];
+    const nL = Math.min(C.SOGA_LARGO, R.L + C.SOGA_ALARGA);
+    const r = nL - R.fijo, dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (r <= d) { R.L = nL; return; }
+    const ux = dx / d, uy = dy / d, k = Math.ceil(r - d);
+    for (let i = 1; i <= k; i++) if (choca(T, s.x + ux * (r - d) * i / k, s.y + uy * (r - d) * i / k)) return;
+    s.x = p.x + ux * r; s.y = p.y + uy * r;
     R.L = nL;
   }
 
@@ -396,38 +419,52 @@
     }
   }
 
-  // la soga no se estira (pero se afloja): si quedo mas lejos, vuelve al circulo y pierde la velocidad
-  // hacia afuera. Si ese punto cae en el terreno, se desliza por el borde (busca el angulo libre mas cerca)
+  // la soga es una vara rigida (medido en el tutorial de "power roping": con abajo apretado la serpiente se aleja
+  // 4 px por paso aunque este por encima del enganche, y por encima del enganche sigue el circulo sin caerse):
+  // siempre queda a la distancia exacta, del lado que este, y la velocidad gira con la soga (sin parte radial).
+  // Si ese punto cae en el terreno, se desliza por el borde (busca el angulo libre mas cerca); si no hay, se queda
+  // donde puede (y si el terreno la acerco, la soga queda de ese largo)
   function restringir(T, s, ax, ay) {
     const R = s.soga, p = R.piv[R.piv.length - 1], r = R.L - R.fijo;
     const dx = s.x - p.x, dy = s.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (d <= r) return;
+    if (Math.abs(d - r) < 1e-6) return;
     let ux = dx / d, uy = dy / d, tx = p.x + ux * r, ty = p.y + uy * r;
+    // empujarla hacia afuera contra el terreno (apoyada en el piso, por ejemplo): no se la mueve por el arco;
+    // avanza hasta el ultimo punto libre y la soga queda de ese largo (asi se apoya y se queda quieta)
+    if (d < r && choca(T, tx, ty)) {
+      let k = 0; const n = Math.ceil(r - d);
+      while (k < n && !choca(T, s.x + ux * (k + 1), s.y + uy * (k + 1))) k++;
+      s.x += ux * k; s.y += uy * k;
+      R.L = R.fijo + Math.max(C.SOGA_MIN, d + k);
+      const vr = s.vx * ux + s.vy * uy; if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+      return;
+    }
     if (choca(T, tx, ty)) {
       const base = Math.atan2(uy, ux); let libre = null;
       for (let k = 1; k <= 12 && !libre; k++) for (const sg of [-1, 1]) {
         const a = base + sg * k * 0.02, x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
         if (!choca(T, x, y)) { libre = [x, y, Math.cos(a), Math.sin(a)]; break; }
       }
-      if (!libre) { s.x = ax; s.y = ay; const vr = s.vx * ux + s.vy * uy; if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; } return; }
+      if (!libre) {
+        if (d > r) { s.x = ax; s.y = ay; } else R.L = R.fijo + Math.max(C.SOGA_MIN, d);
+        const vr = s.vx * ux + s.vy * uy; s.vx -= vr * ux; s.vy -= vr * uy;
+        return;
+      }
       [tx, ty, ux, uy] = libre;
       s.x = tx; s.y = ty;
-      const vr = s.vx * ux + s.vy * uy;
-      if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+      const vr = s.vx * ux + s.vy * uy; s.vx -= vr * ux; s.vy -= vr * uy;
       return;
     }
-    // la velocidad gira con la soga: se queda la parte a lo largo del giro (medida donde estaba) y se pierde
-    // solo lo que iba hacia afuera. Asi el balanceo no pierde energia (antes se iba frenando solo: en el juego
-    // clasico, sin tocar nada, la serpiente sigue yendo y viniendo igual)
+    // la velocidad gira con la soga: se queda la parte a lo largo del giro (medida donde estaba) y la parte
+    // radial se pierde (al soltar no queda la de acortar: medido)
     const ox = ax - p.x, oy = ay - p.y, od = Math.hypot(ox, oy);
     s.x = tx; s.y = ty;
     if (od > 1e-6) {
       const u0x = ox / od, u0y = oy / od;
-      const vt = s.vx * -u0y + s.vy * u0x, vr0 = Math.min(0, s.vx * u0x + s.vy * u0y);
-      s.vx = vt * -uy + vr0 * ux; s.vy = vt * ux + vr0 * uy;
+      const vt = s.vx * -u0y + s.vy * u0x;
+      s.vx = vt * -uy; s.vy = vt * ux;
     } else {
-      const vr = s.vx * ux + s.vy * uy;
-      if (vr > 0) { s.vx -= vr * ux; s.vy -= vr * uy; }
+      const vr = s.vx * ux + s.vy * uy; s.vx -= vr * ux; s.vy -= vr * uy;
     }
   }
 
