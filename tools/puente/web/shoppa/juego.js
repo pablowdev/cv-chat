@@ -133,7 +133,7 @@
   let listo = 0, comentario = null;
   function empezarTurno(viento) {
     fase = 'listo'; listo = LISTO * 50; tiempo = reglas.turno * 50; quietos = 0; cajaTomada = false; ataco = false; carga = null;
-    tirosEsc = 0; usoSoga = false; foco = null; cam.libre = false; cpuE = null;
+    tirosEsc = 0; usoSoga = false; foco = null; cam.libre = false; cpuE = null; preparaEsc = null;
     nTurno++;
     J.viento = viento != null ? viento : Math.round(azar(semilla + nTurno * 31)() * 140 - 70);
     // la muerte subita (modo normal): cuando se acaba el reloj de la ronda, el agua sube en cada turno
@@ -202,8 +202,8 @@
     if (e.key === 'q' || e.key === 'Q') ciclarArma(-1);
     if (e.key === 'e' || e.key === 'E') ciclarArma(1);
     if (e.key === 'r' || e.key === 'R') elegirArma('soga');
-    if (e.key === '+' || e.key === '=') cam.z = Math.min(4, cam.z + 0.25);
-    if (e.key === '-') cam.z = Math.max(0.6, cam.z - 0.25);
+    if (e.key === '+' || e.key === '=') zoom(cam.z + 0.25);
+    if (e.key === '-') zoom(cam.z - 0.25);
     if (e.key === 'Tab') { e.preventDefault(); abrirPanel(); }
     if (e.key === 'Escape') abrirPanel(false);
     if (TECLAS_F[e.key]) {
@@ -237,7 +237,17 @@
   let arrastre = null;
   const alMapa = (px, py) => (vista ? [vista.vx + (px * vista.d - vista.W / 2) / vista.z, vista.vy + (py * vista.d - vista.H / 2) / vista.z] : [0, 0]);
   const apuntaAereo = () => arma === 'aereo' && juegoYo() && (fase === 'mover' || fase === 'listo') && !ataco && actual() && actual().estado === 'suelo';
+  // el zoom: con + y −, con la ruedita del mouse y pellizcando con dos dedos (de 0,3 a 4)
+  const ZOOM_MIN = 0.3, ZOOM_MAX = 4;
+  // (alejando, hasta que el mapa entra justo de ancho en la pantalla)
+  const zoom = (z) => { const min = Math.max(ZOOM_MIN, Math.min(1, innerWidth / (def ? def.w : 1920))); cam.z = Math.max(min, Math.min(ZOOM_MAX, z)); };
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); if (J) zoom(cam.z * Math.pow(1.0015, -e.deltaY)); }, { passive: false });
+  const toques = new Map();
+  let pellizco = null;
+  const distToques = () => { const [a, b] = [...toques.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
   cv.addEventListener('pointerdown', (e) => {
+    toques.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (toques.size >= 2) { pellizco = { d: distToques(), z: cam.z }; arrastre = null; return; }
     if (e.button !== 0) return;
     if (panel) { abrirPanel(false); return; }
     raton.x = e.clientX; raton.y = e.clientY; raton.en = true;
@@ -245,6 +255,8 @@
     cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
   });
   cv.addEventListener('pointermove', (e) => {
+    if (toques.has(e.pointerId)) toques.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pellizco && toques.size >= 2) { zoom(pellizco.z * distToques() / pellizco.d); return; }
     raton.x = e.clientX; raton.y = e.clientY; raton.en = true;
     if (!arrastre || !vista) return;
     const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
@@ -253,6 +265,8 @@
     cam.x = arrastre.cx - dx * vista.d / vista.z; cam.y = arrastre.cy - dy * vista.d / vista.z;
   });
   const soltarRaton = (e) => {
+    if (e) toques.delete(e.pointerId);
+    if (toques.size < 2) pellizco = null;
     const a = arrastre; arrastre = null;
     if (!a || a.movio || !e || e.type !== 'pointerup' || !apuntaAereo()) return;
     const [mx, my] = alMapa(e.clientX, e.clientY), s = actual();
@@ -276,6 +290,7 @@
     ponerArma(a);
   }
   function ponerArma(a) {
+    preparaEsc = null;
     if (fase === 'listo') fase = 'mover';
     const cambio = arma !== a; arma = a; carga = null; jug[turno].ultima = a; pintarArmas();
     if (cambio) avisoArma();
@@ -433,6 +448,9 @@
     return true;
   }
   // la escopeta: el primer tiro gasta el arma; despues queda quieta (solo apunta) hasta el segundo
+  // (la escopeta se prepara antes de cada tiro, como en el juego clasico: medio segundo)
+  const PREPARA_ESC = 25;
+  let preparaEsc = null;
   function escopeta(s) {
     if (tirosEsc === 0) {
       if (ataco) return;
@@ -442,13 +460,15 @@
     }
     M.escopetazo(J, s); tirosEsc--; cam.libre = false;
     if (tirosEsc > 0) aviso(`Queda ${tirosEsc} tiro`, jug[turno].color);
-    else if (!reglas.practica) { fase = 'retirada'; tiempo = RETIRADA * 50; }
+    else { aviso(reglas.practica ? 'Escopeta: otra vez lista' : 'Sin tiros', jug[turno].color); if (!reglas.practica) { fase = 'retirada'; tiempo = RETIRADA * 50; } }
     pintarArmas();
   }
 
   function entradaDelPaso(s) {
     const e = { izq: apretada.izq, der: apretada.der, arr: apretada.arr, aba: apretada.aba, shift: apretada.shift, enter: recien.enter, retro: recien.retro, soga: false };
     if (!s || fase === 'esperando' || fase === 'listo' || fase === 'muriendo') { for (const k in recien) recien[k] = false; return {}; }
+    // (si se cambio de arma o ya no esta parada, la escopeta deja de prepararse)
+    if (preparaEsc !== null && (arma !== 'escopeta' || s.estado !== 'suelo')) { preparaEsc = null; carga = null; }
     // entre los dos tiros de la escopeta no se puede mover (solo apuntar)
     if (tirosEsc > 0) { e.izq = e.der = false; e.enter = e.retro = false; }
     if (arma === 'soga') {
@@ -462,9 +482,16 @@
           if (apretada.espacio && carga < 1) carga = Math.min(1, carga + 1 / C.CARGA);
           else { const c = carga; carga = null; atacar(() => M.lanzar(J, s, c, arma)); }
         }
+      } else if (arma === 'escopeta') {
+        // preparandola: no se mueve; al llenarse, tira
+        if (preparaEsc === null && recien.espacio && (tirosEsc > 0 || !ataco)) { preparaEsc = 0; carga = 0; }
+        if (preparaEsc !== null) {
+          e.izq = e.der = false; e.enter = e.retro = false;
+          carga = Math.min(1, ++preparaEsc / PREPARA_ESC);
+          if (preparaEsc >= PREPARA_ESC) { preparaEsc = null; carga = null; escopeta(s); }
+        }
       } else if (recien.espacio) {
-        if (arma === 'escopeta') escopeta(s);
-        else if (arma === 'bate') atacar(() => M.batazo(J, s));
+        if (arma === 'bate') atacar(() => M.batazo(J, s));
         else if (arma === 'puno') atacar(() => M.punetazo(J, s));
         else if (arma === 'soplete') atacar(() => M.soplete(J, s));
         else if (arma === 'dinamita' || arma === 'mina') atacar(() => M.poner(J, s, arma));
@@ -591,9 +618,10 @@
       while (carga < acc.carga - 1e-9) { carga = Math.min(acc.carga, carga + 1 / C.CARGA); yield {}; }
       const c = carga; carga = null; atacar(() => M.lanzar(J, s, c, acc.arma));
     } else if (acc.arma === 'escopeta') {
-      escopeta(s);
-      for (let k = 0; k < 30; k++) yield {};
-      if (tirosEsc > 0) escopeta(s);
+      for (let k = 1; k <= PREPARA_ESC; k++) { carga = k / PREPARA_ESC; yield {}; }
+      carga = null; escopeta(s);
+      for (let k = 0; k < 20; k++) yield {};
+      if (tirosEsc > 0) { for (let k = 1; k <= PREPARA_ESC; k++) { carga = k / PREPARA_ESC; yield {}; } carga = null; escopeta(s); }
     } else if (acc.arma === 'bate') atacar(() => M.batazo(J, s));
     else if (acc.arma === 'puno') atacar(() => M.punetazo(J, s));
     else if (acc.arma === 'dinamita' || acc.arma === 'mina') atacar(() => M.poner(J, s, acc.arma));
@@ -1104,12 +1132,13 @@
     if (particulas.length > 400) particulas.splice(0, particulas.length - 400);
     // los tiros de escopeta (una raya que se apaga) y el bate (un arco)
     for (const q of trazos) {
-      q.v -= 0.08;
-      x.strokeStyle = `rgba(255,240,180,${Math.max(0, q.v)})`; x.lineWidth = 1;
-      x.beginPath();
-      if (q.bate) x.arc(q.x0, q.y0, 9, q.dir > 0 ? -1.4 : Math.PI - 0.6, q.dir > 0 ? 0.6 : Math.PI + 1.4);
-      else { x.moveTo(q.x0, q.y0); x.lineTo(q.x1, q.y1); }
-      x.stroke();
+      q.v -= q.bate ? 0.08 : 0.035;
+      const a = Math.max(0, Math.min(1, q.v));
+      if (q.bate) { x.strokeStyle = `rgba(255,240,180,${a})`; x.lineWidth = 1; x.beginPath(); x.arc(q.x0, q.y0, 9, q.dir > 0 ? -1.4 : Math.PI - 0.6, q.dir > 0 ? 0.6 : Math.PI + 1.4); x.stroke(); continue; }
+      x.lineCap = 'round';
+      x.strokeStyle = `rgba(255,200,90,${a * 0.55})`; x.lineWidth = 2.6; x.beginPath(); x.moveTo(q.x0, q.y0); x.lineTo(q.x1, q.y1); x.stroke();
+      x.strokeStyle = `rgba(255,250,220,${a})`; x.lineWidth = 1; x.beginPath(); x.moveTo(q.x0, q.y0); x.lineTo(q.x1, q.y1); x.stroke();
+      if (q.v > 0.75) { x.fillStyle = `rgba(255,230,120,${(q.v - 0.75) * 4})`; x.beginPath(); x.arc(q.x0, q.y0, 4, 0, Math.PI * 2); x.fill(); }
     }
     trazos = trazos.filter(q => q.v > 0);
     // nombres y vida arriba de cada una: dos cartelitos negros con borde, en el color del equipo (como en el juego
@@ -1177,9 +1206,11 @@
     x.globalAlpha = 1; textos = textos.filter(z => z.v > 0);
     // el agua (cuando sube en la muerte subita, sube despacito)
     aguaVis += (J.T.agua - aguaVis) * 0.03; if (Math.abs(J.T.agua - aguaVis) < 0.2) aguaVis = J.T.agua;
-    x.fillStyle = 'rgba(38,70,160,0.92)'; x.beginPath(); x.moveTo(-200, def.h + 300);
-    for (let i = -200; i <= def.w + 200; i += 8) x.lineTo(i, aguaVis + Math.sin(i / 34 + t / 420) * 2.5);
-    x.lineTo(def.w + 200, def.h + 300); x.closePath(); x.fill();
+    // (el agua llega a los bordes de lo que se ve, aunque la camara este muy alejada)
+    const ai = Math.min(-200, vx - vw / 2 - 20), ad = Math.max(def.w + 200, vx + vw / 2 + 20), ab = Math.max(def.h + 300, vy + vh / 2 + 20);
+    x.fillStyle = 'rgba(38,70,160,0.92)'; x.beginPath(); x.moveTo(ai, ab);
+    for (let i = ai; i <= ad; i += 8) x.lineTo(i, aguaVis + Math.sin(i / 34 + t / 420) * 2.5);
+    x.lineTo(ad, ab); x.closePath(); x.fill();
     hud();
   }
 
@@ -1315,7 +1346,8 @@
     ['Q / E', 'arma anterior / siguiente'],
     ['1 a 5 · B', 'mecha de las granadas (segundos) · rebote mínimo o máximo'],
     ['Clic y arrastrar', 'mover la cámara · con el ataque aéreo, clic donde tiene que caer'],
-    ['+ −', 'acercar / alejar'],
+    ['+ − · ruedita · pellizcar', 'acercar / alejar la cámara'],
+    ['Escopeta', 'Espacio la prepara medio segundo y tira; tiene dos tiros por turno'],
     ['N', 'en la práctica, empezar de nuevo'],
   ];
   function menuAyuda() {
