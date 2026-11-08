@@ -190,7 +190,8 @@ function calcular(rango) {
   const reacciones = reac(sqlIni, sqlFin);
   const reaccionesAnt = reac(sqlIniAnt, sqlIni);
   const msIni = Date.parse(ini + 'T03:00:00Z'), msIniAnt = Date.parse(iniAnt + 'T03:00:00Z');
-  const partidasDe = (a, b) => ['puente_truco_partidas', 'puente_ajedrez_partidas', 'puente_funball_partidas', 'puente_pool_partidas']
+  // (todos los juegos: GlobalSiege y WORGS tambien; si una tabla no esta todavia, cuenta 0)
+  const partidasDe = (a, b) => ['puente_truco_partidas', 'puente_ajedrez_partidas', 'puente_funball_partidas', 'puente_pool_partidas', 'puente_mr_partidas', 'puente_worgs_partidas']
     .reduce((s, t) => s + contar(`SELECT COUNT(*) n FROM ${t} WHERE fin >= ? AND fin < ?`, a, b), 0);
   const partidas = partidasDe(msIni, 9e15), partidasAnt = partidasDe(msIniAnt, msIni);
   const publicaciones = contar("SELECT COUNT(*) n FROM puente_mercado WHERE creado >= ? AND creado < ? AND IFNULL(origen, '') != 'foro'", msIni, 9e15);

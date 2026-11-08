@@ -224,7 +224,7 @@ function calcular(rango) {
 
   // Ahora: las mesas esperando rival y las partidas en juego
   const ahoraJ = { esperando: 0, jugando: 0 };
-  for (const t of ['puente_truco_mesas', 'puente_funball_mesas', 'puente_ajedrez_mesas', 'puente_mr_mesas']) {
+  for (const t of ['puente_truco_mesas', 'puente_funball_mesas', 'puente_ajedrez_mesas', 'puente_mr_mesas', 'puente_pool_mesas', 'puente_shoppa_mesas']) {
     // ("jugando": las que se movieron en el ultimo dia; las que quedaron abandonadas no cuentan)
     for (const r of filas(`SELECT estado, actualizado FROM ${t}`)) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }
