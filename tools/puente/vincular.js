@@ -440,6 +440,7 @@ function injectScript(req, res, src) {
           html = html.replace('</body>', '<script src="/puente/email.js" defer></script></body>');
         }
         html = shareTags(html, req.url);
+        { const quien = lectorDe(req); if (quien) log(`tarjeta: ${quien} leyo ${String(req.url || '').slice(0, 120)}`); }
         body = Buffer.from(temaFijo.pageHead(db, instalable.pageHead(db, html)), 'utf8');
         if (this.statusCode === 200) {
           const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 27) + '"';
@@ -481,8 +482,20 @@ const armados = new Map();
 const mismaHuella = (pedido, etag) => String(pedido || '').split(/\s*,\s*/).some(t => t.replace(/^W\//, '') === etag);
 function send(res, status, type, body, headers = {}) {
   if (res.headersSent) return;
-  res.writeHead(status, { 'Content-Type': type + '; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
+  // Las imagenes, sonidos y letras van sin "charset" y con su largo (Content-Length): los lectores de vistas previas
+  // (X sobre todo) son quisquillosos con eso y dejan la tarjeta sin imagen. El resto, como siempre
+  const binario = /^(image\/(?!svg)|audio\/|video\/|font\/)/.test(type) && body != null && (Buffer.isBuffer(body) || ArrayBuffer.isView(body));
+  const cab = { 'Content-Type': binario ? type : type + '; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+  if (binario) cab['Content-Length'] = body.byteLength;
+  res.writeHead(status, { ...cab, ...headers });
   res.end(body);
+}
+// Los que leen enlaces para armar vistas previas (para anotar en el registro que vinieron y que se les dio)
+const LECTOR = /twitterbot|facebookexternalhit|facebot|whatsapp|telegrambot|discordbot|slackbot|linkedinbot|mastodon|signal|skypeuripreview|redditbot|applebot|embedly|vkshare|pinterest|iframely/i;
+const lectorDe = (req) => { const ua = String((req && req.headers && req.headers['user-agent']) || ''); const m = LECTOR.exec(ua); return m ? m[0] : null; };
+// La version de una imagen de tapa (cambia si cambia el archivo): asi X y los demas la vuelven a bajar
+function versionTapa(id) {
+  try { const st = fs.statSync(path.join(STATIC, 'tapas', id + '.jpg')); return st.size.toString(36) + Math.round(st.mtimeMs).toString(36); } catch { return ''; }
 }
 const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
 const redirect = (res, to) => send(res, 302, 'text/plain', '', { Location: to });
@@ -737,7 +750,9 @@ async function handle(req, res) {
   const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|worgs|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
-    if (!fs.existsSync(file)) return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen');
+    const quien = lectorDe(req);
+    if (!fs.existsSync(file)) { if (quien) warn(`tarjeta: ${quien} pidio ${p} y no esta`); return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen'); }
+    if (quien) log(`tarjeta: ${quien} bajo la imagen ${p} (${req.method}${req.headers.range ? ', ' + req.headers.range : ''})`);
     return send(res, 200, 'image/jpeg', fs.readFileSync(file), { 'Cache-Control': 'public, max-age=86400' });
   }
 
@@ -1451,7 +1466,7 @@ function shareTags(html, url) {
   let desc = server ? `El chat de ${server}. Entrá y creá tu cuenta.` : 'Entrá y creá tu cuenta.';
   let image = '/puente/logo-carga.png', grande = false, enlace = '/';
   // La tarjeta del chat, apaisada (1200x630, propia de cada servidor): si no esta, va el logo cuadrado
-  if (fs.existsSync(path.join(STATIC, 'tapas', 'chat.jpg'))) { image = '/puente/tapas/chat.jpg'; grande = true; }
+  if (fs.existsSync(path.join(STATIC, 'tapas', 'chat.jpg'))) { image = '/puente/tapas/chat.jpg?v=' + versionTapa('chat'); grande = true; }
   // La portada con algo mas (/?v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
   const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x)) : [];
   if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
@@ -1460,7 +1475,7 @@ function shareTags(html, url) {
   const juego = q && JUEGOS_ENLACE[qj || 'juegos'];
   if (juego && fs.existsSync(path.join(STATIC, 'tapas', (qj || 'juegos') + '.jpg'))) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;
-    image = `/puente/tapas/${qj || 'juegos'}.jpg`; grande = true;
+    image = `/puente/tapas/${qj || 'juegos'}.jpg?v=${versionTapa(qj || 'juegos')}`; grande = true;
     enlace = qj ? `/app?juegos=${qj}` : '/app?juegos';
     // con algo mas (?juegos=pool&v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
     const extra = new URL(String(url), 'http://x').searchParams;
@@ -1497,8 +1512,11 @@ function shareTags(html, url) {
     `<meta property="og:site_name" content="${esc(server || title)}"><meta property="og:description" content="${esc(desc)}">` +
     `<meta name="description" content="${esc(desc)}"><meta property="og:image" content="${esc(image)}">` +
     (medidas ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '') +
+    (/\.jpe?g(\?|$)/i.test(image) ? '<meta property="og:image:type" content="image/jpeg">' : /\.png(\?|$)/i.test(image) ? '<meta property="og:image:type" content="image/png">' : '') +
+    `<meta property="og:image:alt" content="${esc(title)}">` +
     (publicUrl ? `<meta property="og:url" content="${esc(publicUrl + enlace)}">` : '') +
-    `<meta name="twitter:card" content="${grande ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">`;
+    `<meta name="twitter:card" content="${grande ? 'summary_large_image' : 'summary'}"><meta name="twitter:title" content="${esc(title)}"><meta name="twitter:description" content="${esc(desc)}">` +
+    `<meta name="twitter:image" content="${esc(image)}"><meta name="twitter:image:alt" content="${esc(title)}">`;
   return html.replace(/<title[^>]*>[^<]*<\/title>/i, `<title>${esc(title)}</title>`).replace('</head>', tags + '</head>');
 }
 
