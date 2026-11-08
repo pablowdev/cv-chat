@@ -181,7 +181,7 @@
     J.efectos = J.efectos.filter(e => e.t < 20);
     if (J.borrados.length) { const fx = fondo.getContext('2d'); fx.globalCompositeOperation = 'destination-out'; for (const [bx, by, br] of J.borrados) { fx.beginPath(); fx.arc(bx, by, br, 0, Math.PI * 2); fx.fill(); } fx.globalCompositeOperation = 'source-over'; J.borrados = []; }
     // la mira
-    if (s.estado !== 'soga' && s.estado !== 'muerta') {
+    if (s.estado !== 'soga' && s.estado !== 'muerta' && (herramienta !== 'soga' || (s.sogaAng == null && !s.sinControl))) {
       const a = herramienta === 'soga' ? Math.min(0, s.mira) : s.mira;
       x.strokeStyle = '#ff4d6d'; x.lineWidth = 1; x.beginPath(); x.arc(s.x + Math.cos(a) * s.dir * 26, s.y - 4 + Math.sin(a) * 26, 2.5, 0, Math.PI * 2); x.stroke();
     }
@@ -210,7 +210,8 @@
   // ── El panel de ajustes: las medidas en vivo (y un boton para copiarlas) ──
   const AJUSTES = [
     ['GRAV', 'Gravedad', 0.05, 0.6, 0.005], ['CAMINAR', 'Caminar (px/paso)', 0.5, 3, 0.1],
-    ['SOGA_EMPUJE', 'Soga: balanceo (empuje)', 0, 0.8, 0.01],
+    ['SOGA_EMPUJE', 'Soga: balanceo (empuje)', 0, 0.8, 0.01], ['SOGA_ROCE', 'Soga: lo que conserva por paso', 0.95, 1, 0.001],
+    ['SOGA_ANG_MAX', 'Soga en el aire: ángulo máximo (rad)', 0.3, 1.2, 0.01],
     ['SOGA_VMAX', 'Soga: velocidad máxima', 6, 32, 1], ['SOGA_REBOTE', 'Soga: rebote contra paredes', 0, 1, 0.05], ['SOGA_MIN', 'Soga: largo mínimo', 4, 40, 1],
     ['SOGA_ACORTA', 'Soga: acortar (px/paso)', 0.5, 8, 0.1], ['SOGA_ALARGA', 'Soga: alargar (px/paso)', 0.5, 8, 0.1],
     ['SOGA_LARGO', 'Soga: largo máximo', 150, 700, 2], ['SOGA_VEL', 'Soga: velocidad del gancho', 6, 40, 1],

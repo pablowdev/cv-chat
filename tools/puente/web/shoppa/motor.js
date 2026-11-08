@@ -26,13 +26,23 @@
     // la soga (5 estrellas: 462 px y tiros ilimitados). Una soga de un solo lado: tira pero se afloja
     // (medido en partidas filmadas). Acortar y alargar: ~4 px por paso (medido: 200-225 px/s)
     // Medido cuadro por cuadro en una partida de Shopper filmada a 60 cuadros, con la camara quieta y escala 1:1
-    // (la soga llega justo a 462): el gancho vuela 20 px por paso, acortar y alargar son 4 px por paso, colgado no
-    // hay rozamiento (la energia se conserva) y el balanceo es un empujon chico, de ~0,19 px/paso², horizontal.
+    // (la soga llega justo a 462): el gancho vuela 20 px por paso y acortar y alargar son 4 px por paso (confirmado
+    // en el tutorial). El rozamiento y el empujon, abajo: los midio mejor el tutorial (balanceos largos, camara quieta).
     SOGA_LARGO: 462, SOGA_MIN: 14, SOGA_VEL: 20,
     SOGA_ACORTA: 4.0, SOGA_ALARGA: 4.0,
-    SOGA_EMPUJE: 0.19,        // el balanceo: empujon horizontal (antes 0.38 a lo largo del giro: el doble de fuerte)
-    SOGA_VMAX: 32,            // tope de velocidad colgado
-    SOGA_REBOTE: 0.6,         // al chocar colgado contra el terreno
+    // Medido en el tutorial (balanceos largos sin teclas, 4 de 4 dan lo mismo, error ~1,5 px): colgada pierde 1,5%
+    // de la velocidad por paso (un balanceo sin tocar nada se va frenando y se queda quieto). Y con izquierda o
+    // derecha apretada, quieta, se queda colgando a 18,3 grados: el empujon horizontal es 0.24 * tan(18,3) = 0.08
+    // (antes: 0.19 sin rozamiento, medido en otra partida)
+    SOGA_EMPUJE: 0.08,        // el balanceo: empujon horizontal
+    SOGA_ROCE: 0.985,         // lo que queda de la velocidad en cada paso colgada
+    SOGA_VMAX: 16,            // tope de velocidad colgado (el valor por defecto del juego clasico: 16 px/paso)
+    SOGA_REBOTE: 0.6,         // al chocar colgado contra el terreno (tambien contra el techo: asi sale el "spike")
+    // Volver a tirarla en el aire (medido cuadro por cuadro en un tutorial con las teclas en pantalla, 28 tiros):
+    // sale espejada respecto de la vertical, para el lado en que colgaba la serpiente del enganche anterior y con el
+    // mismo angulo, hasta un maximo de ~36 grados de la vertical (colgando mas acostada, o por encima del enganche,
+    // sale a ese maximo). El gancho vuela pegado a la serpiente (si cae, la soga sigue saliendo desde ella)
+    SOGA_ANG_MAX: 36.4 * Math.PI / 180,
     // la granada de prueba
     GRANADA_V: 12, CARGA: 50, GRANADA_REBOTE_X: 0.96, GRANADA_REBOTE_Y: 0.6,
     EXPLOSION_R: 48, EXPLOSION_DANO: 50, EXPLOSION_EMPUJE: 7,
@@ -90,7 +100,10 @@
     this.mira = -0.5;         // angulo de la mira (0 = horizontal, negativo = arriba)
     this.vida = 200;
     this.soga = null;         // { piv: [{x,y,s}], L, fijo }
-    this.gancho = null;       // el gancho volando: { x, y, dx, dy, d }
+    this.gancho = null;       // el gancho volando: { x, y, dx, dy, d } (d: cuanto salio desde la serpiente)
+    this.sogaAng = null;      // en el aire despues de una soga: el angulo al que colgaba (0 = derecho abajo del enganche,
+                              // positivo = a la derecha). La proxima soga sale espejada. En el piso se olvida
+    this.sinControl = false;  // se golpeo la cabeza despues de soltar la soga: no puede volver a tirarla hasta el piso
     this.salto = null;        // { tecla, t } esperando el doble toque
     this.caida = 0;           // el ultimo daño por caida (para mostrarlo)
     this.cola = [];           // por donde paso (para dibujar el cuerpo)
@@ -101,22 +114,23 @@
   function paso(J, s, e) {
     const T = J.T;
     if (s.estado === 'muerta') return;
-    // la mira (no colgado: ahi arriba/abajo es el largo de la soga)
-    if (s.estado !== 'soga') {
+    // la mira: solo parada en el piso (en el aire el juego clasico no la mueve; colgada, arriba/abajo es el largo)
+    if (s.estado === 'suelo') {
       if (e.arr) s.mira = Math.max(-Math.PI / 2, s.mira - C.MIRA);
       if (e.aba) s.mira = Math.min(Math.PI / 2, s.mira + C.MIRA);
     }
-    // la soga: tirarla (o soltarla si ya esta colgada)
+    // la soga: tirarla (o soltarla si ya esta colgada; al soltarla se acuerda del angulo al que colgaba)
     if (e.soga) {
       if (s.estado === 'soga') { s.estado = 'aire'; s.soga = null; }
-      else if (!s.gancho) tirarGancho(s);
+      else if (!s.gancho && !s.sinControl) tirarGancho(s);
     }
-    if (s.gancho) volarGancho(J, s);
 
     if (s.estado === 'suelo') pasoSuelo(J, s, e);
     else if (s.estado === 'desliza') pasoDesliza(J, s);
     else if (s.estado === 'aire') pasoAire(J, s);
     else if (s.estado === 'soga') pasoSoga(J, s, e);
+    // el gancho sale desde donde quedo la serpiente en este paso (asi la acompaña aunque caiga)
+    if (s.gancho) volarGancho(J, s);
 
     // el agua
     if (s.y - 4 > T.agua) { s.estado = 'muerta'; s.vida = 0; s.soga = null; s.gancho = null; }
@@ -232,6 +246,8 @@
     s.estado = Math.abs(s.vx) > 2.5 ? 'desliza' : 'suelo';
     if (s.estado === 'suelo') s.vx = 0;
     s.tiros = Infinity; // al tocar el piso, la soga vuelve a tener todos sus tiros
+    // y se olvida la anterior: la proxima se apunta con la mira. Una soga que venia saliendo se corta
+    s.sogaAng = null; s.sinControl = false; s.gancho = null;
   }
 
   function pasoAire(J, s) {
@@ -245,32 +261,50 @@
       if (s.vx) moverX(T, s, s.vx / n, C.REBOTE);
       const r = moverY(T, s, s.vy / n);
       if (r === 'piso') { aterrizar(s); break; }
-      if (r === 'techo') s.vy = 0;
+      if (r === 'techo') {
+        s.vy = 0;
+        // golpearse la cabeza despues de soltar la soga: pierde el control (como en el juego clasico por defecto)
+        if (Number.isFinite(s.sogaAng)) { s.sinControl = true; s.gancho = null; }
+      }
     }
     if (s.estado === 'aire') s.vx *= 0.999;
   }
 
   // ── La soga ──
-  function tirarGancho(s) {
-    // nunca por debajo de la horizontal (con todas las estrellas: hasta 90 grados de la vertical)
+  // para donde sale la soga: desde el piso o un salto, con la mira (nunca por debajo de la horizontal; con todas
+  // las estrellas, hasta 90 grados de la vertical). En el aire despues de otra soga, espejada: con el mismo angulo
+  // al que colgaba, para el lado en que estaba la serpiente, hasta SOGA_ANG_MAX de la vertical
+  function direccionSoga(s) {
+    if (Number.isFinite(s.sogaAng)) {
+      const a = Math.max(-C.SOGA_ANG_MAX, Math.min(C.SOGA_ANG_MAX, s.sogaAng));
+      return [Math.sin(a), -Math.cos(a)];
+    }
     let dx = Math.cos(s.mira) * s.dir, dy = Math.sin(s.mira);
     if (dy > -0.015) { dy = -0.015; const n = Math.hypot(dx, dy); dx /= n; dy /= n; }
+    return [dx, dy];
+  }
+  function tirarGancho(s) {
+    const [dx, dy] = direccionSoga(s);
     s.gancho = { x: s.x, y: s.y - 2, dx, dy, d: 0 };
   }
+  // el gancho sale SOGA_VEL px por paso desde la serpiente y la acompaña si se mueve (medido: aunque la serpiente
+  // caiga, la soga sigue saliendo con el mismo angulo desde ella)
   function volarGancho(J, s) {
-    const T = J.T, g = s.gancho;
+    const T = J.T, g = s.gancho, ox = s.x, oy = s.y - 2;
     for (let i = 0; i < C.SOGA_VEL; i++) {
-      const nx = g.x + g.dx, ny = g.y + g.dy;
+      const nd = g.d + 1, nx = ox + g.dx * nd, ny = oy + g.dy * nd;
       if (T.solido(nx, ny)) {
         // se engancha en el ultimo pixel libre (muy cerca, no engancha)
-        const L = Math.hypot(g.x - s.x, g.y - s.y);
+        const hx = ox + g.dx * g.d, hy = oy + g.dy * g.d;
+        const L = Math.hypot(hx - s.x, hy - s.y);
         s.gancho = null;
-        if (L < 20 || !T.libre(s.x, s.y - 2, g.x, g.y, 2)) return;
-        s.soga = { piv: [{ x: g.x, y: g.y, s: 0 }], L: Math.max(C.SOGA_MIN, Math.min(C.SOGA_LARGO, L)), fijo: 0 };
+        if (L < 20 || !T.libre(ox, oy, hx, hy, 2)) return;
+        s.soga = { piv: [{ x: hx, y: hy, s: 0 }], L: Math.max(C.SOGA_MIN, Math.min(C.SOGA_LARGO, L)), fijo: 0 };
         s.estado = 'soga'; s.salto = null;
+        s.sogaAng = Math.atan2(s.x - hx, s.y - hy);
         return;
       }
-      g.x = nx; g.y = ny; g.d++;
+      g.d = nd; g.x = nx; g.y = ny;
       if (g.d >= C.SOGA_LARGO || g.y < -300 || g.x < -60 || g.x > T.w + 60) { s.gancho = null; return; }
     }
   }
@@ -286,8 +320,9 @@
     const d = (e.izq ? -1 : 0) + (e.der ? 1 : 0);
     if (d) { s.vx += d * C.SOGA_EMPUJE; s.dir = d; }
     s.vy += C.GRAV;
-    s.vx = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vx));
-    s.vy = Math.max(-C.SOGA_VMAX, Math.min(C.SOGA_VMAX, s.vy));
+    // el tope de velocidad colgada (en cualquier direccion)
+    const v = Math.hypot(s.vx, s.vy);
+    if (v > C.SOGA_VMAX) { s.vx *= C.SOGA_VMAX / v; s.vy *= C.SOGA_VMAX / v; }
     // moverse de a poco: chocar, enrollar en las esquinas y que la soga no se estire
     const n = Math.max(1, Math.ceil(Math.max(Math.abs(s.vx), Math.abs(s.vy))));
     let apoyada = false;
@@ -296,12 +331,17 @@
       if (s.vx) moverX(T, s, s.vx / n, C.SOGA_REBOTE);
       const r = moverY(T, s, s.vy / n);
       if (r === 'piso') { apoyada = true; s.vy = 0; }
-      else if (r === 'techo') s.vy = 0;
+      // contra el techo rebota (medido: sube a ~7 px/cuadro, baja a ~5): el "spike", que despues cae casi derecho
+      else if (r === 'techo') s.vy = -s.vy * C.SOGA_REBOTE;
       enrollar(T, s, ax, ay);
       restringir(T, s, ax, ay);
     }
+    // el rozamiento de la soga
+    s.vx *= C.SOGA_ROCE; s.vy *= C.SOGA_ROCE;
     // apoyada en el piso, colgada: roza como caminando
     if (apoyada) { s.vx *= C.ROCE; if (Math.abs(s.vx) < 0.05) s.vx = 0; }
+    // el angulo al que cuelga del ultimo enganche (para la proxima soga, si la suelta)
+    if (s.estado === 'soga') { const p = R.piv[R.piv.length - 1]; s.sogaAng = Math.atan2(s.x - p.x, s.y - p.y); }
   }
 
   // acortar: tira de la serpiente hacia el enganche (si no la mete en el terreno)
@@ -456,7 +496,8 @@
       s.vida = Math.max(0, s.vida - dano); s.golpe = (s.golpe || 0) + dano;
       J.eventos.push({ tipo: 'dano', x: s.x, y: s.y - 14, n: dano });
       const ux = d ? dx / d : 0, uy = d ? dy / d : -1;
-      s.soga = null; s.gancho = null; s.estado = 'aire'; s.sinCaida = true; s.salto = null;
+      // (si la saca de la soga, pierde el control como en el juego clasico: no puede volver a tirarla hasta el piso)
+      s.soga = null; s.gancho = null; s.estado = 'aire'; s.sinCaida = true; s.salto = null; s.sinControl = true;
       s.vx += ux * A.empuje * k; s.vy += uy * A.empuje * k - 1.5 * k;
     }
   }

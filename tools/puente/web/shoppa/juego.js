@@ -62,7 +62,7 @@
     nTurno++;
     J.viento = viento != null ? viento : Math.round(azar(semilla + nTurno * 31)() * 140 - 70);
     const s = jug[turno].serp;
-    s.estado = s.estado === 'muerta' ? 'muerta' : 'aire'; s.vx = 0; s.vy = 0; s.soga = null; s.gancho = null;
+    s.estado = s.estado === 'muerta' ? 'muerta' : 'aire'; s.vx = 0; s.vy = 0; s.soga = null; s.gancho = null; s.sogaAng = null; s.sinControl = false;
     vidaAntes = s.vida;
     if (simulaYo() && J.cosas.filter(g => g.tipo === 'caja').length < MAX_CAJAS) soltarCaja();
     aviso(`Le toca a ${jug[turno].nombre}${online && turno === online.miSeat ? ' (vos)' : ''}`);
@@ -266,7 +266,7 @@
       mapa: 'fabrica', turno, fase, tiempo, cajaN, nTurno, cajaTomada, ataco, arma, viento: J.viento,
       gusanos: jug.map((j, i) => ({ equipo: i, muerto: j.serp.estado === 'muerta' })),
       armas: jug.map(j => j.armas),
-      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
+      serps: J.serps.map(s => ({ x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), estado: s.estado, dir: s.dir, mira: r1(s.mira), vida: s.vida, soga: s.soga, gancho: s.gancho, sogaAng: s.sogaAng, sinControl: s.sinControl, fase: s.fase || 0, giro: s.giro || 0, aireT: s.aireT || 0 })),
       cosas: J.cosas.map(g => ({ ...g })),
       efectos: J.efectos.filter(e => e.t < 3),
       textos: textos.filter(t => t.v > 1.6).map(t => ({ ...t })),
@@ -423,8 +423,8 @@
       x.fillStyle = jug[turno].color; x.strokeStyle = '#000'; x.lineWidth = 1;
       x.beginPath(); x.moveTo(s0.x - 6, ay - 8); x.lineTo(s0.x + 6, ay - 8); x.lineTo(s0.x + 6, ay - 2); x.lineTo(s0.x + 10, ay - 2); x.lineTo(s0.x, ay + 7); x.lineTo(s0.x - 10, ay - 2); x.lineTo(s0.x - 6, ay - 2); x.closePath(); x.fill(); x.stroke();
     }
-    // la mira (si es tu turno y no estas colgada)
-    if (s0 && juegoYo() && s0.estado !== 'soga' && s0.estado !== 'muerta' && fase === 'mover') {
+    // la mira (si es tu turno y no estas colgada; en el aire despues de una soga no: la proxima sale espejada)
+    if (s0 && juegoYo() && s0.estado !== 'soga' && s0.estado !== 'muerta' && (arma !== 'soga' || (s0.sogaAng == null && !s0.sinControl)) && fase === 'mover') {
       const a = arma === 'soga' ? Math.min(0, s0.mira) : s0.mira;
       x.strokeStyle = '#ff4d6d'; x.lineWidth = 1; x.beginPath(); x.arc(s0.x + Math.cos(a) * s0.dir * 30, s0.y - 4 + Math.sin(a) * 30, 3, 0, Math.PI * 2); x.stroke();
     }
