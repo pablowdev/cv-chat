@@ -376,9 +376,12 @@ function weekSummary(startMs) {
   }
   const top = (map, n) => [...map.entries()].sort((a, b) => (b[1].n || b[1]) - (a[1].n || a[1])).slice(0, n);
   const podium = top(people, 5).map(([k, p]) => ({ k, nombre: nameOf({ d: p.sample.d || (k.startsWith('d') ? k.slice(1) : null), user_id: p.sample.user_id, webhook_username: p.sample.webhook_username }), n: p.n }));
-  // El mensaje con mas reacciones
+  // El mensaje con mas reacciones (sin #círculo-vicioso: ahi van los anuncios del club, que no compiten)
   let best = null;
-  const ids = rows.map(m => m.id);
+  const sinTilde = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const NO_DESTACAR = new Set(['circulo-vicioso']);
+  const fuera = (c) => !!c && (NO_DESTACAR.has(sinTilde(c.name)) || (c.parent_channel_id && fuera(channels.get(c.parent_channel_id))));
+  const ids = rows.filter(m => !fuera(channels.get(m.channel_id))).map(m => m.id);
   for (let i = 0; i < ids.length; i += 900) {
     const chunk = ids.slice(i, i + 900);
     const r = db.prepare(`SELECT message_id id, COUNT(*) n FROM reactions WHERE message_id IN (${chunk.map(() => '?').join(',')}) GROUP BY 1 ORDER BY n DESC LIMIT 1`).get(...chunk);

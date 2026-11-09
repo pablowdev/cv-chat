@@ -8296,6 +8296,40 @@ document.addEventListener('pointerdown', (ev) => {
   })();
 })();
 
+// Al volver a CV Chat (Alt+Tab, otra pestaña, la ventana que estaba tapada): el que estaba leyendo lo ultimo
+// sigue pegado abajo, sin el saltito para arriba. Haven descarga las imagenes cuando la pagina queda oculta un
+// rato (en Windows, una ventana tapada por otra cuenta como oculta) y al volver las carga de nuevo; mientras se
+// reacomoda, esto lo deja abajo en el mismo cuadro (antes de que se dibuje), durante 2 segundos. Si la persona
+// scrollea en ese rato, se deja de hacer.
+(function () {
+  'use strict';
+  const VENTANA = 2000;
+  let hasta = 0, ro = null, abajo = false, alto = 0;
+  const msgs = () => document.getElementById('messages');
+  const pegado = () => { const a = window.app, m = msgs(); return !!(a && a._coupledToBottom) || !!(m && m.scrollHeight - m.scrollTop - m.clientHeight <= 4); };
+  const bajar = () => { const m = msgs(); if (m && Date.now() < hasta) { m.scrollTop = m.scrollHeight; alto = m.scrollTop; } };
+  function anotar() { abajo = pegado(); }
+  function volver() {
+    const m = msgs();
+    if (!m || !window.ResizeObserver || (!abajo && !pegado())) return;
+    hasta = Date.now() + VENTANA;
+    if (!ro) ro = new ResizeObserver(bajar);
+    ro.disconnect(); ro.observe(m); for (const c of m.children) ro.observe(c);
+    bajar();
+    setTimeout(() => { if (Date.now() >= hasta && ro) ro.disconnect(); }, VENTANA + 100);
+  }
+  const cortar = () => { hasta = 0; if (ro) ro.disconnect(); };
+  addEventListener('blur', anotar);
+  addEventListener('focus', volver);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) anotar(); else volver(); });
+  // la persona scrollea: se deja de hacer
+  addEventListener('wheel', cortar, { passive: true, capture: true });
+  addEventListener('touchmove', cortar, { passive: true, capture: true });
+  addEventListener('keydown', (e) => { if (/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End)$/.test(e.key)) cortar(); }, { capture: true });
+  // algo que lo sube sin cambiar de tamaño (un reacomodo de Haven): vuelve abajo
+  document.addEventListener('scroll', (e) => { const m = msgs(); if (m && e.target === m && Date.now() < hasta && m.scrollTop < alto - 1) bajar(); }, { capture: true, passive: true });
+})();
+
 // Sin el temblor de los emojis animados al abrir: cuando la animacion esta en
 // "al pasar el mouse", Haven deja quieto cada GIF recien despues de que carga, y
 // en ese ratito se lo ve moverse. Mientras tanto queda invisible (ocupando su
