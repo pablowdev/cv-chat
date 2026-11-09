@@ -17,26 +17,38 @@
   const M = enNode ? require('../../web/hotel/motor.js') : raiz.HotelMotor;
   const EV = C.EV, S = C.A_SERVIDOR, AS = C.A_SALA, AP = C.A_PERSONA;
 
-  // ===== Catalogo de la fase 1: los 14 muebles dibujados por codigo, todos gratis =====
+  // ===== Catalogo de la fase 1: 15 muebles propios, todos gratis =====
+  // 13 se dibujan por codigo; el cartel CV, la cocina y la mesa usan el arte original del dueño
+  // (web/hotel/arte/*.png, ver src/game/imagenes.js), con las medidas y los corrimientos que
+  // tenian en el catalogo de PawHotel (imageMeta offsetX/offsetY, escala 1). La mesa y el cartel
+  // conservan su dibujo por codigo para el ratito en que la imagen todavia no llego.
   const dos = (a, b) => [{ dx: 0, dy: 0 }, { dx: a, dy: b }];
+  const img = (src, w, h, dx, dy) => ({ src, w, h, dx: dx || 0, dy: dy || 0 });
+  const ARTE = {
+    mesa: { tipo: 'imagen', vistas: [img('mesa-chica.png', 90, 83, 1, -2)] },
+    cocina: { tipo: 'imagen', vistas: [img('cocina-1.png', 69, 90, -8, -7), img('cocina-2.png', 69, 90, -7, -7)], rot: [0, 1] },
+    // cara oeste (pared izquierda) = state0_rot0, cara norte (pared derecha) = state0_rot1
+    cartel_cv: { tipo: 'imagen', vistas: [img('cartel-cv-1.png', 92, 115), img('cartel-cv-2.png', 93, 115)], pared: { west: 0, north: 1 }, muestra: 0 },
+  };
   const CATALOGO = [
     { id: 'alfombra', nombre: 'Alfombra grande', descripcion: 'Roja con guarda amarilla. Se camina encima.', categoria: 'Alfombras', clase: 'piso', caminable: true, huella: '2x2', rotaciones: 1 },
     { id: 'alfombra_chica', nombre: 'Alfombra chica', descripcion: 'Para cualquier rincón.', categoria: 'Alfombras', clase: 'piso', caminable: true, huella: '1x1', rotaciones: 1 },
     { id: 'alfombra_redonda', nombre: 'Alfombra redonda', descripcion: 'Verde y redonda.', categoria: 'Alfombras', clase: 'piso', caminable: true, huella: '1x1', rotaciones: 1 },
     { id: 'sofa', nombre: 'Sillón', descripcion: 'Para dos. Tocalo para sentarte.', categoria: 'Living', clase: 'piso', sentable: true, huella: '2x1', rotaciones: 4,
-      geometria: { shapeByRot: { 0: dos(1, 0), 1: dos(0, 1), 2: dos(1, 0), 3: dos(0, 1) }, sittingDir: 4, sittingVisualOffset: { x: 0, y: -12 } } },
-    { id: 'mesa', nombre: 'Mesa', descripcion: 'De madera maciza.', categoria: 'Living', clase: 'piso', huella: '1x1', rotaciones: 1 },
+      geometria: { shapeByRot: { 0: dos(1, 0), 1: dos(0, 1), 2: dos(1, 0), 3: dos(0, 1) }, sittingDir: 4, sittingVisualOffset: { x: 0, y: 0 } } },
+    { id: 'mesa', nombre: 'Mesa', descripcion: 'Mesa robusta de madera maciza.', categoria: 'Living', clase: 'piso', huella: '1x1', rotaciones: 1, arte: ARTE.mesa },
+    { id: 'cocina', nombre: 'Cocina', descripcion: 'Cocina moderna.', categoria: 'Cocina', clase: 'piso', huella: '1x1', rotaciones: 2, arte: ARTE.cocina, dibujo: null },
     { id: 'silla', nombre: 'Silla de madera', descripcion: 'Tocala para sentarte.', categoria: 'Living', clase: 'piso', sentable: true, huella: '1x1', rotaciones: 4,
-      geometria: { sittingDir: 4, sittingVisualOffset: { x: 0, y: -10 } } },
+      geometria: { sittingDir: 4, sittingVisualOffset: { x: 0, y: 0 } } },
     { id: 'planta', nombre: 'Planta', descripcion: 'Un arbusto en maceta.', categoria: 'Plantas', clase: 'piso', huella: '1x1', rotaciones: 1 },
     { id: 'parlante', nombre: 'Parlante', descripcion: 'Para que suene fuerte.', categoria: 'Música', clase: 'piso', huella: '1x1', rotaciones: 1 },
     { id: 'lampara', nombre: 'Lámpara de pie', descripcion: 'Tocala para prenderla.', categoria: 'Living', clase: 'piso', huella: '1x1', rotaciones: 1, estados: 2 },
     { id: 'separador', nombre: 'Separador', descripcion: 'Dos postes con una cinta.', categoria: 'Varios', clase: 'piso', huella: '1x1', rotaciones: 2 },
     { id: 'poster', nombre: 'Póster', descripcion: 'Un paisaje para la pared.', categoria: 'Pared', clase: 'pared' },
     { id: 'bandera', nombre: 'Bandera', descripcion: 'Roja, blanca y negra.', categoria: 'Pared', clase: 'pared' },
-    { id: 'cartel_cv', nombre: 'Cartel CV', descripcion: 'El cartel del Círculo Vicioso.', categoria: 'Pared', clase: 'pared' },
+    { id: 'cartel_cv', nombre: 'Cartel CV', descripcion: 'Cartel oficial del Círculo Vicioso Club.', categoria: 'Pared', clase: 'pared', arte: ARTE.cartel_cv },
     { id: 'ventana', nombre: 'Ventana', descripcion: 'Con vista al cielo.', categoria: 'Pared', clase: 'pared' },
-  ].map((f) => Object.assign({ caminable: false, sentable: false, huella: '1x1', rotaciones: 1, estados: 1, geometria: {}, precio: 0, visible: true, max_por_persona: 20 }, f, { dibujo: f.id }));
+  ].map((f) => Object.assign({ caminable: false, sentable: false, huella: '1x1', rotaciones: 1, estados: 1, geometria: {}, precio: 0, visible: true, max_por_persona: 20 }, f, { dibujo: f.dibujo === null ? null : f.id }));
   const CAT = {};
   CATALOGO.forEach((f) => { CAT[f.id] = f; });
   const ENTRADA = {};
@@ -523,6 +535,7 @@
       bots.push(b);
       s.emit(S.HOLA, {}, () => s.emit(S.ENTRAR, { sala: o.sala || 'principal' }, () => {
         if (o.x != null) s.emit(S.IR, { x: o.x, y: o.y });
+        if (o.asiento) s.emit(S.IR, { asiento: o.asiento }); // { m, s }: va y se sienta
         if (o.decir) temporizar(() => s.emit(S.DECIR, { texto: o.decir }), o.decirEn || 600);
         if (o.quieto) return;
         const paso = () => {

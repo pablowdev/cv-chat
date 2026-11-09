@@ -35,9 +35,24 @@ function buscar(re, lista, sinComentarios) {
 const buscarCodigo = (re, lista) => buscar(re, lista, true);
 
 describir('nada de afuera', () => {
-  prueba('solo hay archivos de texto propios (sin imagenes bajadas)', () => {
-    const raros = todos.filter((p) => !/\.(js|html|css)$/.test(p)).map(rel);
+  prueba('solo hay archivos de texto propios y, en arte/, las PNG propias del dueño', () => {
+    const raros = todos.filter((p) => !/\.(js|html|css)$/.test(p) && !/^arte\/[a-z0-9][a-z0-9-]*\.png$/.test(rel(p))).map(rel);
     assert.deepEqual(raros, []);
+  });
+  prueba('las PNG de arte/ son PNG de verdad, chicas, sin texto escondido y sin nombres de Habbo', () => {
+    const pngs = todos.filter((p) => /^arte\//.test(rel(p)));
+    assert.ok(pngs.length >= 1);
+    for (const p of pngs) {
+      const b = fs.readFileSync(p);
+      assert.equal(b.slice(0, 8).toString('hex'), '89504e470d0a1a0a', rel(p));
+      assert.ok(b.length <= 64 * 1024, rel(p) + ' pesa ' + b.length);
+      assert.ok(!/habbo|sulake|holo|plasto|yukka|hc_?sofa|fridge|heladera|dj|nft|key|boy|pawhotel/i.test(path.basename(p)), rel(p));
+      // sin bloques de texto (tEXt/iTXt/zTXt) que puedan traer URLs o firmas de otro lado
+      assert.ok(!/tEXt|iTXt|zTXt|https?:/.test(b.toString('latin1')), rel(p));
+    }
+  });
+  prueba('los muebles con imagen la piden por nombre de arte/ (nada de direcciones en el codigo)', () => {
+    assert.deepEqual(buscarCodigo(/\bsrc\s*:\s*['"](?![a-z0-9-]+\.png['"])/i, codigo.filter((p) => p.endsWith('.js'))), []);
   });
   prueba('ningun http:// ni https:// en web/hotel', () => assert.deepEqual(buscar(/https?:\/\//i), []));
   prueba('ninguna direccion que empiece con // (protocolo relativo a otro sitio)', () => assert.deepEqual(buscar(/(src|href)\s*=\s*["']\/\//i), []));

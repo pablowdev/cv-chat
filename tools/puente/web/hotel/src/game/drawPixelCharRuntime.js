@@ -162,7 +162,7 @@ function coloresDe(p, colors, adjustColor) {
 }
 
 // p: { px, py, dir, caminando, fase, cabeza (0..7 o null), avatar, color, lata, sorbo,
-//      sentado: null | { tx, ty, d, ox, oy, mueble } }
+//      sentado: null | { tx, ty, d, ox, oy, mueble, ajuste? } }
 // deps: { ctx, tileToScreen, adjustColor, colors, px, rawCatalog, puntoPuerta (o null) }
 export function drawPixelCharRuntime(p, deps) {
   const { ctx, tileToScreen, adjustColor, colors, px, rawCatalog, puntoPuerta } = deps;
@@ -175,12 +175,18 @@ export function drawPixelCharRuntime(p, deps) {
     const bodyDir = s.d ?? 4;
     const pose = bodyDirToSittingPose(bodyDir);
     const tune = readPoseOffset({ rawCatalog, furniId: s.mueble || null, pose });
-    const feetX = Math.round(sx + (s.ox ?? 0) + tune.dx);
-    const feetY = Math.round(sy + (s.oy ?? -8) + tune.dy);
+    // s.ajuste (escena.js): el lugar del asiento sale del dibujo del mueble (alto del almohadon y
+    // cuanto hacia adelante); si no hay, el corrimiento que manda el servidor, como PawHotel.
+    const aj = s.ajuste;
+    const feetX = Math.round(sx + (aj ? aj.x : (s.ox ?? 0)) + tune.dx);
+    const feetY = Math.round(sy + (aj ? aj.y : (s.oy ?? -8)) + tune.dy);
     const headDir = clampHeadDir(p.cabeza ?? bodyDir, bodyDir);
 
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath(); ctx.ellipse(feetX, feetY + 2, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+    // la sombra en el piso (con ajuste el ancla queda en el almohadon: ahi no va sombra)
+    if (!aj) {
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath(); ctx.ellipse(feetX, feetY + 2, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+    }
 
     const body = drawSeatedBody(pose, {
       ox: feetX, oy: feetY, px, shirt, dark, pantsC, shoesC, skinC, adjustColor,

@@ -3,7 +3,8 @@
 //  - el fondo (piso, zocalo, paredes y puerta) se arma una sola vez por sala, decoracion y escala
 //    en un canvas aparte (asi "Tablones" ya no arma un canvas nuevo en cada cuadro);
 //  - arriba van los muebles de pared, las alfombras y despues muebles y gente ordenados por
-//    profundidad; los sentados en una silla con respaldo quedan detras del respaldo;
+//    profundidad; los sentados van pegados a su mueble (justo despues de el, del asiento de
+//    atras al de adelante) y despues se redibuja lo del mueble que les queda adelante;
 //  - todos se mueven con su camino (p.pasos) y nadie escribe nada a la red desde aca.
 import { tileToScreenPoint, drawDiamondPathCtx } from '../game/iso.js';
 import { getDoorGeometry, drawDoor } from '../game/door.js';
@@ -12,7 +13,7 @@ import { drawFloorTileGeneric, drawIsoBrickFloorGeneric, drawFloorSkirtGeneric, 
 import { hitTestWall as hitTestWallBase, pickVisibleFloorTileAtScreen, pointInDiamondScreen, drawFloorHoverOutline } from '../game/roomCanvasRuntime.js';
 import { drawPixelCharRuntime } from '../game/drawPixelCharRuntime.js';
 import { drawTypingIndicator, dibujarAusente, dibujarGesto, dibujarNombre } from '../game/characterRuntime.js';
-import { dibujarMueblePiso, dibujarMuebleParedEn, esPlano } from '../game/mueblesDibujo.js';
+import { dibujarMueblePiso, dibujarMuebleParedEn, esPlano, ajusteAsiento, dibujarDelanteDeAsiento } from '../game/mueblesDibujo.js';
 import { readSeatPose } from '../config/avatarSeatPoses.js';
 import { bodyDirToSittingPose } from '../game/directionHelpers.js';
 import { COLORS } from '../config/avatar.js';
@@ -166,30 +167,21 @@ export function crearEscena(o) {
     }
     const porMueble = {};
     for (const c of cosas) porMueble[c.mu.m] = c;
-    const gente = [];
     for (const p of Object.values(sala.jugadores)) {
       jugadorParaDibujo(p, ahora);
-      let prof = p.px + p.py;
-      if (p.sentado) { const c = porMueble[p.sentado.m]; prof = c ? c.prof + 0.5 : (p.sentado.tx + p.sentado.ty + 0.5); }
-      const item = { tipo: 'jugador', prof, p };
-      gente.push(item);
-      cosas.push(item);
+      const c = p.sentado ? porMueble[p.sentado.m] : null;
+      if (c && c.tipo === 'mueble') { (c.sentados = c.sentados || []).push(p); continue; }
+      const prof = p.sentado ? p.sentado.tx + p.sentado.ty + 0.5 : p.px + p.py;
+      cosas.push({ tipo: 'jugador', prof, p });
     }
     const peso = { plano: 0, mueble: 1, jugador: 2 };
     cosas.sort((a, b) => (a.tipo === 'plano') !== (b.tipo === 'plano') ? (a.tipo === 'plano' ? -1 : 1) : (a.prof - b.prof) || (peso[a.tipo] - peso[b.tipo]));
 
     let anima = false;
     const deps = { ctx, tileToScreen: g.tts, adjustColor, colors: COLORS, px, rawCatalog: o2.rawCatalog || null, puntoPuerta: null };
-    for (const c of cosas) {
-      if (c.tipo !== 'jugador') {
-        const sc = g.tts(c.mu.x, c.mu.y);
-        const b = dibujarMueblePiso(ctx, c.fila, Math.round(sc.x), Math.round(sc.y), { hw: HW, hh: HH, rot: c.mu.rot, estado: c.mu.s });
-        c.bbox = b;
-        ultimo.muebles.push({ m: c.mu.m, bbox: b, bs: c.bs, plano: c.tipo === 'plano' });
-        continue;
-      }
-      const p = c.p;
+    const dibujarJugador = (p, prof, cm) => {
       if (p.caminando) anima = true;
+      if (p.sentado) p.sentado.ajuste = cm ? ajusteAsiento(cm.fila, p.sentado.d ?? 4, HW, HH) : null;
       let r;
       if (enPuerta(g, p)) {
         const { bL, bR, tL, tR } = g.puerta;
@@ -200,11 +192,13 @@ export function crearEscena(o) {
       } else {
         r = drawPixelCharRuntime(p, deps);
       }
-      // el respaldo tapa al que esta sentado de espaldas (pose con chairOnTop). La pose sale de para
-      // donde mira el cuerpo (la misma que usa el dibujo), no del giro de la silla.
-      if (p.sentado) {
-        const cm = porMueble[p.sentado.m];
-        if (cm && cm.e && (cm.e.sittable || cm.e.seats || cm.e.seatsByRot) && cm.bbox) {
+      // lo del mueble que le queda adelante (respaldo, apoyabrazos) se vuelve a dibujar arriba. Los
+      // muebles sin cajas (imagen o grilla) usan lo de PawHotel: el respaldo tapa al que esta
+      // sentado de espaldas (pose con chairOnTop), con la pose que sale de para donde mira el cuerpo.
+      if (p.sentado && cm) {
+        const sc = g.tts(cm.mu.x, cm.mu.y);
+        const hecho = dibujarDelanteDeAsiento(ctx, cm.fila, Math.round(sc.x), Math.round(sc.y), { hw: HW, hh: HH, rot: cm.mu.rot }, p.sentado.tx - cm.mu.x, p.sentado.ty - cm.mu.y, p.sentado.d ?? 4);
+        if (hecho === false && cm.e && (cm.e.sittable || cm.e.seats || cm.e.seatsByRot) && cm.bbox) {
           const pose = readSeatPose({ rawCatalog: o2.rawCatalog || null, furniId: cm.mu.c, pose: bodyDirToSittingPose(p.sentado.d ?? 4) });
           if (pose.chairOnTop && pose.chairCoverHeightRatio > 0) {
             const sc = g.tts(cm.mu.x, cm.mu.y), b = cm.bbox;
@@ -215,7 +209,19 @@ export function crearEscena(o) {
           }
         }
       }
-      ultimo.jugadores.push({ u: p.u, regions: r.regions, sx: r.sx, sy: r.sy, headSy: r.headSy, prof: c.prof });
+      ultimo.jugadores.push({ u: p.u, regions: r.regions, sx: r.sx, sy: r.sy, headSy: r.headSy, prof });
+    };
+    for (const c of cosas) {
+      if (c.tipo === 'jugador') { dibujarJugador(c.p, c.prof, null); continue; }
+      const sc = g.tts(c.mu.x, c.mu.y);
+      const b = dibujarMueblePiso(ctx, c.fila, Math.round(sc.x), Math.round(sc.y), { hw: HW, hh: HH, rot: c.mu.rot, estado: c.mu.s });
+      c.bbox = b;
+      ultimo.muebles.push({ m: c.mu.m, bbox: b, bs: c.bs, plano: c.tipo === 'plano' });
+      if (c.sentados) {
+        // del asiento de atras al de adelante
+        c.sentados.sort((a, b2) => (a.sentado.tx + a.sentado.ty) - (b2.sentado.tx + b2.sentado.ty));
+        for (const p of c.sentados) dibujarJugador(p, c.prof + 0.5 + 0.01 * (p.sentado.tx + p.sentado.ty), c);
+      }
     }
 
     // fantasma del mueble que se esta poniendo o moviendo

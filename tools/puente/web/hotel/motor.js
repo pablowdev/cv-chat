@@ -435,21 +435,17 @@
   }
 
   // Lo que bloquea el paso. muebles: [{x, y, rot, entrada}] (los de pared no cuentan).
-  // Igual que PawHotel: el ancla bloquea si el mueble no es caminable, y las baldosas
-  // secundarias bloquean siempre (tambien las de una alfombra grande).
+  // Un mueble caminable (las alfombras) no bloquea ninguna de sus baldosas; el resto bloquea
+  // toda su huella. (En PawHotel las baldosas secundarias de una alfombra grande bloqueaban:
+  // el dueño decidio que se pisen todas.)
   function bloqueosDeMuebles(muebles) {
     const set = new Set();
     for (let i = 0; i < muebles.length; i++) {
       const mu = muebles[i];
       if (!mu || mu.pared) continue;
-      const ancla = clave(mu.x, mu.y);
-      if (!(mu.entrada && mu.entrada.walkable)) set.add(ancla);
+      if (mu.entrada && mu.entrada.walkable) continue;
       const bs = baldosasDeMueble(mu.x, mu.y, mu.rot, mu.entrada);
-      if (bs.length <= 1) continue;
-      for (let j = 0; j < bs.length; j++) {
-        const k = clave(bs[j].tx, bs[j].ty);
-        if (k !== ancla) set.add(k);
-      }
+      for (let j = 0; j < bs.length; j++) set.add(clave(bs[j].tx, bs[j].ty));
     }
     return set;
   }
@@ -617,7 +613,7 @@
   const LIMITES_PARED = Object.freeze({
     nota: Object.freeze({ minOx: 14, maxOx: 86, minOy: 14, maxOy: 84 }),
     pad_notas: Object.freeze({ minOx: 14, maxOx: 86, minOy: 14, maxOy: 84 }),
-    cartel_cv: Object.freeze({ minOx: 22, maxOx: 78, minOy: 40, maxOy: 78 }),
+    cartel_cv: Object.freeze({ minOx: 22, maxOx: 78, minOy: 40, maxOy: 58 }), // la imagen (115 de alto) entra en la pared
     window: Object.freeze({ minOx: 22, maxOx: 78, minOy: 34, maxOy: 78 }),
     ventana: Object.freeze({ minOx: 22, maxOx: 78, minOy: 34, maxOy: 78 }),
     poster: Object.freeze({ minOx: 18, maxOx: 82, minOy: 22, maxOy: 82 }),

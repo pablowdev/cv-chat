@@ -199,6 +199,42 @@ describir('sala propia y muebles', () => {
     assert.ok((await a.llamar('poner', { m, pared: 'wall:north:3,0:50,55' })).ok);
     assert.ok(a.est.sala.muebles[String(m)].pared);
   });
+  prueba('cada mueble propio: se pide, se pone, se gira por todos sus giros, se mueve, se sienta donde se puede y se levanta; los de pared en las dos caras', async () => {
+    const { r, a } = await propia();
+    // de a uno y sin apuro: el servidor tiene topes por pedido y el cliente 20 cada 10 s
+    const pedir = async (n, d) => { await r.avanzar(1500); let listo = false, v; a.api[n](d || {}).then((x) => { listo = true; v = x; }); while (!listo) await r.avanzar(300); return v; };
+    for (const f of CATALOGO) {
+      const m = Number((await pedir('pedir', { catalogo: f.id })).item.m);
+      if (f.clase === 'pared') {
+        assert.ok((await pedir('poner', { m, pared: 'wall:north:3,0:50,50' })).ok, f.id + ' norte');
+        assert.equal(a.est.sala.muebles[String(m)].pared.lado, 'north');
+        assert.ok((await pedir('mover', { m, pared: 'wall:west:0,5:50,50' })).ok, f.id + ' oeste');
+        assert.equal(a.est.sala.muebles[String(m)].pared.lado, 'west');
+        assert.ok((await pedir('rotar', { m })).error, f.id + ' no se gira');
+      } else {
+        assert.ok((await pedir('poner', { m, x: 3, y: 4, rot: 0 })).ok, f.id + ' poner');
+        const e = ENTRADAS[f.id];
+        const giros = [];
+        for (let i = 0; i < e.rotaciones; i++) {
+          if (e.rotaciones > 1) { const g = await pedir('rotar', { m }); assert.ok(g.ok, f.id + ' girar: ' + g.error); }
+          giros.push(a.est.sala.muebles[String(m)].rot);
+        }
+        assert.equal(new Set(giros).size, e.rotaciones, f.id + ' giros');
+        assert.ok((await pedir('mover', { m, x: 5, y: 5, rot: 0 })).ok, f.id + ' mover');
+        assert.deepEqual([a.est.sala.muebles[String(m)].x, a.est.sala.muebles[String(m)].y], [5, 5]);
+        if (e.sittable) {
+          assert.ok((await pedir('ir', { asiento: { m, s: 0 } })).ok, f.id + ' sentarse');
+          await r.avanzar(6000);
+          assert.ok(a.est.sala.jugadores['7'].sentado, f.id + ' sentado');
+          assert.equal(a.est.sala.jugadores['7'].sentado.m, String(m));
+          await pedir('ir', { x: 1, y: 1 }); await r.avanzar(6000);
+        } else {
+          assert.ok((await pedir('ir', { asiento: { m, s: 0 } })).error, f.id + ' no se sienta');
+        }
+      }
+      assert.ok((await pedir('levantar', { m })).ok, f.id + ' levantar');
+    }
+  });
   prueba('no se tapa la puerta ni se encima un mueble', async () => {
     const { a } = await propia();
     const pu = a.est.sala.puerta;
@@ -243,13 +279,19 @@ describir('sala propia y muebles', () => {
   });
 });
 
-describir('alfombras (aviso para motor.js)', () => {
-  prueba('las baldosas secundarias de una alfombra hoy BLOQUEAN el paso (motor.bloqueosDeMuebles)', () => {
+describir('alfombras', () => {
+  prueba('una alfombra grande se pisa entera (motor.bloqueosDeMuebles)', () => {
     const e = M.entradaDesdeCatalogo(CATALOGO.find((f) => f.id === 'alfombra'));
     const bl = M.bloqueosDeMuebles([{ x: 3, y: 3, rot: 0, entrada: e }]);
-    // el ancla se pisa, las otras tres no: la decision del dueño es que se puedan pisar todas
-    assert.equal(bl.has('3,3'), false);
-    assert.deepEqual([bl.has('4,3'), bl.has('3,4'), bl.has('4,4')], [true, true, true]);
+    assert.deepEqual([bl.has('3,3'), bl.has('4,3'), bl.has('3,4'), bl.has('4,4')], [false, false, false, false]);
+  });
+  prueba('el servidor falso deja caminar hasta una baldosa secundaria de la alfombra de la sala principal', async () => {
+    const { r, srv } = nuevo();
+    const a = cliente(srv, r, { id: 7, nombre: 'Ana', avatar: AVATAR });
+    await a.llamar('hola'); await a.entrar('principal');
+    // la alfombra grande esta en (5,4): sus baldosas son 5,4 6,4 5,5 6,5
+    const res = await a.llamar('ir', { x: 6, y: 5 });
+    assert.ok(!res.error, res.error);
   });
 });
 

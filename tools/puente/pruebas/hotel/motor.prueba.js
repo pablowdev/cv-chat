@@ -330,19 +330,29 @@ describir('muebles', () => {
     igual(M.asientosDeMueble(2, 4, 0, sofa).length, 2);
     igual(M.asientosDeMueble(2, 4, 0, mesa), []);
   });
-  prueba('bloqueos como PawHotel: alfombra con ancla libre y secundarias bloqueadas', () => {
+  prueba('bloqueos: una alfombra grande se pisa entera (ancla y secundarias), la silla bloquea', () => {
     const b = M.bloqueosDeMuebles([{ x: 1, y: 1, rot: 0, entrada: alfombra }, { x: 5, y: 5, rot: 0, entrada: silla }]);
-    igual(b.has('1,1'), false);
-    igual(b.has('2,1'), true);
+    igual(['1,1', '2,1', '1,2', '2,2'].map((k) => b.has(k)), [false, false, false, false]);
     igual(b.has('5,5'), true);
   });
-  prueba('bloqueosDeMuebles da lo mismo que createIsBlocked + buildOccupiedTilesMap', () => {
-    const cat = { mesa, silla, alfombra };
-    const furnitureMap = { '1,1': 'alfombra', '5,5': 'silla', '3,6': 'mesa' };
-    const flipped = { '3,6': 1 };
+  prueba('un mueble de varias baldosas que no se pisa bloquea toda su huella', () => {
+    const sofa2 = M.entradaDesdeCatalogo({ id: 'sofa', huella: '2x1', rotaciones: 4, sentable: true });
+    const b = M.bloqueosDeMuebles([{ x: 3, y: 3, rot: 0, entrada: sofa2 }]);
+    igual([b.has('3,3'), b.has('4,3')], [true, true]);
+  });
+  prueba('se cruza una alfombra grande de punta a punta', () => {
+    const capa = M.crearCapa({ forma: 'small' });
+    const c = M.camino({ capa, desde: { x: 0, y: 2 }, hasta: { x: 5, y: 2 }, bloqueos: M.bloqueosDeMuebles([{ x: 2, y: 1, rot: 0, entrada: alfombra }]) });
+    igual(c.map((p) => p.tx + ',' + p.ty), ['1,2', '2,2', '3,2', '4,2', '5,2']);
+  });
+  prueba('sin muebles caminables, bloqueosDeMuebles da lo mismo que createIsBlocked + buildOccupiedTilesMap', () => {
+    const sofa2 = M.entradaDesdeCatalogo({ id: 'sofa', huella: '2x1', rotaciones: 4 });
+    const cat = { mesa, silla, sofa2 };
+    const furnitureMap = { '1,1': 'sofa2', '5,5': 'silla', '3,6': 'mesa' };
+    const flipped = { '3,6': 1, '1,1': 1 };
     const sec = M.buildOccupiedTilesMap(furnitureMap, flipped, t => cat[t]);
     const ph = M.createIsBlocked({ furnitureMap, walkableFurniTypes: new Set(['alfombra']), normalizeFurniType: t => t, secondaryTilesMap: sec });
-    const cv = M.bloqueosDeMuebles([{ x: 1, y: 1, rot: 0, entrada: alfombra }, { x: 5, y: 5, rot: 0, entrada: silla }, { x: 3, y: 6, rot: 1, entrada: mesa }]);
+    const cv = M.bloqueosDeMuebles([{ x: 1, y: 1, rot: 1, entrada: sofa2 }, { x: 5, y: 5, rot: 0, entrada: silla }, { x: 3, y: 6, rot: 1, entrada: mesa }]);
     for (let x = -1; x < 10; x++) for (let y = -1; y < 10; y++) igual(cv.has(x + ',' + y), ph(x, y), x + ',' + y);
   });
 });

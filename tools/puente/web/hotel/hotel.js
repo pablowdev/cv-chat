@@ -18,6 +18,7 @@ import { instalarMochila } from './src/app/mochila.js';
 import { instalarMuneco } from './src/app/muneco.js';
 import { instalarFichas } from './src/app/fichas.js';
 import { GESTOS_TXT } from './src/config/hotel.js';
+import { alCargarImagenes, precargar } from './src/game/imagenes.js';
 
 const C = window.HotelContrato;
 const M = window.HotelMotor;
@@ -55,6 +56,9 @@ const vista = crearVista({
 });
 const escena = crearEscena({ canvas, vista, M });
 const cat = crearCatalogo({ M });
+// los muebles con imagen propia: cuando llega una imagen se vuelve a dibujar la sala
+alCargarImagenes(marcar);
+const precargarArte = () => { for (const f of cat.lista()) precargar(f.arte); };
 
 const H = {
   C, M, api, est, vista, escena, cat, raiz,
@@ -92,7 +96,7 @@ const eventos = crearSalaEventos({
     inventarioCambio: (d) => mochila.cambio(d),
     aviso: (texto) => { toast(texto); chat.sistema(texto); },
     conteos: (c) => nav.conteos(c),
-    catalogoCambio: (v) => { cat.cargar(v).then(() => { escena.olvidarFondo(); mochila.pintar(); marcar(); }).catch(() => {}); },
+    catalogoCambio: (v) => { cat.cargar(v).then(() => { precargarArte(); escena.olvidarFondo(); mochila.pintar(); marcar(); }).catch(() => {}); },
   },
 });
 eventos.atar(transporte);
@@ -143,7 +147,7 @@ async function arrancar() {
   est.estadoTexto = r.estado || '';
   est.config = r.config || {};
   est.ultimaSala = r.ultimaSala || null;
-  try { await cat.cargar(r.catalogoV); } catch (e) { toast('No se pudo bajar el catálogo de muebles. Se van a ver cajas grises.', 'error'); }
+  try { await cat.cargar(r.catalogoV); precargarArte(); } catch (e) { toast('No se pudo bajar el catálogo de muebles. Se van a ver cajas grises.', 'error'); }
   if (!est.avatar) {
     $('portada').hidden = true;
     await muneco.abrir({ bienvenida: true });

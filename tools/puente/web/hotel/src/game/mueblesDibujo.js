@@ -1,6 +1,7 @@
 // Los muebles de CV Hotel se dibujan por codigo: cajas isometricas y unas pocas formas, con
-// colores propios. No hay imagenes. Los muebles nuevos (fase 2) llegan del catalogo como grilla
-// de pixeles y los dibuja grilla.js.
+// colores propios. Los que tienen arte original del dueño (cartel CV, cocina, mesa chica) traen
+// en el catalogo `arte` con imagenes propias (imagenes.js) y los muebles nuevos (fase 2) llegan
+// como grilla de pixeles (grilla.js).
 //
 // Un mueble de piso se describe girado 0 sobre su huella de W x D baldosas: la baldosa (0,0) es
 // el ancla y cada caja va en coordenadas de baldosa (u a lo largo de x, v a lo largo de y, el
@@ -8,6 +9,18 @@
 // gira 90 grados y se vuelve a apoyar en (0,0), igual que las formas de shapeByRot del catalogo.
 import { adjustColor } from './draw.js';
 import { dibujarGrilla, revisarArte } from './grilla.js';
+import { esArteImagen, revisarArteImagen, dibujarImagenPiso, dibujarImagenPared, vistaDeGiro, vistaDeMuestra, cuandoCargue, imagenDe } from './imagenes.js';
+
+// El arte de una fila, revisado una sola vez: 'imagen', 'grilla' o null.
+const tipoArte = new WeakMap();
+export function arteDe(fila) {
+  if (!fila || !fila.arte || typeof fila.arte !== 'object') return null;
+  if (!tipoArte.has(fila)) {
+    const a = fila.arte;
+    tipoArte.set(fila, esArteImagen(a) ? (revisarArteImagen(a).ok ? 'imagen' : null) : (revisarArte(a).ok ? 'grilla' : null));
+  }
+  return tipoArte.get(fila);
+}
 
 function pt(X, Y, u, v, z, hw, hh) { return [X + (u - v) * hw, Y + (u + v) * hh - z]; }
 
@@ -70,7 +83,9 @@ const PISO = {
     for (const [c, dw, dh] of capas) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(X, Y, hw - dw, hh - dh, 0, 0, Math.PI * 2); ctx.fill(); }
     return { x1: X - hw, y1: Y - hh, x2: X + hw, y2: Y + hh };
   } },
-  sofa: { huella: [2, 1], cajas: () => [
+  // asiento: z es el alto del almohadon (pixeles) y f cuanto se corre la cola hacia adelante desde
+  // el centro de la baldosa (en baldosas), para que el muñeco quede apoyado en el almohadon.
+  sofa: { huella: [2, 1], asiento: { z: 18, f: 0.12 }, cajas: () => [
     ...patas(-0.42, -0.38, 1.42, 0.42, 5, 0.08),
     { u0: -0.45, v0: -0.45, u1: 1.45, v1: -0.18, z0: 5, z1: 40, c: '#5228a0' },
     { u0: -0.45, v0: -0.18, u1: -0.22, v1: 0.45, z0: 5, z1: 26, c: '#5228a0' },
@@ -81,7 +96,7 @@ const PISO = {
     ...patas(-0.36, -0.36, 0.36, 0.36, 26, 0.08, '#5a3820'),
     { u0: -0.42, v0: -0.42, u1: 0.42, v1: 0.42, z0: 26, z1: 31, c: '#9a6a40' },
   ] },
-  silla: { huella: [1, 1], cajas: () => [
+  silla: { huella: [1, 1], asiento: { z: 20, f: 0.04 }, cajas: () => [
     ...patas(-0.28, -0.28, 0.28, 0.28, 16, 0.07, '#5a3820'),
     { u0: -0.3, v0: -0.3, u1: 0.3, v1: 0.3, z0: 16, z1: 20, c: '#9a6a40' },
     { u0: -0.3, v0: -0.3, u1: 0.3, v1: -0.2, z0: 20, z1: 46, c: '#7a5030' },
@@ -170,6 +185,61 @@ const PARED = {
 };
 
 export const DIBUJOS_PISO = Object.freeze(Object.keys(PISO));
+
+// ── Sentarse ──
+// Para donde queda "adelante" (en baldosas) segun la direccion del cuerpo sentado
+// (4 = +y abajo a la izquierda, 2 = -x, 0 = -y, 6 = +x; ver motor.DIR_VECTORS).
+const ADELANTE = { 0: [0, -1], 2: [-1, 0], 4: [0, 1], 6: [1, 0] };
+function adelante(dir) { return ADELANTE[((dir | 0) % 8 + 8) % 8 & 6] || [0, 1]; }
+
+// El asiento de un mueble dibujado por codigo, o null (imagen, grilla o sin asiento).
+export function asientoDe(fila) {
+  if (!fila || arteDe(fila)) return null; // con imagen o grilla, la forma es otra
+  const d = PISO[nombreDibujo(fila)];
+  return d && d.asiento ? d.asiento : null;
+}
+
+// Cuanto se corre el ancla de los pies del muñeco sentado (la cola de la pose queda 18 px arriba
+// del ancla) desde el centro de la baldosa del asiento: hacia adelante y a la altura del almohadon.
+// Para un mueble sin datos de asiento: { x: 0, y: 0 } (queda lo que manda el servidor).
+export function ajusteAsiento(fila, dir, hw, hh) {
+  const a = asientoDe(fila);
+  if (!a) return { x: 0, y: 0 };
+  const [fu, fv] = adelante(dir);
+  const u = fu * a.f, v = fv * a.f;
+  return { x: Math.round((u - v) * hw), y: Math.round((u + v) * hh + 18 - a.z) };
+}
+
+// Despues de dibujar a alguien sentado, vuelve a dibujar las partes del mueble que le quedan
+// adelante (el respaldo cuando se lo ve de espaldas, el apoyabrazos del costado de adelante):
+// las cajas mas altas que el almohadon, a menos de 0,6 baldosas del asiento, cuyo punto mas
+// cercano al asiento esta mas cerca de la pantalla que la cola del muñeco. (dx, dy): la baldosa del asiento desde el ancla.
+// Devuelve cuantas cajas volvio a dibujar, o false si el mueble no es de cajas (el que llama usa
+// el recorte de PawHotel).
+export function dibujarDelanteDeAsiento(ctx, fila, X, Y, o, dx, dy, dir) {
+  const a = asientoDe(fila);
+  const d = PISO[nombreDibujo(fila)];
+  if (!a || !d || !d.cajas) return false;
+  const rot = ((o.rot || 0) % 4 + 4) % 4;
+  const [W, D] = d.huella;
+  const [fu, fv] = adelante(dir);
+  const su = dx + fu * a.f, sv = dy + fv * a.f;
+  const prof = su + sv;
+  const cl = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const cajas = d.cajas().map((b) => girarCaja(b, rot, W, D))
+    .filter((b) => {
+      const cu = cl(su, b.u0, b.u1), cv = cl(sv, b.v0, b.v1);
+      // mas alta que el almohadon, pegada al asiento (no la otra punta del sillon) y mas adelante
+      return b.z1 > a.z + 1 && (cu - su) ** 2 + (cv - sv) ** 2 <= 0.36 && cu + cv > prof + 0.01;
+    });
+  if (!cajas.length) return 0;
+  cajas.sort((p, q) => ((p.u0 + p.u1 + p.v0 + p.v1) - (q.u0 + q.u1 + q.v0 + q.v1)) || (p.z0 - q.z0));
+  ctx.save();
+  const pts = [];
+  for (const b of cajas) caja(ctx, X, Y, b, o.hw, o.hh, pts);
+  ctx.restore();
+  return cajas.length;
+}
 export const DIBUJOS_PARED = Object.freeze(Object.keys(PARED));
 
 function nombreDibujo(fila) { return (fila && (fila.dibujo || fila.id)) || ''; }
@@ -194,11 +264,17 @@ export function dibujarMueblePiso(ctx, fila, X, Y, o) {
   if (o.alfa != null) ctx.globalAlpha *= o.alfa;
   let bbox = null;
   try {
-    if (fila && fila.arte && revisarArte(fila.arte).ok) {
+    const tipo = arteDe(fila);
+    if (tipo === 'grilla') {
       bbox = dibujarGrilla(ctx, fila.id, fila.arte, rot, X, Y + hh, { alfa: 1 });
       return bbox;
     }
     const d = PISO[nombreDibujo(fila)];
+    if (tipo === 'imagen') {
+      const b = dibujarImagenPiso(ctx, fila.arte, rot, X, Y, hh);
+      // mientras baja la imagen se ve el dibujo por codigo (si hay) o nada
+      if (b.listo || !d) return (bbox = { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 });
+    }
     const pts = [];
     if (!d) {
       for (const p of dibujoGenerico(ctx, X, Y, hw, hh)) pts.push(p);
@@ -223,12 +299,17 @@ export function dibujarMueblePiso(ctx, fila, X, Y, o) {
 // Dibuja un mueble de pared centrado en (cx, cy), del lado 'north' o 'west'.
 export function dibujarMuebleParedEn(ctx, fila, cx, cy, lado, alfa) {
   const corte = lado === 'north' ? 0.5 : lado === 'west' ? -0.5 : 0;
+  const tipo = arteDe(fila);
+  if (tipo === 'imagen') {
+    const b = dibujarImagenPared(ctx, fila.arte, lado, cx, cy, alfa);
+    if (b.listo || !PARED[nombreDibujo(fila)]) return { x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 };
+  }
   ctx.save();
   if (alfa != null) ctx.globalAlpha *= alfa;
   ctx.translate(Math.round(cx), Math.round(cy));
   ctx.transform(1, corte, 0, 1, 0, 0);
   let r;
-  if (fila && fila.arte && revisarArte(fila.arte).ok) {
+  if (tipo === 'grilla') {
     const b = dibujarGrilla(ctx, fila.id, fila.arte, lado === 'north' ? 1 : 0, 0, 0, {});
     r = [b.x1, b.y1, b.x2, b.y2];
   } else {
@@ -252,6 +333,24 @@ export function dibujarMiniatura(canvas, fila, rot) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
+  if (arteDe(fila) === 'imagen') {
+    // la imagen original entera: achicada con suavizado (si no se rompe el dibujo) o agrandada
+    // de a un numero entero de veces, sin suavizado
+    const v = fila.clase !== 'pared' && rot ? vistaDeGiro(fila.arte, rot) : vistaDeMuestra(fila.arte);
+    const img = imagenDe(v);
+    if (!img) {
+      // cuando llegue se vuelve a dibujar (si la miniatura sigue en pantalla)
+      cuandoCargue(v, () => dibujarMiniatura(canvas, fila, rot));
+      return;
+    }
+    const lugar = Math.min((canvas.width - 6) / v.w, (canvas.height - 6) / v.h);
+    const esc = lugar >= 1 ? Math.min(3, Math.floor(lugar)) : lugar;
+    const dw = Math.round(v.w * esc), dh = Math.round(v.h * esc);
+    ctx.imageSmoothingEnabled = esc < 1;
+    if (esc < 1) ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, Math.round((canvas.width - dw) / 2), Math.round((canvas.height - dh) / 2), dw, dh);
+    return;
+  }
   const pared = fila && fila.clase === 'pared';
   // primero a un lienzo grande y despues se acomoda al tamaño
   const tmp = document.createElement('canvas');
