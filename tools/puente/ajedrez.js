@@ -495,4 +495,6 @@ function lobby(me) {
   return { enJuego: mirables(me), ritmos: Object.keys(RITMOS).map(r => [r, ritmoNombre(r)]), niveles: M.NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { games, create, join, act, view, botMove, arm, BOT } };
+// a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida
+function leToca(g) { try { return g && g.estado === 'jugando' ? g.jugadores[seatOfColor(g, turno(g))] || null : null; } catch { return null; } }
+module.exports = { setup, stats, leToca, _test: { games, create, join, act, view, botMove, arm, BOT } };

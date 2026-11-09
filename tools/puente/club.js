@@ -83,9 +83,9 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   let m = null;
   try { m = require('./portada.js').mesas(db, true); } catch (err) { warn('club: mesas:', err.message); }
   // sin las partidas de uno mismo (no se ofrece mirar ni entrar a la propia) y sin los ids de nadie
-  const ajenas = (l) => l.filter(x => !(x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, ...x }) => x);
+  const ajenas = (l) => l.filter(x => !(x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => x);
   // las propias van aparte: la tarjeta las muestra primero, con "Volver" (la que se esta jugando y la que espera rival)
-  const propias = (l) => l.filter(x => (x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, ...x }) => x);
+  const propias = (l) => l.filter(x => (x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => ({ ...x, teToca: toca === user.id }));
   return json(res, 200, m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos);
 }
 

@@ -428,4 +428,6 @@ function lobby(me) {
   return { enJuego: mirables(me), tableros: boards.map(b => b.nombre), niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { games, create, join, act, view, botMove, BOT, boards: () => boards } };
+// a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida
+function leToca(g) { try { return g && g.estado === 'jugando' ? g.jugadores[seatOfColor(g, g.turno)] || null : null; } catch { return null; } }
+module.exports = { setup, stats, leToca, _test: { games, create, join, act, view, botMove, BOT, boards: () => boards } };

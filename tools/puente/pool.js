@@ -410,4 +410,6 @@ function lobby(me) {
   return { enJuego: mirables(me), niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { games, create, join, act, view, botMove, BOT } };
+// a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida
+function leToca(g) { try { return g && g.estado === 'jugando' ? (g.compu && g.S.turno === 1 ? null : g.jugadores[g.S.turno]) || null : null; } catch { return null; } }
+module.exports = { setup, stats, leToca, _test: { games, create, join, act, view, botMove, BOT } };

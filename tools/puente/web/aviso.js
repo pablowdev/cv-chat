@@ -2172,7 +2172,8 @@ function leido(sc) {
       const yo = String((window.app && window.app.user && (window.app.user.displayName || window.app.user.username)) || '').toLowerCase();
       const otros = (mia.quienes || []).filter(q => String(q).toLowerCase() !== yo);
       t.append(el('b', '', mia.nombre + ':'), document.createTextNode(' ' + (mia.quienes ? (otros.length ? 'tu partida con ' + otros.join(', ') : 'tu partida') : 'tu mesa espera rival')));
-      const b = el('button', 'puente-club-entrar', 'Volver'); b.type = 'button'; b.title = 'Volver a tu partida';
+      // (si ya te toca: 'Te toca', titilando suave)
+      const b = el('button', 'puente-club-entrar' + (mia.teToca ? ' puente-club-tetoca' : ''), mia.teToca ? 'Te toca' : 'Volver'); b.type = 'button'; b.title = mia.teToca ? 'Te toca jugar' : 'Volver a tu partida';
       r.append(el('span', 'puente-club-mesa-ico', ICONO[mia.juego] || '🎲'), t, b);
       r.title = 'Volver a tu partida';
       r.addEventListener('click', (e) => { e.stopPropagation(); irA(mia.enlace); });
@@ -2473,7 +2474,8 @@ function leido(sc) {
     // Cuando se arma, empieza o termina una partida (los juegos avisan a todos): la tarjeta al dia, sin
     // pedir de mas (como mucho una vez cada 3 segundos)
     let cambioT = null;
-    for (const ev of ['truco:cambio', 'funball:cambio', 'ajedrez:cambio', 'mr:cambio', 'pool:cambio']) {
+    // (y cuando cambia el turno de una partida propia: para el 'Te toca')
+    for (const ev of ['truco:cambio', 'funball:cambio', 'ajedrez:cambio', 'mr:cambio', 'pool:cambio', 'truco:estado', 'funball:estado', 'ajedrez:estado', 'pool:estado']) {
       app.socket.on(ev, () => { if (!cambioT) cambioT = setTimeout(() => { cambioT = null; if (document.visibilityState === 'visible') traerDatos(); }, 3000); });
     }
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') traerDatos(); });

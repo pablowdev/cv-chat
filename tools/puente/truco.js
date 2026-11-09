@@ -820,4 +820,6 @@ function lobby(me) {
   return { enJuego: mirables(me), abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
 }
 
-module.exports = { setup, stats, _test: { act, rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };
+// a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida
+function leToca(g) { try { return g && g.estado === 'jugando' ? g.jugadores[actor(g)] || null : null; } catch { return null; } }
+module.exports = { setup, stats, leToca, _test: { act, rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };

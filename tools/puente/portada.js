@@ -38,6 +38,9 @@ function quienJuega(db, id) {
 // entre gente del club (enJuego, para la tarjeta "Ahora en el club" de club.js: con movimiento en los
 // ultimos 30 minutos, de dos o mas personas con cuenta, sin las de la compu sola ni las de invitados)
 // conIds: con los ids de los que juegan (uids), para que club.js no le ofrezca a nadie sus propias partidas
+// A quien le toca en una partida en juego (para el 'Te toca' de la tarjeta del club; solo con conIds, nunca sale afuera)
+const TOCA = { truco: './truco.js', pool: './pool.js', ajedrez: './ajedrez.js', funball: './funball.js' };
+function leToca(juego, g) { try { return TOCA[juego] ? require(TOCA[juego]).leToca(g) : null; } catch { return null; } }
 function mesas(db, conIds) {
   let jugando = 0;
   const abiertas = [], enJuego = [];
@@ -54,7 +57,7 @@ function mesas(db, conIds) {
         const todos = g.jugadores || (g.asientos || []).map(a => (a && a.uid) || -1);
         const ids = todos.filter(x => x > 0);
         const nombres = todos.map(x => quienJuega(db, x)).filter((n, k, l) => n !== 'la compu' || l.indexOf(n) === k);
-        if (ids.length >= 1) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, ...(conIds ? { uids: ids } : {}) });
+        if (ids.length >= 1) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, ...(conIds ? { uids: ids, toca: leToca(j.juego, g) } : {}) });
       }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));

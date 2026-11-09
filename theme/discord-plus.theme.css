@@ -3600,6 +3600,10 @@ html body .puente-club-ventana-lista { margin: 0.375rem 0 0; padding: 0; list-st
 html body .puente-club-ventana-lista li { padding: 0.375rem 0; border-bottom: 1px solid #2f2e35; font-size: 0.9375rem; color: #f2f3f5; overflow-wrap: anywhere; }
 html body .puente-club-ventana-lista li:last-child { border-bottom: 0; }
 html body .puente-club-ventana-acc { display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+/* Te toca: el boton titila suave (sin animacion si la persona la pidio reducida) */
+html body .puente-club-tetoca { animation: puente-tetoca 1.6s ease-in-out infinite; }
+@keyframes puente-tetoca { 0%, 100% { background: #ee2d6f; box-shadow: 0 0 0 0 rgba(238, 45, 111, 0); } 50% { background: #ff5c93; box-shadow: 0 0 0.6rem 0.1rem rgba(238, 45, 111, 0.55); } }
+@media (prefers-reduced-motion: reduce) { html body .puente-club-tetoca { animation: none; } }
 html body .puente-club-entrar:disabled { opacity: 0.6; cursor: default; }
 html body .puente-club-ventana-pregunta { margin-top: 0.875rem; font-size: 0.9375rem; color: #f2f3f5; }
 html body .puente-club-ventana-acc .puente-club-entrar { padding: 0.5rem 1rem; font-size: 0.875rem; }
