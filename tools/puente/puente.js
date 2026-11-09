@@ -60,6 +60,9 @@ const log = (...a) => console.log('[puente]', ...a);
 const warn = (...a) => console.warn('[puente]', ...a);
 
 let db, io, token, publicUrl, allow, unlinkedPolicy;
+// Sin Discord (PUENTE_CANALES vacio, sin token o con Ferry encendido): todo lo del club anda igual (login, paginas,
+// juegos, estadisticas...), pero no se copia nada con Discord: api() no llama a Discord y no hay gateway
+let sinDiscord = false;
 let botUserId = null;
 let guildId = null;
 let guildName = null;
@@ -76,18 +79,23 @@ function start(deps) {
   db = deps.db;
   io = deps.io;
   const list = (process.env.PUENTE_CANALES || '').split(',').map(s => s.trim()).filter(Boolean);
-  if (!list.length) { log('apagado (PUENTE_CANALES vacio)'); return; }
   allow = list.includes('*') ? null : new Set(list);
   unlinkedPolicy = process.env.PUENTE_SIN_VINCULAR === 'bloquear' ? 'bloquear' : 'marcar';
   publicUrl = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 
-  const row = db.prepare("SELECT value FROM server_settings WHERE key = 'ferry_bot_token'").get();
-  token = row && row.value;
-  if (!token) { warn('no hay token de Ferry configurado; puente apagado'); return; }
-  const ferryOn = db.prepare("SELECT value FROM server_settings WHERE key = 'ferry_enabled'").get();
-  if (ferryOn && (ferryOn.value === 'true' || ferryOn.value === '1')) {
-    warn('Ferry esta encendido: apagalo en Settings -> Ferry, o los mensajes saldrian duplicados. Puente apagado.');
-    return;
+  // Lo que apaga la copia con Discord (y solo eso: lo demas arranca igual, mas abajo)
+  let porque = '';
+  if (!list.length) porque = 'PUENTE_CANALES vacio';
+  else {
+    const row = db.prepare("SELECT value FROM server_settings WHERE key = 'ferry_bot_token'").get();
+    token = row && row.value;
+    const ferryOn = db.prepare("SELECT value FROM server_settings WHERE key = 'ferry_enabled'").get();
+    if (!token) porque = 'no hay token de Ferry configurado';
+    else if (ferryOn && (ferryOn.value === 'true' || ferryOn.value === '1')) porque = 'Ferry esta encendido (apagalo en Settings -> Ferry, o los mensajes saldrian duplicados)';
+  }
+  if (porque) {
+    sinDiscord = true; token = null; allow = new Set();
+    warn(`sin Discord: ${porque}. El chat, los juegos y lo demas del club andan igual; no se copia nada con Discord.`);
   }
 
   db.exec(`
@@ -176,6 +184,7 @@ function start(deps) {
   miniaturas.setup({ log, warn });
   stickers.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId });
   hookHavenEmits();
+  if (sinDiscord) { log('encendido sin Discord'); return; }
   connectGateway();
   // Mensajes que no llegaron a Discord: se reintentan (el primero, cuando ya se conecto)
   setTimeout(retryMissing, 60 * 1000);
@@ -189,6 +198,7 @@ function start(deps) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function api(method, endpoint, body, attempt = 0) {
+  if (sinDiscord) return { __error: 'sin Discord' };
   // body.__reason: el motivo para el registro de auditoria de Discord
   const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'HavenPuente (local, 1.0)' };
   if (body && body.__reason) { headers['X-Audit-Log-Reason'] = encodeURIComponent(body.__reason); const { __reason, ...rest } = body; body = Object.keys(rest).length ? rest : undefined; }
@@ -215,6 +225,7 @@ async function api(method, endpoint, body, attempt = 0) {
 
 // Igual que api(), pero subiendo archivos (multipart). files: [{ data, name }]
 async function apiFiles(method, endpoint, payload, files, attempt = 0) {
+  if (sinDiscord) return { __error: 'sin Discord' };
   const form = new FormData();
   form.append('payload_json', JSON.stringify(payload));
   files.forEach((f, i) => form.append(`files[${i}]`, new Blob([f.data]), f.name));
