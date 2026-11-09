@@ -5,7 +5,9 @@
 //
 // Por el socket de Haven (con respuesta):
 //   shoppa:inicio                     -> { abiertas, mias }
-//   shoppa:crear    { modo }          -> { id }   (modo: shopper | normal; el mapa sale del modo)
+//   shoppa:crear    { modo, mapa? }   -> { id }   (modo: shopper | normal; el normal, en una isla. Shoppa: en la
+//                                                  fabrica, o en el mapa de Shoppa que se pida, o 'shoppaAzar': uno al azar
+//                                                  cada vez que empieza, la revancha tambien)
 //   shoppa:unirse   { id }            -> { id }
 //   shoppa:ver      { id }            -> { partida }  (con snapshot si esta en juego)
 //   shoppa:listo    { id, listo }     -> { ok }
@@ -26,7 +28,10 @@ const CP = require('./chat-partida.js');
 
 const MIN = 2;
 const MAX = 5;
-const MAPAS = new Set(['fabrica', 'isla']);
+// los mapas de Shoppa (los mismos ids que web/worgs/mapas.js: SHOPPA)
+const MAPAS_SHOPPA = ['fabrica', 'torres', 'laberinto', 'colgantes', 'pozo', 'escalera', 'camaras', 'jaula', 'abandonada', 'barco', 'colmena', 'reloj', 'mina'];
+const MAPAS = new Set(['isla'].concat(MAPAS_SHOPPA));
+const AZAR = 'shoppaAzar';
 // los modos de juego y su mapa: Shopper en la fabrica; el normal en una isla al azar (sale de la semilla)
 const MODOS = { shopper: 'fabrica', normal: 'isla' };
 const esModo = (m) => typeof m === 'string' && Object.prototype.hasOwnProperty.call(MODOS, m);
@@ -106,7 +111,8 @@ function normalizar(g) {
   g.chat = Array.isArray(g.chat) ? g.chat : [];
   g.chatT = g.chatT && typeof g.chatT === 'object' ? g.chatT : {};
   if (!esModo(g.modo)) g.modo = 'shopper';
-  if (!g.mapa || !MAPAS.has(g.mapa)) g.mapa = MODOS[g.modo];
+  if (!g.mapa || !MAPAS.has(g.mapa) || (g.modo === 'normal') !== (g.mapa === 'isla')) g.mapa = MODOS[g.modo];
+  if (g.eleccion !== AZAR || g.modo !== 'shopper') delete g.eleccion;
   if (g.ronda == null) g.ronda = 1;
   if (g.viento == null) g.viento = 0;
   if (g.ultimoMovimiento == null) g.ultimoMovimiento = Date.now();
@@ -158,7 +164,7 @@ function view(g, me, conSnapshot) {
   const nombre = (k) => ({ quien: k === me ? 'Vos' : nameOf(k).nombre });
   const rival = jugadores.find((_, k) => k !== i) || null;
   const out = {
-    id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, creado: g.creado || null, inicio: g.inicio || null,
+    id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, eleccion: g.eleccion || null, creado: g.creado || null, inicio: g.inicio || null,
     fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
     abandono: g.abandono || null, ronda: g.ronda || 1, turno: g.turno != null ? g.turno : null,
     viento: g.viento || 0, semilla: g.semilla || 0, jugadores, rival,
@@ -201,7 +207,7 @@ function lobby(me) {
     .sort((a, b) => (b.creado || 0) - (a.creado || 0)).slice(0, 30)
     .map(g => {
       const activos = jugadoresActivos(g);
-      return { id: g.id, mapa: g.mapa, modo: g.modo, jugadores: activos.length, creador: nameOf(activos[0] ? activos[0].id : g.jugadores[0]) };
+      return { id: g.id, mapa: g.mapa, modo: g.modo, eleccion: g.eleccion || null, jugadores: activos.length, creador: nameOf(activos[0] ? activos[0].id : g.jugadores[0]) };
     });
   const mias = all
     .filter(g => g.jugadores.includes(me))
@@ -211,7 +217,7 @@ function lobby(me) {
       const i = seat(g, me);
       const jugadores = g.jugadores.map(nameOf);
       return {
-        id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, jugadores: jugadoresActivos(g).length,
+        id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, eleccion: g.eleccion || null, jugadores: jugadoresActivos(g).length,
         teToca: g.estado === 'jugando' && g.turno === i,
         ganaste: g.estado === 'terminada' ? g.ganador === i : null,
         rival: jugadores.find((_, k) => k !== i) || null,
@@ -228,9 +234,11 @@ function create(me, d) {
     return { error: 'Tenés muchas salas abiertas. Cerrá alguna.' };
   }
   const modo = esModo(d.modo) ? d.modo : 'shopper';
-  const mapa = MODOS[modo];
+  // (Shoppa: el mapa pedido, si es uno de Shoppa; 'al azar' se elige al empezar)
+  const azar = modo === 'shopper' && d.mapa === AZAR;
+  const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : modo === 'shopper' && MAPAS_SHOPPA.includes(d.mapa) ? d.mapa : MODOS[modo];
   const g = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo, ...(azar ? { eleccion: AZAR } : {}),
     jugadores: [me], listos: [false], fuera: [false], revancha: [false],
     estado: 'esperando', ronda: 1, turno: null, viento: 0, ultimo: null,
     chat: [], chatT: {}, ultimoMovimiento: Date.now(),
@@ -239,7 +247,7 @@ function create(me, d) {
   save(g); changed();
   const nombre = nameOf(me).nombre;
   // (en prueba: sin aviso en #que-paso)
-  log(`shoppa: ${nombre} creó una sala (${modo})`);
+  log(`shoppa: ${nombre} creó una sala (${modo}${modo === 'shopper' ? ', ' + (azar ? 'al azar' : mapa) : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -305,6 +313,7 @@ function comenzar(g, revancha) {
   g.ronda = revancha ? (g.ronda || 1) + 1 : 1;
   g.turno = elegidos[rng(elegidos.length)];
   g.semilla = rng(1e9); // (las cajas caen en el mismo orden para todos)
+  if (g.eleccion === AZAR) g.mapa = MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)];
   g.viento = rng(141) - 70;
   g.ultimo = null;
   g.cr = [];
@@ -558,7 +567,7 @@ function revancha(me, d) {
 
   // Sala nueva (los que se quedaron, con los asientos acomodados) y arranca enseguida.
   const n = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa, modo: g.modo,
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa, modo: g.modo, ...(g.eleccion ? { eleccion: g.eleccion } : {}),
     jugadores: activos.map(x => g.jugadores[x.i]),
     listos: [], fuera: [], revancha: [], estado: 'esperando', ronda: g.ronda || 1,
     turno: null, viento: 0, ultimo: null, chat: [], chatT: {}, ultimoMovimiento: Date.now(),
