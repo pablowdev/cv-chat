@@ -2164,6 +2164,22 @@ function leido(sc) {
       fotos.append(caras);
     }
     fotos.append(n);
+    // Una partida propia (la que se esta jugando o la que espera rival): primero, con "Volver"
+    const mia = (datos.mias || [])[0];
+    if (mia && mia.enlace) {
+      const r = el('div', 'puente-club-mesa');
+      const t = el('span', 'puente-club-mesa-txt');
+      const yo = String((window.app && window.app.user && (window.app.user.displayName || window.app.user.username)) || '').toLowerCase();
+      const otros = (mia.quienes || []).filter(q => String(q).toLowerCase() !== yo);
+      t.append(el('b', '', mia.nombre + ':'), document.createTextNode(' ' + (mia.quienes ? (otros.length ? 'tu partida con ' + otros.join(', ') : 'tu partida') : 'tu mesa espera rival')));
+      const b = el('button', 'puente-club-entrar', 'Volver'); b.type = 'button'; b.title = 'Volver a tu partida';
+      r.append(el('span', 'puente-club-mesa-ico', ICONO[mia.juego] || '🎲'), t, b);
+      r.title = 'Volver a tu partida';
+      r.addEventListener('click', (e) => { e.stopPropagation(); irA(mia.enlace); });
+      tarjeta.append(r);
+      tarjeta.hidden = false;
+      return;
+    }
     const m = (datos.abiertas || [])[0];
     // (si no hay ninguna esperando rival: la que se esta jugando ahora entre gente del club)
     const j = m ? null : (datos.enJuego || [])[0];
