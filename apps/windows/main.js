@@ -58,12 +58,14 @@ function crear() {
   const deAdentro = (url) => ADENTRO.some(o => url === o || url.startsWith(o + '/'));
   // Enlaces que abren otra ventana: los de CV Chat adentro, el resto en el navegador
   win.webContents.setWindowOpenHandler(({ url }) => {
+    // Archivos (imagenes, adjuntos): al navegador del sistema, no reemplazan la app
+    if (url.startsWith(ORIGEN + '/uploads/')) { shell.openExternal(url); return { action: 'deny' }; }
     if (url.startsWith(ORIGEN + '/')) { win.loadURL(url); return { action: 'deny' }; }
     if (/^https?:/.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
-    if (!deAdentro(url)) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); }
+    if (!deAdentro(url) || url.startsWith(ORIGEN + '/uploads/')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); }
   });
   // Cerrar la ventana la esconde (como Discord): sigue llegando lo nuevo. Salir, desde el icono
   win.on('close', (e) => { if (!saliendo) { e.preventDefault(); win.hide(); } });
