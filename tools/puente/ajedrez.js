@@ -103,12 +103,12 @@ function sweep() {
     else if (g.estado === 'esperando' && now - g.creado > 24 * 3600e3) { drop(g); changed(); }
     // la mesa de alguien que ya no esta (un invitado que se fue): se cierra, no se puede jugar (juegos-aviso.js)
     else if (g.estado === 'esperando' && require('./juegos-aviso.js').seFue(db, g.jugadores, BOT)) { drop(g); changed(); }
-    // sin reloj: el que no juega en 7 dias pierde por abandono (12 horas antes, un aviso al celular; chat-partida.js)
+    // sin reloj: el que no juega en 24 horas pierde por abandono (3 horas antes, un aviso al celular; chat-partida.js)
     else if (g.estado === 'jugando' && !g.compu && !RITMOS[g.ritmo]) {
-      const k = seatOfColor(g, turno(g)), uid = g.jugadores[k], q = CP.quieto(g, uid, undefined, 7 * 24 * 3600e3);
+      const k = seatOfColor(g, turno(g)), uid = g.jugadores[k], q = CP.quieto(g, uid, undefined);
       if (q === 'nuevo') save(g);
       else if (q === 'avisar') { save(g); CP.avisoQuieto({ uid, titulo: 'Ajedrez', url: `/app?ajedrez=${g.id}`, tag: 'ajedrez-' + g.id, rival: nameOf(g.jugadores[1 - k]).nombre, db, webpush }); }
-      else if (q === 'perder') { note(g, `${nameOf(uid).nombre} no jugó en 7 días.`); finish(g, 1 - k, 'abandono'); push(g, true); }
+      else if (q === 'perder') { note(g, `${nameOf(uid).nombre} no jugó en ${CP.plazoTexto(CP.QUIETO_MS)}.`); finish(g, 1 - k, 'abandono'); push(g, true); }
     }
   }
 }

@@ -94,22 +94,26 @@ function ultimaJugada(g) {
   return Math.max(g.zt && g.zt.real ? g.zt.at : 0, g.movido || 0, log) || g.inicio || g.creado || 0;
 }
 
-// ── La partida quieta: el que tiene que jugar y no juega en 3 dias (o el plazo de cada juego), pierde ──
-// Cada juego lo pregunta en su barrido (cada minuto), con el mismo turno que usa al guardar. 12 horas antes
-// le llega un aviso al celular. Devuelve 'perder', 'avisar', 'nuevo' (empezo a contar: hay que guardar) o null
-const QUIETO_MS = 3 * 24 * 3600e3, AVISO_ANTES = 12 * 3600e3;
+// ── La partida quieta: el que tiene que jugar y no juega en 24 horas (o el plazo de cada juego), pierde ──
+// Cada juego lo pregunta en su barrido (cada minuto), con el mismo turno que usa al guardar. 3 horas antes
+// le llega un aviso al celular, y nadie pierde sin que le haya llegado el aviso con ese tiempo (las partidas
+// que ya estaban quietas cuando se acorto el plazo: primero el aviso y 3 horas despues, si sigue, pierde).
+// Devuelve 'perder', 'avisar', 'nuevo' (empezo a contar: hay que guardar) o null
+const QUIETO_MS = 24 * 3600e3, AVISO_ANTES = 3 * 3600e3;
 function quieto(g, uid, jugada, plazo = QUIETO_MS) {
   if (!(uid > 0)) return null;
   if (turno(g, uid, jugada)) return 'nuevo';
-  const t = Date.now() - g.zt.at;
-  if (t > plazo) return 'perder';
-  if (t > plazo - AVISO_ANTES && !g.zt.aviso) { g.zt.aviso = 1; return 'avisar'; }
+  const now = Date.now(), t = now - g.zt.at;
+  if (t > plazo - AVISO_ANTES && !g.zt.aviso) { g.zt.aviso = 1; g.zt.avisoAt = now; return 'avisar'; }
+  // (aviso sin hora: el de antes, que llego 12 horas antes del plazo viejo, ya paso hace rato)
+  if (t > plazo && g.zt.aviso && (!g.zt.avisoAt || now - g.zt.avisoAt >= AVISO_ANTES)) return 'perder';
   return null;
 }
+const plazoTexto = (ms) => ms % (24 * 3600e3) === 0 ? (ms === 24 * 3600e3 ? '24 horas' : ms / (24 * 3600e3) + ' días') : Math.round(ms / 3600e3) + ' horas';
 // o: { uid, titulo, url, tag, rival, db, webpush }
 function avisoQuieto(o) {
   if (!o.webpush) return;
-  const payload = JSON.stringify({ title: o.titulo, body: `Te quedan 12 horas para jugar contra ${o.rival}: si no, perdés la partida.`, url: o.url, tag: o.tag, __puente: 1 });
+  const payload = JSON.stringify({ title: o.titulo, body: `Te quedan ${plazoTexto(AVISO_ANTES)} para jugar contra ${o.rival}: si no, perdés la partida.`, url: o.url, tag: o.tag, __puente: 1 });
   for (const sub of o.db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?').all(o.uid)) {
     o.webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload, { TTL: 6 * 3600, urgency: 'high' }).catch(() => {});
   }
@@ -149,4 +153,4 @@ function zumbar(o) {
   return { ok: true, quedan: 3 - z.n };
 }
 
-module.exports = { espEstado, vistaEsp, accionEsp, respuestaEsp, chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, ultimaJugada };
+module.exports = { espEstado, vistaEsp, accionEsp, respuestaEsp, chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, plazoTexto, ultimaJugada };
