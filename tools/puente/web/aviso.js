@@ -16726,6 +16726,16 @@ var puenteSinUbicacion = (function () {
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
   const absoluta = (src) => { try { const u = new URL(src, location.href); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } };
   const copiar = (t) => (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(t) : Promise.reject(new Error('sin portapapeles')));
+  // En la app de Android (TWA) un enlace al mismo sitio se abre dentro de la app: se manda a Chrome con un intent
+  function abrirArchivoFuera(url) {
+    const enAndroid = /Android/i.test(navigator.userAgent) && (matchMedia('(display-mode: standalone)').matches || document.referrer.startsWith('android-app://'));
+    if (enAndroid) {
+      const u = new URL(url);
+      location.href = `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${u.protocol.slice(0, -1)};package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+  }
 
   // ── El menu de la imagen ──
   const ITEMS = {
@@ -16745,6 +16755,8 @@ var puenteSinUbicacion = (function () {
       b.addEventListener('click', (e) => { e.stopPropagation(); app._hideImageContextMenu(); copiar(url).then(() => toast('Enlace copiado', 'success'), () => prompt('Copiá el enlace:', url)); });
       by.set('puente-copiar-enlace', b);
     }
+    const abrirB = by.get('open');
+    if (abrirB && url) abrirB.addEventListener('click', (e) => { e.stopImmediatePropagation(); app._hideImageContextMenu(); abrirArchivoFuera(url); }, true);
     const grupos = [[], [], [], []];
     for (const [a, b] of by) {
       const it = ITEMS[a] || [null, I.imagen, 3];
@@ -16779,7 +16791,7 @@ var puenteSinUbicacion = (function () {
       else { const mas = document.getElementById('lightbox-zoom-in'); if (mas) { mas.click(); mas.click(); } }
     });
     const reenviar = boton(I.reenviar, 'Reenviar', () => { const u = absoluta(img.src); if (u) elegirDestino(app, u); });
-    const abrir = boton(I.abrir, 'Abrir en el navegador', () => { if (img.src) window.open(img.src, '_blank', 'noopener'); });
+    const abrir = boton(I.abrir, 'Abrir en el navegador', () => { if (img.src) abrirArchivoFuera(img.src); });
     const mas = boton(I.mas, 'Más', (e, x) => {
       const r = x.getBoundingClientRect();
       app._showImageContextMenu({ clientX: r.left, clientY: r.bottom + 6, preventDefault() {}, stopPropagation() {} }, img.src, {});
