@@ -10849,7 +10849,7 @@ document.addEventListener('pointerdown', (ev) => {
     const top = stack[stack.length - 1];
     if (!plCarga) {
       if (!document.querySelector('link[data-pl]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/pool/juego.css?v=1'; css.dataset.pl = '1'; document.head.appendChild(css); }
-      plCarga = (window.puentePool ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/pool/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
+      plCarga = (window.puentePool ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/pool/juego.js?v=2'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
         .then(() => window.puentePool.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, chat: chatPartida, desafio: desafioDM, page: () => page, stack: () => stack }))
         .catch((e) => { plCarga = null; throw e; });
     }

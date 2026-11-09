@@ -896,12 +896,21 @@
     const c = M.ctx, s = M.s;
     dibujarMesa(c);
     if (!s) return;
-    // la tronera donde tiene que ir la 8 del que esta tirando (si ya va por ella): un aro amarillo que late
+    // la tronera donde tiene que ir la 8 del que esta tirando (si ya va por ella): el agujero "se enciende" (un
+    // halo dorado que sale de su borde y late suave, un aro fino justo en el borde y una 8 chiquita adentro).
+    // Centrado en el agujero que se ve (HUECO), que en las esquinas esta corrido hacia el paño
     const t8 = s.estado === 'jugando' && s.la8 ? (s.teToca ? s.la8.yo : s.la8.rival) : null;
-    if (t8 != null && POCKETS[t8]) {
-      const p = POCKETS[t8], a = 0.55 + 0.45 * Math.sin(performance.now() / 260);
-      c.save(); c.strokeStyle = 'rgba(240,220,20,' + a.toFixed(2) + ')'; c.lineWidth = 3;
-      c.beginPath(); c.arc(p.x, p.y, POCKET_R + 6, 0, Math.PI * 2); c.stroke(); c.restore();
+    if (t8 != null && HUECO[t8]) {
+      const h = HUECO[t8], late = 0.5 + 0.5 * Math.sin(performance.now() / 260);
+      c.save();
+      const g = c.createRadialGradient(h.x, h.y, h.r - 2, h.x, h.y, h.r + 16);
+      g.addColorStop(0, 'rgba(255,214,64,' + (0.6 + 0.35 * late).toFixed(2) + ')'); g.addColorStop(1, 'rgba(255,214,64,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(h.x, h.y, h.r + 16, 0, Math.PI * 2); c.arc(h.x, h.y, h.r, 0, Math.PI * 2, true); c.fill();
+      c.strokeStyle = '#ffe680'; c.lineWidth = 1.5; c.beginPath(); c.arc(h.x, h.y, h.r + 0.5, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = 0.85; c.fillStyle = '#111'; c.beginPath(); c.arc(h.x, h.y, 9, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(h.x, h.y, 5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#111'; c.font = 'bold 8px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('8', h.x, h.y + 0.5);
+      c.restore();
     }
     const cue = blanca();
     const mio = puedoTirar();
