@@ -2126,7 +2126,24 @@ function leido(sc) {
   }
   const inicial = (p) => String((p && p.nombre) || '?').trim().charAt(0).toUpperCase() || '?';
   const mesaTexto = (m) => m.quien + (m.juego === 'truco' || m.juego === 'pool' || m.juego === 'ajedrez' || m.juego === 'funball' ? ' espera rival' : ' espera jugadores');
-  function entrar(m) { const a = el('a', 'puente-club-entrar', 'Entrar'); a.href = m.enlace; return a; }
+  // (una mesa que espera rival: el boton pregunta si jugar o mirar, en la ventanita)
+  function entrar(m) { const b = el('button', 'puente-club-entrar', 'Entrar'); b.type = 'button'; b.addEventListener('click', (e) => { e.stopPropagation(); ventanaMesa(m, true); }); return b; }
+  // Abre un enlace del club aca mismo (lo agarra el que abre las mesas de los juegos); antes cierra la hoja de "El club hoy" si estaba abierta
+  const irA = (href) => { cerrar(); const a = document.createElement('a'); a.href = href; a.hidden = true; document.body.append(a); a.click(); a.remove(); };
+  // Sumarse a una mesa que espera rival: el evento de cada juego, y despues se abre la mesa
+  const UNIRSE = { truco: 'truco:unirse', pool: 'pool:unirse', ajedrez: 'ajedrez:unirse', funball: 'funball:unirse', globalsiege: 'mr:unirse' };
+  function jugar(x, boton, cerrar) {
+    const s = window.app && window.app.socket, ev = UNIRSE[x.juego];
+    let id = null; try { id = new URL(x.enlace, location.origin).searchParams.get(x.juego === 'globalsiege' ? 'globalsiege' : x.juego); } catch { /* sin id */ }
+    if (!s || !s.connected || !ev || !id) { if (cerrar) cerrar(); irA(x.enlace); return; }
+    boton.disabled = true;
+    s.emit(ev, { id }, (r) => {
+      boton.disabled = false;
+      if (r && r.error) { try { window.app._showToast(r.error, 'error'); } catch { /* sin aviso */ } return; }
+      if (cerrar) cerrar();
+      irA(x.enlace);
+    });
+  }
 
   function pintarTarjeta() {
     if (!tarjeta || !datos) return;
@@ -2196,7 +2213,19 @@ function leido(sc) {
     const acc = el('div', 'puente-club-ventana-acc');
     const c = el('button', 'puente-club-ventana-cerrar', 'Cerrar'); c.type = 'button'; c.addEventListener('click', cerrar);
     acc.append(c);
-    if (x.enlace) { const a = el('a', 'puente-club-entrar', abierta ? 'Entrar' : '👀 Mirar'); a.href = x.enlace; a.addEventListener('click', cerrar); acc.append(a); }
+    // (los botones abren la mesa aca mismo y cierran la ventanita; una que espera rival: jugarla o solo mirarla)
+    if (x.enlace && abierta) {
+      v.append(el('div', 'puente-club-ventana-pregunta', '¿Querés jugar esta partida o solo mirarla?'));
+      const mi = el('button', 'puente-club-ventana-cerrar', '👀 Mirar'); mi.type = 'button';
+      mi.addEventListener('click', () => { cerrar(); irA(x.enlace); });
+      const ju = el('button', 'puente-club-entrar', 'Jugar'); ju.type = 'button';
+      ju.addEventListener('click', () => jugar(x, ju, cerrar));
+      acc.append(mi, ju);
+    } else if (x.enlace) {
+      const a = el('button', 'puente-club-entrar', '👀 Mirar'); a.type = 'button';
+      a.addEventListener('click', () => { cerrar(); irA(x.enlace); });
+      acc.append(a);
+    }
     v.append(acc);
     fondo.append(v);
     document.body.append(fondo);
