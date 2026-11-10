@@ -7,7 +7,8 @@
 //   shoppa:inicio                     -> { abiertas, mias }
 //   shoppa:crear    { modo, mapa? }   -> { id }   (modo: shopper | normal; el normal, en una isla. Shoppa: en la
 //                                                  fabrica, o en el mapa de Shoppa que se pida, o 'shoppaAzar': uno al azar
-//                                                  cada vez que empieza, la revancha tambien)
+//                                                  cada vez que empieza, la revancha tambien; o uno de la comunidad
+//                                                  ('c-...'), o 'comunidadAzar')
 //   shoppa:unirse   { id }            -> { id }
 //   shoppa:ver      { id }            -> { partida }  (con snapshot si esta en juego)
 //   shoppa:listo    { id, listo }     -> { ok }
@@ -15,6 +16,7 @@
 //   shoppa:chat     { id, texto }     -> { ok }
 //   shoppa:revancha { id }            -> { ok, id? }  (cuando la piden todos, sala nueva)
 //   shoppa:abandonar{ id }            -> { ok }
+//   shoppa:sinMapa  { id, mapa }      -> { ok }   (no se pudo bajar ese mapa de la comunidad: la sala va a la fabrica)
 // Y sin respuesta:
 //   shoppa:snapshot { id, snapshot }  (solo el que tiene el turno)
 //   shoppa:finTurno { id, snapshot }  (solo el que tiene el turno)
@@ -24,6 +26,8 @@
 //   shoppa:fin      (termino la partida)                shoppa:revancha (sala nueva)
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const CP = require('./chat-partida.js');
 
 const MIN = 2;
@@ -32,6 +36,27 @@ const MAX = 5;
 const MAPAS_SHOPPA = ['fabrica', 'torres', 'laberinto', 'colgantes', 'pozo', 'escalera', 'camaras', 'jaula', 'abandonada', 'barco', 'colmena', 'reloj', 'mina'];
 const MAPAS = new Set(['isla'].concat(MAPAS_SHOPPA));
 const AZAR = 'shoppaAzar';
+// los mapas de Shopper de la comunidad: solo en el servidor, en web/worgs/comunidad/ (comunidad.json y un .bin por mapa).
+// La lista se vuelve a leer si cambia el archivo. 'comunidadAzar': uno de ellos al azar (elegido al crear la sala, asi
+// todos lo bajan antes de empezar; en la revancha, otro). Si alguien no lo puede bajar (shoppa:sinMapa), la sala pasa a la
+// fabrica (y si ya estaba en juego, vuelve a empezar ahi para todos)
+const AZAR_C = 'comunidadAzar';
+const DIR_COMUNIDAD = path.join(__dirname, 'web', 'worgs', 'comunidad');
+const esComunidad = (id) => typeof id === 'string' && /^c-[a-z0-9-]{1,60}$/.test(id);
+let comunidad = { t: -1, ids: [] };
+function mapasComunidad() {
+  try {
+    const f = path.join(DIR_COMUNIDAD, 'comunidad.json'), t = fs.statSync(f).mtimeMs;
+    if (t !== comunidad.t) {
+      const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+      const ids = (Array.isArray(j && j.mapas) ? j.mapas : [])
+        .filter(e => e && esComunidad(e.id) && typeof e.archivo === 'string' && /^[a-z0-9-]+\.bin$/.test(e.archivo) && fs.existsSync(path.join(DIR_COMUNIDAD, e.archivo)))
+        .map(e => e.id);
+      comunidad = { t, ids: [...new Set(ids)] };
+    }
+  } catch { comunidad = { t: -1, ids: [] }; }
+  return comunidad.ids;
+}
 // los modos de juego y su mapa: Shopper en la fabrica; el normal en una isla al azar (sale de la semilla)
 const MODOS = { shopper: 'fabrica', normal: 'isla' };
 const esModo = (m) => typeof m === 'string' && Object.prototype.hasOwnProperty.call(MODOS, m);
@@ -85,6 +110,7 @@ function setup(ctx) {
     on('shoppa:chat', chat);
     on('shoppa:revancha', revancha);
     on('shoppa:abandonar', abandonar);
+    on('shoppa:sinMapa', sinMapa);
     on('shoppa:snapshot', snapshot);
     on('shoppa:finTurno', finTurno);
   });
@@ -111,8 +137,9 @@ function normalizar(g) {
   g.chat = Array.isArray(g.chat) ? g.chat : [];
   g.chatT = g.chatT && typeof g.chatT === 'object' ? g.chatT : {};
   if (!esModo(g.modo)) g.modo = 'shopper';
-  if (!g.mapa || !MAPAS.has(g.mapa) || (g.modo === 'normal') !== (g.mapa === 'isla')) g.mapa = MODOS[g.modo];
-  if (g.eleccion !== AZAR || g.modo !== 'shopper') delete g.eleccion;
+  // (uno de la comunidad que ya estaba en la sala se respeta aunque lo hayan sacado de la lista: no se cambia a mitad de partida)
+  if (!g.mapa || !(MAPAS.has(g.mapa) || (esComunidad(g.mapa) && g.modo === 'shopper')) || (g.modo === 'normal') !== (g.mapa === 'isla')) g.mapa = MODOS[g.modo];
+  if ((g.eleccion !== AZAR && g.eleccion !== AZAR_C) || g.modo !== 'shopper') delete g.eleccion;
   if (g.ronda == null) g.ronda = 1;
   if (g.viento == null) g.viento = 0;
   if (g.ultimoMovimiento == null) g.ultimoMovimiento = Date.now();
@@ -165,7 +192,7 @@ function view(g, me, conSnapshot) {
   const rival = jugadores.find((_, k) => k !== i) || null;
   const out = {
     id: g.id, estado: g.estado, mapa: g.mapa, modo: g.modo, eleccion: g.eleccion || null, creado: g.creado || null, inicio: g.inicio || null,
-    fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
+    sinMapa: g.sinMapa || null, fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
     abandono: g.abandono || null, ronda: g.ronda || 1, turno: g.turno != null ? g.turno : null,
     viento: g.viento || 0, semilla: g.semilla || 0, jugadores, rival,
     miSeat: i, soyJugador: soy, soyCreador: soy && i === 0, listo: soy && !!g.listos[i],
@@ -234,11 +261,14 @@ function create(me, d) {
     return { error: 'Tenés muchas salas abiertas. Cerrá alguna.' };
   }
   const modo = esModo(d.modo) ? d.modo : 'shopper';
-  // (Shoppa: el mapa pedido, si es uno de Shoppa; 'al azar' se elige al empezar)
-  const azar = modo === 'shopper' && d.mapa === AZAR;
-  const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : modo === 'shopper' && MAPAS_SHOPPA.includes(d.mapa) ? d.mapa : MODOS[modo];
+  // (Shoppa: el mapa pedido, si es uno de Shoppa o de la comunidad; 'al azar' se elige al empezar; 'comunidad al azar',
+  // ahora: asi todos lo bajan antes)
+  const com = modo === 'shopper' ? mapasComunidad() : [];
+  const azar = modo === 'shopper' && d.mapa === AZAR, azarC = modo === 'shopper' && d.mapa === AZAR_C && com.length > 0;
+  const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : azarC ? com[rng(com.length)]
+    : modo === 'shopper' && (MAPAS_SHOPPA.includes(d.mapa) || com.includes(d.mapa)) ? d.mapa : MODOS[modo];
   const g = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo, ...(azar ? { eleccion: AZAR } : {}),
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo, ...(azar ? { eleccion: AZAR } : azarC ? { eleccion: AZAR_C } : {}),
     jugadores: [me], listos: [false], fuera: [false], revancha: [false],
     estado: 'esperando', ronda: 1, turno: null, viento: 0, ultimo: null,
     chat: [], chatT: {}, ultimoMovimiento: Date.now(),
@@ -247,7 +277,7 @@ function create(me, d) {
   save(g); changed();
   const nombre = nameOf(me).nombre;
   // (en prueba: sin aviso en #que-paso)
-  log(`shoppa: ${nombre} creó una sala (${modo}${modo === 'shopper' ? ', ' + (azar ? 'al azar' : mapa) : ''})`);
+  log(`shoppa: ${nombre} creó una sala (${modo}${modo === 'shopper' ? ', ' + (azar ? 'al azar' : azarC ? 'comunidad al azar: ' + mapa : mapa) : ''})`);
   return { ok: true, id: g.id };
 }
 
@@ -314,6 +344,8 @@ function comenzar(g, revancha) {
   g.turno = elegidos[rng(elegidos.length)];
   g.semilla = rng(1e9); // (las cajas caen en el mismo orden para todos)
   if (g.eleccion === AZAR) g.mapa = MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)];
+  else if (g.eleccion === AZAR_C && revancha) { const com = mapasComunidad(); if (com.length) g.mapa = com[rng(com.length)]; }
+  delete g.sinMapa;
   g.viento = rng(141) - 70;
   g.ultimo = null;
   g.cr = [];
@@ -336,7 +368,7 @@ function enviarTurno(g, inicio) {
     const i = seat(g, s.user.id);
     if (!activo(g, i)) continue;
     const d = {
-      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa, modo: g.modo,
+      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa, modo: g.modo, sinMapa: g.sinMapa || null,
       miSeat: i, jugadores: jugadoresDe(g, s.user.id), snapshot: g.ultimo || null, cr: g.cr || [],
     };
     try { s.emit('shoppa:turno', d); } catch { /* sesion cerrada */ }
@@ -499,6 +531,26 @@ function finish(g, ganador, motivo, extra) {
   push(g, true);
 }
 
+// ── Un mapa de la comunidad que alguien no pudo bajar: la sala pasa a la fabrica (si ya se jugaba, empieza de nuevo ahi,
+// para todos: los snapshots del mapa de antes ya no valen) ──
+function sinMapa(me, d) {
+  const g = games.get(String(d.id || ''));
+  if (!g) return { error: 'Esa sala ya no está.' };
+  const i = seat(g, me);
+  if (!activo(g, i)) return { error: 'No estás en esta sala.' };
+  if (!esComunidad(g.mapa) || d.mapa !== g.mapa || g.estado === 'terminada') return { ok: true };
+  log(`shoppa: ${nameOf(me).nombre} no pudo bajar el mapa ${g.mapa}; la sala ${g.id} pasa a la fabrica`);
+  g.sinMapa = g.mapa;
+  g.mapa = 'fabrica';
+  delete g.eleccion;
+  if (g.estado === 'jugando') {
+    g.ultimo = null; g.cr = []; g.turnoDesde = Date.now(); g.ultimoMovimiento = Date.now();
+    save(g); armar(g); enviarTurno(g, true);
+  }
+  push(g, true);
+  return { ok: true };
+}
+
 // ── Chat, abandono y revancha ──
 function chat(me, d) {
   const g = games.get(String(d.id || ''));
@@ -593,4 +645,4 @@ function revancha(me, d) {
   return { ok: true, id: n.id };
 }
 
-module.exports = { setup, _test: { games, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, view, lobby, seat } };
+module.exports = { setup, _test: { games, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, sinMapa, view, lobby, seat, mapasComunidad, DIR_COMUNIDAD } };

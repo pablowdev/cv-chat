@@ -792,6 +792,11 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
+  // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio
+  if (p === '/puente/api/worgs/voz' || p === '/puente/api/worgs/voces' || p.startsWith('/puente/worgs/voz/')) {
+    const r = await require('./worgs-voces.js').handle(req, res, p, u, { sessionUser, json, send });
+    if (r !== false) return;
+  }
   // WORGS: el juego (juego.html, motor.js, mapas.js...) y la pagina de prueba de la fisica, en web/worgs/.
   // Se sirve solo lo que esta adentro de esa carpeta y con los tipos conocidos. /puente/shoppa/ (el nombre de antes)
   // sigue andando, para los enlaces viejos. (Proyecto Gusanos se saco.)

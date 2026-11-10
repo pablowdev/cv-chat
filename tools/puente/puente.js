@@ -169,6 +169,7 @@ function start(deps) {
   require('./misionrisk.js').setup({ db, io, log, warn });
   require('./pool.js').setup({ db, io, log, warn });
   require('./shoppa.js').setup({ db, io, log, warn }); // (WORGS, antes Shoppa: salas y turnos)
+  require('./worgs-voces.js').setup({ db, log, warn }); // (WORGS: las voces grabadas de cada uno)
   require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });

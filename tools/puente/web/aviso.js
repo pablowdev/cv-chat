@@ -10984,7 +10984,8 @@ document.addEventListener('pointerdown', (ev) => {
     const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
     ifr.src = '/puente/worgs/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
     worgsIfr = ifr;
-    ifr.title = 'WORGS'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+    // (microphone: para grabar las voces del equipo en el editor de WORGS)
+    ifr.title = 'WORGS'; ifr.allow = 'autoplay; fullscreen; microphone'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
     let ultimo = 0;
     const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
     ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
