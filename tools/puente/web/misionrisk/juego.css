@@ -12,9 +12,15 @@
 
 /* La mesa: el mapa (y abajo lo que pasa) a la izquierda, el panel a la derecha */
 .puente-jg .jg-cuerpo.mr-mesa { max-width: 84rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; padding-top: 0.75rem; }
-@media (min-width: 1000px) { .puente-jg .jg-cuerpo.mr-mesa { grid-template-columns: minmax(0, 1fr) 19rem; } }
+@media (min-width: 1000px) { .puente-jg .jg-cuerpo.mr-mesa { grid-template-columns: minmax(0, 1fr) 19rem; } /* la columna de la derecha: el panel se achica (con su scroll) para que el chat quede siempre a la vista */
+  .puente-jg .mr-der { display: flex; flex-direction: column; gap: 0.75rem; min-height: 0; }
+  .puente-jg .mr-panel > .mr-caja:last-of-type { margin-bottom: 0; }
+  .puente-jg .mr-panel { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .puente-jg .mr-der > .mr-chat { flex: none; }
+  .puente-jg .mr-der .jg-chat-lista { height: 9rem !important; }
+  .puente-jg .mr-der .mr-chat:not(:empty) { margin-top: 0; } }
 .puente-jg .mr-izq { min-width: 0; }
-.puente-jg .mr-mapa { position: relative; width: 100%; overflow: hidden; border-radius: 0.75rem; background: #0a3f8f; line-height: 0; }
+.puente-jg .mr-mapa { position: relative; width: 100%; margin: 0 auto; overflow: hidden; border-radius: 0.75rem; background: #0a3f8f; line-height: 0; }
 .puente-jg .mr-mapa.grande { overflow: auto; max-height: 75vh; overscroll-behavior: contain; }
 .puente-jg .mr-lienzo { display: block; cursor: pointer; touch-action: manipulation; }
 .puente-jg .mr-zoom { position: absolute; right: 0.5rem; bottom: 0.5rem; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 1rem; cursor: pointer; }

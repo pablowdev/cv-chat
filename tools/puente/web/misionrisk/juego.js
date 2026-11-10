@@ -318,6 +318,7 @@
     const b = el('div', 'jg-cuerpo mr-ui mr-mesa'); page.appendChild(b);
     const izq = el('div', 'mr-izq'), der = el('div', 'mr-der');
     b.append(izq, der);
+    M.cuerpo = b; M.izq = izq;
     M.wrap = el('div', 'mr-mapa');
     M.cv = el('canvas', 'mr-lienzo');
     M.cv.setAttribute('role', 'img'); M.cv.setAttribute('aria-label', 'Mapa de GlobalSiege');
@@ -329,10 +330,13 @@
     // el chat con los demas (aviso.js: chatPartida), fijo debajo de lo que pasa
     M.chatBox = el('div', 'mr-chat');
     izq.append(M.wrap, M.barra, M.chatBox);
-    M.panel = der;
+    // el panel (se rearma entero) y, en la pantalla ancha, el chat abajo de todo en esta columna
+    M.der = der; M.panel = el('div', 'mr-panel'); der.appendChild(M.panel);
     M.cv.addEventListener('click', tocar);
     M.cv.addEventListener('mousemove', (e) => { const p = puntoDe(e); M.cv.title = p ? `${P[p].nombre}` : ''; });
-    M.ro = new ResizeObserver(() => dibujar()); M.ro.observe(M.wrap);
+    // (se mira la columna, no el mapa: el mapa cambia de ancho solo, para entrar en la pantalla)
+    M.ro = new ResizeObserver(() => dibujar()); M.ro.observe(izq); M.ro.observe(M.barra); M.ro.observe(M.chatBox);
+    if (A.page()) M.ro.observe(A.page());
     M.reloj = setInterval(() => { if (M === yo) relojes(); }, 1000);
     M.barra.appendChild(el('div', 'jg-estado', 'Cargando…'));
     let d;
@@ -388,10 +392,29 @@
     if (!r.width || !arte.alfa) return 0;
     return paisEn((e.clientX - r.left) / r.width * MAPA.ANCHO, (e.clientY - r.top) / r.height * MAPA.ALTO);
   }
+  // El ancho del mapa para que la pantalla entera (el mapa, lo que pasa y el chat) entre sin scroll: el mapa
+  // crece parejo con el ancho, asi que alcanza con una cuenta. En el celular (y con la lupa), todo el ancho
+  function anchoMapa() {
+    const libre = Math.max(200, M.izq.clientWidth), page = A.page();
+    // el chat: a la derecha si hay dos columnas (el mapa queda mas grande), si no debajo de lo que pasa
+    const dos = innerWidth >= 1000, donde = dos ? M.der : M.izq;
+    if (M.chatBox.parentElement !== donde) donde.appendChild(M.chatBox);
+    if (M.zoom || !page || innerWidth <= 640) { M.wrap.style.maxWidth = ''; M.der.style.maxHeight = ''; return libre; }
+    const pr = page.getBoundingClientRect(), padB = parseFloat(getComputedStyle(M.cuerpo).paddingBottom) || 0;
+    const fondo = (y) => y - pr.top + page.scrollTop + padB; // hasta donde llega algo, contando desde arriba de todo
+    const h = M.cv.offsetHeight;
+    // el panel de la derecha: lo que quede, con su propio scroll si hace falta
+    M.der.style.maxHeight = dos ? Math.max(320, page.clientHeight - fondo(M.der.getBoundingClientRect().top)) + 'px' : '';
+    if (!h) { requestAnimationFrame(dibujar); return libre; }
+    const sobra = fondo(M.izq.getBoundingClientRect().bottom) - page.clientHeight;
+    const w = Math.round(Math.max(320, Math.min(libre, (h - sobra - 2) * MAPA.ANCHO / MAPA.ALTO)));
+    M.wrap.style.maxWidth = w < libre ? w + "px" : "";
+    return w;
+  }
   function dibujar() {
     if (!M || !M.cv || !arte.alfa) return;
     const s = M.s;
-    const cssW = Math.max(200, M.wrap.clientWidth) * (M.zoom ? 2 : 1);
+    const cssW = anchoMapa() * (M.zoom ? 2 : 1);
     const cssH = cssW * MAPA.ALTO / MAPA.ANCHO;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     M.cv.style.width = cssW + 'px'; M.cv.style.height = cssH + 'px';
