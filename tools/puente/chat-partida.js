@@ -126,6 +126,8 @@ function zumbar(o) {
   if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
   if (!(o.para > 0)) return { error: 'Ahora juega la compu.' };
   if (o.para === o.yo) return { error: 'Te toca a vos.' };
+  // (solo los que juegan: un espectador no apura a nadie; quien es el asiento, o el id en GlobalSiege, que avisa con jugador)
+  if (o.jugador === false || (typeof o.quien === 'number' && o.quien < 0)) return { error: 'Solo los que juegan pueden mandar zumbidos.' };
   turno(g, o.para, o.jugada);
   const espera = 20e3 - (now - g.zt.at);
   if (espera > 0) return { error: `Dale un momento: podés mandar un zumbido en ${Math.ceil(espera / 1000)} segundos.` };

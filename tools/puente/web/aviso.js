@@ -10776,7 +10776,8 @@ document.addEventListener('pointerdown', (ev) => {
       inp.placeholder = 'Escribí un mensaje';
       const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
       form.append(inp);
-      if (juego) form.append(botonZumbido(juego, s.id));
+      // (el zumbido, solo para los que juegan: el espectador no lo ve)
+      if (juego && s.soyJugador !== false && !s.chatEsp) form.append(botonZumbido(juego, s.id));
       form.append(send);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -11450,7 +11451,7 @@ document.addEventListener('pointerdown', (ev) => {
         const inp = el('input'); inp.type = 'text'; inp.maxLength = 200; inp.autocomplete = 'off'; inp.enterKeyHint = 'send';
         inp.placeholder = s.soyJugador === false ? 'Escribí un mensaje' : `Mensaje a ${(s.rival && s.rival.nombre) || 'tu rival'}`;
         const send = el('button', 'jg-btn jg-primario', 'Enviar'); send.type = 'submit';
-        form.append(inp, botonZumbido('truco', s.id), send);
+        form.append(inp); if (s.soyJugador !== false) form.append(botonZumbido('truco', s.id)); form.append(send); // (el espectador no manda zumbidos)
         const mandar = (t) => emit('truco:accion', { id: mesa.id, tipo: 'chat', texto: t }).then(r => { if (r && r.error) toast(r.error, 'error'); });
         form.addEventListener('submit', (e) => { e.preventDefault(); const t = inp.value.trim(); if (!t) return; inp.value = ''; mandar(t); });
         chat.append(el('div', 'jg-chat-t', 'Chat'), lista, rapidos, form);

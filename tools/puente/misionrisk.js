@@ -213,7 +213,7 @@ function act(me, d) {
   if (d.tipo === 'zumbido') {
     if (g.estado !== 'jugando') return { error: 'La partida no está en juego.' };
     const t = g.S.turno, para = juegaCompu(g, t) ? null : g.asientos[t - 1].uid;
-    const r = CP.zumbar({ g, juego: 'globalsiege', titulo: 'GlobalSiege', url: `/app?globalsiege=${g.id}`, yo: me, de: nameOf(me).nombre, quien: me, para, io, db, webpush });
+    const r = CP.zumbar({ g, juego: 'globalsiege', titulo: 'GlobalSiege', url: `/app?globalsiege=${g.id}`, yo: me, de: nameOf(me).nombre, quien: me, jugador: seatOf(g, me) >= 0, para, io, db, webpush });
     if (r.ok) push(g);
     return r;
   }
