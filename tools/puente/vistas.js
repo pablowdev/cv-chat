@@ -539,7 +539,7 @@ async function holaJpg(u) {
   const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 23, color: TEXTO, width: 540, renglones: 3 });
   if (cuerpo) capas.push({ input: cuerpo.buf, left: 40, top: Math.min(y + 10, 528 - cuerpo.h) });
   capas.push({ input: svg(640, 80, `<rect x="40" y="10" width="580" height="62" rx="31" fill="${ROSA}"/>
-    <text x="330" y="51" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" fill="#ffffff">Entrá gratis · ${esc(lugarChat())}</text>`), left: 0, top: 538 });
+    <text x="330" y="51" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" fill="#ffffff">ENTRÁ ACÁ · ${esc(lugarChat())}</text>`), left: 0, top: 538 });
   return jpg(svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>`), capas);
 }
 // para vincular.js: las etiquetas de /app?hola=<usuario>
