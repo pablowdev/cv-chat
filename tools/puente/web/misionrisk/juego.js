@@ -337,6 +337,7 @@
     // (se mira la columna, no el mapa: el mapa cambia de ancho solo, para entrar en la pantalla)
     // a la derecha (o, con una sola columna, debajo): el panel, el chat y el credito
     der.append(M.chatBox, credito());
+    cajonChat(page);
     M.ro = new ResizeObserver(() => dibujar()); M.ro.observe(izq); M.ro.observe(M.barra); M.ro.observe(M.chatBox);
     if (A.page()) M.ro.observe(A.page());
     M.reloj = setInterval(() => { if (M === yo) relojes(); }, 1000);
@@ -350,6 +351,7 @@
   function salir() {
     if (!M) return;
     clearInterval(M.reloj); if (M.ro) M.ro.disconnect();
+    if (M.cajon) { M.cajon.fondo.remove(); M.cajon.panel.remove(); M.cajon.boton.remove(); removeEventListener('resize', M.cajon.lugar); }
     M = null;
   }
 
@@ -387,6 +389,7 @@
     barra();
     panel();
     if (A.chat) A.chat(M.chatBox, s, (t) => A.emit('mr:accion', { id: s.id, tipo: 'chat', texto: t }), 'mr');
+    avisoChat(s);
   }
 
   // ── El mapa ──
@@ -397,6 +400,80 @@
   }
   // El ancho del mapa para que la pantalla entera (el mapa, lo que pasa y el chat) entre sin scroll: el mapa
   // crece parejo con el ancho, asi que alcanza con una cuenta. En el celular (y con la lupa), todo el ancho
+  // ── El chat en un panel de costado (con una sola columna) ──
+  // El panel entra desde la derecha: deslizando el dedo desde el borde derecho hacia la izquierda, o con el boton de
+  // arriba a la derecha (que muestra cuantos mensajes nuevos hay). Se cierra deslizando hacia la derecha, tocando
+  // afuera o con la X. Con dos columnas (la compu) el chat sigue a la derecha, como siempre
+  const UNA_COLUMNA = () => innerWidth < 1000;
+  function cajonChat(page) {
+    const fondo = el('div', 'mr-cajon-fondo'), panel = el('div', 'mr-cajon');
+    const cab = el('div', 'mr-cajon-cab');
+    const cerrar = el('button', 'mr-cajon-x', '✕'); cerrar.type = 'button'; cerrar.setAttribute('aria-label', 'Cerrar el chat');
+    cab.append(el('b', null, 'Chat de la partida'), cerrar);
+    const lugar = el('div', 'mr-cajon-lugar');
+    panel.append(cab, lugar);
+    const boton = el('button', 'mr-chat-btn'); boton.type = 'button'; boton.setAttribute('aria-label', 'Abrir el chat');
+    boton.append(el('span', 'mr-chat-ico', '💬'), el('span', 'mr-chat-n'));
+    // (el boton, en la barra de arriba, al lado de Abandonar; si no esta la barra, flotando arriba a la derecha)
+    const barraArriba = M.salirBtn && M.salirBtn.parentElement;
+    page.append(fondo, panel);
+    if (barraArriba) { barraArriba.insertBefore(boton, M.salirBtn); boton.classList.add('en-barra'); } else page.appendChild(boton);
+    const C = M.cajon = { fondo, panel, boton, lugar, abierto: false, visto: null };
+    const abrir = (si) => {
+      C.abierto = si; panel.classList.toggle('abierto', si); fondo.classList.toggle('abierto', si);
+      if (si) avisoChat(M && M.s);
+    };
+    C.abrir = abrir;
+    boton.addEventListener('click', () => abrir(!C.abierto));
+    cerrar.addEventListener('click', () => abrir(false));
+    fondo.addEventListener('click', () => abrir(false));
+    // deslizar con el dedo: desde el borde derecho abre, sobre el panel hacia la derecha cierra
+    let t0 = null;
+    page.addEventListener('touchstart', (e) => {
+      if (!UNA_COLUMNA() || !M || !M.cajon || boton.hidden || e.touches.length !== 1) return;
+      const x = e.touches[0].clientX, y = e.touches[0].clientY;
+      if (C.abierto ? panel.contains(e.target) : x > innerWidth - 28) t0 = { x, y };
+    }, { passive: true });
+    page.addEventListener('touchmove', (e) => {
+      if (!t0) return;
+      const dx = e.touches[0].clientX - t0.x, dy = e.touches[0].clientY - t0.y;
+      if (Math.abs(dy) > Math.abs(dx) * 1.2) { t0 = null; return; }
+      if (!C.abierto && dx < -40) { abrir(true); t0 = null; } else if (C.abierto && dx > 60) { abrir(false); t0 = null; }
+    }, { passive: true });
+    page.addEventListener('touchend', () => { t0 = null; }, { passive: true });
+    // el chat va al panel con una columna y a la derecha con dos
+    C.lugar = () => {
+      if (!M || !M.cajon) return;
+      const una = UNA_COLUMNA(), donde = una ? lugar : M.der;
+      if (una && M.chatBox.parentElement !== lugar) lugar.appendChild(M.chatBox);
+      else if (!una && M.chatBox.parentElement !== M.der) M.der.insertBefore(M.chatBox, M.der.querySelector(':scope > .mr-credito'));
+      if (!una && C.abierto) abrir(false);
+      avisoChat(M.s);
+      return donde;
+    };
+    addEventListener('resize', C.lugar);
+    C.lugar();
+  }
+  // el boton del chat: se ve con una columna y si la partida tiene chat; dice cuantos mensajes nuevos de otros hay
+  function avisoChat(s) {
+    const C = M && M.cajon;
+    if (!C) return;
+    // (las partidas contra la compu no tienen chat: ahi no hay boton)
+    C.boton.hidden = !UNA_COLUMNA() || !M.chatBox.firstChild;
+    // (lo visto se cuenta por la hora del ultimo mensaje, la del servidor: no depende del reloj del celular. Al entrar a
+    // la partida, lo que ya habia cuenta como visto)
+    const chat = s && Array.isArray(s.chat) ? s.chat : [];
+    const ultimo = chat.reduce((x, m) => Math.max(x, m.t || 0), 0);
+    if (C.visto == null || C.abierto) C.visto = Math.max(C.visto || 0, ultimo);
+    const nuevos = chat.filter(m => !m.mio && m.t > C.visto).length;
+    const n = C.boton.querySelector('.mr-chat-n');
+    n.textContent = nuevos > 9 ? '9+' : nuevos ? String(nuevos) : '';
+    const antes = C.nuevos || 0;
+    C.nuevos = nuevos;
+    C.boton.classList.toggle('con-nuevos', nuevos > 0);
+    // (un saltito cuando llega uno nuevo)
+    if (nuevos > antes) { C.boton.classList.remove('salta'); void C.boton.offsetWidth; C.boton.classList.add('salta'); }
+  }
   function anchoMapa() {
     const libre = Math.max(200, M.izq.clientWidth), page = A.page();
     // con una sola columna (celular, tablet, el Fold abierto) el mapa va de todo el ancho y lo demas abajo, en
