@@ -649,7 +649,7 @@
     }
     acc.appendChild(btn('Copiar invitación', '', () => {
       const url = `${location.origin}/app?globalsiege=${s.id}`;
-      const t = `¡Vení a jugar una guerra de GlobalSiege (el MissionRisk de siempre)! Entrá acá: ${url}`;
+      const t = `¡Vení a jugar una guerra de GlobalSiege! Entrá acá: ${url}`;
       if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => A.toast('Invitación copiada: pegala en un canal o en un mensaje', 'success'), () => prompt('Copiá la invitación:', t));
       else prompt('Copiá la invitación:', t);
     }));
