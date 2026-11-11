@@ -63,6 +63,7 @@ const esModo = (m) => typeof m === 'string' && Object.prototype.hasOwnProperty.c
 const MAX_SNAPSHOT = 262144;       // 256 KB: mas que eso es un estado roto
 const ESPERA_TURNO = 90e3;         // anti-trabado: 30 s de turno + 10 de retirada y margen
 const GRACIA_SALA = 24 * 3600e3;   // una sala esperando sin empezar se borra al dia
+const GRACIA_INVITADO = 10 * 60e3; // la de un invitado (o de una cuenta que ya no esta), a los 10 minutos de irse
 const GRACIA_FIN = 3600e3;         // una partida terminada queda una hora (para la revancha)
 const GRACIA_JUEGO = 6 * 3600e3;   // una partida abandonada del todo se cierra a las 6 horas
 
@@ -89,6 +90,7 @@ function setup(ctx) {
     } catch { /* fila rota */ }
   }
   setInterval(sweep, 10 * 60 * 1000).unref();
+  setInterval(salasDeInvitados, 60 * 1000).unref();
   io.on('connection', (socket) => {
     const on = (ev, fn) => socket.on(ev, (data, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
@@ -168,6 +170,22 @@ function sweep() {
     else if (g.estado === 'jugando' && now - (g.ultimoMovimiento || 0) > GRACIA_JUEGO) {
       finish(g, null, 'abandono', { abandono: 'Todos' });
     }
+  }
+}
+
+// Las salas que armo un invitado y se fue sin jugar: el invitado no vuelve (su cuenta se borra), asi que
+// a los 10 minutos sin el conectado la sala se cierra (las de las cuentas de verdad esperan el dia)
+function salasDeInvitados() {
+  const now = Date.now();
+  for (const g of [...games.values()]) {
+    if (g.estado !== 'esperando') continue;
+    const uid = g.jugadores[0];
+    let u = null;
+    try { u = db.prepare('SELECT COALESCE(is_guest, 0) g FROM users WHERE id = ?').get(uid); } catch { continue; }
+    if (u && !u.g) continue;
+    if (u && conectado(uid)) { delete g.soloDesde; continue; }
+    if (!g.soloDesde) { g.soloDesde = now; continue; }
+    if (now - g.soloDesde > GRACIA_INVITADO) { log('worgs: se cerro la sala ' + g.id + ' (el invitado que la armo se fue)'); drop(g); changed(); }
   }
 }
 
@@ -645,4 +663,4 @@ function revancha(me, d) {
   return { ok: true, id: n.id };
 }
 
-module.exports = { setup, _test: { games, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, sinMapa, view, lobby, seat, mapasComunidad, DIR_COMUNIDAD } };
+module.exports = { setup, _test: { games, salasDeInvitados, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, sinMapa, view, lobby, seat, mapasComunidad, DIR_COMUNIDAD } };
