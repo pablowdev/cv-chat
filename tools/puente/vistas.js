@@ -447,8 +447,8 @@ function guardada(clave, hacer) {
   if (hechas.size > 300) hechas.delete(hechas.keys().next().value);
   return p;
 }
-// ── La invitacion para alguien de X (/app?hola=<usuario>): "Hey @usuario, sumate al club" con su foto de perfil
-// pasada a puntitos (como una pantalla vieja), en una ventanita a la derecha. La foto es la publica de su perfil (la
+// ── La invitacion para alguien de X (/app?hola=<usuario>): "Che @usuario, sumá PESO NETO al club" con su foto de perfil
+// pasada a puntitos, en el lugar del conejo de la insignia del club. La foto es la publica de su perfil (la
 // da unavatar.io); se guarda una semana en el disco para no pedirla de nuevo. Sin foto (o si no existe), la inicial
 const usuarioX = (s) => (/^@?([A-Za-z0-9_]{1,15})$/.exec(String(s || '').trim()) || [])[1] || null;
 const HOLA_DIR = path.join(path.dirname(UPLOADS), 'puente-hola');
@@ -464,56 +464,85 @@ async function fotoX(u) {
   if (seguro) { try { fs.mkdirSync(HOLA_DIR, { recursive: true }); fs.writeFileSync(f, buf || Buffer.alloc(0)); } catch { /* sin disco: igual anda */ } }
   return buf;
 }
-// La foto en puntitos de dos colores (tramado ordenado de 8x8), agrandada sin suavizar
+// La foto en puntitos de dos colores (tramado ordenado de 8x8), agrandada sin suavizar; redonda: afuera del
+// circulo, transparente
 const BAYER = [0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
   3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21];
-async function puntitos(foto, lado) {
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const umbral = (x, y) => (BAYER[(y % 8) * 8 + (x % 8)] + 0.5) * 4;
+async function puntitos(foto, lado, redonda) {
   const N = 112;
   const { data } = await sharp(foto).rotate().resize(N, N, { fit: 'cover' }).flatten({ background: '#ffffff' }).grayscale().normalize().raw().toBuffer({ resolveWithObject: true });
-  const claro = [0xf2, 0xee, 0xf0], oscuro = [0x21, 0x1c, 0x1f], out = Buffer.alloc(N * N * 3);
+  const claro = hex(BLANCO), oscuro = hex(FONDO), out = Buffer.alloc(N * N * 4);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const i = y * N + x, umbral = (BAYER[(y % 8) * 8 + (x % 8)] + 0.5) * 4;
-    const c = data[i] > umbral ? claro : oscuro;
-    out[i * 3] = c[0]; out[i * 3 + 1] = c[1]; out[i * 3 + 2] = c[2];
+    const k = y * N + x, c = data[k] > umbral(x, y) ? claro : oscuro;
+    out[k * 4] = c[0]; out[k * 4 + 1] = c[1]; out[k * 4 + 2] = c[2];
+    out[k * 4 + 3] = !redonda || Math.hypot(x + 0.5 - N / 2, y + 0.5 - N / 2) <= N / 2 ? 255 : 0;
   }
-  return sharp(out, { raw: { width: N, height: N, channels: 3 } }).resize(lado, lado, { kernel: 'nearest' }).png().toBuffer();
+  return sharp(out, { raw: { width: N, height: N, channels: 4 } }).resize(lado, lado, { kernel: 'nearest' }).png().toBuffer();
+}
+// La insignia del club (web/logo-carga.png) en puntitos. hueco: un radio (0 a 1) adentro del cual no queda nada (ahi va
+// la foto: el conejo, la pastilla y las rayas del medio se van, quedan las letras y las estrellitas). suave: solo lo
+// claro, de un color apagado y sin fondo (para la textura de atras)
+const INSIGNIA = path.join(__dirname, 'web', 'logo-carga.png');
+async function insigniaPuntos(N, lado, { hueco = 0, suave = null } = {}) {
+  const { data } = await sharp(INSIGNIA).resize(N, N, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const cR = hex(ROSA), cC = hex(suave || BLANCO), cO = hex(FONDO), out = Buffer.alloc(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const k = y * N + x, r = data[k * 4], g = data[k * 4 + 1], b = data[k * 4 + 2], a = data[k * 4 + 3];
+    if (a < 128) continue;
+    const dentro = Math.hypot(x + 0.5 - N / 2, y + 0.5 - N / 2) / (N / 2);
+    const esRosa = r > 150 && g < 120 && r - g > 80;
+    // (en el hueco no queda nada; la pastilla y las rayas rosas, tampoco: son parte del conejo)
+    // (y los dos pedacitos del conejo que quedan afuera del hueco: el brillo de la pastilla y la punta de la pata)
+    const resto = hueco && ((x / N > 0.75 && x / N < 0.93 && y / N > 0.44 && y / N < 0.58) || (x / N > 0.23 && x / N < 0.34 && y / N > 0.66 && y / N < 0.82));
+    if (dentro < hueco || resto || (hueco && esRosa)) { if (!suave && dentro < 1) { out[k * 4] = cO[0]; out[k * 4 + 1] = cO[1]; out[k * 4 + 2] = cO[2]; out[k * 4 + 3] = 255; } continue; }
+    const lum = 0.3 * r + 0.59 * g + 0.11 * b, l2 = lum < 70 ? 0 : lum > 200 ? 255 : (lum - 70) * 255 / 130;
+    let c = null;
+    if (esRosa) c = lum + 60 > umbral(x, y) ? (suave ? cC : cR) : (suave ? null : cO);
+    else c = l2 > umbral(x, y) ? cC : (suave ? null : cO);
+    if (!c) continue;
+    out[k * 4] = c[0]; out[k * 4 + 1] = c[1]; out[k * 4 + 2] = c[2]; out[k * 4 + 3] = 255;
+  }
+  return sharp(out, { raw: { width: N, height: N, channels: 4 } }).resize(lado, lado, { kernel: 'nearest' }).png().toBuffer();
+}
+// Un texto con partes de distinto color (Pango): [[texto, color], ...] en un renglon
+async function renglon(partes, size, width) {
+  const t = partes.map(([x, c]) => `<span foreground="${c}">${esc(sinEmojis(x))}</span>`).join('');
+  const { data, info } = await sharp({ text: { text: t, font: `DejaVu Sans Bold ${size}`, width, rgba: true, dpi: 72, wrap: 'word' } }).png().toBuffer({ resolveWithObject: true });
+  return { buf: data, h: info.height };
 }
 async function holaJpg(u) {
   const foto = await fotoX(u);
   const capas = [];
-  // el fondo: oscuro, con una trama de puntitos rosas a la derecha (como la del ejemplo, en los colores del club)
-  let trama = '';
-  for (let y = 18; y < H; y += 18) for (let x = 640; x < W; x += 18) if (((x * 7 + y * 13) % 5) < 2) trama += `<circle cx="${x}" cy="${y}" r="2.2" fill="${ROSA}" opacity="0.28"/>`;
-  const base = svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>${trama}
-    <rect x="40" y="44" width="10" height="40" fill="${ROSA}"/>
-    <text x="64" y="76" font-family="DejaVu Sans" font-weight="bold" font-size="30" fill="${BLANCO}">Círculo Vicioso</text>
-    <text x="64" y="104" font-family="DejaVu Sans Mono" font-size="18" fill="${GRIS}">el club · chat, foro y juegos</text>
-    <!-- la ventanita de la derecha, con la barra de arriba y el nombre abajo -->
-    <rect x="726" y="96" width="420" height="440" rx="10" fill="${FONDO_2}" stroke="${BLANCO}" stroke-width="4"/>
-    <rect x="726" y="96" width="420" height="40" rx="10" fill="${BLANCO}"/><rect x="726" y="122" width="420" height="14" fill="${BLANCO}"/>
-    <circle cx="752" cy="116" r="7" fill="${ROSA}"/><circle cx="774" cy="116" r="7" fill="#faa61a"/><circle cx="796" cy="116" r="7" fill="#3ba55d"/>
-    <text x="1128" y="123" text-anchor="end" font-family="DejaVu Sans Mono" font-weight="bold" font-size="18" fill="${FONDO}">@${esc(u)}</text>
-    <rect x="776" y="156" width="320" height="320" fill="${BLANCO}"/>
-    <text x="936" y="512" text-anchor="middle" font-family="DejaVu Sans Mono" font-weight="bold" font-size="22" fill="${BLANCO}">${esc(u.toUpperCase())}</text>
-    <!-- abajo: adonde lleva -->
-    <rect x="40" y="536" width="560" height="54" rx="27" fill="${ROSA}"/>
-    <text x="320" y="571" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="22" fill="#ffffff">Entrá gratis · ${esc(lugarChat())}</text>`);
-  if (foto) { try { capas.push({ input: await puntitos(foto, 312), left: 780, top: 160 }); } catch { /* foto rota: la inicial */ } }
-  if (capas.length === 0) capas.push({ input: await avatar(null, u, 260), left: 806, top: 186 });
-  // el saludo: "Hey" y "@usuario," en rosa, y "sumate al club."
+  // de fondo, la insignia grande en puntitos muy suaves (textura), cortada por los bordes
+  // (mas grande que la tarjeta: se recorta lo que se ve, porque una capa no puede salirse del borde)
+  try { capas.push({ input: await sharp(await insigniaPuntos(200, 980, { suave: '#3a2f35' })).extract({ left: 250, top: 175, width: 730, height: H }).toBuffer(), left: 0, top: 0 }); } catch (err) { warn('vistas: hola: textura:', err.message); }
+  // la insignia, a la derecha, con la foto redonda en el lugar del conejo (y un anillo rosa punteado)
+  const L = 600, x0 = 585, y0 = 15, F = Math.round(L * 0.66);
+  try { capas.push({ input: await insigniaPuntos(220, L, { hueco: 0.7 }), left: x0, top: y0 }); } catch (err) { warn('vistas: hola: insignia:', err.message); }
+  const fx = x0 + Math.round((L - F) / 2), fy = y0 + Math.round((L - F) / 2);
+  let conFoto = false;
+  if (foto) { try { capas.push({ input: await puntitos(foto, F, true), left: fx, top: fy }); conFoto = true; } catch { /* foto rota: la inicial */ } }
+  if (!conFoto) capas.push({ input: await avatar(null, u, F), left: fx, top: fy });
+  capas.push({ input: svg(L, L, `<circle cx="${L / 2}" cy="${L / 2}" r="${F / 2 + 5}" fill="none" stroke="${ROSA}" stroke-width="9" stroke-dasharray="3 7"/>`), left: x0, top: y0 });
+  // a la izquierda: el club arriba, el saludo grande y el boton abajo
+  capas.push({ input: svg(600, 120, `<rect x="40" y="40" width="12" height="48" fill="${ROSA}"/>
+    <text x="68" y="78" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="${BLANCO}">Círculo Vicioso</text>
+    <text x="70" y="110" font-family="DejaVu Sans Mono" font-size="20" fill="${GRIS}">el club · chat, foro y juegos</text>`), left: 0, top: 0 });
   let y = 150;
-  for (const [t, color, size] of [['Hey', BLANCO, 70], ['@' + u + ',', ROSA, u.length > 11 ? 56 : 70], ['sumate al club.', BLANCO, 70]]) {
-    const r = await texto(t, { size, color, bold: true, width: 660, renglones: 1 });
-    if (r) { capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 2; }
+  const grande = u.length > 12 ? 52 : u.length > 9 ? 64 : 80;
+  for (const [partes, size] of [[[['Che', BLANCO]], 80], [[['@' + u + ',', ROSA]], grande], [[['sumá ', BLANCO], ['PESO NETO', ROSA]], 60], [[['al club.', BLANCO]], 60]]) {
+    try { const r = await renglon(partes, size, 640); capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 2; } catch { /* sin ese renglon */ }
   }
-  const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 24, color: TEXTO, width: 640, renglones: 3 });
-  if (cuerpo) capas.push({ input: cuerpo.buf, left: 40, top: y + 18 });
-  return jpg(base, capas);
+  capas.push({ input: svg(640, 80, `<rect x="40" y="10" width="580" height="62" rx="31" fill="${ROSA}"/>
+    <text x="330" y="51" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" fill="#ffffff">Entrá gratis · ${esc(lugarChat())}</text>`), left: 0, top: 538 });
+  return jpg(svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>`), capas);
 }
 // para vincular.js: las etiquetas de /app?hola=<usuario>
 function holaEnlace(s) {
   const u = usuarioX(s);
-  return u ? { usuario: u, title: `Hey @${u}, sumate a Círculo Vicioso`, desc: 'El chat, el foro, los juegos y el Marketplace del club, todo en un lugar. Entrá y creá tu cuenta.', image: '/puente/vista/hola.jpg?u=' + encodeURIComponent(u) } : null;
+  return u ? { usuario: u, title: `Che @${u}, sumá PESO NETO al club`, desc: 'El chat, el foro, los juegos y el Marketplace del club, todo en un lugar. Entrá y creá tu cuenta.', image: '/puente/vista/hola.jpg?u=' + encodeURIComponent(u) } : null;
 }
 const lugarChat = () => 'chat.' + (DOMINIO() || 'circulovicioso.club');
 
