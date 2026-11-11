@@ -526,20 +526,22 @@ async function holaJpg(u) {
   if (foto) { try { capas.push({ input: await puntitos(foto, F, true), left: fx, top: fy }); conFoto = true; } catch { /* foto rota: la inicial */ } }
   if (!conFoto) capas.push({ input: await avatar(null, u, F), left: fx, top: fy });
   capas.push({ input: svg(L, L, `<circle cx="${L / 2}" cy="${L / 2}" r="${F / 2 + 5}" fill="none" stroke="${ROSA}" stroke-width="9" stroke-dasharray="3 7"/>`), left: x0, top: y0 });
-  // a la izquierda: el club arriba, el saludo grande y el boton abajo
-  capas.push({ input: svg(600, 120, `<rect x="40" y="40" width="12" height="48" fill="${ROSA}"/>
-    <text x="68" y="78" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="${BLANCO}">Círculo Vicioso</text>
-    <text x="70" y="110" font-family="DejaVu Sans Mono" font-size="20" fill="${GRIS}">el club · chat, foro y juegos</text>`), left: 0, top: 0 });
-  let y = 130;
-  const grande = u.length > 12 ? 48 : u.length > 9 ? 58 : 70;
-  for (const [partes, size] of [[[['Che', BLANCO]], 70], [[['@' + u + ',', ROSA]], grande], [[['sumá ', BLANCO], ['PESO NETO', ROSA]], 54], [[['al club.', BLANCO]], 54]]) {
-    try { const r = await renglon(partes, size, 640); capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 4; } catch { /* sin ese renglon */ }
+  // a la izquierda: el club arriba, el saludo grande y el boton abajo. Todo arriba de y=515: en el celular, X
+  // pone el titulo del enlace encima de la parte de abajo de la tarjeta
+  capas.push({ input: svg(600, 120, `<rect x="40" y="24" width="12" height="44" fill="${ROSA}"/>
+    <text x="68" y="59" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="${BLANCO}">Círculo Vicioso</text>
+    <text x="70" y="90" font-family="DejaVu Sans Mono" font-size="19" fill="${GRIS}">el club · chat, foro y juegos</text>`), left: 0, top: 0 });
+  let y = 116;
+  const grande = u.length > 12 ? 44 : u.length > 9 ? 52 : 62;
+  for (const [partes, size] of [[[['Che', BLANCO]], 62], [[['@' + u + ',', ROSA]], grande], [[['sumá ', BLANCO], ['PESO NETO', ROSA]], 50], [[['al club.', BLANCO]], 50]]) {
+    try { const r = await renglon(partes, size, 640); capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 8; } catch { /* sin ese renglon */ }
   }
   // y abajo, chico: que es el club
-  const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 23, color: TEXTO, width: 540, renglones: 3 });
-  if (cuerpo) capas.push({ input: cuerpo.buf, left: 40, top: Math.min(y + 10, 528 - cuerpo.h) });
-  capas.push({ input: svg(640, 80, `<rect x="40" y="10" width="580" height="62" rx="31" fill="${ROSA}"/>
-    <text x="330" y="51" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" fill="#ffffff">ENTRÁ ACÁ · ${esc(lugarChat())}</text>`), left: 0, top: 538 });
+  const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 21, color: TEXTO, width: 560, renglones: 3 });
+  if (cuerpo) { const top = Math.min(y + 8, 436 - cuerpo.h); capas.push({ input: cuerpo.buf, left: 40, top }); y = top + cuerpo.h; }
+  const yb = Math.min(y + 16, 456);
+  capas.push({ input: svg(640, 80, `<rect x="40" y="0" width="580" height="56" rx="28" fill="${ROSA}"/>
+    <text x="330" y="37" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="24" fill="#ffffff">ENTRÁ ACÁ · ${esc(lugarChat())}</text>`), left: 0, top: yb });
   return jpg(svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>`), capas);
 }
 // para vincular.js: las etiquetas de /app?hola=<usuario>
