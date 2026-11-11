@@ -109,6 +109,8 @@ function setup(ctx) {
     });
     on('shoppa:listo', listo);
     on('shoppa:empezar', empezar);
+    on('shoppa:sacar', sacar);
+    on('shoppa:mapa', cambiarMapa);
     on('shoppa:chat', chat);
     on('shoppa:revancha', revancha);
     on('shoppa:abandonar', abandonar);
@@ -213,7 +215,7 @@ function view(g, me, conSnapshot) {
     sinMapa: g.sinMapa || null, fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
     abandono: g.abandono || null, ronda: g.ronda || 1, turno: g.turno != null ? g.turno : null,
     viento: g.viento || 0, semilla: g.semilla || 0, jugadores, rival,
-    miSeat: i, soyJugador: soy, soyCreador: soy && i === 0, listo: soy && !!g.listos[i],
+    miSeat: i, soyJugador: soy, soyCreador: soy && i === 0, listo: soy && !!g.listos[i], sacado: (g.sacados || []).includes(me), maximo: MAX, minimo: MIN,
     todosListos: jugadoresActivos(g).length >= MIN && jugadoresActivos(g).every(x => !!g.listos[x.i]),
     revancha: g.revancha.map(Boolean),
     yoRevancha: soy && (!!g.revancha[i] || !!g.siguiente),
@@ -248,7 +250,7 @@ function changed() {
 function lobby(me) {
   const all = [...games.values()];
   const abiertas = all
-    .filter(g => g.estado === 'esperando' && g.publica && jugadoresActivos(g).length < MAX && !g.jugadores.includes(me))
+    .filter(g => g.estado === 'esperando' && g.publica && jugadoresActivos(g).length < MAX && !g.jugadores.includes(me) && !(g.sacados || []).includes(me))
     .sort((a, b) => (b.creado || 0) - (a.creado || 0)).slice(0, 30)
     .map(g => {
       const activos = jugadoresActivos(g);
@@ -272,6 +274,48 @@ function lobby(me) {
   return CP.paraBiblioteca({ abiertas, mias }, games, { io, db, ult: (g) => g.ultimoMovimiento || g.creado || 0, creador: (g) => { const a = jugadoresActivos(g)[0]; return a ? a.id : g.jugadores[0]; } });
 }
 
+// El mapa de una sala: el pedido si es de Shoppa o de la comunidad; 'al azar' se elige al empezar; 'comunidad al
+// azar', ahora (asi todos lo bajan antes)
+function elegirMapa(modo, pedido) {
+  const com = modo === 'shopper' ? mapasComunidad() : [];
+  const azar = modo === 'shopper' && pedido === AZAR, azarC = modo === 'shopper' && pedido === AZAR_C && com.length > 0;
+  const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : azarC ? com[rng(com.length)]
+    : modo === 'shopper' && (MAPAS_SHOPPA.includes(pedido) || com.includes(pedido)) ? pedido : MODOS[modo];
+  return { mapa, azar, azarC };
+}
+
+// Quien armo la sala cambia el mapa (Shoppa, antes de empezar): todos vuelven a estar listos cuando lo tienen
+function cambiarMapa(me, d) {
+  const g = games.get(String(d.id || ''));
+  if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó.' };
+  if (seat(g, me) !== 0 || !activo(g, 0)) return { error: 'Solo quien armó la sala puede cambiar el mapa.' };
+  if (g.modo !== 'shopper') return { error: 'El mapa se elige en las salas de Shoppa.' };
+  const { mapa, azar, azarC } = elegirMapa(g.modo, d.mapa);
+  g.mapa = mapa; delete g.eleccion; delete g.sinMapa;
+  if (azar) g.eleccion = AZAR; else if (azarC) g.eleccion = AZAR_C;
+  g.listos = g.listos.map(() => false);
+  push(g, true);
+  return { ok: true };
+}
+
+// Quien armo la sala saca a alguien (solo antes de empezar): se levanta y no puede volver a esa sala
+function sacar(me, d) {
+  const g = games.get(String(d.id || ''));
+  if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó: ya no se puede sacar a nadie.' };
+  if (seat(g, me) !== 0 || !activo(g, 0)) return { error: 'Solo quien armó la sala puede sacar a alguien.' };
+  const uid = Number(d.uid);
+  if (uid === me) return { error: 'Para irte, salí de la sala.' };
+  const i = seat(g, uid);
+  if (i < 0) return { ok: true };
+  g.jugadores.splice(i, 1); g.listos.splice(i, 1); g.fuera.splice(i, 1); g.revancha.splice(i, 1);
+  g.sacados = [...new Set([...(g.sacados || []), uid])];
+  log(`shoppa: ${nameOf(me).nombre} sacó a ${nameOf(uid).nombre} de la sala ${g.id}`);
+  push(g, true);
+  // al que sacaron se le avisa (ya no esta en la sala, asi que push no le llega)
+  for (const [, so] of io.sockets.sockets) if (so.user && so.user.id === uid) { try { so.emit('shoppa:estado', view(g, uid, false)); } catch { /* sesion cerrada */ } }
+  return { ok: true };
+}
+
 function create(me, d) {
   const otra = [...games.values()].find(g => g.estado !== 'terminada' && activo(g, seat(g, me)));
   if (otra) return { error: 'Ya estás en una partida de WORGS. Terminá esa o salí de la sala.' };
@@ -281,10 +325,7 @@ function create(me, d) {
   const modo = esModo(d.modo) ? d.modo : 'shopper';
   // (Shoppa: el mapa pedido, si es uno de Shoppa o de la comunidad; 'al azar' se elige al empezar; 'comunidad al azar',
   // ahora: asi todos lo bajan antes)
-  const com = modo === 'shopper' ? mapasComunidad() : [];
-  const azar = modo === 'shopper' && d.mapa === AZAR, azarC = modo === 'shopper' && d.mapa === AZAR_C && com.length > 0;
-  const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : azarC ? com[rng(com.length)]
-    : modo === 'shopper' && (MAPAS_SHOPPA.includes(d.mapa) || com.includes(d.mapa)) ? d.mapa : MODOS[modo];
+  const { mapa, azar, azarC } = elegirMapa(modo, d.mapa);
   const g = {
     id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa, modo, ...(azar ? { eleccion: AZAR } : azarC ? { eleccion: AZAR_C } : {}),
     jugadores: [me], listos: [false], fuera: [false], revancha: [false],
@@ -308,6 +349,7 @@ function join(me, d) {
     return { ok: true, id: g.id };
   }
   if (g.estado !== 'esperando') return { error: 'Esa partida ya empezó.' };
+  if ((g.sacados || []).includes(me)) return { error: 'Quien armó la sala te sacó: no podés volver a entrar.' };
   if (!g.publica) return { error: 'Esa sala es privada.' };
   if (jugadoresActivos(g).length >= MAX) return { error: 'La sala está llena (5 jugadores).' };
   const otra = [...games.values()].find(x => x !== g && x.estado !== 'terminada' && activo(x, seat(x, me)));
