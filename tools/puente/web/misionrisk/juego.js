@@ -572,12 +572,6 @@
     quien.append(punto, el('b', null, tx), el('span', 'mr-ronda', `Ronda ${s.ronda}`));
     M.relojEl = el('span', 'mr-reloj'); quien.appendChild(M.relojEl);
     b.appendChild(quien);
-    // la mision, siempre a la vista y escrita entera (para no olvidarla y sin tener que tocar nada)
-    if (s.soyJugador && s.miMision && s.estado === 'jugando') {
-      const mi = el('div', 'mr-mi-mision');
-      mi.append(el('span', 'mr-mi-mision-t', s.opciones && s.opciones.misiones ? 'Tu misión' : 'Tu objetivo'), el('span', null, s.miMision));
-      b.appendChild(mi);
-    }
     relojes();
     if (s.ausente) {
       const w = el('div', 'mr-aviso');
@@ -701,7 +695,8 @@
     if (s.soyJugador && s.misCartas) {
       const c = el('div', 'mr-caja mr-c-cartas');
       const t = el('div', 'mr-caja-t');
-      t.append(el('span', null, 'Tus cartas'));
+      // (bien a la vista, para no olvidarse de la mision)
+      t.append(el('span', null, 'Tus cartas'), btn('🎯 Tu misión', 'mr-btn-mision', verMision));
       c.appendChild(t);
       const fila = el('div', 'mr-cartas');
       const puede = s.teToca && ['canje', 'poner', 'atacar'].includes(s.fase) && !s.ataque;
