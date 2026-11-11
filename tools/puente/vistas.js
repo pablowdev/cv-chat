@@ -17,6 +17,7 @@
 //  GET /puente/vista/foro.jpg?u=<direccion del foro, sin el dominio>
 //  GET /puente/vista/web.jpg?p=<pagina>          (inicio, wiki, full-fat-search, descargar...)
 //  GET /puente/vista/wiki.jpg?s=<entrada> | ?cat=<categoria>
+//  GET /puente/vista/hola.jpg?u=<usuario de X>  (la invitacion para responderle a alguien en X: /app?hola=<usuario>)
 //  GET /puente/vista/pagina/wiki/<entrada>, /puente/vista/pagina/wiki-categorias/<categoria>
 //
 // Sin sesion: lo que muestran ya es publico (o, en el chat, lo eligio quien comparte el enlace). Si algo
@@ -446,6 +447,76 @@ function guardada(clave, hacer) {
   if (hechas.size > 300) hechas.delete(hechas.keys().next().value);
   return p;
 }
+// ── La invitacion para alguien de X (/app?hola=<usuario>): "Hey @usuario, sumate al club" con su foto de perfil
+// pasada a puntitos (como una pantalla vieja), en una ventanita a la derecha. La foto es la publica de su perfil (la
+// da unavatar.io); se guarda una semana en el disco para no pedirla de nuevo. Sin foto (o si no existe), la inicial
+const usuarioX = (s) => (/^@?([A-Za-z0-9_]{1,15})$/.exec(String(s || '').trim()) || [])[1] || null;
+const HOLA_DIR = path.join(path.dirname(UPLOADS), 'puente-hola');
+async function fotoX(u) {
+  const f = path.join(HOLA_DIR, u.toLowerCase() + '.img');
+  try { const st = fs.statSync(f); if (Date.now() - st.mtimeMs < 7 * 24 * 3600e3) return st.size ? fs.readFileSync(f) : null; } catch { /* no estaba */ }
+  let buf = null, seguro = false;
+  try {
+    const r = await fetch(`https://unavatar.io/x/${encodeURIComponent(u)}?fallback=false`, { signal: AbortSignal.timeout(7000) });
+    if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) { const b = Buffer.from(await r.arrayBuffer()); if (b.length < 3e6) buf = b; seguro = true; } else if (r.status === 404) seguro = true;
+  } catch { /* no contesto: sin foto, y se prueba de nuevo la proxima */ }
+  // (se guarda la foto, o que no tiene: un archivo vacio; si el servicio fallo, no se guarda nada)
+  if (seguro) { try { fs.mkdirSync(HOLA_DIR, { recursive: true }); fs.writeFileSync(f, buf || Buffer.alloc(0)); } catch { /* sin disco: igual anda */ } }
+  return buf;
+}
+// La foto en puntitos de dos colores (tramado ordenado de 8x8), agrandada sin suavizar
+const BAYER = [0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
+  3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21];
+async function puntitos(foto, lado) {
+  const N = 112;
+  const { data } = await sharp(foto).rotate().resize(N, N, { fit: 'cover' }).flatten({ background: '#ffffff' }).grayscale().normalize().raw().toBuffer({ resolveWithObject: true });
+  const claro = [0xf2, 0xee, 0xf0], oscuro = [0x21, 0x1c, 0x1f], out = Buffer.alloc(N * N * 3);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x, umbral = (BAYER[(y % 8) * 8 + (x % 8)] + 0.5) * 4;
+    const c = data[i] > umbral ? claro : oscuro;
+    out[i * 3] = c[0]; out[i * 3 + 1] = c[1]; out[i * 3 + 2] = c[2];
+  }
+  return sharp(out, { raw: { width: N, height: N, channels: 3 } }).resize(lado, lado, { kernel: 'nearest' }).png().toBuffer();
+}
+async function holaJpg(u) {
+  const foto = await fotoX(u);
+  const capas = [];
+  // el fondo: oscuro, con una trama de puntitos rosas a la derecha (como la del ejemplo, en los colores del club)
+  let trama = '';
+  for (let y = 18; y < H; y += 18) for (let x = 640; x < W; x += 18) if (((x * 7 + y * 13) % 5) < 2) trama += `<circle cx="${x}" cy="${y}" r="2.2" fill="${ROSA}" opacity="0.28"/>`;
+  const base = svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>${trama}
+    <rect x="40" y="44" width="10" height="40" fill="${ROSA}"/>
+    <text x="64" y="76" font-family="DejaVu Sans" font-weight="bold" font-size="30" fill="${BLANCO}">Círculo Vicioso</text>
+    <text x="64" y="104" font-family="DejaVu Sans Mono" font-size="18" fill="${GRIS}">el club · chat, foro y juegos</text>
+    <!-- la ventanita de la derecha, con la barra de arriba y el nombre abajo -->
+    <rect x="726" y="96" width="420" height="440" rx="10" fill="${FONDO_2}" stroke="${BLANCO}" stroke-width="4"/>
+    <rect x="726" y="96" width="420" height="40" rx="10" fill="${BLANCO}"/><rect x="726" y="122" width="420" height="14" fill="${BLANCO}"/>
+    <circle cx="752" cy="116" r="7" fill="${ROSA}"/><circle cx="774" cy="116" r="7" fill="#faa61a"/><circle cx="796" cy="116" r="7" fill="#3ba55d"/>
+    <text x="1128" y="123" text-anchor="end" font-family="DejaVu Sans Mono" font-weight="bold" font-size="18" fill="${FONDO}">@${esc(u)}</text>
+    <rect x="776" y="156" width="320" height="320" fill="${BLANCO}"/>
+    <text x="936" y="512" text-anchor="middle" font-family="DejaVu Sans Mono" font-weight="bold" font-size="22" fill="${BLANCO}">${esc(u.toUpperCase())}</text>
+    <!-- abajo: adonde lleva -->
+    <rect x="40" y="536" width="560" height="54" rx="27" fill="${ROSA}"/>
+    <text x="320" y="571" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="22" fill="#ffffff">Entrá gratis · ${esc(lugarChat())}</text>`);
+  if (foto) { try { capas.push({ input: await puntitos(foto, 312), left: 780, top: 160 }); } catch { /* foto rota: la inicial */ } }
+  if (capas.length === 0) capas.push({ input: await avatar(null, u, 260), left: 806, top: 186 });
+  // el saludo: "Hey" y "@usuario," en rosa, y "sumate al club."
+  let y = 150;
+  for (const [t, color, size] of [['Hey', BLANCO, 70], ['@' + u + ',', ROSA, u.length > 11 ? 56 : 70], ['sumate al club.', BLANCO, 70]]) {
+    const r = await texto(t, { size, color, bold: true, width: 660, renglones: 1 });
+    if (r) { capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 2; }
+  }
+  const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 24, color: TEXTO, width: 640, renglones: 3 });
+  if (cuerpo) capas.push({ input: cuerpo.buf, left: 40, top: y + 18 });
+  return jpg(base, capas);
+}
+// para vincular.js: las etiquetas de /app?hola=<usuario>
+function holaEnlace(s) {
+  const u = usuarioX(s);
+  return u ? { usuario: u, title: `Hey @${u}, sumate a Círculo Vicioso`, desc: 'El chat, el foro, los juegos y el Marketplace del club, todo en un lugar. Entrá y creá tu cuenta.', image: '/puente/vista/hola.jpg?u=' + encodeURIComponent(u) } : null;
+}
+const lugarChat = () => 'chat.' + (DOMINIO() || 'circulovicioso.club');
+
 async function handle(req, res, p, u, h) {
   // (HEAD tambien: algunos lectores de vistas previas preguntan primero; Node no manda el cuerpo)
   if (!p.startsWith('/puente/vista/') || (req.method !== 'GET' && req.method !== 'HEAD')) return false;
@@ -496,6 +567,10 @@ async function handle(req, res, p, u, h) {
   } else if (p === '/puente/vista/wiki.jpg') {
     const s = String(q.get('s') || '').slice(0, 120), cat = String(q.get('cat') || '').slice(0, 120);
     clave = `wiki:${s}:${cat}:${q.get('v') || ''}`; hacer = () => wikiJpg(s, cat);
+  } else if (p === '/puente/vista/hola.jpg') {
+    const x = usuarioX(q.get('u'));
+    if (!x) return h.send(res, 404, 'text/plain', 'No encontrado');
+    clave = 'hola:' + x.toLowerCase(); hacer = () => holaJpg(x);
   } else return h.send(res, 404, 'text/plain', 'No encontrado');
   const buf = sharp ? await guardada(clave, hacer) : null;
   if (!buf) { res.writeHead(302, { Location: '/puente/logo-carga.png', 'Cache-Control': 'public, max-age=300' }); return res.end(); }
@@ -503,4 +578,4 @@ async function handle(req, res, p, u, h) {
   return res.end(buf);
 }
 
-module.exports = { setup, on, handle, chatEnlace, canalPublico, pedacitoDatos, ultimosDatos };
+module.exports = { setup, on, handle, holaEnlace, chatEnlace, canalPublico, pedacitoDatos, ultimosDatos };

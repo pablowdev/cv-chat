@@ -1498,6 +1498,12 @@ function shareTags(html, url) {
       enlace = `/app?channel=${chq.get('channel')}` + (msg ? `&message=${msg}` : '');
     }
   }
+  // La invitacion para alguien de X (/app?hola=<usuario>): "Hey @usuario, sumate" con su foto (vistas.js)
+  if (chq && chq.has('hola')) {
+    let v = null;
+    try { v = require('./vistas.js').holaEnlace(chq.get('hola')); } catch (err) { warn('vistas: hola:', err.message); }
+    if (v) { title = v.title; desc = v.desc; image = v.image; grande = true; enlace = '/app?hola=' + v.usuario; }
+  }
   if (publicUrl) image = publicUrl + image;
   // El Marketplace (/app?mercado): la imagen con las ultimas publicaciones, como la de la web; una
   // publicacion (/app?mercado=<id>): su titulo, precio y foto (mercado.js)
