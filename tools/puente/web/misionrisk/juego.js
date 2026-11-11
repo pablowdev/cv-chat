@@ -644,6 +644,8 @@
     const s = M.s, b = M.barra;
     b.textContent = '';
     if (s.estado === 'esperando') return esperando(b, s);
+    // (si no marco "Estoy listo", la partida empezo sin el: se le avisa una vez)
+    if (s.quedeAfuera && !M.avisoAfuera) { M.avisoAfuera = true; A.toast('La partida empezó sin vos porque no marcaste «Estoy listo». Podés mirarla.', 'info'); }
     if (s.estado === 'terminada') return final(b, s);
     const quien = el('div', 'mr-quien');
     const punto = el('span', 'mr-punto'); punto.style.background = EJ[s.turno].color;
@@ -703,12 +705,13 @@
   // La sala de espera: arriba una franja del mapa con como esta la mesa, las reglas, los lugares (quien armo la
   // mesa puede sacar a alguien) y los botones. El mapa grande se esconde hasta que empieza la guerra
   function esperando(b, s) {
-    const n = s.asientos.filter(a => a.nombre).length;
+    const n = s.asientos.filter(a => a.nombre).length, nl = s.asientos.filter(a => a.nombre && a.listo).length;
+    const yo = s.asientos.find(a => a.yo);
     const sala = el('div', 'mr-sala');
     const banda = el('div', 'mr-sala-banda');
     const tit = el('div', 'mr-sala-tit');
     const sub = s.sacado ? 'Quien armó la mesa te sacó: podés seguir mirando, pero no volver a entrar.'
-      : s.flexible ? `${n} de hasta ${s.maximo} · ${s.soyCreador ? (n < 2 ? 'cuando entre alguien más, la arrancás vos' : 'la guerra arranca cuando vos digas') : 'arranca cuando la empiece quien armó la mesa, o sola si se llena'}`
+      : s.flexible ? `${n} de hasta ${s.maximo} · ${s.soyCreador ? (n < 2 ? 'cuando entre alguien más, la arrancás vos' : nl < 2 ? 'esperando que alguien marque «Estoy listo»' : `${nl} listos: la arrancás cuando quieras`) : s.soyJugador ? (yo && yo.listo ? 'estás listo: arranca cuando la empiece quien armó la mesa' : 'marcá «Estoy listo» para jugar esta partida') : 'arranca cuando la empiece quien armó la mesa'}`
       : `Mesa de ${s.asientos.length} ejércitos · los lugares vacíos los juega la compu (${s.nivel})`;
     tit.append(el('div', 'mr-sala-h', s.sacado ? 'Te sacaron de esta mesa' : 'Esperando gente'), el('div', 'mr-sala-s', sub));
     banda.appendChild(tit);
@@ -728,14 +731,15 @@
     for (let k = 0; k < total; k++) {
       const a = s.asientos[k] || {};
       const color = (s.asientos[k] && s.asientos[k].color) || (window.MRMapa.ejercitos[k + 1] || {}).color || '#5865f2';
-      const r = el('div', 'mr-lugar' + (a.nombre ? '' : ' libre'));
+      const r = el('div', 'mr-lugar' + (a.nombre ? (s.flexible && !a.listo ? ' no-listo' : '') : ' libre'));
       r.style.setProperty('--c', color);
       const tx = el('div', 'mr-lugar-tx');
       if (a.nombre) {
         r.appendChild(A.avatar(a));
         const nom = el('b', null, a.yo ? `${a.nombre} (vos)` : a.nombre);
         if (a.creador) { const c = el('span', 'mr-lugar-corona', '★'); c.title = 'Armó la mesa'; nom.append(' ', c); }
-        tx.append(nom, el('span', null, a.creador ? 'Armó la mesa' : 'En la mesa'));
+        tx.append(nom, !s.flexible ? el('span', null, a.creador ? 'Armó la mesa' : 'En la mesa')
+          : a.listo ? el('span', 'mr-lugar-ok', a.creador ? '✓ Armó la mesa' : '✓ Listo') : el('span', 'mr-lugar-falta', 'Todavía no está listo'));
         // quien armo la mesa puede sacar a los demas (antes de empezar)
         if (s.soyCreador && a.id && !a.yo) {
           const x = el('button', 'mr-lugar-x', '✕'); x.type = 'button'; x.title = `Sacar a ${a.nombre} de la mesa`; x.setAttribute('aria-label', x.title);
@@ -755,9 +759,27 @@
     if (s.invitados.length) sala.appendChild(el('div', 'mr-sala-inv', 'Invitados: ' + s.invitados.map(p => p.nombre).join(', ')));
     const acc = el('div', 'mr-sala-acc');
     if (!s.soyJugador && !s.sacado) acc.appendChild(btn('Entrar a la mesa', 'jg-primario mr-sala-btn', () => unirse(s.id)));
+    // "Estoy listo" (los que entraron; quien armo la mesa ya esta)
+    if (s.flexible && s.soyJugador && !s.soyCreador && yo) {
+      const lb = btn(yo.listo ? '✓ Estoy listo' : '✋ Estoy listo', yo.listo ? 'mr-sala-btn mr-listo-on' : 'jg-primario mr-sala-btn mr-listo', async () => {
+        lb.disabled = true;
+        const r = await A.emit('mr:listo', { id: s.id, listo: !yo.listo });
+        if (r.error) { lb.disabled = false; A.toast(r.error, 'error'); }
+      });
+      if (yo.listo) lb.title = 'Tocá de nuevo si todavía no estás listo';
+      acc.appendChild(lb);
+    }
     if (s.soyCreador) {
-      const emp = btn(s.flexible ? `⚔ Empezar con ${n}` : '⚔ Empezar', 'jg-primario mr-sala-btn', async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); });
+      const empezar = async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); };
+      const emp = btn(s.flexible ? `⚔ Empezar con ${nl}` : '⚔ Empezar', 'jg-primario mr-sala-btn', () => {
+        // (los que no estan listos quedan afuera: se pregunta antes)
+        const faltan = s.asientos.filter(a => a.nombre && !a.listo);
+        if (!s.flexible || !faltan.length) return empezar();
+        const quienes = faltan.map(a => a.nombre).join(', ');
+        A.confirmar(faltan.length === 1 ? `${quienes} no está listo` : `${faltan.length} no están listos`, `Si empezás ahora, ${faltan.length === 1 ? 'queda' : 'quedan'} afuera de esta partida (${quienes}) y la ${faltan.length === 1 ? 'puede' : 'pueden'} mirar.`, 'Empezar igual', 'Esperar').then(ok => { if (ok) empezar(); });
+      });
       if (s.flexible && n < 2) { emp.disabled = true; emp.title = 'Hace falta que entre alguien más'; }
+      else if (s.flexible && nl < 2) { emp.disabled = true; emp.title = 'Hace falta que alguien más marque «Estoy listo»'; }
       acc.appendChild(emp);
     }
     if (!s.sacado) acc.appendChild(btn('🔗 Copiar invitación', 'mr-sala-btn', () => {
@@ -766,7 +788,7 @@
       if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => A.toast('Invitación copiada: pegala en un canal o en un mensaje', 'success'), () => prompt('Copiá la invitación:', t));
       else prompt('Copiá la invitación:', t);
     }));
-    if (s.flexible && !s.sacado) acc.appendChild(el('div', 'mr-sala-nota', s.soyCreador && n > 1 ? 'Los colores se sortean al empezar. Tocá ✕ para sacar a alguien de la mesa.' : 'Los colores se sortean al empezar.'));
+    if (s.flexible && !s.sacado) acc.appendChild(el('div', 'mr-sala-nota', 'Solo juegan los que marcaron «Estoy listo». Los colores se sortean al empezar.' + (s.soyCreador && n > 1 ? ' Tocá ✕ para sacar a alguien de la mesa.' : '')));
     sala.appendChild(acc);
     b.appendChild(sala);
   }

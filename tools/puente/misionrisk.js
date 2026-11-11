@@ -10,6 +10,7 @@
 //             siguen como eran)
 //   mr:unirse { id }   mr:cancelar { id }   mr:empezar { id }   mr:ver { id }
 //   mr:sacar { id, uid }   (quien armo la mesa saca a alguien antes de empezar; no puede volver a entrar)
+//   mr:listo { id, listo }  (en la mesa que espera: "Estoy listo"; al empezar, los que no lo marcaron quedan afuera y miran)
 //   mr:accion { id, tipo, ... }  (las jugadas del motor, y 'abandonar' y 'volver')
 // Y el servidor avisa:
 //   mr:estado (la partida)   mr:cambio (algo cambio en la sala)
@@ -70,11 +71,13 @@ function setup(ctx) {
     on('mr:unirse', join);
     on('mr:cancelar', cancel);
     on('mr:sacar', sacar);
+    on('mr:listo', listo);
     on('mr:empezar', (me, d) => {
       const g = games.get(String(d.id));
       if (!g || g.creador !== me || g.estado !== 'esperando') return { error: 'No se puede empezar.' };
       // (la flexible arranca con los que estan: hace falta alguien mas)
       if (g.flexible && humanos(g).length < 2) return { error: 'Hace falta que entre alguien más para empezar. Si querés, jugá con la compu.' };
+      if (g.flexible && listos(g).length < 2) return { error: 'Hace falta que alguien más marque «Estoy listo» para empezar.' };
       start(g); return { ok: true };
     });
     // el que mira una partida (aunque no juegue) recibe sus cambios
@@ -91,6 +94,9 @@ const nameOf = (id) => {
 };
 const humanos = (g) => g.asientos.filter(a => a.uid).map(a => a.uid);
 const seatOf = (g, me) => g.asientos.findIndex(a => a.uid === me);
+// los que marcaron "Estoy listo" (quien armo la mesa, siempre)
+const estaListo = (g, a) => !!a.uid && (!!a.listo || a.uid === g.creador);
+const listos = (g) => g.asientos.filter(a => estaListo(g, a)).map(a => a.uid);
 // (las que ya empezaron se pueden mirar todas)
 const canSee = (g, me) => seatOf(g, me) >= 0 || g.publica || g.invitados.includes(me) || g.estado !== 'esperando';
 
@@ -151,7 +157,7 @@ function join(me, d) {
     if (!libre) return { error: 'La mesa está completa.' };
     libre.uid = me;
   }
-  if (g.asientos.length >= MAX ? g.asientos.every(a => a.uid) : !g.flexible && g.asientos.every(a => a.uid)) start(g);
+  if (g.flexible ? g.asientos.length >= MAX && g.asientos.every(a => estaListo(g, a)) : g.asientos.every(a => a.uid)) start(g);
   else { push(g); changed(); }
   return { ok: true, id: g.id };
 }
@@ -184,8 +190,29 @@ function sacar(me, d) {
   return { ok: true };
 }
 
-// Los asientos vacios quedan para la compu; el orden de los ejercitos es el de los asientos
+// "Estoy listo" (o ya no): solo en la mesa que espera gente. Si se llena y estan todos listos, arranca sola
+function listo(me, d) {
+  const g = games.get(String(d.id));
+  if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó.' };
+  const i = seatOf(g, me);
+  if (i < 0) return { error: 'No estás en esta mesa.' };
+  g.asientos[i].listo = d.listo !== false;
+  if (g.flexible && g.asientos.length >= MAX && g.asientos.every(a => estaListo(g, a))) start(g);
+  else push(g);
+  return { ok: true };
+}
+
+// Los asientos vacios quedan para la compu; el orden de los ejercitos es el de los asientos. En la que espera
+// gente, los que no marcaron "Estoy listo" quedan afuera (pueden mirarla)
 function start(g) {
+  if (g.flexible) {
+    const fuera = g.asientos.filter(a => a.uid && !estaListo(g, a)).map(a => a.uid);
+    if (fuera.length) {
+      g.asientos = g.asientos.filter(a => !fuera.includes(a.uid));
+      g.quedaronAfuera = fuera;
+      log(`globalsiege: la partida ${g.id} empezó sin ${fuera.map(u => nameOf(u).nombre).join(', ')} (no marcaron que estaban listos)`);
+    }
+  }
   g.estado = 'jugando';
   g.inicio = Date.now();
   g.asientos = g.asientos.map(a => a.uid ? a : { uid: null, compu: true, nivel: g.nivel });
@@ -342,7 +369,7 @@ function view(g, me) {
   const i = seatOf(g, me), e = i + 1;
   const S = g.S;
   const out = {
-    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me, sacado: (g.sacados || []).includes(me), amistosa: !!g.amistosa, flexible: !!g.flexible, maximo: MAX,
+    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me, sacado: (g.sacados || []).includes(me), quedeAfuera: (g.quedaronAfuera || []).includes(me), amistosa: !!g.amistosa, flexible: !!g.flexible, maximo: MAX,
     nivel: NIVELES[g.nivel - 1], opciones: g.opciones, miEj: i >= 0 ? e : null,
     invitados: g.invitados.map(nameOf),
     // el chat, con el nombre y el color del ejercito de cada uno (en la espera todavia no tienen)
@@ -357,7 +384,7 @@ function view(g, me) {
     }) : {}),
     asientos: g.asientos.map((a, k) => {
       const p = a.uid ? nameOf(a.uid) : null;
-      const x = { id: a.uid || null, creador: !!a.uid && a.uid === g.creador, ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me };
+      const x = { id: a.uid || null, creador: !!a.uid && a.uid === g.creador, ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me, listo: estaListo(g, a) };
       if (S) {
         const ej = S.ej[k + 1];
         Object.assign(x, { vivo: ej.vivo, paises: M.paisesDe(S, k + 1), tropas: M.tropasDe(S, k + 1), cartas: ej.cartas.length, ausente: !!g.ausente[k + 1], abandono: !!a.abandono, conquistas: ej.conquistas, bajas: ej.bajas });
@@ -460,4 +487,4 @@ function lobby(me) {
   return CP.paraBiblioteca({ niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } }, games, { io, db, creador: (g) => g.creador });
 }
 
-module.exports = { setup, stats, _test: { cancel, games, create, join, act, view, start, botStep, timeout } };
+module.exports = { setup, stats, _test: { cancel, games, create, join, act, view, start, botStep, timeout, listo } };
