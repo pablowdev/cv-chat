@@ -10894,6 +10894,19 @@ document.addEventListener('pointerdown', (ev) => {
   const nombreMesa = (j, m) => (j.id === 'shoppa' && m ? 'WORGS: ' + (m.modo === 'normal' ? 'Normal' : 'Shoppa') : j.nombre);
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
   const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
+  // La tapa chica de un juego (para las filas de partidas y mesas), con la foto de quien (o un numero) encima
+  function tapaChica(j, quien) {
+    const c = el('div', 'jg-mini'); c.style.background = j.fondo;
+    if (j.dibujo) c.innerHTML = j.dibujo();
+    else { const img = el('img'); img.alt = ''; img.draggable = false; img.src = j.tapa(); if (j.ajuste) img.style.objectFit = j.ajuste; img.addEventListener('error', () => img.remove()); c.appendChild(img); }
+    if (quien) { const a = typeof quien === 'string' ? el('span', 'jg-mini-n', quien) : avatar(quien); a.classList.add('jg-mini-av'); c.appendChild(a); }
+    return c;
+  }
+  const haceCuanto = (t) => {
+    if (!(t > 0)) return '';
+    const m = Math.max(0, Math.round((Date.now() - t) / 60e3));
+    return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : m < 48 * 60 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} días`;
+  };
   async function biblioteca() {
     // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
     page.appendChild(head('Juegos', botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__')));
@@ -10907,6 +10920,7 @@ document.addEventListener('pointerdown', (ev) => {
       const t = el('button', 'jg-tapa'); t.type = 'button'; t.setAttribute('aria-label', j.nombre);
       const caja = el('div', 'jg-tapa-img'); caja.style.background = j.fondo;
       const badge = el('span', 'jg-tapa-badge'); badge.style.display = 'none';
+      const vivo = el('span', 'jg-tapa-vivo'); vivo.style.display = 'none';
       // la tapa: una imagen del servidor, o un dibujo hecho aca
       if (j.dibujo) { caja.innerHTML = j.dibujo(); caja.appendChild(badge); }
       else {
@@ -10915,10 +10929,11 @@ document.addEventListener('pointerdown', (ev) => {
         img.addEventListener('error', () => { img.remove(); caja.appendChild(el('div', 'jg-tapa-sin', j.nombre)); });
         caja.append(img, badge);
       }
+      caja.appendChild(vivo);
       t.append(caja, el('div', 'jg-tapa-n', j.nombre), el('div', 'jg-tapa-s', j.sub));
       t.addEventListener('click', () => go('inicio', j.id));
       grilla.appendChild(t);
-      tarjetas[j.id] = { t, badge };
+      tarjetas[j.id] = { t, badge, vivo };
     }
     const pronto = el('div', 'jg-tapa pronto');
     const pc = el('div', 'jg-tapa-img'); pc.appendChild(el('div', 'jg-tapa-sin', '＋'));
@@ -10935,20 +10950,30 @@ document.addEventListener('pointerdown', (ev) => {
       const mias = (d.mias || []).filter(m => m.estado !== 'terminada');
       const n = mias.filter(m => m.teToca).length + (d.abiertas || []).filter(a => a.paraVos).length;
       if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
+      // lo que se esta jugando ahora (alguien jugo en la ultima media hora) o, si no, las mesas que esperan
+      const act = d.activas || 0, esp = (d.abiertas || []).length;
+      const vv = act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
+      if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
       for (const m of mias) curso.push({ j, m });
     });
     pintarMesas(mesasBox, datos);
     if (!curso.length) return;
     curso.sort((a, z) => (z.m.teToca ? 1 : 0) - (a.m.teToca ? 1 : 0));
-    seguir.appendChild(el('div', 'jg-bib-titulo', 'Seguir jugando'));
+    const st = el('div', 'jg-bib-titulo'); st.append('Seguir jugando', el('small', null, 'tus partidas en curso'));
+    seguir.appendChild(st);
     const l = el('div', 'jg-seguir'); seguir.appendChild(l);
     for (const { j, m } of curso.slice(0, 6)) {
       const who = m.rival || m.invitado || { nombre: '?' };
-      const r = el('button', 'jg-fila'); r.type = 'button';
+      const espera = m.estado === 'esperando';
+      // en las de varios (GlobalSiege) la mesa que espera muestra cuantos hay; en las de dos, quien falta
+      const varios = espera && m.flexible && m.sentados > 0;
+      const r = el('button', 'jg-fila jg-fila-tapa' + (m.teToca ? ' toca' : '')); r.type = 'button';
       const tx = el('div', 'jg-ftexto');
-      tx.append(el('div', 'jg-fnombre', m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`), el('div', 'jg-fmeta', nombreMesa(j, m)));
-      r.append(avatar(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who), tx);
-      if (m.teToca) r.appendChild(el('span', 'jg-chip amarillo', 'Te toca'));
+      const que = espera ? (varios ? `${m.sentados} en la mesa, entran hasta ${m.total}` : `armada ${haceCuanto(m.ult)}`) : m.estado === 'jugando' && m.ult ? `última jugada ${haceCuanto(m.ult)}` : '';
+      const meta = el('div', 'jg-fmeta', nombreMesa(j, m)); if (que) meta.append(' · ', el('i', null, que));
+      tx.append(el('div', 'jg-fnombre', espera ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : varios ? 'Esperando gente' : 'Esperando rival') : `vs ${who.nombre}`), meta);
+      r.append(tapaChica(j, varios ? String(m.sentados) : espera && !m.invitado ? null : who), tx);
+      r.appendChild(m.teToca ? el('span', 'jg-chip amarillo', 'Te toca') : el('span', 'jg-chip', 'Abrir'));
       r.addEventListener('click', () => go(j.mesa || 'mesa', m.id));
       l.appendChild(r);
     }
@@ -10959,16 +10984,21 @@ document.addEventListener('pointerdown', (ev) => {
     const lista = [];
     JUEGOS_EN_RED.forEach((j, i) => { const d = datos[i]; if (d && !d.error) for (const a of d.abiertas || []) lista.push({ j, a }); });
     lista.sort((x, y) => (y.a.paraVos ? 1 : 0) - (x.a.paraVos ? 1 : 0));
-    box.appendChild(el('div', 'jg-bib-titulo', 'Mesas esperando rival'));
+    const mt = el('div', 'jg-bib-titulo'); mt.append('Mesas esperando rival', el('small', null, 'de todos los juegos'));
+    box.appendChild(mt);
     if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
     const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, shoppa: (id) => { stack = []; go('shJuego', id); } };
     const l = el('div', 'jg-seguir'); box.appendChild(l);
     for (const { j, a } of lista.slice(0, 8)) {
       const quien = a.creador || { nombre: '?' };
-      const r = el('button', 'jg-fila'); r.type = 'button';
+      const r = el('button', 'jg-fila jg-fila-tapa' + (a.paraVos ? ' toca' : '')); r.type = 'button';
       const tx = el('div', 'jg-ftexto');
-      tx.append(el('div', 'jg-fnombre', a.paraVos ? `${quien.nombre} te desafía` : quien.nombre), el('div', 'jg-fmeta', nombreMesa(j, a)));
-      r.append(avatar(quien), tx, el('span', 'jg-chip ' + (a.paraVos ? 'amarillo' : 'azul'), 'Jugar'));
+      const meta = el('div', 'jg-fmeta');
+      if (a.enLinea) { const p = el('span', 'jg-enlinea'); p.title = 'Conectado ahora'; meta.appendChild(p); }
+      meta.append(nombreMesa(j, a));
+      if (a.creado) meta.append(' · ', el('i', null, `armada ${haceCuanto(a.creado)}`));
+      tx.append(el('div', 'jg-fnombre', a.paraVos ? `${quien.nombre} te desafía` : quien.nombre), meta);
+      r.append(tapaChica(j, quien), tx, el('span', 'jg-chip ' + (a.paraVos ? 'amarillo' : 'azul'), 'Jugar'));
       r.addEventListener('click', () => { const f = unirse[j.id]; if (f) f(a.id); else go('inicio', j.id); });
       l.appendChild(r);
     }

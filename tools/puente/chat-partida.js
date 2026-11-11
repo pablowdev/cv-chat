@@ -155,4 +155,27 @@ function zumbar(o) {
   return { ok: true, quedan: 3 - z.n };
 }
 
-module.exports = { espEstado, vistaEsp, accionEsp, respuestaEsp, chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, plazoTexto, ultimaJugada };
+// ── Para la biblioteca de Juegos (aviso.js) ──
+// Si alguien esta conectado y se lo puede ver (no si eligio aparecer invisible, como en la tarjeta del club)
+function enLinea(io, db, uid) {
+  if (!(uid > 0)) return false;
+  let hay = false;
+  for (const [, s] of io.sockets.sockets) if (s.user && s.user.id === uid) { hay = true; break; }
+  if (!hay) return false;
+  try { const u = db.prepare('SELECT status FROM users WHERE id = ?').get(uid); return !(u && /^(invisible|offline)$/i.test(String(u.status || ''))); } catch { return true; }
+}
+// A lo que da cada sala (abiertas y mias) le suma: cuando fue lo ultimo de cada partida tuya (ult; la que espera,
+// cuando se armo), cuando se armo cada mesa y si quien la armo esta conectado, y cuantas partidas se estan jugando
+// ahora (activas: alguien jugo en la ultima media hora). o: { io, db, ult (g -> ms), creador (g -> uid) }
+function paraBiblioteca(res, games, o) {
+  const ult = o.ult || ultimaJugada, creador = o.creador || ((g) => g.jugadores[0]);
+  try {
+    for (const m of res.mias || []) { const g = games.get(m.id); if (g) m.ult = g.estado === 'esperando' ? g.creado || 0 : ult(g); }
+    for (const a of res.abiertas || []) { const g = games.get(a.id); if (g) { a.creado = g.creado || 0; a.enLinea = enLinea(o.io, o.db, creador(g)); } }
+    const now = Date.now();
+    res.activas = [...games.values()].filter(g => g.estado === 'jugando' && now - ult(g) < 30 * 60e3).length;
+  } catch { /* sin los extras: la biblioteca se arregla sin ellos */ }
+  return res;
+}
+
+module.exports = { enLinea, paraBiblioteca, espEstado, vistaEsp, accionEsp, respuestaEsp, chatear, mensajes, turno, zumbar, quieto, avisoQuieto, QUIETO_MS, plazoTexto, ultimaJugada };

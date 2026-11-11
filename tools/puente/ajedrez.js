@@ -492,7 +492,7 @@ function lobby(me) {
     });
   const d = new Date();
   const mes = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) + 3 * 3600e3;
-  return { enJuego: mirables(me), ritmos: Object.keys(RITMOS).map(r => [r, ritmoNombre(r)]), niveles: M.NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
+  return CP.paraBiblioteca({ enJuego: mirables(me), ritmos: Object.keys(RITMOS).map(r => [r, ritmoNombre(r)]), niveles: M.NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } }, games, { io, db });
 }
 
 // a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida

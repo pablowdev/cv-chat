@@ -269,7 +269,7 @@ function lobby(me) {
         invitado: null,
       };
     });
-  return { abiertas, mias };
+  return CP.paraBiblioteca({ abiertas, mias }, games, { io, db, ult: (g) => g.ultimoMovimiento || g.creado || 0, creador: (g) => { const a = jugadoresActivos(g)[0]; return a ? a.id : g.jugadores[0]; } });
 }
 
 function create(me, d) {

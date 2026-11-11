@@ -438,7 +438,7 @@ function lobby(me) {
     });
   const d = new Date();
   const mes = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) + 3 * 3600e3;
-  return { niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } };
+  return CP.paraBiblioteca({ niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } }, games, { io, db, creador: (g) => g.creador });
 }
 
 module.exports = { setup, stats, _test: { games, create, join, act, view, start, botStep, timeout } };
