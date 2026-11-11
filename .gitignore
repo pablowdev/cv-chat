@@ -40,10 +40,9 @@ apps/android/firma.properties
 apps/android/app/src/main/res/**/*.png
 # Proyecto Gusanos: el codigo va al repositorio; los assets y la tapa son de cada servidor
 tools/puente/web/gusanos/assets/
+# WORGS: el juego vive en su propio repositorio privado (github.com/pablowdev/worgs)
+tools/puente/web/worgs/
+tools/puente/worgs-voces.js
 tools/puente/web/tapas/gusanos.jpg
 
-# WORGS: los sonidos y los graficos de WA quedan solo en el servidor (assets de Team17, fuera del repositorio publico)
-tools/puente/web/worgs/sonidos/
-tools/puente/web/worgs/assets/
-# WORGS: los mapas de Shopper de la comunidad (mascaras, imagenes originales y comunidad.json): solo en el servidor
 tools/puente/web/worgs/comunidad/
