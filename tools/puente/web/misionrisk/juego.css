@@ -46,6 +46,14 @@
 .puente-jg .mr-final-s { margin-top: 0.25rem; color: #dbdee1; }
 .puente-jg .mr-final + .mr-acc { justify-content: center; }
 
+/* Con una sola columna pero ancha (tablet, el Fold abierto): las cartas y los ejercitos lado a lado */
+@media (min-width: 600px) and (max-width: 999px) {
+  .puente-jg .mr-panel:not(:empty) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; align-items: start; }
+  .puente-jg .mr-panel > .mr-caja { margin-bottom: 0; }
+  .puente-jg .mr-panel > .mr-caja:nth-child(n+3) { grid-column: 1 / -1; }
+  .puente-jg .mr-panel .mr-log { max-height: 9rem; }
+}
+.puente-jg .mr-der > .mr-credito { margin-top: 0.75rem; }
 /* El panel */
 .puente-jg .mr-caja { margin-bottom: 0.75rem; padding: 0.75rem; border-radius: 0.75rem; background: #232227; }
 .puente-jg .mr-caja-t { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: #b5bac1; }

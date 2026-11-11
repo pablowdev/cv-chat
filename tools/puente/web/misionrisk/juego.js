@@ -329,12 +329,14 @@
     M.barra = el('div', 'mr-barra');
     // el chat con los demas (aviso.js: chatPartida), fijo debajo de lo que pasa
     M.chatBox = el('div', 'mr-chat');
-    izq.append(M.wrap, M.barra, M.chatBox);
+    izq.append(M.wrap, M.barra);
     // el panel (se rearma entero) y, en la pantalla ancha, el chat abajo de todo en esta columna
     M.der = der; M.panel = el('div', 'mr-panel'); der.appendChild(M.panel);
     M.cv.addEventListener('click', tocar);
     M.cv.addEventListener('mousemove', (e) => { const p = puntoDe(e); M.cv.title = p ? `${P[p].nombre}` : ''; });
     // (se mira la columna, no el mapa: el mapa cambia de ancho solo, para entrar en la pantalla)
+    // a la derecha (o, con una sola columna, debajo): el panel, el chat y el credito
+    der.append(M.chatBox, credito());
     M.ro = new ResizeObserver(() => dibujar()); M.ro.observe(izq); M.ro.observe(M.barra); M.ro.observe(M.chatBox);
     if (A.page()) M.ro.observe(A.page());
     M.reloj = setInterval(() => { if (M === yo) relojes(); }, 1000);
@@ -396,15 +398,15 @@
   // crece parejo con el ancho, asi que alcanza con una cuenta. En el celular (y con la lupa), todo el ancho
   function anchoMapa() {
     const libre = Math.max(200, M.izq.clientWidth), page = A.page();
-    // el chat: a la derecha si hay dos columnas (el mapa queda mas grande), si no debajo de lo que pasa
-    const dos = innerWidth >= 1000, donde = dos ? M.der : M.izq;
-    if (M.chatBox.parentElement !== donde) donde.appendChild(M.chatBox);
-    if (M.zoom || !page || innerWidth <= 640) { M.wrap.style.maxWidth = ''; M.der.style.maxHeight = ''; return libre; }
+    // con una sola columna (celular, tablet, el Fold abierto) el mapa va de todo el ancho y lo demas abajo, en
+    // orden: lo que pasa, las cartas y los ejercitos, la guerra y el chat. El ajuste al alto, solo con dos columnas
+    const dos = innerWidth >= 1000;
+    if (M.zoom || !page || !dos) { M.wrap.style.maxWidth = ''; M.der.style.maxHeight = ''; return libre; }
     const pr = page.getBoundingClientRect(), padB = parseFloat(getComputedStyle(M.cuerpo).paddingBottom) || 0;
     const fondo = (y) => y - pr.top + page.scrollTop + padB; // hasta donde llega algo, contando desde arriba de todo
     const h = M.cv.offsetHeight;
     // el panel de la derecha: lo que quede, con su propio scroll si hace falta
-    M.der.style.maxHeight = dos ? Math.max(320, page.clientHeight - fondo(M.der.getBoundingClientRect().top)) + 'px' : '';
+    M.der.style.maxHeight = Math.max(320, page.clientHeight - fondo(M.der.getBoundingClientRect().top)) + 'px';
     if (!h) { requestAnimationFrame(dibujar); return libre; }
     const sobra = fondo(M.izq.getBoundingClientRect().bottom) - page.clientHeight;
     const w = Math.round(Math.max(320, Math.min(libre, (h - sobra - 2) * MAPA.ANCHO / MAPA.ALTO)));
@@ -688,7 +690,7 @@
   function panel() {
     const s = M.s, d = M.panel;
     d.textContent = '';
-    if (s.estado === 'esperando') { d.appendChild(credito()); return; }
+    if (s.estado === 'esperando') return;
     // Mis cartas y mi mision
     if (s.soyJugador && s.misCartas) {
       const c = el('div', 'mr-caja');
@@ -737,7 +739,6 @@
     for (const t of (s.log || []).slice().reverse()) l.appendChild(el('div', null, t));
     lg.appendChild(l);
     d.appendChild(lg);
-    d.appendChild(credito());
   }
 
   // ── Para aviso.js ──
