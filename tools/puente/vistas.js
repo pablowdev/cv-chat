@@ -519,7 +519,7 @@ async function holaJpg(u) {
   // (mas grande que la tarjeta: se recorta lo que se ve, porque una capa no puede salirse del borde)
   try { capas.push({ input: await sharp(await insigniaPuntos(200, 980, { suave: '#3a2f35' })).extract({ left: 250, top: 175, width: 730, height: H }).toBuffer(), left: 0, top: 0 }); } catch (err) { warn('vistas: hola: textura:', err.message); }
   // la insignia, a la derecha, con la foto redonda en el lugar del conejo (y un anillo rosa punteado)
-  const L = 600, x0 = 585, y0 = 15, F = Math.round(L * 0.66);
+  const L = 600, x0 = 585, y0 = 15, F = Math.round(L * 0.56);
   try { capas.push({ input: await insigniaPuntos(220, L, { hueco: 0.7 }), left: x0, top: y0 }); } catch (err) { warn('vistas: hola: insignia:', err.message); }
   const fx = x0 + Math.round((L - F) / 2), fy = y0 + Math.round((L - F) / 2);
   let conFoto = false;
@@ -530,11 +530,14 @@ async function holaJpg(u) {
   capas.push({ input: svg(600, 120, `<rect x="40" y="40" width="12" height="48" fill="${ROSA}"/>
     <text x="68" y="78" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="${BLANCO}">Círculo Vicioso</text>
     <text x="70" y="110" font-family="DejaVu Sans Mono" font-size="20" fill="${GRIS}">el club · chat, foro y juegos</text>`), left: 0, top: 0 });
-  let y = 150;
-  const grande = u.length > 12 ? 52 : u.length > 9 ? 64 : 80;
-  for (const [partes, size] of [[[['Che', BLANCO]], 80], [[['@' + u + ',', ROSA]], grande], [[['sumá ', BLANCO], ['PESO NETO', ROSA]], 60], [[['al club.', BLANCO]], 60]]) {
-    try { const r = await renglon(partes, size, 640); capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 2; } catch { /* sin ese renglon */ }
+  let y = 130;
+  const grande = u.length > 12 ? 48 : u.length > 9 ? 58 : 70;
+  for (const [partes, size] of [[[['Che', BLANCO]], 70], [[['@' + u + ',', ROSA]], grande], [[['sumá ', BLANCO], ['PESO NETO', ROSA]], 54], [[['al club.', BLANCO]], 54]]) {
+    try { const r = await renglon(partes, size, 640); capas.push({ input: r.buf, left: 40, top: y }); y += r.h + 4; } catch { /* sin ese renglon */ }
   }
+  // y abajo, chico: que es el club
+  const cuerpo = await texto('El chat, el foro, los juegos y el Marketplace de Círculo Vicioso, todo en un lugar. Entrá y creá tu cuenta.', { size: 23, color: TEXTO, width: 540, renglones: 3 });
+  if (cuerpo) capas.push({ input: cuerpo.buf, left: 40, top: Math.min(y + 10, 528 - cuerpo.h) });
   capas.push({ input: svg(640, 80, `<rect x="40" y="10" width="580" height="62" rx="31" fill="${ROSA}"/>
     <text x="330" y="51" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" fill="#ffffff">Entrá gratis · ${esc(lugarChat())}</text>`), left: 0, top: 538 });
   return jpg(svg(W, H, `<rect width="${W}" height="${H}" fill="${FONDO}"/>`), capas);
