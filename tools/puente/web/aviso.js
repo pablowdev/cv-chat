@@ -13835,6 +13835,9 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
 //    anota quien la invito (el enlace lo guardo login.js).
 //  - "🤝 Invitar gente" en la tarjeta de perfil propia (y el boton "Invitar usuarios"
 //    de la columna derecha): tu enlace para copiar o compartir, y cuantas personas trajiste.
+//  - Abajo, "Invitá a alguien de X": se pone su usuario (o el link de su posteo) y se arma la tarjeta con su
+//    nombre y su foto (vistas.js, /app?hola=<usuario>&invita=<vos>, que tambien cuenta para tu medalla), para
+//    responderle en X o copiar el link.
 (function () {
   'use strict';
   const storage = (fn) => { try { return fn(); } catch { return null; } };
@@ -13874,12 +13877,14 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     if (navigator.share) box.appendChild(share);
     const stats = el('p', 'pi-cuenta', '');
     box.appendChild(stats);
+    const conX = seccionX(box);
     back.appendChild(box);
     back.addEventListener('click', (e) => { if (e.target === back) close(); });
     document.body.appendChild(back);
     const d = await fetch('/puente/api/invitacion/mia', { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
     if (!d) { input.value = 'No se pudo cargar. Probá de nuevo.'; return; }
     input.value = d.enlace;
+    conX(d.enlace);
     stats.textContent = d.invitados
       ? `Ya trajiste ${d.invitados === 1 ? 'a 1 persona' : `a ${d.invitados} personas`}` + (d.pendientes ? ` (y ${d.pendientes} más que todavía no confirmaron su cuenta).` : '.')
       : d.pendientes ? `${d.pendientes === 1 ? 'Una persona entró' : `${d.pendientes} personas entraron`} con tu enlace y todavía no confirmó su cuenta.` : 'Todavía no trajiste a nadie: ¡estrená tu enlace!';
@@ -13890,6 +13895,76 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
       else { input.select(); document.execCommand('copy'); done(); }
     });
     share.addEventListener('click', () => { navigator.share({ title: '__PUENTE_APP__', text }).catch(() => {}); });
+  }
+  // ── Invitá a alguien de X ──
+  // Su usuario (@fulano, fulano) o un link de X (de su perfil o de un posteo suyo: con el del posteo, el boton le
+  // responde ahi mismo)
+  const NO_SON = new Set(['home', 'i', 'intent', 'search', 'explore', 'notifications', 'messages', 'settings', 'share', 'compose', 'hashtag', 'login', 'signup', 'tos', 'privacy']);
+  function deX(t) {
+    t = String(t || '').trim();
+    let m = /(?:^|\/\/|\b)(?:www\.|mobile\.)?(?:x|twitter)\.com\/@?([A-Za-z0-9_]{1,15})(?:\/status(?:es)?\/(\d{5,25}))?/i.exec(t);
+    if (m) return NO_SON.has(m[1].toLowerCase()) ? null : { u: m[1], post: m[2] || null };
+    m = /^@?([A-Za-z0-9_]{1,15})$/.exec(t);
+    return m ? { u: m[1], post: null } : null;
+  }
+  const LOGO_X = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82-5.97 6.82H1.67l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23Zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64Z"/></svg>';
+  function seccionX(box) {
+    const sec = el('div', 'pi-x');
+    const tit = el('h3', 'pi-x-titulo'); tit.innerHTML = LOGO_X; tit.appendChild(document.createTextNode(' Invitá a alguien de X'));
+    const ayuda = el('p', 'pi-x-texto', 'Poné su usuario o pegá el link de su posteo: te armamos una tarjeta con su nombre y su foto para responderle.');
+    const campo = el('input', 'pi-x-campo'); campo.type = 'text'; campo.placeholder = '@usuario o link del posteo';
+    campo.autocomplete = 'off'; campo.autocapitalize = 'off'; campo.spellcheck = false; campo.setAttribute('aria-label', 'Usuario de X o link del posteo');
+    const vista = el('div', 'pi-x-vista'); vista.hidden = true;
+    const img = el('img'); img.alt = ''; const carga = el('div', 'pi-x-carga', 'Armando la tarjeta…');
+    vista.append(img, carga);
+    const nota = el('p', 'pi-x-nota', '');
+    const botones = el('div', 'pi-x-botones'); botones.hidden = true;
+    const resp = el('button', 'pi-x-responder'); resp.type = 'button';
+    const copiar = el('button', 'pi-x-copiar', 'Copiar link'); copiar.type = 'button';
+    botones.append(resp, copiar);
+    sec.append(tit, ayuda, campo, vista, nota, botones);
+    box.appendChild(sec);
+    let base = null, quien = null, ahora = null, espera = null;
+    const enlace = () => `${base}/app?hola=${encodeURIComponent(ahora.u)}` + (quien ? `&invita=${encodeURIComponent(quien)}` : '');
+    function mostrar() {
+      clearTimeout(espera);
+      const x = deX(campo.value);
+      if (!campo.value.trim()) { ahora = null; vista.hidden = true; botones.hidden = true; nota.textContent = ''; nota.classList.remove('mal'); return; }
+      if (!x) { ahora = null; vista.hidden = true; botones.hidden = true; nota.textContent = 'Ese no parece un usuario de X (letras, números y _, hasta 15).'; nota.classList.add('mal'); return; }
+      nota.classList.remove('mal');
+      const igual = ahora && ahora.u.toLowerCase() === x.u.toLowerCase();
+      ahora = x;
+      resp.innerHTML = LOGO_X; resp.appendChild(document.createTextNode(x.post ? ' Responder en X' : ' Mencionarlo en X'));
+      nota.textContent = x.post ? `Así lo va a ver @${x.u} en X. El botón le responde a su posteo.` : `Así lo va a ver @${x.u} en X. Para responderle a un posteo suyo, pegá el link del posteo.`;
+      botones.hidden = !base;
+      vista.hidden = false;
+      if (igual) return;
+      // (la tarjeta, cuando deja de escribir)
+      vista.classList.add('cargando'); img.removeAttribute('src');
+      espera = setTimeout(() => { img.src = '/puente/vista/hola.jpg?u=' + encodeURIComponent(x.u); }, 650);
+    }
+    img.addEventListener('load', () => vista.classList.remove('cargando'));
+    img.addEventListener('error', () => { carga.textContent = 'No se pudo armar la tarjeta. Probá de nuevo.'; });
+    campo.addEventListener('input', () => { carga.textContent = 'Armando la tarjeta…'; mostrar(); });
+    campo.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); campo.blur(); } });
+    resp.addEventListener('click', () => {
+      if (!ahora || !base) return;
+      const texto = ahora.post ? enlace() : `@${ahora.u} ${enlace()}`;
+      const url = 'https://x.com/intent/tweet?' + (ahora.post ? 'in_reply_to=' + ahora.post + '&' : '') + 'text=' + encodeURIComponent(texto);
+      window.open(url, '_blank', 'noopener');
+    });
+    copiar.addEventListener('click', () => {
+      if (!ahora || !base) return;
+      const t = enlace();
+      const done = () => { copiar.textContent = '¡Copiado!'; setTimeout(() => { copiar.textContent = 'Copiar link'; }, 1800); };
+      const aMano = () => { const i = el('input'); i.value = t; document.body.appendChild(i); i.select(); try { document.execCommand('copy'); } catch { /* nada */ } i.remove(); done(); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, aMano); else aMano();
+    });
+    // cuando llega tu enlace: de ahi salen la direccion del chat y tu usuario (para que cuente para tu medalla)
+    return (tuyo) => {
+      try { const u = new URL(tuyo, location.origin); base = u.origin; quien = u.searchParams.get('invita'); } catch { base = location.origin; }
+      mostrar();
+    };
   }
   window.puenteInvitar = open;
   // El boton "Invitar usuarios" de la columna derecha abria la ventana de Haven (enlaces con
@@ -13904,7 +13979,7 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
   const style = el('style');
   style.textContent = `
     #puente-invitar-capa { position: fixed; inset: 0; z-index: 100012; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.7); animation: puente-fade .18s ease-out; }
-    #puente-invitar-capa .pi-tarjeta { position: relative; width: 100%; max-width: 26rem; box-sizing: border-box; padding: 1.75rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
+    #puente-invitar-capa .pi-tarjeta { position: relative; width: 100%; max-width: 26rem; max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 1.75rem 1.5rem 1.25rem; border-radius: 1rem; background: #242429; color: #dbdee1; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
     #puente-invitar-capa .pi-cerrar { position: absolute; top: .5rem; right: .75rem; border: 0; background: transparent; color: #b5bac1; font-size: 1.75rem; line-height: 1; cursor: pointer; }
     #puente-invitar-capa .pi-icono { font-size: 2.75rem; }
     #puente-invitar-capa .pi-titulo { margin: .5rem 0; font-size: 1.375rem; font-weight: 800; color: #f2f3f5; }
@@ -13915,6 +13990,26 @@ const FB_TUTORIAL = [{"t":"Saltar","x":"Cada bola salta a una casilla vecina, ha
     #puente-invitar-capa .pi-copiar:hover, #puente-invitar-capa .pi-compartir:hover { background: #4752c4; }
     #puente-invitar-capa .pi-compartir { width: 100%; margin-top: .5rem; background: #4e5058; }
     #puente-invitar-capa .pi-cuenta { margin: 1rem 0 0; font-size: .9375rem; color: #f2f3f5; font-weight: 600; }
+    #puente-invitar-capa .pi-x { margin-top: 1.25rem; padding-top: 1.1rem; border-top: 1px solid #3a3940; text-align: left; }
+    #puente-invitar-capa .pi-x-titulo { display: flex; align-items: center; gap: .4rem; margin: 0 0 .35rem; font-size: 1.0625rem; font-weight: 800; color: #f2f3f5; }
+    #puente-invitar-capa .pi-x-texto { margin: 0 0 .75rem; font-size: .875rem; line-height: 1.45; color: #b5bac1; }
+    #puente-invitar-capa .pi-x-campo { width: 100%; box-sizing: border-box; height: 2.75rem; padding: 0 .75rem; border: 1px solid #3a3940; border-radius: .5rem; background: #121214; color: #f2f3f5; font: inherit; font-size: 1rem; }
+    #puente-invitar-capa .pi-x-campo:focus { outline: none; border-color: #ff4f9a; }
+    #puente-invitar-capa .pi-x-vista { position: relative; margin-top: .75rem; aspect-ratio: 1200 / 630; border-radius: .75rem; overflow: hidden; background: #121214; border: 1px solid #3a3940; }
+    #puente-invitar-capa .pi-x-vista img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    #puente-invitar-capa .pi-x-carga { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #b5bac1; font-size: .875rem; }
+    #puente-invitar-capa .pi-x-vista.cargando img { visibility: hidden; }
+    #puente-invitar-capa .pi-x-vista.cargando .pi-x-carga { display: flex; }
+    #puente-invitar-capa .pi-x-nota { margin: .5rem 0 0; font-size: .8125rem; line-height: 1.4; color: #b5bac1; }
+    #puente-invitar-capa .pi-x-nota:empty { display: none; }
+    #puente-invitar-capa .pi-x-nota.mal { color: #f0b232; }
+    #puente-invitar-capa .pi-x-botones { display: flex; gap: .5rem; margin-top: .75rem; }
+    #puente-invitar-capa .pi-x-botones[hidden] { display: none; }
+    #puente-invitar-capa .pi-x-responder, #puente-invitar-capa .pi-x-copiar { flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.75rem; padding: 0 .75rem; border: 0; border-radius: 999px; white-space: nowrap; font-size: .9375rem; font: inherit; font-weight: 700; cursor: pointer; }
+    #puente-invitar-capa .pi-x-responder { background: #f2f3f5; color: #0f0f10; }
+    #puente-invitar-capa .pi-x-responder:hover { background: #fff; }
+    #puente-invitar-capa .pi-x-copiar { background: #4e5058; color: #fff; }
+    #puente-invitar-capa .pi-x-copiar:hover { background: #6d6f78; }
     .puente-invitar-btn { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border-radius: 6px; background: #4e5058; color: #fff !important; font-weight: 600; font-size: 14px; text-decoration: none !important; border: 0; width: 100%; cursor: pointer; font-family: inherit; }
     .puente-invitar-btn:hover { background: #6d6f78; }
     .puente-profile-sheet .puente-invitar-btn { order: 1; }`;

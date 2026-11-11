@@ -2,6 +2,7 @@
 //  - Al Marketplace (/app?mercado o /app?mercado=<id>): en vez de la pantalla de entrar, el Marketplace en
 //    la web, que se ve sin cuenta (y "Escribirle" hace la cuenta y vuelve a la publicacion en el chat).
 //  - A los juegos (/app?juegos): a su pagina, juegos.<dominio> (juegos.html), donde se elige uno.
+//  - A la invitacion de X (/app?hola=<usuario>&invita=<quien>): a la pantalla de entrar, con "<quien> te invitó".
 //  - A un juego o una mesa (/app?juegos=truco, ?truco=, ?funball=, ?ajedrez=, ?globalsiege=, ?pool=, ?juegos=worgs): a
 //    la pantalla de entrar, a poner el nombre de invitado (login.js); despues vuelve ahi.
 // Lo pone vincular.js en la cabeza de /app solo para esos enlaces, despues de origen.js (asi cuenta de donde
@@ -11,7 +12,7 @@
   'use strict';
   var q = new URLSearchParams(location.search);
   var juegos = ['juegos', 'truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'shoppa', 'worgs'].some(function (k) { return q.has(k); });
-  if ((!q.has('mercado') && !juegos) || window.name === 'cv-ventana' || window.top !== window) return;
+  if ((!q.has('mercado') && !juegos && !q.has('hola')) || window.name === 'cv-ventana' || window.top !== window) return;
   try { if (localStorage.getItem('haven_token')) return; } catch (e) { return; }
   // la sesion de la web o el foro (la cookie del dominio): sincronico, para llegar antes que Haven
   try {
@@ -23,6 +24,8 @@
       if (d && d.token) { localStorage.setItem('haven_token', d.token); localStorage.setItem('haven_user', JSON.stringify(d.user)); return; }
     }
   } catch (e) { /* sin la cuenta de la web */ }
+  // la invitacion de X (/app?hola=<usuario>&invita=<quien>): a la pantalla de entrar, con "<quien> te invitó" (login.js)
+  if (q.has('hola')) { var inv = q.get('invita') || ''; location.replace('/' + (/^[\w.-]{1,40}$/.test(inv) ? '?invita=' + encodeURIComponent(inv) : '')); return; }
   var dom = location.hostname.replace(/^chat\./, '');
   // a los juegos en general: su pagina (juegos.<dominio>); a un juego o una mesa: a poner el nombre de invitado
   var uno = q.get('juegos') || ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool'].some(function (k) { return q.has(k); });
