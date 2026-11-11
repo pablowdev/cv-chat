@@ -517,10 +517,10 @@ async function holaJpg(u) {
   const capas = [];
   // de fondo, la insignia grande en puntitos muy suaves (textura), cortada por los bordes
   // (mas grande que la tarjeta: se recorta lo que se ve, porque una capa no puede salirse del borde)
-  try { capas.push({ input: await sharp(await insigniaPuntos(200, 980, { suave: '#3a2f35' })).extract({ left: 250, top: 175, width: 730, height: H }).toBuffer(), left: 0, top: 0 }); } catch (err) { warn('vistas: hola: textura:', err.message); }
+  try { capas.push({ input: await sharp(await insigniaPuntos(200, 980, { suave: '#2a2226' })).extract({ left: 250, top: 175, width: 730, height: H }).toBuffer(), left: 0, top: 0 }); } catch (err) { warn('vistas: hola: textura:', err.message); }
   // la insignia, a la derecha, con la foto redonda en el lugar del conejo (y un anillo rosa punteado)
   const L = 600, x0 = 585, y0 = 15, F = Math.round(L * 0.56);
-  try { capas.push({ input: await insigniaPuntos(220, L, { hueco: 0.7 }), left: x0, top: y0 }); } catch (err) { warn('vistas: hola: insignia:', err.message); }
+  try { capas.push({ input: await insigniaPuntos(220, L, { hueco: 0.62 }), left: x0, top: y0 }); } catch (err) { warn('vistas: hola: insignia:', err.message); }
   const fx = x0 + Math.round((L - F) / 2), fy = y0 + Math.round((L - F) / 2);
   let conFoto = false;
   if (foto) { try { capas.push({ input: await puntitos(foto, F, true), left: fx, top: fy }); conFoto = true; } catch { /* foto rota: la inicial */ } }
