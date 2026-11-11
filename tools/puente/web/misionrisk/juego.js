@@ -572,6 +572,12 @@
     quien.append(punto, el('b', null, tx), el('span', 'mr-ronda', `Ronda ${s.ronda}`));
     M.relojEl = el('span', 'mr-reloj'); quien.appendChild(M.relojEl);
     b.appendChild(quien);
+    // la mision, siempre a la vista y escrita entera (para no olvidarla y sin tener que tocar nada)
+    if (s.soyJugador && s.miMision && s.estado === 'jugando') {
+      const mi = el('div', 'mr-mi-mision');
+      mi.append(el('span', 'mr-mi-mision-t', s.opciones && s.opciones.misiones ? 'Tu misión' : 'Tu objetivo'), el('span', null, s.miMision));
+      b.appendChild(mi);
+    }
     relojes();
     if (s.ausente) {
       const w = el('div', 'mr-aviso');
@@ -693,9 +699,9 @@
     if (s.estado === 'esperando') return;
     // Mis cartas y mi mision
     if (s.soyJugador && s.misCartas) {
-      const c = el('div', 'mr-caja');
+      const c = el('div', 'mr-caja mr-c-cartas');
       const t = el('div', 'mr-caja-t');
-      t.append(el('span', null, 'Tus cartas'), btn('Tu misión', 'jg-suave mr-chico', verMision));
+      t.append(el('span', null, 'Tus cartas'));
       c.appendChild(t);
       const fila = el('div', 'mr-cartas');
       const puede = s.teToca && ['canje', 'poner', 'atacar'].includes(s.fase) && !s.ataque;
@@ -718,7 +724,7 @@
       d.appendChild(c);
     }
     // Los ejercitos
-    const ej = el('div', 'mr-caja');
+    const ej = el('div', 'mr-caja mr-c-ej');
     ej.appendChild(el('div', 'mr-caja-t', 'Ejércitos'));
     for (const a of s.asientos) {
       const r = el('div', 'mr-ej' + (s.turno === a.ej && s.estado === 'jugando' ? ' turno' : '') + (a.vivo === false ? ' muerto' : ''));
@@ -733,7 +739,7 @@
     }
     d.appendChild(ej);
     // Lo que fue pasando
-    const lg = el('div', 'mr-caja');
+    const lg = el('div', 'mr-caja mr-c-log');
     lg.appendChild(el('div', 'mr-caja-t', 'La guerra'));
     const l = el('div', 'mr-log');
     for (const t of (s.log || []).slice().reverse()) l.appendChild(el('div', null, t));

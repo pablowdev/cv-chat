@@ -48,12 +48,20 @@
 
 /* Con una sola columna pero ancha (tablet, el Fold abierto): las cartas y los ejercitos lado a lado */
 @media (min-width: 600px) and (max-width: 999px) {
-  .puente-jg .mr-panel:not(:empty) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; align-items: start; }
+  .puente-jg .mr-panel:not(:empty) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 0.75rem; margin-bottom: 0.75rem; align-items: start; }
   .puente-jg .mr-panel > .mr-caja { margin-bottom: 0; }
-  .puente-jg .mr-panel > .mr-caja:nth-child(n+3) { grid-column: 1 / -1; }
+  /* los ejercitos a la derecha; a la izquierda, las cartas y abajo la guerra (sin cartas, la guerra arriba) */
+  .puente-jg .mr-panel > .mr-c-ej { grid-column: 2; grid-row: 1 / span 2; }
+  .puente-jg .mr-panel > .mr-c-cartas { grid-column: 1; grid-row: 1; }
+  .puente-jg .mr-panel > .mr-c-log { grid-column: 1; grid-row: 2; align-self: stretch; }
+  .puente-jg .mr-panel:not(:has(> .mr-c-cartas)) > .mr-c-log { grid-row: 1 / span 2; }
   .puente-jg .mr-panel .mr-log { max-height: 9rem; }
 }
 .puente-jg .mr-der > .mr-credito { margin-top: 0.75rem; }
+/* La mision en la barra, siempre a la vista */
+.puente-jg .mr-mi-mision { box-sizing: border-box; display: flex; align-items: baseline; gap: 0.5rem; width: 100%; margin-top: 0.5rem; padding: 0.5rem 0.75rem; border: 1px solid #6b5a1e; border-radius: 0.5rem; background: #2e2a17; color: #f0e6a8; font: inherit; font-size: 0.9375rem; line-height: 1.35; text-align: left; }
+.puente-jg .mr-mi-mision-t { flex: none; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #f0b232; }
+.puente-jg .mr-mi-mision-t::before { content: '🎯 '; }
 /* El panel */
 .puente-jg .mr-caja { margin-bottom: 0.75rem; padding: 0.75rem; border-radius: 0.75rem; background: #232227; }
 .puente-jg .mr-caja-t { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: #b5bac1; }
