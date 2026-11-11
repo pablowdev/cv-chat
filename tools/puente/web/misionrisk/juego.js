@@ -382,6 +382,7 @@
       let vista = true; try { vista = !!localStorage.getItem(k); } catch { /* sin almacenamiento */ }
       if (!vista) { try { localStorage.setItem(k, '1'); } catch { /* sin almacenamiento */ } verMision(); }
     }
+    if (M.cuerpo) M.cuerpo.classList.toggle('mr-espera', s.estado === 'esperando');
     dibujar();
     barra();
     panel();
@@ -415,6 +416,7 @@
   }
   function dibujar() {
     if (!M || !M.cv || !arte.alfa) return;
+    if (M.s && M.s.estado === 'esperando') return; // (en la espera el mapa no se ve)
     const s = M.s;
     const cssW = anchoMapa() * (M.zoom ? 2 : 1);
     const cssH = cssW * MAPA.ALTO / MAPA.ANCHO;
@@ -621,33 +623,75 @@
     M.relojEl.classList.toggle('poco', r < 45);
   }
 
+  // La sala de espera: arriba una franja del mapa con como esta la mesa, las reglas, los lugares (quien armo la
+  // mesa puede sacar a alguien) y los botones. El mapa grande se esconde hasta que empieza la guerra
   function esperando(b, s) {
     const n = s.asientos.filter(a => a.nombre).length;
-    b.appendChild(el('div', 'mr-texto', s.flexible
-      ? `${n === 1 ? '1 en la mesa' : `${n} en la mesa`} (entran hasta ${s.maximo})${s.opciones.misiones ? ', con misiones secretas' : ''}. ${s.soyCreador ? (n < 2 ? 'Cuando entre alguien más, tocá "Empezar" para arrancar con los que estén.' : 'Tocá "Empezar" cuando quieras: la guerra arranca con los que están.') : 'La guerra empieza cuando la arranque quien armó la mesa, o sola si se llena.'}`
-      : `Mesa de ${s.asientos.length} ejércitos${s.opciones.misiones ? ', con misiones secretas' : ''}. Los lugares vacíos los juega la compu (${s.nivel}).`));
-    const l = el('div', 'jg-lista');
-    for (const a of s.asientos) {
-      const r = el('div', 'jg-fila');
-      r.append(A.avatar(a.nombre ? a : { nombre: '?' }), el('span', 'jg-fnombre', a.nombre ? (a.yo ? `${a.nombre} (vos)` : a.nombre) : 'Lugar libre'));
-      l.appendChild(r);
+    const sala = el('div', 'mr-sala');
+    const banda = el('div', 'mr-sala-banda');
+    const tit = el('div', 'mr-sala-tit');
+    const sub = s.sacado ? 'Quien armó la mesa te sacó: podés seguir mirando, pero no volver a entrar.'
+      : s.flexible ? `${n} de hasta ${s.maximo} · ${s.soyCreador ? (n < 2 ? 'cuando entre alguien más, la arrancás vos' : 'la guerra arranca cuando vos digas') : 'arranca cuando la empiece quien armó la mesa, o sola si se llena'}`
+      : `Mesa de ${s.asientos.length} ejércitos · los lugares vacíos los juega la compu (${s.nivel})`;
+    tit.append(el('div', 'mr-sala-h', s.sacado ? 'Te sacaron de esta mesa' : 'Esperando gente'), el('div', 'mr-sala-s', sub));
+    banda.appendChild(tit);
+    sala.appendChild(banda);
+    // las reglas de la mesa
+    const chips = el('div', 'mr-sala-chips');
+    const chip = (t, c) => chips.appendChild(el('span', 'mr-sala-chip' + (c ? ' ' + c : ''), t));
+    chip(s.opciones.misiones ? '🎯 Con misiones secretas' : '🌍 Conquistar el mundo', 'oro');
+    chip(s.publica ? '🌐 Mesa pública' : '🔒 Mesa privada');
+    chip(s.amistosa ? '🤝 Amistosa' : '🏆 Suma al ranking');
+    if (s.flexible) chip('⏱ 4 min por turno');
+    sala.appendChild(chips);
+    // los lugares: los que estan y, en la que crece, los libres hasta el maximo
+    sala.appendChild(el('div', 'mr-sala-sub', 'En la mesa'));
+    const lug = el('div', 'mr-lugares');
+    const total = s.flexible ? s.maximo : s.asientos.length;
+    for (let k = 0; k < total; k++) {
+      const a = s.asientos[k] || {};
+      const color = (s.asientos[k] && s.asientos[k].color) || (window.MRMapa.ejercitos[k + 1] || {}).color || '#5865f2';
+      const r = el('div', 'mr-lugar' + (a.nombre ? '' : ' libre'));
+      r.style.setProperty('--c', color);
+      const tx = el('div', 'mr-lugar-tx');
+      if (a.nombre) {
+        r.appendChild(A.avatar(a));
+        const nom = el('b', null, a.yo ? `${a.nombre} (vos)` : a.nombre);
+        if (a.creador) { const c = el('span', 'mr-lugar-corona', '★'); c.title = 'Armó la mesa'; nom.append(' ', c); }
+        tx.append(nom, el('span', null, a.creador ? 'Armó la mesa' : 'En la mesa'));
+        // quien armo la mesa puede sacar a los demas (antes de empezar)
+        if (s.soyCreador && a.id && !a.yo) {
+          const x = el('button', 'mr-lugar-x', '✕'); x.type = 'button'; x.title = `Sacar a ${a.nombre} de la mesa`; x.setAttribute('aria-label', x.title);
+          x.addEventListener('click', () => A.confirmar(`¿Sacar a ${a.nombre}?`, 'Se levanta de la mesa y no puede volver a entrar a esta partida.', 'Sacar', 'Volver').then(ok => {
+            if (ok) A.emit('mr:sacar', { id: s.id, uid: a.id }).then(rr => { if (rr.error) A.toast(rr.error, 'error'); else A.toast(`Sacaste a ${a.nombre} de la mesa`, 'success'); });
+          }));
+          r.appendChild(x);
+        }
+      } else {
+        r.appendChild(el('div', 'mr-lugar-vacio', s.flexible ? '+' : '🤖'));
+        tx.append(el('b', null, s.flexible ? 'Lugar libre' : 'La compu'), el('span', null, s.flexible ? 'Invitá a alguien' : `Juega ${(s.nivel || '').toLowerCase()}`));
+      }
+      r.appendChild(tx);
+      lug.appendChild(r);
     }
-    b.appendChild(l);
-    if (s.invitados.length) b.appendChild(el('div', 'jg-ayuda', 'Invitados: ' + s.invitados.map(p => p.nombre).join(', ')));
-    const acc = el('div', 'mr-acc');
-    if (!s.soyJugador) acc.appendChild(btn('Entrar a la mesa', 'jg-primario', () => unirse(s.id)));
+    sala.appendChild(lug);
+    if (s.invitados.length) sala.appendChild(el('div', 'mr-sala-inv', 'Invitados: ' + s.invitados.map(p => p.nombre).join(', ')));
+    const acc = el('div', 'mr-sala-acc');
+    if (!s.soyJugador && !s.sacado) acc.appendChild(btn('Entrar a la mesa', 'jg-primario mr-sala-btn', () => unirse(s.id)));
     if (s.soyCreador) {
-      const emp = btn(s.flexible ? `Empezar con ${n}` : 'Empezar', 'jg-primario', async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); });
+      const emp = btn(s.flexible ? `⚔ Empezar con ${n}` : '⚔ Empezar', 'jg-primario mr-sala-btn', async () => { const r = await A.emit('mr:empezar', { id: s.id }); if (r.error) A.toast(r.error, 'error'); });
       if (s.flexible && n < 2) { emp.disabled = true; emp.title = 'Hace falta que entre alguien más'; }
       acc.appendChild(emp);
     }
-    acc.appendChild(btn('Copiar invitación', '', () => {
+    if (!s.sacado) acc.appendChild(btn('🔗 Copiar invitación', 'mr-sala-btn', () => {
       const url = `${location.origin}/app?globalsiege=${s.id}`;
       const t = `¡Vení a jugar una guerra de GlobalSiege! Entrá acá: ${url}`;
       if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => A.toast('Invitación copiada: pegala en un canal o en un mensaje', 'success'), () => prompt('Copiá la invitación:', t));
       else prompt('Copiá la invitación:', t);
     }));
-    b.appendChild(acc);
+    if (s.flexible && !s.sacado) acc.appendChild(el('div', 'mr-sala-nota', s.soyCreador && n > 1 ? 'Los colores se sortean al empezar. Tocá ✕ para sacar a alguien de la mesa.' : 'Los colores se sortean al empezar.'));
+    sala.appendChild(acc);
+    b.appendChild(sala);
   }
 
   function final(b, s) {

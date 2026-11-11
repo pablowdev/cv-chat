@@ -91,3 +91,45 @@
 .puente-jg .mr-modos { flex-wrap: wrap; }
 .puente-jg .mr-modos .jg-btn { flex: 1 1 auto; }
 .puente-jg .mr-chat:not(:empty) { margin-top: 0.625rem; }
+
+/* La sala de espera (esperando): sin el mapa grande; una franja del mapa con como esta la mesa, las reglas,
+   los lugares (con el color de un ejercito; quien armo la mesa puede sacar a alguien) y los botones */
+.puente-jg .mr-espera .mr-mapa { display: none; }
+.puente-jg .mr-espera .mr-barra { margin-top: 0; padding: 0; overflow: hidden; border-radius: 0.875rem; }
+.puente-jg .mr-sala-banda { position: relative; display: flex; align-items: flex-end; min-height: 11rem; padding: 1rem 1.5rem; background: url('/puente/misionrisk/mapa.jpg') center 40% / cover; }
+.puente-jg .mr-sala-banda::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,37,82,0.1), #232227); }
+.puente-jg .mr-sala-tit { position: relative; }
+.puente-jg .mr-sala-h { font-size: 1.75rem; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+.puente-jg .mr-sala-s { margin-top: 0.25rem; color: #dbe6ff; font-size: 0.9375rem; text-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+.puente-jg .mr-sala-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.25rem 1.5rem 0; }
+.puente-jg .mr-sala-chip { padding: 0.3125rem 0.75rem; border-radius: 999px; background: #34333a; font-size: 0.8125rem; font-weight: 700; color: #dbdee1; }
+.puente-jg .mr-sala-chip.oro { background: #3c3214; color: #ffd166; box-shadow: inset 0 0 0 1px #6b5a1e; }
+.puente-jg .mr-sala-sub { margin: 1.375rem 1.5rem 0.625rem; font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #b5bac1; }
+.puente-jg .mr-lugares { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr)); gap: 0.75rem; padding: 0 1.5rem; }
+.puente-jg .mr-lugar { position: relative; display: flex; align-items: center; gap: 0.75rem; min-width: 0; padding: 0.875rem 2.75rem 0.875rem 0.875rem; border-radius: 0.75rem; background: #2e2d32; border-left: 5px solid var(--c); }
+.puente-jg .mr-lugar .jg-av { flex: 0 0 2.75rem; width: 2.75rem; height: 2.75rem; }
+.puente-jg .mr-lugar-tx { display: flex; flex-direction: column; min-width: 0; }
+.puente-jg .mr-lugar-tx b { color: #fff; font-size: 0.96875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.puente-jg .mr-lugar-tx span { font-size: 0.78125rem; color: #949ba4; }
+.puente-jg .mr-lugar-tx .mr-lugar-corona { color: #f0b232; font-size: 0.8125rem; }
+.puente-jg .mr-lugar.libre { background: transparent; box-shadow: inset 0 0 0 2px #34333a; opacity: 0.8; }
+.puente-jg .mr-lugar.libre b { color: #949ba4; }
+.puente-jg .mr-lugar-vacio { flex: 0 0 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px dashed #3a3940; color: #6d6f78; font-weight: 700; }
+.puente-jg .mr-lugar-x { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 2rem; height: 2rem; border: 0; border-radius: 50%; background: #3a3940; color: #f2a2a4; font: inherit; font-size: 0.875rem; font-weight: 800; cursor: pointer; }
+.puente-jg .mr-lugar-x:hover { background: #da373c; color: #fff; }
+.puente-jg .mr-sala-inv { margin: 0.75rem 1.5rem 0; font-size: 0.8125rem; color: #949ba4; }
+.puente-jg .mr-sala-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin: 1.375rem 1.5rem 1.5rem; padding-top: 1.125rem; border-top: 1px solid #2e2d32; }
+.puente-jg .jg-btn.mr-sala-btn { min-height: 2.875rem; padding: 0 1.375rem; font-size: 1rem; font-weight: 800; }
+.puente-jg .mr-sala-nota { margin-left: auto; max-width: 22rem; font-size: 0.8125rem; color: #949ba4; text-align: right; }
+/* en el telefono: mas compacto, los botones a lo ancho y la nota abajo */
+@media (max-width: 640px) {
+  .puente-jg .mr-sala-banda { min-height: 8.5rem; padding: 0.875rem 1rem; }
+  .puente-jg .mr-sala-h { font-size: 1.375rem; }
+  .puente-jg .mr-sala-chips, .puente-jg .mr-lugares { padding-left: 1rem; padding-right: 1rem; }
+  .puente-jg .mr-sala-sub, .puente-jg .mr-sala-inv { margin-left: 1rem; margin-right: 1rem; }
+  .puente-jg .mr-lugares { gap: 0.5rem; }
+  .puente-jg .mr-lugar { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+  .puente-jg .mr-sala-acc { margin: 1.125rem 1rem 1.125rem; }
+  .puente-jg .mr-sala-acc .mr-sala-btn { flex: 1 1 100%; }
+  .puente-jg .mr-sala-nota { margin-left: 0; max-width: none; text-align: left; }
+}

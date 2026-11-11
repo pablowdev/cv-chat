@@ -9,6 +9,7 @@
 //             empieza cuando quiere con los que haya, al menos 2: "flexible". Las de antes, de un total fijo,
 //             siguen como eran)
 //   mr:unirse { id }   mr:cancelar { id }   mr:empezar { id }   mr:ver { id }
+//   mr:sacar { id, uid }   (quien armo la mesa saca a alguien antes de empezar; no puede volver a entrar)
 //   mr:accion { id, tipo, ... }  (las jugadas del motor, y 'abandonar' y 'volver')
 // Y el servidor avisa:
 //   mr:estado (la partida)   mr:cambio (algo cambio en la sala)
@@ -68,6 +69,7 @@ function setup(ctx) {
     on('mr:crear', create);
     on('mr:unirse', join);
     on('mr:cancelar', cancel);
+    on('mr:sacar', sacar);
     on('mr:empezar', (me, d) => {
       const g = games.get(String(d.id));
       if (!g || g.creador !== me || g.estado !== 'esperando') return { error: 'No se puede empezar.' };
@@ -139,6 +141,7 @@ function join(me, d) {
   if (!g) return { error: 'Esa partida ya no está.' };
   if (seatOf(g, me) >= 0) return { ok: true, id: g.id };
   if (g.estado !== 'esperando') return { error: 'Esa partida ya empezó.' };
+  if ((g.sacados || []).includes(me)) return { error: 'Quien armó la mesa te sacó: no podés volver a entrar.' };
   if (!g.publica && !g.invitados.includes(me)) return { error: 'Esa partida es privada.' };
   if (g.flexible) {
     if (g.asientos.length >= MAX) return { error: 'La mesa está completa.' };
@@ -162,6 +165,22 @@ function cancel(me, d) {
   if (i < 0) return { error: 'No estás en esta partida.' };
   if (g.flexible) g.asientos.splice(i, 1); else g.asientos[i].uid = null;
   push(g); changed();
+  return { ok: true };
+}
+
+// Quien armo la mesa saca a alguien (solo antes de empezar): se levanta y no puede volver a esa mesa
+function sacar(me, d) {
+  const g = games.get(String(d.id));
+  if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó: ya no se puede sacar a nadie.' };
+  if (g.creador !== me) return { error: 'Solo quien armó la mesa puede sacar a alguien.' };
+  const uid = Number(d.uid);
+  if (uid === me) return { error: 'Para irte, cancelá la partida.' };
+  const i = seatOf(g, uid);
+  if (i < 0) return { ok: true };
+  if (g.flexible) g.asientos.splice(i, 1); else g.asientos[i].uid = null;
+  g.sacados = [...new Set([...(g.sacados || []), uid])];
+  log(`globalsiege: ${nameOf(me).nombre} sacó a ${nameOf(uid).nombre} de la mesa ${g.id}`);
+  push(g, true);
   return { ok: true };
 }
 
@@ -323,7 +342,7 @@ function view(g, me) {
   const i = seatOf(g, me), e = i + 1;
   const S = g.S;
   const out = {
-    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me, flexible: !!g.flexible, maximo: MAX,
+    id: g.id, estado: g.estado, publica: g.publica, soyJugador: i >= 0, soyCreador: g.creador === me, sacado: (g.sacados || []).includes(me), amistosa: !!g.amistosa, flexible: !!g.flexible, maximo: MAX,
     nivel: NIVELES[g.nivel - 1], opciones: g.opciones, miEj: i >= 0 ? e : null,
     invitados: g.invitados.map(nameOf),
     // el chat, con el nombre y el color del ejercito de cada uno (en la espera todavia no tienen)
@@ -338,7 +357,7 @@ function view(g, me) {
     }) : {}),
     asientos: g.asientos.map((a, k) => {
       const p = a.uid ? nameOf(a.uid) : null;
-      const x = { ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me };
+      const x = { id: a.uid || null, creador: !!a.uid && a.uid === g.creador, ej: k + 1, color: MAPA.ejercitos[k + 1].color, ejercito: MAPA.ejercitos[k + 1].nombre, nombre: p ? p.nombre : (g.estado === 'esperando' ? null : 'La Compu'), avatar: p ? p.avatar : null, compu: !a.uid, nivel: !a.uid && a.nivel ? NIVELES[a.nivel - 1] : null, yo: a.uid === me };
       if (S) {
         const ej = S.ej[k + 1];
         Object.assign(x, { vivo: ej.vivo, paises: M.paisesDe(S, k + 1), tropas: M.tropasDe(S, k + 1), cartas: ej.cartas.length, ausente: !!g.ausente[k + 1], abandono: !!a.abandono, conquistas: ej.conquistas, bajas: ej.bajas });
@@ -421,7 +440,7 @@ function resumen(g, me) {
 }
 function lobby(me) {
   const all = [...games.values()];
-  const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitados.includes(me)) && seatOf(g, me) < 0 && (g.flexible ? g.asientos.length < MAX : g.asientos.some(a => !a.uid)))
+  const abiertas = all.filter(g => g.estado === 'esperando' && (g.publica || g.invitados.includes(me)) && seatOf(g, me) < 0 && !(g.sacados || []).includes(me) && (g.flexible ? g.asientos.length < MAX : g.asientos.some(a => !a.uid)))
     .sort((a, b) => b.creado - a.creado).slice(0, 30)
     .map(g => ({ id: g.id, total: g.flexible ? MAX : g.asientos.length, flexible: !!g.flexible, sentados: g.asientos.filter(a => a.uid).length, misiones: g.opciones.misiones, amistosa: !!g.amistosa, creador: nameOf(g.creador), paraVos: g.invitados.includes(me) }));
   const mias = all.filter(g => seatOf(g, me) >= 0 && (g.estado !== 'terminada' || Date.now() - g.fin < 10 * 60e3))
