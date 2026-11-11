@@ -169,6 +169,8 @@ function start(deps) {
   require('./misionrisk.js').setup({ db, io, log, warn });
   require('./pool.js').setup({ db, io, log, warn });
   require('./shoppa.js').setup({ db, io, log, warn }); // (WORGS, antes Shoppa: salas y turnos)
+  // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
+  require('./invitados-fuera.js').setup({ db, io, log, warn });
   require('./worgs-voces.js').setup({ db, log, warn }); // (WORGS: las voces grabadas de cada uno)
   require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });

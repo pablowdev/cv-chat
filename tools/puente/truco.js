@@ -822,4 +822,4 @@ function lobby(me) {
 
 // a quien le toca jugar (para la tarjeta del club: "Te toca"), con el estado guardado de la partida
 function leToca(g) { try { return g && g.estado === 'jugando' ? g.jugadores[actor(g)] || null : null; } catch { return null; } }
-module.exports = { setup, stats, leToca, _test: { act, rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };
+module.exports = { setup, stats, leToca, _test: { cancel, act, rank, envido, hasFlor, florVal, handWinner, allowed, doAct, games, view, newHand, create, join, actor, botMove, sweep, BOT } };

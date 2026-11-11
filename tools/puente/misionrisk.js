@@ -460,4 +460,4 @@ function lobby(me) {
   return CP.paraBiblioteca({ niveles: NIVELES, abiertas, mias, stats: stats(me), ranking: { mes: ranking(mes), total: ranking(0) } }, games, { io, db, creador: (g) => g.creador });
 }
 
-module.exports = { setup, stats, _test: { games, create, join, act, view, start, botStep, timeout } };
+module.exports = { setup, stats, _test: { cancel, games, create, join, act, view, start, botStep, timeout } };
