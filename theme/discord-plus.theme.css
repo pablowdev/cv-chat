@@ -1870,6 +1870,14 @@ html body #right-sidebar .user-status-dot.invisible,
 html body #right-sidebar .user-item.offline .user-status-dot { border: 0.1875rem solid var(--anillo); background: radial-gradient(circle, var(--anillo) 0 0.125rem, #80848e 0.1563rem); }
 /* "Invitar usuarios": un boton rosa del club, bien a la vista (abre "Invitar gente", aviso.js) */
 html body #right-sidebar #sidebar-invite-panel { padding: 0.75rem; border-top: 1px solid #29292d; background: none; }
+/* alrededor, un recuadro rosa con un titulo y una linea (para que se vea) */
+html body #right-sidebar #sidebar-invite-panel::before {
+  content: '🤝 Traé gente al club\A Invitá a tus amigos y sumá tu medalla de Reclutador.'; white-space: pre-line; display: block;
+  margin: 0 0 0.75rem; color: #b5bac1; font-size: 0.875rem; line-height: 1.4; text-align: center;
+}
+html body #right-sidebar #sidebar-invite-panel::first-line { color: #fff; font-size: 1.0625rem; font-weight: 800; }
+html body #right-sidebar #sidebar-invite-panel { margin: 0.5rem 0.625rem 0.75rem; padding: 1rem 0.875rem 0.875rem; border: 1px solid rgba(238, 45, 111, 0.55); border-radius: 1rem;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(238, 45, 111, 0.22), rgba(238, 45, 111, 0.06) 70%), #1f1d22; box-shadow: 0 0 24px rgba(238, 45, 111, 0.15); }
 html body #right-sidebar #right-btn-invite-popout {
   display: flex; align-items: center; justify-content: center; gap: 0.625rem; width: 100%; min-height: 3rem; margin: 0; padding: 0 1rem; box-sizing: border-box;
   border: 0; border-radius: 999px; background: linear-gradient(135deg, #ee2d6f, #ff5c93); color: #fff; font-size: 1.0625rem; font-weight: 800; letter-spacing: 0.01em;
