@@ -111,6 +111,7 @@ function setup(ctx) {
     on('shoppa:empezar', empezar);
     on('shoppa:sacar', sacar);
     on('shoppa:mapa', cambiarMapa);
+    on('shoppa:opciones', cambiarOpciones);
     on('shoppa:chat', chat);
     on('shoppa:revancha', revancha);
     on('shoppa:abandonar', abandonar);
@@ -142,7 +143,9 @@ function normalizar(g) {
   g.chatT = g.chatT && typeof g.chatT === 'object' ? g.chatT : {};
   if (!esModo(g.modo)) g.modo = 'shopper';
   // (uno de la comunidad que ya estaba en la sala se respeta aunque lo hayan sacado de la lista: no se cambia a mitad de partida)
-  if (!g.mapa || !(MAPAS.has(g.mapa) || (esComunidad(g.mapa) && g.modo === 'shopper')) || (g.modo === 'normal') !== (g.mapa === 'isla')) g.mapa = MODOS[g.modo];
+  // (Normal: la isla o la cueva al azar, o uno de los de Shoppa o de la comunidad; Shoppa: los suyos o de la comunidad)
+  const mapaOk = g.modo === 'normal' ? ['isla', 'cueva'].includes(g.mapa) || MAPAS_SHOPPA.includes(g.mapa) || esComunidad(g.mapa) : MAPAS_SHOPPA.includes(g.mapa) || esComunidad(g.mapa);
+  if (!g.mapa || !mapaOk) g.mapa = MODOS[g.modo];
   if ((g.eleccion !== AZAR && g.eleccion !== AZAR_C) || g.modo !== 'shopper') delete g.eleccion;
   if (g.ronda == null) g.ronda = 1;
   if (g.viento == null) g.viento = 0;
@@ -215,7 +218,7 @@ function view(g, me, conSnapshot) {
     sinMapa: g.sinMapa || null, fin: g.fin || null, ganador: g.ganador != null ? g.ganador : null, motivo: g.motivo || null,
     abandono: g.abandono || null, ronda: g.ronda || 1, turno: g.turno != null ? g.turno : null,
     viento: g.viento || 0, semilla: g.semilla || 0, jugadores, rival,
-    miSeat: i, soyJugador: soy, soyCreador: soy && i === 0, listo: soy && !!g.listos[i], sacado: (g.sacados || []).includes(me), maximo: MAX, minimo: MIN,
+    miSeat: i, soyJugador: soy, soyCreador: soy && i === 0, listo: soy && !!g.listos[i], sacado: (g.sacados || []).includes(me), maximo: MAX, minimo: MIN, opciones: opcionesDe(g),
     todosListos: jugadoresActivos(g).length >= MIN && jugadoresActivos(g).every(x => !!g.listos[x.i]),
     revancha: g.revancha.map(Boolean),
     yoRevancha: soy && (!!g.revancha[i] || !!g.siguiente),
@@ -277,6 +280,11 @@ function lobby(me) {
 // El mapa de una sala: el pedido si es de Shoppa o de la comunidad; 'al azar' se elige al empezar; 'comunidad al
 // azar', ahora (asi todos lo bajan antes)
 function elegirMapa(modo, pedido) {
+  // (Normal: la isla o la cueva al azar, o uno de los de Shoppa o de la comunidad, con todas las armas)
+  if (modo === 'normal') {
+    const com = mapasComunidad();
+    return { mapa: ['isla', 'cueva'].includes(pedido) || MAPAS_SHOPPA.includes(pedido) || com.includes(pedido) ? pedido : MODOS.normal, azar: false, azarC: false };
+  }
   const com = modo === 'shopper' ? mapasComunidad() : [];
   const azar = modo === 'shopper' && pedido === AZAR, azarC = modo === 'shopper' && pedido === AZAR_C && com.length > 0;
   const mapa = azar ? MAPAS_SHOPPA[rng(MAPAS_SHOPPA.length)] : azarC ? com[rng(com.length)]
@@ -289,11 +297,27 @@ function cambiarMapa(me, d) {
   const g = games.get(String(d.id || ''));
   if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó.' };
   if (seat(g, me) !== 0 || !activo(g, 0)) return { error: 'Solo quien armó la sala puede cambiar el mapa.' };
-  if (g.modo !== 'shopper') return { error: 'El mapa se elige en las salas de Shoppa.' };
   const { mapa, azar, azarC } = elegirMapa(g.modo, d.mapa);
   g.mapa = mapa; delete g.eleccion; delete g.sinMapa;
   if (azar) g.eleccion = AZAR; else if (azarC) g.eleccion = AZAR_C;
   g.listos = g.listos.map(() => false);
+  push(g, true);
+  return { ok: true };
+}
+
+// Las opciones de una sala Normal (quien la armo, antes de empezar): tiempo del turno (segundos), de la ronda (minutos;
+// 0: sin limite), la vida de los worgs y si en cada turno se puede elegir cual juega. Todos las juegan iguales
+const OPCIONES = { turno: [15, 20, 30, 45, 60, 90], ronda: [0, 5, 10, 15, 20, 30], vida: [50, 100, 150, 200], elegir: [false, true] };
+const OPCIONES_NORMAL = { turno: 30, ronda: 20, vida: 100, elegir: false };
+function opcionesDe(g) { return g.modo === 'normal' ? { ...OPCIONES_NORMAL, ...(g.opciones || {}) } : null; }
+function cambiarOpciones(me, d) {
+  const g = games.get(String(d.id || ''));
+  if (!g || g.estado !== 'esperando') return { error: 'La partida ya empezó.' };
+  if (seat(g, me) !== 0 || !activo(g, 0)) return { error: 'Solo quien armó la sala puede cambiar las opciones.' };
+  if (g.modo !== 'normal') return { error: 'Las opciones se eligen en las salas de Normal.' };
+  const o = { ...OPCIONES_NORMAL, ...(g.opciones || {}) };
+  for (const [k, vals] of Object.entries(OPCIONES)) if (d.opciones && vals.includes(d.opciones[k])) o[k] = d.opciones[k];
+  g.opciones = o;
   push(g, true);
   return { ok: true };
 }
@@ -428,7 +452,7 @@ function enviarTurno(g, inicio) {
     const i = seat(g, s.user.id);
     if (!activo(g, i)) continue;
     const d = {
-      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa, modo: g.modo, sinMapa: g.sinMapa || null,
+      id: g.id, turno: g.turno, viento: g.viento, ronda: g.ronda, inicio: !!inicio, semilla: g.semilla || 0, mapa: g.mapa, modo: g.modo, sinMapa: g.sinMapa || null, opciones: opcionesDe(g),
       miSeat: i, jugadores: jugadoresDe(g, s.user.id), snapshot: g.ultimo || null, cr: g.cr || [],
     };
     try { s.emit('shoppa:turno', d); } catch { /* sesion cerrada */ }
@@ -679,7 +703,7 @@ function revancha(me, d) {
 
   // Sala nueva (los que se quedaron, con los asientos acomodados) y arranca enseguida.
   const n = {
-    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa, modo: g.modo, ...(g.eleccion ? { eleccion: g.eleccion } : {}),
+    id: crypto.randomBytes(5).toString('hex'), creado: Date.now(), publica: true, mapa: g.mapa, modo: g.modo, ...(g.eleccion ? { eleccion: g.eleccion } : {}), ...(g.opciones ? { opciones: { ...g.opciones } } : {}),
     jugadores: activos.map(x => g.jugadores[x.i]),
     listos: [], fuera: [], revancha: [], estado: 'esperando', ronda: g.ronda || 1,
     turno: null, viento: 0, ultimo: null, chat: [], chatT: {}, ultimoMovimiento: Date.now(),
