@@ -1473,7 +1473,7 @@ function shareTags(html, url) {
   // La tarjeta del chat, apaisada (1200x630, propia de cada servidor): si no esta, va el logo cuadrado
   if (fs.existsSync(path.join(STATIC, 'tapas', 'chat.jpg'))) { image = '/puente/tapas/chat.jpg?v=' + versionTapa('chat'); grande = true; }
   // La portada con algo mas (/?v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
-  const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x)) : [];
+  const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[\w.-]{0,40}$/.test(x)) : [];
   if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
   const qj = q && (q[1] === 'shoppa' || q[1] === 'gusanos' ? 'worgs' : q[1]);
@@ -1486,6 +1486,15 @@ function shareTags(html, url) {
     const extra = new URL(String(url), 'http://x').searchParams;
     const resto = [...extra].filter(([k, x]) => k !== 'juegos' && /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x));
     if (resto.length) enlace += '&' + resto.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
+  }
+  // Una mesa (/app?truco=<id>, ?funball=, ?ajedrez=, ?globalsiege=, ?pool=): la tapa de ese juego, "Te invitaron a jugar..."
+  const mq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;
+  const mesa = mq && ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool'].find(k => /^[a-z0-9_-]{1,40}$/i.test(mq.get(k) || ''));
+  if (mesa && fs.existsSync(path.join(STATIC, 'tapas', mesa + '.jpg'))) {
+    const jm = JUEGOS_ENLACE[mesa];
+    title = `Te invitaron a jugar ${jm.nombre} · ${title}`; desc = jm.desc;
+    image = `/puente/tapas/${mesa}.jpg?v=${versionTapa(mesa)}`; grande = true;
+    enlace = `/app?${mesa}=${encodeURIComponent(mq.get(mesa))}`;
   }
   // Un canal o un mensaje de un canal que ve cualquiera con cuenta: un pedacito del chat (vistas.js)
   const chq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;

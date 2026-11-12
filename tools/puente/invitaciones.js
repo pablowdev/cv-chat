@@ -21,7 +21,8 @@ function setup(ctx) {
 }
 
 const userByName = (u) => db.prepare("SELECT id, username, COALESCE(display_name, username) nombre, avatar FROM users WHERE username = ? COLLATE NOCASE AND username != 'discord-historial'").get(String(u || '').slice(0, 40));
-const linkFor = (username) => `${String(publicUrl || '').replace(/\/+$/, '')}/?invita=${encodeURIComponent(username)}`;
+// (con &v=2: X tenia guardada la tarjeta vieja, chica, de los ?invita= de antes; una direccion nueva la hace leer de nuevo)
+const linkFor = (username) => `${String(publicUrl || '').replace(/\/+$/, '')}/?invita=${encodeURIComponent(username)}&v=2`;
 
 // Un invitado vale cuando vinculo su Discord o confirmo su email
 const VALID = `(i.invitado_id IN (SELECT haven_user_id FROM puente_vinculos)
