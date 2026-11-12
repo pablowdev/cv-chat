@@ -792,6 +792,8 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
+  // BACITY: el pase firmado con el que el juego (que corre aparte, en /bacity/) sabe quien es cada uno
+  if (p === '/puente/api/bacity/entrada') return require('./bacity.js').handle(req, res, p, u, { sessionUser, json });
   // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio
   if (p === '/puente/api/worgs/voz' || p === '/puente/api/worgs/voces' || p.startsWith('/puente/worgs/voz/')) {
     const r = await require('./worgs-voces.js').handle(req, res, p, u, { sessionUser, json, send });

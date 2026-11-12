@@ -12,5 +12,11 @@
 chat.example.com {
 	import seguridad
 	encode gzip
+	# BACITY (opcional): el juego de mundo abierto corre en su propio contenedor y queda en esta misma
+	# direccion, bajo /bacity/ (la pagina y su conexion). Descomentar si se instala (ver deploy/env.example)
+	# redir /bacity /bacity/ 308
+	# handle /bacity/* {
+	# 	reverse_proxy bacity:8787
+	# }
 	reverse_proxy haven:3000
 }

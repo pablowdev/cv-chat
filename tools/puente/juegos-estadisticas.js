@@ -17,6 +17,8 @@ const JUEGOS = [
   { id: 'pool', nombre: 'Pool' },
   // WORGS: los dos modos como dos juegos (el tiempo de uso de antes, cuando solo habia Shoppa, queda en Shoppa)
   { id: 'shoppa', nombre: 'WORGS: Shoppa' }, { id: 'worgsnormal', nombre: 'WORGS: Normal' },
+  // BACITY no tiene partidas (es una ciudad abierta): de ella queda el tiempo con el juego abierto
+  { id: 'bacity', nombre: 'BACITY' },
 ];
 const COMPU = -1;
 const TOPE_PARTIDA = 2 * 3600 * 1000; // una partida que quedo abierta dias (el truco por turnos) no cuenta como horas jugando

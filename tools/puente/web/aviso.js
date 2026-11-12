@@ -3614,8 +3614,8 @@ function leido(sc) {
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
-  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], shoppa: ['WORGS: Shoppa', '#e0763a'], worgsnormal: ['WORGS: Normal', '#2fb3c9'] };
-  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'shoppa', 'worgsnormal'];
+  const JG = { truco: ['Truco', '#3ba55c'], funball: ['Funball', '#f0b232'], ajedrez: ['Ajedrez', '#eb459e'], globalsiege: ['GlobalSiege', '#5865f2'], pool: ['Pool', '#1abc9c'], shoppa: ['WORGS: Shoppa', '#e0763a'], worgsnormal: ['WORGS: Normal', '#2fb3c9'], bacity: ['BACITY', '#e8437f'] };
+  const JG_ORDEN = ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool', 'shoppa', 'worgsnormal', 'bacity'];
   const MOTIVO_JG = { puntos: 'Llegó a los puntos', ultimo: 'Quedó un solo equipo',abandono: 'Abandonó alguien', mate: 'Jaque mate', ahogado: 'Ahogado (tablas)', tablas: 'Tablas',
     tiempo: 'Se acabó el reloj', meta: 'Llegó a la meta', bolas: 'Sin bolas', rendicion: 'Se rindió alguien', inactividad: 'No jugó a tiempo' };
   const PERIODO_JG = { '7d': 'los últimos 7 días', '4s': 'las últimas 4 semanas', '3m': 'los últimos 3 meses', '1a': 'el último año', todo: 'todo este tiempo' };
@@ -10619,7 +10619,7 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'shJuego' ? usoWorgs() : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'shJuego' ? usoWorgs() : v === 'bcJuego' ? 'bacity' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
   window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
   function frame() {
     if (page) return page;
@@ -10667,7 +10667,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
     if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
     if (fbCam.tutZ != null && view !== 'fbTutorial') { fbCam.z = fbCam.tutZ; fbCam.tutZ = null; }
-    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable, shJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    try { ({ inicio, crear, mesa: table, fbCrear, fbMesa: fbTable, fbReglas, fbTutorial, ajCrear, ajMesa: ajTable, shJuego, bcJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
@@ -10886,6 +10886,9 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/worgs/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
+    // (BACITY corre en su propio servidor, en /bacity/: bacity.js. La tarjeta dice cuantos hay en la ciudad)
+    { id: 'bacity', nombre: 'BACITY', sub: 'Mundo abierto en Buenos Aires', evento: 'bacity:inicio', tapa: () => '/bacity/tapa.jpg?v=1', fondo: '#16324a', mesa: 'bcJuego',
+      vivo: (d) => (d.gente ? (d.gente === 1 ? '1 en la ciudad' : `${d.gente} en la ciudad`) : '') },
   ];
   // WORGS se llamaba Shoppa: por dentro sigue siendo "shoppa" (las salas, el tiempo de uso), pero el enlace dice worgs
   // (los enlaces viejos del juego que WORGS reemplazo tambien abren WORGS)
@@ -10952,7 +10955,7 @@ document.addEventListener('pointerdown', (ev) => {
       if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
       // lo que se esta jugando ahora (alguien jugo en la ultima media hora) o, si no, las mesas que esperan
       const act = d.activas || 0, esp = (d.abiertas || []).length;
-      const vv = act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
+      const vv = j.vivo ? j.vivo(d) : act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
       if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
       for (const m of mias) curso.push({ j, m });
     });
@@ -11022,9 +11025,23 @@ document.addEventListener('pointerdown', (ev) => {
     ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
     marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
   }
+  // ── BACITY ──
+  // Igual que WORGS: en un iframe del mismo origen, pero la pagina la sirve el servidor del juego (/bacity/).
+  // El juego pide su pase con la sesion del chat (bacity.js). (microphone: el chat de voz por cercania)
+  function bcJuego() {
+    page.appendChild(head('BACITY', botonEnlace('/app?juegos=bacity', 'BACITY · __PUENTE_APP__')));
+    const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
+    ifr.src = '/bacity/?v=1';
+    ifr.title = 'BACITY'; ifr.allow = 'autoplay; fullscreen; microphone; gamepad'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+    let ultimo = 0;
+    const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
+    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); w.focus(); } catch { /* otro origen */ } });
+    marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
+  }
   async function inicio(which) {
     // la pila queda en la pantalla del juego, para que el tiempo de uso diga "shoppa" y no "juegos"
     if (which === 'shoppa') { if (stack.length) stack[stack.length - 1] = ['shJuego']; return shJuego(); }
+    if (which === 'bacity') { if (stack.length) stack[stack.length - 1] = ['bcJuego']; return bcJuego(); }
     if (which === 'funball') return fbInicio();
     if (which === 'ajedrez') return ajInicio();
     if (which === 'globalsiege') return mr('inicio');

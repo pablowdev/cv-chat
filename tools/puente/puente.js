@@ -172,6 +172,7 @@ function start(deps) {
   // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
   require('./invitados-fuera.js').setup({ db, io, log, warn });
   require('./worgs-voces.js').setup({ db, log, warn }); // (WORGS: las voces grabadas de cada uno)
+  require('./bacity.js').setup({ db, io, log, warn }); // (BACITY: el pase para entrar al juego, que corre aparte)
   require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
