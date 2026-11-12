@@ -146,7 +146,7 @@ app.whenReady().then(() => {
   // Microfono (llamadas de voz) y portapapeles solo para CV Chat. Notificaciones de Windows, nunca:
   // alcanza con los avisos y sonidos de CV Chat
   session.defaultSession.setPermissionRequestHandler((wc, permiso, cb) => {
-    const ok = wc.getURL().startsWith(ORIGEN) && ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'].includes(permiso);
+    const ok = wc.getURL().startsWith(ORIGEN) && ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture', 'pointerLock'].includes(permiso);   // (pointerLock: mirar con el mouse en BACITY)
     cb(ok);
   });
   session.defaultSession.setPermissionCheckHandler((wc, permiso) => permiso !== 'notifications');
