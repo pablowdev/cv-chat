@@ -33,7 +33,8 @@ zstd -q -T0 -10 --rm "$TMPDB" -o "$OUT/haven-db_$STAMP.db.zst"
 tar --zstd -cf "$OUT/haven-config_$STAMP.tar.zst" \
   --exclude='haven-data/haven.db*' --exclude='haven-data/backups' --exclude='haven-data/backup-en-curso.db*' \
   --exclude='haven-data/media-cache' --exclude='haven-data/tmp-restore' --exclude='haven-data/uploads/discord' \
-  docker-compose.yml Caddyfile .env patches tools haven-data caddy-data
+  docker-compose.yml Caddyfile .env patches tools haven-data caddy-data \
+  $( [ -d bacity-datos ] && echo bacity-datos bacity.env )  # (BACITY, si esta: las cuentas del juego y su clave)
 
 if [ -f /opt/foro/.env ]; then
   FORO_PWD=$(grep '^MARIADB_ROOT_PASSWORD=' /opt/foro/.env | cut -d= -f2-)
