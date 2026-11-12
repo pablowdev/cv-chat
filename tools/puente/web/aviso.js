@@ -10886,8 +10886,10 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
     { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/worgs/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
-    // (BACITY corre en su propio servidor, en /bacity/: bacity.js. La tarjeta dice cuantos hay en la ciudad)
-    { id: 'bacity', nombre: 'BACITY', sub: 'Mundo abierto en Buenos Aires', evento: 'bacity:inicio', tapa: () => '/bacity/tapa.jpg?v=1', fondo: '#16324a', mesa: 'bcJuego',
+    // BACITY corre en su propio servidor, en /bacity/ (bacity.js). "aparte": su tarjeta nace oculta y se pide por
+    // separado, sin demorar a los demas; se muestra solo si el puente dice que esta cuenta puede entrar. Asi, si el
+    // juego no esta instalado (o esta en prueba y la cuenta no es administradora), no se ve nada.
+    { id: 'bacity', nombre: 'BACITY', sub: 'Mundo abierto en Buenos Aires', evento: 'bacity:inicio', tapa: () => '/bacity/tapa.jpg?v=1', fondo: '#16324a', mesa: 'bcJuego', aparte: true,
       vivo: (d) => (d.gente ? (d.gente === 1 ? '1 en la ciudad' : `${d.gente} en la ciudad`) : '') },
   ];
   // WORGS se llamaba Shoppa: por dentro sigue siendo "shoppa" (las salas, el tiempo de uso), pero el enlace dice worgs
@@ -10896,7 +10898,7 @@ document.addEventListener('pointerdown', (ev) => {
   // las salas de WORGS dicen el modo: "WORGS: Shoppa" o "WORGS: Normal"
   const nombreMesa = (j, m) => (j.id === 'shoppa' && m ? 'WORGS: ' + (m.modo === 'normal' ? 'Normal' : 'Shoppa') : j.nombre);
   // Los que se juegan contra otra persona: solo a esos se les piden las mesas y las partidas en curso
-  const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local);
+  const JUEGOS_EN_RED = JUEGOS.filter(j => !j.local && !j.aparte);
   // La tapa chica de un juego (para las filas de partidas y mesas), con la foto de quien (o un numero) encima
   function tapaChica(j, quien) {
     const c = el('div', 'jg-mini'); c.style.background = j.fondo;
@@ -10916,7 +10918,10 @@ document.addEventListener('pointerdown', (ev) => {
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
     const mesasBox = el('div'); b.appendChild(mesasBox); // las mesas que esperan rival, de todos los juegos (pintarMesas)
-    b.appendChild(el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.length})`));
+    const titulo = el('div', 'jg-bib-titulo', `Tus juegos (${JUEGOS.filter(j => !j.aparte).length})`); b.appendChild(titulo);
+    // (el titulo cuenta las tarjetas que se ven: un juego que este servidor no tiene se saca, y los "aparte" se suman al aparecer)
+    const contar = () => { titulo.textContent = `Tus juegos (${[...grilla.querySelectorAll('.jg-tapa:not(.pronto)')].filter(x => x.style.display !== 'none').length})`; };
+    const sacar = (id) => { tarjetas[id].t.remove(); contar(); };
     const grilla = el('div', 'jg-tapas'); b.appendChild(grilla);
     const tarjetas = {};
     for (const j of JUEGOS) {
@@ -10935,6 +10940,7 @@ document.addEventListener('pointerdown', (ev) => {
       caja.appendChild(vivo);
       t.append(caja, el('div', 'jg-tapa-n', j.nombre), el('div', 'jg-tapa-s', j.sub));
       t.addEventListener('click', () => go('inicio', j.id));
+      if (j.aparte) t.style.display = 'none';
       grilla.appendChild(t);
       tarjetas[j.id] = { t, badge, vivo };
     }
@@ -10942,6 +10948,12 @@ document.addEventListener('pointerdown', (ev) => {
     const pc = el('div', 'jg-tapa-img'); pc.appendChild(el('div', 'jg-tapa-sin', '＋'));
     pronto.append(pc, el('div', 'jg-tapa-n', 'Más juegos'), el('div', 'jg-tapa-s', 'Muy pronto'));
     grilla.appendChild(pronto);
+    for (const j of JUEGOS.filter(x => x.aparte)) emit(j.evento).then((d) => {
+      if (!page || !b.isConnected || !d || d.error || (d.tableros && !d.tableros.length)) return;
+      tarjetas[j.id].t.style.display = ''; contar();
+      const vv = j.vivo ? j.vivo(d) : '';
+      if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
+    }).catch(() => { /* sin respuesta: queda oculta */ });
     // las partidas en curso de todos los juegos, primero las que te toca
     const datos = await Promise.all(JUEGOS_EN_RED.map(j => emit(j.evento).catch(() => ({ error: true }))));
     if (!page || !b.isConnected) return;
@@ -10949,13 +10961,13 @@ document.addEventListener('pointerdown', (ev) => {
     JUEGOS_EN_RED.forEach((j, i) => {
       const d = datos[i];
       if (!d || d.error) return;
-      if (d.tableros && !d.tableros.length) { tarjetas[j.id].t.remove(); return; }
+      if (d.tableros && !d.tableros.length) { sacar(j.id); return; }
       const mias = (d.mias || []).filter(m => m.estado !== 'terminada');
       const n = mias.filter(m => m.teToca).length + (d.abiertas || []).filter(a => a.paraVos).length;
       if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
       // lo que se esta jugando ahora (alguien jugo en la ultima media hora) o, si no, las mesas que esperan
       const act = d.activas || 0, esp = (d.abiertas || []).length;
-      const vv = j.vivo ? j.vivo(d) : act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
+      const vv = act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
       if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
       for (const m of mias) curso.push({ j, m });
     });
