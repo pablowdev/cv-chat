@@ -1886,6 +1886,15 @@ html body #right-sidebar #right-btn-invite-popout {
 html body #right-sidebar #right-btn-invite-popout:hover { color: #fff; filter: brightness(1.08); box-shadow: 0 6px 20px rgba(238, 45, 111, 0.5); }
 html body #right-sidebar #right-btn-invite-popout:active { transform: scale(0.97); }
 html body #right-sidebar #right-btn-invite-popout svg { width: 1.375rem; height: 1.375rem; stroke-width: 2.5; }
+/* En la PC, mas tranquilo: el mismo recuadro sin brillo, letras y boton mas chicos (en el celular queda como arriba) */
+@media (min-width: 769px) {
+  html body #right-sidebar #sidebar-invite-panel { padding: 0.75rem 0.75rem 0.75rem; border-color: rgba(238, 45, 111, 0.25); background: #1f1d22; box-shadow: none; }
+  html body #right-sidebar #sidebar-invite-panel::before { margin-bottom: 0.625rem; font-size: 0.8125rem; color: #949ba4; }
+  html body #right-sidebar #sidebar-invite-panel::first-line { font-size: 0.9375rem; font-weight: 700; color: #dbdee1; }
+  html body #right-sidebar #right-btn-invite-popout { min-height: 2.25rem; font-size: 0.9375rem; font-weight: 700; background: #d8336f; box-shadow: none; }
+  html body #right-sidebar #right-btn-invite-popout:hover { background: #e63e7b; filter: none; box-shadow: none; }
+  html body #right-sidebar #right-btn-invite-popout svg { width: 1.125rem; height: 1.125rem; stroke-width: 2; }
+}
 /* La foto con su marco del mismo tamaño (en la PC el marco de Haven era mas chico y el estado quedaba en el medio) */
 html body #right-sidebar .user-item .user-avatar-wrapper { width: 2rem; height: 2rem; flex: 0 0 2rem; }
 html body #right-sidebar .user-item .user-item-avatar, html body #right-sidebar .user-item .user-item-avatar-img { width: 2rem !important; height: 2rem !important; min-width: 2rem; font-size: 0.875rem; }
