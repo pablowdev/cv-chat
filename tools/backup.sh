@@ -16,7 +16,9 @@ set -eu
 umask 077
 cd /opt/haven
 STAMP=$(date -u +%Y-%m-%d_%H%M)
-REMOTE=${BACKUP_REMOTE:-personal:CV-respaldo}
+# (personal2: el Drive personal con el cliente de Google del club, que no comparte el limite con todos
+# los que usan rclone; personal:CV-respaldo es la carpeta de antes, con el cliente de rclone)
+REMOTE=${BACKUP_REMOTE:-personal2:CV-respaldo-2}
 ESTADO=/opt/haven/haven-data/puente-respaldo.json
 # Si algo falla, queda anotado (el estado se pisa con "ok" al final)
 trap 'r=$?; [ $r -eq 0 ] || printf "{\"ok\":false,\"fecha\":\"%s\",\"error\":\"la copia termino con error %s (ver tools/backup.log)\"}\n" "$(date -u +%FT%TZ)" "$r" > "$ESTADO"; chmod 644 "$ESTADO" 2>/dev/null || true' EXIT
