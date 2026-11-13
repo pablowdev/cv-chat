@@ -65,3 +65,6 @@ tools/puente/web/ajedrez/
 # Curveball: su repositorio (pablowdev/curveball) instala el motor y la pantalla
 tools/puente/curveball-servidor.cjs
 tools/puente/web/curveball/
+# CV Hotel: su repositorio (pablowdev/cv-hotel)
+tools/puente/web/hotel/
+tools/puente/pruebas/hotel/

@@ -1,4 +1,0 @@
-html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-#hotel { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-#estado { position: fixed; left: 4px; bottom: 4px; z-index: 9; padding: 2px 6px; font: 11px monospace; color: #9f9; background: rgba(0,0,0,.7); }
-#estado.mal { color: #f99; }
