@@ -792,6 +792,17 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
+  // Truco (truco.js): su pantalla (juego.js; su repositorio es aparte), en web/truco/. Con huella, como aviso.js
+  const trArch = req.method === 'GET' && /^\/puente\/truco\/(juego\.js)$/.exec(p);
+  if (trArch) {
+    const file = path.join(STATIC, 'truco', trArch[1]);
+    let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
+    const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
+    if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    const body = fs.readFileSync(file).toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
+    return send(res, 200, 'application/javascript', body, { ETag: etag, 'Cache-Control': 'no-cache' });
+  }
+
   // BACITY: el pase firmado con el que el juego (que corre aparte, en /bacity/) sabe quien es cada uno
   if (p === '/puente/api/bacity/entrada') return require('./bacity.js').handle(req, res, p, u, { sessionUser, json });
   // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio

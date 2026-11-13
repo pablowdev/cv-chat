@@ -54,3 +54,5 @@ tools/puente/web/misionrisk/
 tools/puente/pool.js
 tools/puente/pool-motor.js
 tools/puente/web/pool/
+tools/puente/truco.js
+tools/puente/web/truco/
