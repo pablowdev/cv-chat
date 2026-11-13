@@ -169,6 +169,7 @@ function start(deps) {
   require('./misionrisk.js').setup({ db, io, log, warn });
   require('./pool.js').setup({ db, io, log, warn });
   require('./curveball.js').setup({ db, io, log, warn });
+  require('./juegos-registro.js').setup({ log, warn }); // (las fichas de los juegos: cada uno las deja al instalarse)
   require('./shoppa.js').setup({ db, io, log, warn }); // (WORGS, antes Shoppa: salas y turnos)
   // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
   require('./invitados-fuera.js').setup({ db, io, log, warn });

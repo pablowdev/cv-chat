@@ -821,6 +821,13 @@ async function handle(req, res) {
     return send(res, 200, tipo, fs.readFileSync(file), { ETag: etag, 'Cache-Control': cache });
   }
 
+  // El registro de los Juegos (juegos-registro.js): las fichas que deja cada juego al instalarse, y los archivos
+  // de los juegos que no tienen su propia ruta aca (las carpetas de abajo siguen con la suya)
+  if (req.method === 'GET' && (p === '/puente/api/juegos/registro' || /^\/puente\/[a-z0-9-]{2,24}\/[^/]+$/.test(p))) {
+    const yaServidas = new Set(['truco', 'funball', 'ajedrez', 'misionrisk', 'pool', 'curveball', 'worgs', 'shoppa', 'cartas', 'tapas', 'descargas', 'fuentes', 'vista', 'tema', 'api']);
+    if (require('./juegos-registro.js').handle(req, res, p, { json, send, appName, mismaHuella, yaServidas })) return;
+  }
+
   // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio
   if (p === '/puente/api/worgs/voz' || p === '/puente/api/worgs/voces' || p.startsWith('/puente/worgs/voz/')) {
     const r = await require('./worgs-voces.js').handle(req, res, p, u, { sessionUser, json, send });
