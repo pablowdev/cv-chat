@@ -79,6 +79,10 @@ function limpiar(f, archivo) {
   // en "Ahora en el club": su dibujito y si la mesa "espera rival" (de a dos) o "espera jugadores"
   const icono = typeof f.icono === 'string' && f.icono.length <= 8 && !/[<>&"'\s]/.test(f.icono) ? f.icono : null;
   const jugadores = f.jugadores === 2 ? 2 : 'varios';
+  // sin cuenta: si se puede jugar como invitado (la entrada de invitado, login.js) y su lugar en la pagina publica
+  // de los juegos (juegos.html; sin "pagina" no aparece ahi, pero sus enlaces igual llevan a jugar como invitado)
+  const invitados = f.invitados === true;
+  const pagina = invitados && Number.isInteger(f.pagina) && f.pagina > 0 && f.pagina < 1000 ? f.pagina : null;
   // el nombre de sus mesas segun su modo (WORGS: { "": "WORGS: Shoppa", "normal": "WORGS: Normal" })
   let modos = null;
   for (const [k, v] of Object.entries(f.modos || {})) { if (!/^[a-z]{0,16}$/.test(k) || !texto(v, 40)) return mal(`modo ${k} invalido`); (modos = modos || {})[k] = v; }
@@ -95,7 +99,7 @@ function limpiar(f, archivo) {
     tapa, fondo: texto(f.fondo, 120) || '#1e1f22', ajuste: f.ajuste === 'contain' ? 'contain' : null,
     web, archivos, vistas, mesa, antes, version,
     cliente,
-    eventos, servidor, lista, icono, jugadores, modos, estadisticas,
+    eventos, servidor, lista, icono, jugadores, modos, estadisticas, invitados, pagina,
     tarjeta: { aparte: t.aparte === true, vivo },
     // el enlace: su parametro (/app?juegos=<param>), nombres viejos que tambien lo abren, su texto y su imagen apaisada
     // (la vista previa del enlace en los mensajes, y la de WhatsApp o X)
@@ -154,4 +158,23 @@ function handle(req, res, p, { json, send, appName, mismaHuella, yaServidas }) {
   return true;
 }
 
-module.exports = { setup, handle, lista, _limpiar: limpiar };
+// La firma de las fichas instaladas (cambia si cambia alguna): para lo que se arma con ellas y se guarda armado
+function firma() { lista(); return cache.firma; }
+// El nombre de la tapa apaisada de un juego (/puente/tapas/<nombre>.jpg, la de su enlace), o null
+const tapaDe = (j) => ((j && j.enlace && /^\/puente\/tapas\/([a-z0-9-]{2,24})\.jpg(\?|$)/.exec(j.enlace.imagen || '')) || [])[1] || null;
+// El juego de un nombre de enlace (/app?juegos=worgs): su parametro, sus nombres viejos o su id
+const deEnlace = (p) => (p ? lista().find((j) => j.id === p || (j.enlace && (j.enlace.param === p || j.enlace.alias.includes(p)))) || null : null);
+// Lo que necesitan saber, antes que Haven y sin pedir nada, las paginas de afuera (afuera.js, instalar.js, login.js):
+// que claves de la direccion son una mesa (/app?truco=<id>) y a que juegos se entra como invitado (con su nombre y tapa)
+function paraPaginas() {
+  const mesas = lista().filter((j) => j.mesa).map((j) => j.id);
+  const invitados = {};
+  for (const j of lista().filter((x) => x.invitados)) {
+    const d = { nombre: j.nombre, tapa: (j.enlace && j.enlace.imagen) || null };
+    for (const k of [j.id, ...(j.enlace ? [j.enlace.param, ...j.enlace.alias] : [])]) if (!invitados[k]) invitados[k] = d;
+  }
+  // (JSON dentro de un <script> o un .js: sin "<" ni separadores de linea sueltos)
+  return JSON.stringify({ mesas, invitados }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, _limpiar: limpiar };

@@ -326,7 +326,11 @@
   // Los juegos tienen su propia pagina (juegos.<dominio>, juegos.html): ahi se elige el juego o la mesa, y se
   // llega aca (por afuera.js) solo a poner el nombre: la tarjeta flotando, con la tapa del juego (html.puente-nombre)
   const PAGINA_JUEGOS = 'https://juegos.' + location.hostname.replace(/^chat\./, '') + '/';
-  const NOMBRES = { truco: 'Truco', funball: 'Funball', ajedrez: 'Ajedrez', globalsiege: 'GlobalSiege', pool: 'Pool', curveball: 'Curveball', gusanos: 'WORGS', shoppa: 'WORGS', worgs: 'WORGS' };
+  // los juegos que se juegan como invitado, por su id, su enlace o sus nombres viejos: su nombre y su tapa (de sus
+  // fichas; lo pone vincular.js al servir este archivo)
+  const FICHAS_AFUERA = /*__PUENTE_JUEGOS__*/null;
+  const NOMBRES = {}, TAPAS = {};
+  for (const [k, d] of Object.entries((FICHAS_AFUERA && FICHAS_AFUERA.invitados) || {})) { NOMBRES[k] = d.nombre; TAPAS[k] = d.tapa; }
   function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); location.href = PAGINA_JUEGOS; }
   let portada = null;
   const datos = () => portada || (portada = fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).catch(() => null));
@@ -355,7 +359,7 @@
       const p = document.getElementById('puente-jugar-aviso');
       if (!p) { if (++n < 40) setTimeout(tapa, 150); return; }
       if (p.querySelector('.puente-jugar-tapa')) return;
-      const i = mk('img', 'puente-jugar-tapa'); i.src = '/puente/tapas/' + j + '.jpg'; i.alt = ''; i.onerror = () => i.remove();
+      const i = mk('img', 'puente-jugar-tapa'); i.src = TAPAS[j] || '/puente/tapas/' + j + '.jpg'; i.alt = ''; i.onerror = () => i.remove();
       p.insertBefore(i, p.firstChild);
     })();
   }

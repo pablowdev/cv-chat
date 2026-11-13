@@ -391,7 +391,7 @@ function injectScript(req, res, src) {
         // Un enlace al Marketplace sin la sesion del chat: al Marketplace de la web, que se ve sin cuenta; uno
         // de los juegos: a jugar como invitado (afuera.js, antes que Haven; origen.js primero, para que cuente de
         // donde llego)
-        if (src === '/puente/aviso.js' && /^\/app\/?\?(?:.*&)?(?:mercado|juegos|truco|funball|ajedrez|globalsiege|pool|hola)(?:[=&]|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
+        if (src === '/puente/aviso.js' && new RegExp('^/app/?\\?(?:.*&)?(?:' + ['mercado', 'juegos', 'hola', ...registro().lista().filter((j) => j.mesa).map((j) => j.id)].join('|') + ')(?:[=&]|$)').test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
         // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
         // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
         if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
@@ -668,7 +668,7 @@ async function handle(req, res) {
     const guardable = !file.endsWith('.html');
     let st = null;
     if (guardable) { try { st = fs.statSync(path.join(STATIC, file)); } catch { /* no esta: lo dice readFileSync */ } }
-    const clave = st && `${st.size}:${st.mtimeMs}:${process.env.PUENTE_TITULO || ''}:${process.env.PUENTE_CANAL_INICIO || ''}:${appName()}`;
+    const clave = st && `${st.size}:${st.mtimeMs}:${process.env.PUENTE_TITULO || ''}:${process.env.PUENTE_CANAL_INICIO || ''}:${appName()}:${registro().firma()}`;
     const guardado = clave && armados.get(file);
     if (guardado && guardado.clave === clave) {
       if (mismaHuella(req.headers['if-none-match'], guardado.etag)) {
@@ -685,6 +685,8 @@ async function handle(req, res) {
       // Canales que se abren al entrar por primera vez (PUENTE_CANAL_INICIO): nombres separados por comas.
       const start = String(process.env.PUENTE_CANAL_INICIO || '').replace(/[^\p{L}\p{N}_,-]/gu, '').slice(0, 200);
       body = body.toString('utf8').replace(/__PUENTE_TITULO__/g, title).replace(/__PUENTE_CANAL_INICIO__/g, start);
+      // Los juegos, para afuera.js, instalar.js y login.js (corren antes que Haven y no pueden esperar al registro)
+      if (body.includes('/*__PUENTE_JUEGOS__*/null')) { const pj = registro().paraPaginas(); body = body.replace(/\/\*__PUENTE_JUEGOS__\*\/null/g, () => pj); }
     }
     // Nombre de la app ("CV Chat") en las paginas y sus textos, en vez de "Haven"
     if (file.endsWith('.html') || file.endsWith('.js')) {
@@ -696,7 +698,12 @@ async function handle(req, res) {
     // La pagina de los juegos (juegos.html) se ve en juegos.<dominio> y lleva al chat (PUBLIC_URL)
     if (file === 'juegos.html') {
       const chat = String(publicUrl || '').replace(/\/+$/, '').replace(/["<>&]/g, '');
-      body = body.toString('utf8').replace(/__CHAT__/g, chat).replace(/__ORIGEN__/g, chat.replace(/^(https?:\/\/)chat\./, '$1juegos.'));
+      // los juegos que se juegan sin cuenta, en el orden de su ficha ("pagina")
+      const e = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const pj = registro().lista().filter((j) => j.pagina && registro().tapaDe(j)).sort((a, b) => a.pagina - b.pagina);
+      const lista = pj.map((j) => `      <a class="puente-sala-juego" href="__CHAT__/app?juegos=${e(j.enlace.param)}"><span class="puente-sala-tapa"><img src="${e(j.enlace.imagen)}" alt="${e(j.nombre)}" width="1200" height="630"></span><span class="puente-sala-txt"><b>${e(j.nombre)}</b><small>${e(j.sub)}</small></span><span class="puente-sala-jugar">Jugar</span></a>`).join('\n');
+      const nombres = e(yNombres(pj.map((j) => j.nombre)));
+      body = body.toString('utf8').replace('__JUEGOS_LISTA__', () => lista).replace(/__JUEGOS_NOMBRES__/g, () => nombres).replace(/__CHAT__/g, chat).replace(/__ORIGEN__/g, chat.replace(/^(https?:\/\/)chat\./, '$1juegos.'));
     }
     if (clave) {
       const etag = '"' + crypto.createHash('sha1').update(body).digest('base64url').slice(0, 20) + '"';
@@ -747,8 +754,8 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|curveball|worgs|juegos|chat)\.jpg$/.exec(p);
-  if (tapa) {
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/([a-z0-9-]{2,24})\.jpg$/.exec(p);
+  if (tapa && (tapa[1] === 'juegos' || tapa[1] === 'chat' || registro().lista().some((j) => registro().tapaDe(j) === tapa[1]))) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     const quien = lectorDe(req);
     if (!fs.existsSync(file)) { if (quien) warn(`tarjeta: ${quien} pidio ${p} y no esta`); return send(res, 404, 'text/plain; charset=utf-8', 'Sin imagen'); }
@@ -1488,17 +1495,16 @@ async function handle(req, res) {
 // esos sitios leen la pagina sin ejecutarla, asi que va escrito en el HTML. En
 // lugar de "Haven | Login", el nombre de la app (PUENTE_TITULO) con el logo y
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
-// muestran la tapa del juego en vez del logo.
-const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool, Curveball y WORGS para jugar con la gente del chat.' },
-  truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
-  funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
-  ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
-  globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
-  pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
-  curveball: { nombre: 'Curveball', desc: 'Bolea, curvea y dejá al rival sin vidas: 1 contra 1, tres vidas, contra alguien del chat o contra la compu.' },
-  worgs: { nombre: 'WORGS', desc: 'Serpientes, sogas y explosiones: modo Shoppa o normal, con gente del chat o contra la máquina.' },
-};
+// muestran la tapa del juego en vez del logo: su nombre, su texto y su tapa apaisada salen de su ficha
+// (juegos-registro.js; la tapa es /puente/tapas/<nombre>.jpg, propia de cada servidor).
+const registro = () => require('./juegos-registro.js');
+// "Truco, Pool y Ajedrez"
+const yNombres = (n) => (n.length > 1 ? n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1] : n.join(''));
+// La biblioteca (/app?juegos): nombra a los juegos que tienen la vista previa de su enlace (no a los que van aparte)
+function enlaceBiblioteca() {
+  const n = registro().lista().filter((j) => registro().tapaDe(j) && !j.tarjeta.aparte).map((j) => j.nombre);
+  return { nombre: 'Juegos', desc: (n.length ? yNombres(n) + ' para jugar' : 'Juegos para jugar') + ' con la gente del chat.', tapa: 'juegos', param: null };
+}
 function shareTags(html, url) {
   if (!process.env.PUENTE_TITULO || html.includes('property="og:title"')) return html;
   const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1512,26 +1518,26 @@ function shareTags(html, url) {
   // La portada con algo mas (/?v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
   const raiz = /^\/\?/.test(String(url || '')) ? [...new URL(String(url), 'http://x').searchParams].filter(([k, x]) => /^[a-z_]{1,20}$/.test(k) && /^[\w.-]{0,40}$/.test(x)) : [];
   if (raiz.length) enlace = '/?' + raiz.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
-  const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z]*))?(?:&|$)/.exec(String(url || ''));
-  const qj = q && (q[1] === 'shoppa' || q[1] === 'gusanos' ? 'worgs' : q[1]);
-  const juego = q && JUEGOS_ENLACE[qj || 'juegos'];
-  if (juego && fs.existsSync(path.join(STATIC, 'tapas', (qj || 'juegos') + '.jpg'))) {
+  const q = /^\/app\/?\?(?:.*&)?juegos(?:=([a-z0-9-]*))?(?:&|$)/.exec(String(url || ''));
+  const fj = q && q[1] ? registro().deEnlace(q[1]) : null;
+  const juego = q && (!q[1] ? enlaceBiblioteca() : fj && registro().tapaDe(fj) ? { nombre: fj.nombre, desc: fj.enlace.desc, tapa: registro().tapaDe(fj), param: fj.enlace.param } : null);
+  if (juego && fs.existsSync(path.join(STATIC, 'tapas', juego.tapa + '.jpg'))) {
     title = `${juego.nombre} · ${title}`; desc = juego.desc;
-    image = `/puente/tapas/${qj || 'juegos'}.jpg?v=${versionTapa(qj || 'juegos')}`; grande = true;
-    enlace = qj ? `/app?juegos=${qj}` : '/app?juegos';
+    image = `/puente/tapas/${juego.tapa}.jpg?v=${versionTapa(juego.tapa)}`; grande = true;
+    enlace = juego.param ? `/app?juegos=${juego.param}` : '/app?juegos';
     // con algo mas (?juegos=pool&v=2): la direccion tal cual, para que X lea la tarjeta de nuevo en vez de usar la que tenia guardada
     const extra = new URL(String(url), 'http://x').searchParams;
     const resto = [...extra].filter(([k, x]) => k !== 'juegos' && /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x));
     if (resto.length) enlace += '&' + resto.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   }
-  // Una mesa (/app?truco=<id>, ?funball=, ?ajedrez=, ?globalsiege=, ?pool=): la tapa de ese juego, "Te invitaron a jugar..."
+  // Una mesa (/app?truco=<id>, ?pool=<id>...: el id del juego): la tapa de ese juego, "Te invitaron a jugar..."
   const mq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;
-  const mesa = mq && ['truco', 'funball', 'ajedrez', 'globalsiege', 'pool'].find(k => /^[a-z0-9_-]{1,40}$/i.test(mq.get(k) || ''));
-  if (mesa && fs.existsSync(path.join(STATIC, 'tapas', mesa + '.jpg'))) {
-    const jm = JUEGOS_ENLACE[mesa];
-    title = `Te invitaron a jugar ${jm.nombre} · ${title}`; desc = jm.desc;
-    image = `/puente/tapas/${mesa}.jpg?v=${versionTapa(mesa)}`; grande = true;
-    enlace = `/app?${mesa}=${encodeURIComponent(mq.get(mesa))}`;
+  const jm = mq && registro().lista().find((j) => j.mesa && registro().tapaDe(j) && /^[a-z0-9_-]{1,40}$/i.test(mq.get(j.id) || ''));
+  if (jm && fs.existsSync(path.join(STATIC, 'tapas', registro().tapaDe(jm) + '.jpg'))) {
+    const t = registro().tapaDe(jm);
+    title = `Te invitaron a jugar ${jm.nombre} · ${title}`; desc = jm.enlace.desc;
+    image = `/puente/tapas/${t}.jpg?v=${versionTapa(t)}`; grande = true;
+    enlace = `/app?${jm.id}=${encodeURIComponent(mq.get(jm.id))}`;
   }
   // Un canal o un mensaje de un canal que ve cualquiera con cuenta: un pedacito del chat (vistas.js)
   const chq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;

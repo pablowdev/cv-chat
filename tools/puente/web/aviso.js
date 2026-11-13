@@ -11236,7 +11236,11 @@ document.addEventListener('pointerdown', (ev) => {
     // la tapa del juego y el texto que ven WhatsApp o X (vincular.js, JUEGOS_ENLACE). Al tocarla abre el juego.
     // (la de cada juego: su nombre y, de su ficha, el texto y la imagen apaisada del enlace; un juego sin imagen no
     // tiene vista previa)
-    const TARJETA_JUEGOS = { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool, Curveball y WORGS para jugar con la gente del chat.', imagen: '/puente/tapas/juegos.jpg' };
+    // (la biblioteca: nombra a los juegos que tienen la vista previa de su enlace, como vincular.js)
+    const tarjetaJuegos = () => {
+      const n = fichasYa.filter((j) => j.enlace && j.enlace.imagen && !j.tarjeta.aparte).map((j) => j.nombre);
+      return n.length ? { nombre: 'Juegos', desc: (n.length > 1 ? n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1] : n[0]) + ' para jugar con la gente del chat.', imagen: '/puente/tapas/juegos.jpg' } : null;
+    };
     // el juego de un enlace (/app?juegos=worgs): por su parametro, sus nombres viejos o su id
     const fichaDeEnlace = (p) => fichasYa.find((j) => j.id === p || (j.enlace && (j.enlace.param === p || (j.enlace.alias || []).includes(p))));
     // desde un enlace a una mesa, "atras" cierra (los que se entran directo de la lista) o vuelve a la biblioteca
@@ -11249,7 +11253,7 @@ document.addEventListener('pointerdown', (ev) => {
         let u; try { u = new URL(l.href); } catch { continue; }
         if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
         const p = u.searchParams.get('juegos'), f = p ? fichaDeEnlace(p) : null;
-        const t = !p ? TARJETA_JUEGOS : f && f.enlace && f.enlace.imagen ? { nombre: f.nombre, desc: f.enlace.desc, imagen: f.enlace.imagen } : null;
+        const t = !p ? tarjetaJuegos() : f && f.enlace && f.enlace.imagen ? { nombre: f.nombre, desc: f.enlace.desc, imagen: f.enlace.imagen } : null;
         const box = t && l.closest('.message-content, .thread-msg-content');
         if (!box || [...box.querySelectorAll('.link-preview')].some(x => x.dataset.url === l.href)) continue;
         try {
