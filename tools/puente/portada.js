@@ -11,14 +11,10 @@
 
 const CANAL = () => String(process.env.PORTADA_CANAL || 'circulo-vicioso');
 const sinTildes = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-const JUEGOS = [
-  { tabla: 'puente_truco_mesas', juego: 'truco', nombre: 'Truco', param: 'truco', detalle: g => `a ${g.puntos || 30}${g.flor ? ' con flor' : ''}` },
-  { tabla: 'puente_funball_mesas', juego: 'funball', nombre: 'Funball', param: 'funball', detalle: () => '' },
-  { tabla: 'puente_ajedrez_mesas', juego: 'ajedrez', nombre: 'Ajedrez', param: 'ajedrez', detalle: g => (g.ritmo && g.ritmo !== 'libre' ? g.ritmo : 'sin reloj') },
-  { tabla: 'puente_mr_mesas', juego: 'globalsiege', nombre: 'GlobalSiege', param: 'globalsiege', detalle: g => `${(g.asientos || []).filter(a => a.uid).length} en la mesa` },
-  { tabla: 'puente_pool_mesas', juego: 'pool', nombre: 'Pool', param: 'pool', detalle: () => '8 bolas' },
-  { tabla: 'puente_curveball_mesas', juego: 'curveball', nombre: 'Curveball', param: 'curveball', detalle: () => '3 vidas' },
-];
+// Los juegos con mesas para mostrar: los que dicen como se lee una mesa abierta ("detalle" en el "chat" de su modulo de
+// servidor, juegos-registro.js). El enlace a una mesa es /app?<id del juego>=<mesa>.
+const JUEGOS = () => require('./juegos-registro.js').conChat().filter(x => x.chat.mesas && typeof x.chat.detalle === 'function')
+  .map(({ ficha, chat }) => ({ tabla: chat.mesas, juego: ficha.id, nombre: ficha.nombre, param: ficha.id, detalle: chat.detalle, leToca: chat.leToca }));
 
 let hecha = { at: 0, datos: null, pidiendo: null };
 
@@ -39,13 +35,15 @@ function quienJuega(db, id) {
 // entre gente del club (enJuego, para la tarjeta "Ahora en el club" de club.js: con movimiento en los
 // ultimos 30 minutos, de dos o mas personas con cuenta, sin las de la compu sola ni las de invitados)
 // conIds: con los ids de los que juegan (uids), para que club.js no le ofrezca a nadie sus propias partidas
-// A quien le toca en una partida en juego (para el 'Te toca' de la tarjeta del club; solo con conIds, nunca sale afuera)
-const TOCA = { truco: './truco.js', pool: './pool.js', ajedrez: './ajedrez.js', funball: './funball.js' };
-function leToca(juego, g) { try { return TOCA[juego] ? require(TOCA[juego]).leToca(g) : null; } catch { return null; } }
+// A quien le toca en una partida en juego (para el 'Te toca' de la tarjeta del club; solo con conIds, nunca sale afuera;
+// "leToca" del juego, si lo tiene)
+function leToca(j, g) { try { return typeof j.leToca === 'function' ? j.leToca(g) : null; } catch { return null; } }
 function mesas(db, conIds) {
   let jugando = 0;
   const abiertas = [], enJuego = [];
-  for (const j of JUEGOS) {
+  let juegos = [];
+  try { juegos = JUEGOS(); } catch { /* sin el registro */ }
+  for (const j of juegos) {
     let filas = [];
     try { filas = db.prepare(`SELECT estado, actualizado FROM ${j.tabla}`).all(); } catch { continue; }
     for (const r of filas) {
@@ -58,7 +56,7 @@ function mesas(db, conIds) {
         const todos = g.jugadores || (g.asientos || []).map(a => (a && a.uid) || -1);
         const ids = todos.filter(x => x > 0);
         const nombres = todos.map(x => quienJuega(db, x)).filter((n, k, l) => n !== 'la compu' || l.indexOf(n) === k);
-        if (ids.length >= 1) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, ...(conIds ? { uids: ids, toca: leToca(j.juego, g) } : {}) });
+        if (ids.length >= 1) enJuego.push({ juego: j.juego, nombre: j.nombre, quienes: nombres, at: ultima, enlace: `/app?${j.param}=${encodeURIComponent(g.id)}`, ...(conIds ? { uids: ids, toca: leToca(j, g) } : {}) });
       }
       if (g.estado !== 'esperando' || !g.publica) continue;
       const quien = nombre(db, g.creador || (g.jugadores && g.jugadores[0]) || (g.asientos && g.asientos[0] && g.asientos[0].uid));

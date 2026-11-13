@@ -447,4 +447,20 @@ function lobby(me) {
   return CP.paraBiblioteca(res, games, { io, db });
 }
 
-module.exports = { setup, stats, _test: { games, create, join, act, view, finishGame, BOT } };
+
+// Lo que el chat lee de este juego (cv-chat lo encuentra por la ficha, en "servidor"): sus mesas, para "Ahora en
+// el club" y la pantalla de entrar (portada.js); sus partidas terminadas, para las estadisticas (juegos-estadisticas.js
+// y panel-estadisticas.js); y como levantar a un invitado que cerro la app (invitados-fuera.js)
+const paraElChat = {
+  mesas: 'puente_curveball_mesas',
+  detalle: () => '3 vidas',
+  partidas: {
+    tabla: 'puente_curveball_partidas',
+    leer: () => db.prepare('SELECT id, j1, j2, ganador, motivo, vidas, inicio, fin, compu, amistosa FROM puente_curveball_partidas').all().map((r) => ({
+      juego: 'curveball', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter((x) => x > 0), ganador: r.ganador, motivo: r.motivo || '',
+      detalle: ['3 vidas' + (r.amistosa ? ', amistosa' : '')],
+    })),
+  },
+};
+
+module.exports = { setup, chat: paraElChat, stats, _test: { games, create, join, act, view, finishGame, BOT } };

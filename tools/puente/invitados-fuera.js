@@ -13,44 +13,13 @@ const ESPERA_MS = 60e3, JUEGO_MS = 3 * 60e3;
 let db, io, log, warn;
 const desde = new Map(); // "juego:mesa:uid" -> cuando se lo vio desconectado por primera vez
 
-// Cada juego: sus mesas, quien esta sentado y como se lo saca (con las funciones de siempre del juego)
-const DE_A_DOS = (archivo, nombre) => ({
-  nombre,
-  mesas: () => require(archivo)._test.games,
-  sentados: (g) => (g.jugadores || []).filter(u => u > 0),
-  sacar: (g, uid) => {
-    const m = require(archivo)._test;
-    if (g.estado === 'esperando') return m.cancel(uid, { id: g.id });
-    return m.act(uid, { id: g.id, tipo: 'abandonar' });
-  },
-});
-const JUEGOS = [
-  DE_A_DOS('./truco.js', 'truco'),
-  DE_A_DOS('./pool.js', 'pool'),
-  DE_A_DOS('./ajedrez.js', 'ajedrez'),
-  DE_A_DOS('./funball.js', 'funball'),
-  {
-    nombre: 'globalsiege',
-    mesas: () => require('./misionrisk.js')._test.games,
-    sentados: (g) => (g.asientos || []).filter(a => a.uid > 0 && !a.abandono).map(a => a.uid),
-    sacar: (g, uid) => {
-      const m = require('./misionrisk.js')._test;
-      if (g.estado === 'esperando') {
-        // (si la habia armado el y quedan otros, la mesa pasa al que sigue en vez de cerrarse para todos)
-        const otro = g.asientos.find(a => a.uid > 0 && a.uid !== uid);
-        if (g.creador === uid && otro) g.creador = otro.uid;
-        return m.cancel(uid, { id: g.id });
-      }
-      return m.act(uid, { id: g.id, tipo: 'abandonar' });
-    },
-  },
-  {
-    nombre: 'worgs',
-    mesas: () => require('./shoppa.js')._test.games,
-    sentados: (g) => (g.jugadores || []).filter((u, i) => u > 0 && !(g.fuera || [])[i]),
-    sacar: (g, uid) => require('./shoppa.js')._test.abandonar(uid, { id: g.id }),
-  },
-];
+// Cada juego: sus mesas, quien esta sentado y como se lo saca (con las funciones de siempre del juego): lo dice el
+// "chat" de su modulo de servidor ("invitados"; los juegos que no lo tienen no se miran)
+function juegos() {
+  return require('./juegos-registro.js').conChat()
+    .filter(({ chat: c }) => c.invitados && ['mesas', 'sentados', 'sacar'].every(k => typeof c.invitados[k] === 'function'))
+    .map(({ ficha, chat }) => ({ nombre: ficha.id, ...chat.invitados }));
+}
 
 // Si es alguien que no va a volver: un invitado o una cuenta que ya no esta
 function esInvitado(uid) {
@@ -61,6 +30,8 @@ function revisar() {
   const conectados = new Set();
   for (const [, s] of io.sockets.sockets) if (s.user && s.user.id) conectados.add(s.user.id);
   const vistos = new Set(), now = Date.now();
+  let JUEGOS = [];
+  try { JUEGOS = juegos(); } catch (err) { warn('invitados: registro:', err.message); }
   for (const J of JUEGOS) {
     let mesas;
     try { mesas = J.mesas(); } catch { continue; }

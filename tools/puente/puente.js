@@ -163,18 +163,23 @@ function start(deps) {
   require('./guardados.js').setup({ db, io, log, warn });
   // Emojis y stickers que propone la gente (se votan en #que-paso, los aprueba un admin)
   require('./propuestas.js').setup({ db, io, log, warn });
-  require('./truco.js').setup({ db, io, log, warn });
-  require('./funball.js').setup({ db, io, log, warn });
-  require('./ajedrez.js').setup({ db, io, log, warn });
-  require('./misionrisk.js').setup({ db, io, log, warn });
-  require('./pool.js').setup({ db, io, log, warn });
-  require('./curveball.js').setup({ db, io, log, warn });
-  require('./juegos-registro.js').setup({ log, warn }); // (las fichas de los juegos: cada uno las deja al instalarse)
-  require('./shoppa.js').setup({ db, io, log, warn }); // (WORGS, antes Shoppa: salas y turnos)
+  // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
+  // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
+  // falla no tira a los demas.
+  const registroJuegos = require('./juegos-registro.js');
+  registroJuegos.setup({ log, warn });
+  const prendidos = [];
+  for (const m of registroJuegos.servidores()) {
+    const ruta = path.join(__dirname, m);
+    if (!fs.existsSync(ruta)) { warn(`juegos: falta ${m}`); continue; }
+    try {
+      const x = require(ruta);
+      if (x && typeof x.setup === 'function') { x.setup({ db, io, log, warn }); prendidos.push(m); }
+    } catch (err) { warn(`juegos: ${m} no arrancó:`, err.message); }
+  }
+  log(`juegos: ${prendidos.length} prendidos (${prendidos.join(', ')})`);
   // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
   require('./invitados-fuera.js').setup({ db, io, log, warn });
-  require('./worgs-voces.js').setup({ db, log, warn }); // (WORGS: las voces grabadas de cada uno)
-  require('./bacity.js').setup({ db, io, log, warn }); // (BACITY: el pase para entrar al juego, que corre aparte)
   require('./leidos.js').setup({ db, io, log, warn });
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });

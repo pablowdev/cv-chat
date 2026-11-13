@@ -1,8 +1,8 @@
 // Estadisticas de los juegos para los administradores (la pestaña "Juegos" de la pagina de administracion,
 // web/aviso.js): que juegos se juegan, quien los juega, cuanto tiempo, contra quien y como terminan.
 //
-// Salen de lo que ya se guarda: las partidas terminadas de cada juego (truco.js, funball.js, ajedrez.js y
-// misionrisk.js: quien jugo, contra quien o contra la compu, cuando empezo y termino, quien gano y por que)
+// Salen de lo que ya se guarda: las partidas terminadas de cada juego (las lee su modulo de servidor, el "chat" que
+// exporta: quien jugo, contra quien o contra la compu, cuando empezo y termino, quien gano y por que)
 // y el tiempo de uso (uso.js: los segundos que cada persona tuvo cada juego abierto y lo estaba usando, desde
 // que se mide). Las partidas con invitados se guardan desde el 2026-11-03 (como amistosas); antes, de ellos quedaba solo el tiempo.
 //
@@ -11,16 +11,15 @@
 const AR = 3 * 3600 * 1000; // Argentina, UTC-3 todo el año
 const DIA = 864e5;
 const RANGOS = { '7d': { dias: 7, paso: 'dia' }, '4s': { dias: 28, paso: 'dia' }, '3m': { dias: 91, paso: 'semana' }, '1a': { dias: 365, paso: 'mes' }, todo: { dias: 0, paso: 'mes' } };
-const JUEGOS = [
-  { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
-  { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
-  { id: 'pool', nombre: 'Pool' },
-  { id: 'curveball', nombre: 'Curveball' },
-  // WORGS: los dos modos como dos juegos (el tiempo de uso de antes, cuando solo habia Shoppa, queda en Shoppa)
-  { id: 'shoppa', nombre: 'WORGS: Shoppa' }, { id: 'worgsnormal', nombre: 'WORGS: Normal' },
-  // BACITY no tiene partidas (es una ciudad abierta): de ella queda el tiempo con el juego abierto
-  { id: 'bacity', nombre: 'BACITY' },
-];
+// Los juegos de las estadisticas: los de las fichas, con su nombre (WORGS: los dos modos como dos juegos; BACITY no tiene
+// partidas, es una ciudad abierta: de ella queda el tiempo con el juego abierto). medianas: lo que se cuenta por
+// partida en cada juego ("jugadas" en el ajedrez, "rondas" en GlobalSiege), de su "chat"
+function juegos() {
+  const registro = require('./juegos-registro.js');
+  const medianas = new Map();
+  try { for (const { ficha, chat } of registro.conChat()) medianas.set(ficha.id, chat.medianas); } catch { /* sin el registro */ }
+  return registro.lista().flatMap((f) => f.estadisticas.map((e) => ({ id: e.id, nombre: e.nombre, medianas: medianas.get(f.id) || [] })));
+}
 const COMPU = -1;
 const TOPE_PARTIDA = 2 * 3600 * 1000; // una partida que quedo abierta dias (el truco por turnos) no cuenta como horas jugando
 
@@ -33,47 +32,18 @@ const diaAR = (ms) => new Date(ms - AR).toISOString().slice(0, 10);
 const inicioDiaAR = (dia) => Date.parse(dia + 'T00:00:00Z') + AR; // el dia de Argentina, en ms
 const filas = (sql, ...a) => { try { return db.prepare(sql).all(...a); } catch { return []; } };
 
-// Todas las partidas terminadas, de los cuatro juegos, con la misma forma
+// Todas las partidas terminadas, de todos los juegos, con la misma forma (cada juego las lee de sus tablas)
 function partidas() {
   const out = [];
-  for (const r of filas('SELECT id, j1, j2, puntos, flor, ganador, motivo, inicio, fin, compu FROM puente_truco_partidas')) {
-    out.push({ juego: 'truco', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
-      detalle: ['A ' + r.puntos + (r.flor ? ', con flor' : ', sin flor')] });
+  let js = [];
+  try { js = require('./juegos-registro.js').conChat(); } catch (err) { warn('estadisticas de juegos: registro:', err.message); }
+  for (const { chat } of js) {
+    if (!chat.partidas) continue;
+    try { for (const p of chat.partidas.leer()) if (p) out.push(p); } catch { /* sin la tabla todavia */ }
   }
-  for (const r of filas('SELECT id, j1, j2, tablero, ganador, motivo, jugadas, inicio, fin, compu FROM puente_funball_partidas')) {
-    out.push({ juego: 'funball', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
-      detalle: ['Tablero ' + r.tablero], jugadas: r.jugadas });
-  }
-  for (const r of filas('SELECT id, blancas, negras, ganador, resultado, motivo, jugadas, ritmo, inicio, fin, compu FROM puente_ajedrez_partidas')) {
-    out.push({ juego: 'ajedrez', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.blancas, r.negras].filter(x => x > 0), ganador: r.resultado === '1/2-1/2' ? null : r.ganador,
-      motivo: r.motivo || '', detalle: [r.ritmo && r.ritmo !== 'libre' ? 'Con reloj (' + r.ritmo + ')' : 'Sin reloj'], jugadas: r.jugadas, empate: r.resultado === '1/2-1/2' });
-  }
-  for (const r of filas('SELECT id, j1, j2, ganador, motivo, tiros, inicio, fin, compu FROM puente_pool_partidas')) {
-    out.push({ juego: 'pool', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
-      detalle: ['8 bolas'], jugadas: r.tiros });
-  }
-  for (const r of filas('SELECT id, j1, j2, ganador, motivo, vidas, inicio, fin, compu, amistosa FROM puente_curveball_partidas')) {
-    out.push({ juego: 'curveball', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
-      detalle: ['3 vidas' + (r.amistosa ? ', amistosa' : '')] });
-  }
-  // WORGS: de 2 a 5 personas; el modo decide en cual de los dos juegos cuenta
-  for (const r of filas('SELECT id, modo, jugadores, ganador, motivo, inicio, fin FROM puente_worgs_partidas')) {
-    let humanos = []; try { humanos = (JSON.parse(r.jugadores) || []).filter(x => x > 0); } catch { /* sin jugadores */ }
-    out.push({ juego: r.modo === 'normal' ? 'worgsnormal' : 'shoppa', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: false, humanos, ganador: r.ganador || null, motivo: r.motivo || '',
-      detalle: [humanos.length + ' jugadores'] });
-  }
-  // GlobalSiege: los asientos (0 = la compu) y quien gano cada uno (puente_mr_resultados)
-  const res = new Map();
-  for (const r of filas('SELECT partida, user_id, gano FROM puente_mr_resultados')) { if (!res.has(r.partida)) res.set(r.partida, []); res.get(r.partida).push(r); }
-  for (const r of filas('SELECT id, jugadores, ganador, humanos, rondas, inicio, fin FROM puente_mr_partidas')) {
-    let asientos = []; try { asientos = JSON.parse(r.jugadores) || []; } catch { /* sin asientos */ }
-    const humanos = [...new Set(asientos.filter(x => x > 0))];
-    const gano = (res.get(r.id) || []).find(x => x.gano);
-    const ganador = r.ganador > 0 ? r.ganador : gano ? gano.user_id : (r.ganador === 0 ? COMPU : null);
-    out.push({ juego: 'globalsiege', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: asientos.some(x => !(x > 0)), humanos, ganador, motivo: '',
-      detalle: [asientos.length + ' ejércitos' + (humanos.length > 1 ? ', ' + humanos.length + ' personas' : '')], rondas: r.rondas });
-  }
-  return out;
+  // (en el orden en que terminaron: los empates, como el juego favorito de alguien que jugo lo mismo a dos, van por la
+  // primera partida, no por el orden de las fichas)
+  return out.sort((a, b) => (a.fin || 0) - (b.fin || 0));
 }
 
 // Los cortes de la serie (dia, semana o mes) entre dos dias de Argentina
@@ -145,6 +115,7 @@ function calcular(rango) {
   const durTotal = (l) => Math.round(l.reduce((a, p) => a + Math.min(TOPE_PARTIDA, Math.max(0, p.fin - p.inicio)), 0) / 60000);
 
   // Por juego
+  const JUEGOS = juegos();
   const porJuego = JUEGOS.map(J => {
     const l = enPeriodo.filter(p => p.juego === J.id), la = antes.filter(p => p.juego === J.id);
     const conCompu = l.filter(p => p.compu && p.humanos.length);
@@ -159,8 +130,7 @@ function calcular(rango) {
     }
     const abandonos = l.filter(p => /abandon|rend/.test(p.motivo)).length;
     const extra = {};
-    if (J.id === 'ajedrez' || J.id === 'funball') { const js = l.map(p => p.jugadas).filter(x => x > 0); extra.jugadas = Math.round(mediana(js)); }
-    if (J.id === 'globalsiege') { const rs = l.map(p => p.rondas).filter(x => x > 0); extra.rondas = Math.round(mediana(rs)); }
+    for (const k of J.medianas) extra[k] = Math.round(mediana(l.map(p => p[k]).filter(x => x > 0)));
     return {
       id: J.id, nombre: J.nombre, partidas: l.length, antes: la.length, contraCompu: conCompu.length, contraPersonas: vsPersonas(l),
       jugadores: jugadores(l).size, minutos: Math.round((segJuego.get(J.id) || 0) / 60), minutosPartidas: Math.round(dur.reduce((a, b) => a + b, 0)), personasUso: (personasJuego.get(J.id) || new Set()).size,
@@ -231,7 +201,9 @@ function calcular(rango) {
 
   // Ahora: las mesas esperando rival y las partidas en juego
   const ahoraJ = { esperando: 0, jugando: 0 };
-  for (const t of ['puente_truco_mesas', 'puente_funball_mesas', 'puente_ajedrez_mesas', 'puente_mr_mesas', 'puente_pool_mesas', 'puente_curveball_mesas', 'puente_shoppa_mesas']) {
+  let tablas = [];
+  try { tablas = require('./juegos-registro.js').conChat().map(x => x.chat.mesas).filter(Boolean); } catch { /* sin el registro */ }
+  for (const t of tablas) {
     // ("jugando": las que se movieron en el ultimo dia; las que quedaron abandonadas no cuentan)
     for (const r of filas(`SELECT estado, actualizado FROM ${t}`)) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }

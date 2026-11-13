@@ -190,8 +190,10 @@ function calcular(rango) {
   const reacciones = reac(sqlIni, sqlFin);
   const reaccionesAnt = reac(sqlIniAnt, sqlIni);
   const msIni = Date.parse(ini + 'T03:00:00Z'), msIniAnt = Date.parse(iniAnt + 'T03:00:00Z');
-  // (todos los juegos: GlobalSiege y WORGS tambien; si una tabla no esta todavia, cuenta 0)
-  const partidasDe = (a, b) => ['puente_truco_partidas', 'puente_ajedrez_partidas', 'puente_funball_partidas', 'puente_pool_partidas', 'puente_curveball_partidas', 'puente_mr_partidas', 'puente_worgs_partidas']
+  // (todos los juegos, con la tabla de partidas que dice cada uno; si una tabla no esta todavia, cuenta 0)
+  let tablasPartidas = [];
+  try { tablasPartidas = require('./juegos-registro.js').conChat().map(x => x.chat.partidas && x.chat.partidas.tabla).filter(Boolean); } catch { /* sin el registro */ }
+  const partidasDe = (a, b) => tablasPartidas
     .reduce((s, t) => s + contar(`SELECT COUNT(*) n FROM ${t} WHERE fin >= ? AND fin < ?`, a, b), 0);
   const partidas = partidasDe(msIni, 9e15), partidasAnt = partidasDe(msIniAnt, msIni);
   const publicaciones = contar("SELECT COUNT(*) n FROM puente_mercado WHERE creado >= ? AND creado < ? AND IFNULL(origen, '') != 'foro'", msIni, 9e15);
@@ -228,7 +230,9 @@ function calcular(rango) {
   try {
     const U = require('./uso.js');
     const a = U.entre(ini, fin), b = U.entre(iniAnt, finAnt);
-    const juegos = { truco: 'Truco', ajedrez: 'Ajedrez', funball: 'Funball', globalsiege: 'GlobalSiege', pool: 'Pool', curveball: 'Curveball', shoppa: 'WORGS: Shoppa', worgsnormal: 'WORGS: Normal', bacity: 'BACITY' };
+    // (el nombre de cada juego, de su ficha: los de las estadisticas, WORGS con sus dos modos)
+    const juegos = {};
+    for (const f of require('./juegos-registro.js').lista()) for (const e of f.estadisticas) juegos[e.id] = e.nombre;
     const nombreSec = (k) => k.startsWith('c:') ? (nombres.has(Number(k.slice(2))) ? '#' + nombres.get(Number(k.slice(2))).name : 'Otro canal')
       : k === 'dm' ? 'Mensajes privados' : k.startsWith('j:') ? (juegos[k.slice(2)] ? 'Juegos · ' + juegos[k.slice(2)] : 'Juegos (el menú)') : k === 'mercado' ? 'Marketplace'
         : k === 'foro' ? 'Foro' : k === 'miembros' ? 'Panel de administradores' : 'Otras pantallas';

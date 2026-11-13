@@ -20,7 +20,8 @@
 //     "version": 1,                        se suma a las direcciones (?v=) para que el navegador no use la vieja
 //     "eventos": { "inicio": "truco:inicio", "estado": "truco:estado", "cambio": "truco:cambio", ... },
 //     "enlace": { "param": "truco", "desc": "..." },
-//     "servidor": ["truco.js"]             sus modulos en tools/puente/
+//     "servidor": ["truco.js"]             sus modulos en tools/puente/ (puente.js prende los que tienen setup; el
+//                                          que exporta "chat" dice lo que el chat lee del juego: conChat())
 //   }
 // Una ficha que no cumple se ignora (y queda anotado), asi un error en un juego no tira a los demas.
 const fs = require('fs');
@@ -177,4 +178,33 @@ function paraPaginas() {
   return JSON.stringify({ mesas, invitados }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
-module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, _limpiar: limpiar };
+// Los modulos de servidor de todos los juegos (su "servidor"), sin repetir, en el orden de las fichas: puente.js los
+// prende al arrancar
+function servidores() {
+  const out = [];
+  for (const j of lista()) for (const m of j.servidor) if (!out.includes(m)) out.push(m);
+  return out;
+}
+
+// Lo que el chat lee de cada juego: el "chat" que exporta su modulo de servidor (mesas, partidas, invitados; ver
+// truco.js) -> [{ ficha, chat }]. Los juegos que no lo tienen (o cuyo modulo no esta) no aparecen.
+const TABLA = /^puente_[a-z0-9_]{2,40}$/;
+function conChat() {
+  const out = [];
+  for (const j of lista()) {
+    for (const m of j.servidor) {
+      let x = null;
+      try { x = require(path.join(__dirname, m)); } catch { continue; }
+      const c = x && x.chat;
+      if (!c || typeof c !== 'object') continue;
+      // (los nombres de tabla van en el SQL: solo los que tienen forma de tabla del puente)
+      const mesas = TABLA.test(c.mesas || '') ? c.mesas : null;
+      const p = c.partidas && TABLA.test(c.partidas.tabla || '') && typeof c.partidas.leer === 'function' ? c.partidas : null;
+      out.push({ ficha: j, chat: { ...c, mesas, partidas: p, medianas: (p && Array.isArray(p.medianas) ? p.medianas : []).filter((k) => /^[a-z]{2,16}$/.test(k)) } });
+      break;
+    }
+  }
+  return out;
+}
+
+module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, servidores, conChat, _limpiar: limpiar };

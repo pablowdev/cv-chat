@@ -729,4 +729,27 @@ function revancha(me, d) {
   return { ok: true, id: n.id };
 }
 
-module.exports = { setup, _test: { games, salasDeInvitados, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, sinMapa, view, lobby, seat, mapasComunidad, DIR_COMUNIDAD } };
+
+// Lo que el chat lee de este juego (cv-chat lo encuentra por la ficha, en "servidor"): sus mesas, para "Ahora en
+// el club" y la pantalla de entrar (portada.js); sus partidas terminadas, para las estadisticas (juegos-estadisticas.js
+// y panel-estadisticas.js); y como levantar a un invitado que cerro la app (invitados-fuera.js)
+// (sin "detalle": sus mesas no salen en la pantalla de entrar ni en "Ahora en el club", solo se cuentan)
+const paraElChat = {
+  mesas: 'puente_shoppa_mesas',
+  partidas: {
+    tabla: 'puente_worgs_partidas',
+    // de 2 a 5 personas; el modo decide en cual de los dos juegos de las estadisticas cuenta
+    leer: () => db.prepare('SELECT id, modo, jugadores, ganador, motivo, inicio, fin FROM puente_worgs_partidas').all().map((r) => {
+      let humanos = []; try { humanos = (JSON.parse(r.jugadores) || []).filter((x) => x > 0); } catch { /* sin jugadores */ }
+      return { juego: r.modo === 'normal' ? 'worgsnormal' : 'shoppa', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: false, humanos, ganador: r.ganador || null, motivo: r.motivo || '',
+        detalle: [humanos.length + ' jugadores'] };
+    }),
+  },
+  invitados: {
+    mesas: () => games,
+    sentados: (g) => (g.jugadores || []).filter((u, i) => u > 0 && !(g.fuera || [])[i]),
+    sacar: (g, uid) => abandonar(uid, { id: g.id }),
+  },
+};
+
+module.exports = { setup, chat: paraElChat, _test: { games, salasDeInvitados, create, join, listo, empezar, snapshot, finTurno, abandonar, revancha, sinMapa, view, lobby, seat, mapasComunidad, DIR_COMUNIDAD } };
