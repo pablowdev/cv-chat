@@ -14,6 +14,10 @@
 //     "web": "truco",                      su carpeta en tools/puente/web/ (y su direccion /puente/<web>/)
 //     "archivos": ["juego.js", "juego.css"],   lo que se sirve de esa carpeta
 //     "cliente": { "tipo": "pantalla" | "ventana", "global": "puenteTruco", "js": "juego.js", "css": "juego.css" },
+//     "vistas": { "mesa": "mesa", "crear": "crear" },   vista de la pila de Juegos -> funcion del juego que la abre
+//     "mesa": "mesa",                      la vista de una mesa (para entrar desde la lista de mesas)
+//     "antes": ["mapa.js"],                lo que se baja antes que cliente.js (de sus archivos)
+//     "version": 1,                        se suma a las direcciones (?v=) para que el navegador no use la vieja
 //     "eventos": { "inicio": "truco:inicio", "estado": "truco:estado", "cambio": "truco:cambio", ... },
 //     "enlace": { "param": "truco", "desc": "..." },
 //     "servidor": ["truco.js"]             sus modulos en tools/puente/
@@ -51,10 +55,17 @@ function limpiar(f, archivo) {
   if (servidor.some((m) => typeof m !== 'string' || !/^[\w-]+\.(js|cjs)$/.test(m))) return mal('un modulo de servidor con nombre invalido');
   const param = f.enlace && f.enlace.param;
   if (param != null && !ID.test(param)) return mal('enlace.param invalido');
+  // las vistas de la pila de Juegos que son de este juego -> la funcion del juego que abre cada una
+  const vistas = {};
+  for (const [k, v] of Object.entries(f.vistas || {})) { if (!/^[a-zA-Z]{2,24}$/.test(k) || !/^[a-zA-Z]{2,24}$/.test(v || '') || k === 'inicio') return mal(`vista ${k} invalida`); vistas[k] = v; }
+  const mesa = f.mesa == null ? null : vistas[f.mesa] ? f.mesa : undefined; if (mesa === undefined) return mal('mesa no es una de sus vistas');
+  const antes = Array.isArray(f.antes) ? f.antes : [];
+  if (antes.some((a) => typeof a !== 'string' || !archivos.includes(a))) return mal('antes: tiene que ser de sus archivos');
+  const version = Number.isInteger(f.version) && f.version > 0 && f.version < 100000 ? f.version : 1;
   return {
     id: f.id, nombre, sub: texto(f.sub, 80) || '', orden: Number.isFinite(f.orden) ? f.orden : 100,
     tapa, fondo: texto(f.fondo, 120) || '#1e1f22', ajuste: f.ajuste === 'contain' ? 'contain' : null,
-    web, archivos,
+    web, archivos, vistas, mesa, antes, version,
     cliente: tipo ? { tipo, global: /^[A-Za-z_$][\w$]{0,40}$/.test(cli.global || '') ? cli.global : null, js: ARCHIVO.test(cli.js || '') ? cli.js : null, css: ARCHIVO.test(cli.css || '') ? cli.css : null } : null,
     eventos, enlace: param ? { param, desc: texto(f.enlace.desc, 200) || '' } : null, servidor,
   };
