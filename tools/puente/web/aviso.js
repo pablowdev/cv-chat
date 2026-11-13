@@ -10567,7 +10567,7 @@ document.addEventListener('pointerdown', (ev) => {
   let page = null, stack = [], tickT = null;
   function close() {
     if (!page) return;
-    soltarCurveball();
+    soltarVentana();
     page.remove(); page = null; stack = []; clearInterval(tickT);
     salirJuegos();
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
@@ -10619,10 +10619,10 @@ document.addEventListener('pointerdown', (ev) => {
   }
   function show(view, arg) {
     clearInterval(tickT);
-    soltarCurveball();
+    soltarVentana();
     page.textContent = '';
     salirJuegos(view);
-    const propias = { inicio, shJuego, bcJuego, cbJuego };
+    const propias = { inicio };
     if (!propias[view]) { abrirJuego(null, view, arg); return; } // (una vista de un juego: la dice su ficha)
     try { propias[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
@@ -10784,7 +10784,7 @@ document.addEventListener('pointerdown', (ev) => {
   let fichasP = null;
   const fichas = () => fichasP || (fichasP = fetch('/puente/api/juegos/registro', { cache: 'no-cache' })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error('registro ' + r.status))))
-    .then((d) => (d.juegos || []).filter((j) => j.web && j.cliente && j.cliente.tipo === 'pantalla' && j.cliente.global && j.cliente.js))
+    .then((d) => (d.juegos || []).filter((j) => j.cliente && (j.cliente.tipo === 'ventana' ? j.cliente.url && Object.keys(j.vistas || {}).length : j.web && j.cliente.global && j.cliente.js)))
     .catch((e) => { fichasP = null; throw e; }));
   fichas().catch(() => { /* se vuelve a pedir al abrir un juego */ });
   const cargas = new Map(); // id del juego -> su pantalla lista
@@ -10815,10 +10815,11 @@ document.addEventListener('pointerdown', (ev) => {
     fichas().then((js) => {
       j = id ? js.find((x) => x.id === id) : js.find((x) => x.vistas && x.vistas[vista]);
       if (!j) throw new Error('sin ficha para ' + (id || vista));
-      return cargarJuego(j);
+      return j.cliente.tipo === 'ventana' ? null : cargarJuego(j);
     }).then(() => {
       if (!page || stack[stack.length - 1] !== top) return;
       page.textContent = '';
+      if (j.cliente.tipo === 'ventana') return ventana(j, arg);
       window[j.cliente.global][vista === 'inicio' ? 'inicio' : j.vistas[vista]](arg);
     }).catch((err) => { console.warn('[puente] juegos:', err); toast(`No se pudo abrir ${j ? j.nombre : id ? nombreDe(id) : 'el juego'}. Probá de nuevo.`, 'error'); });
   }
@@ -10990,67 +10991,40 @@ document.addEventListener('pointerdown', (ev) => {
     }
     if (lista.length > 8) box.appendChild(el('div', 'jg-fmeta jg-mesas-mas', `y ${lista.length - 8} más: entrá a cada juego para verlas`));
   }
-  // ── WORGS (en prueba; antes se llamaba Shoppa) ──
-  // En un iframe del mismo origen (web/worgs/juego.html): su CSS y su JS no se mezclan con el chat. Las salas y
-  // los turnos los lleva shoppa.js. Los eventos de adentro no llegan al chat, así que se le avisa al tiempo de uso
-  // (uso.js) para que cuente mientras se juega. (Proyecto Gusanos se sacó: WORGS es el que lo reemplaza.)
-  let worgsIfr = null;
-  const usoWorgs = () => { try { const w = worgsIfr && worgsIfr.isConnected && worgsIfr.contentWindow; return w && w.worgsModo && w.worgsModo() === 'normal' ? 'worgsnormal' : 'shoppa'; } catch { return 'shoppa'; } };
-  function shJuego(mesa) {
-    page.appendChild(head('WORGS', botonEnlace('/app?juegos=worgs', 'WORGS · __PUENTE_APP__')));
-    const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
-    ifr.src = '/puente/worgs/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
-    worgsIfr = ifr;
-    // (microphone: para grabar las voces del equipo en el editor de WORGS)
-    ifr.title = 'WORGS'; ifr.allow = 'autoplay; fullscreen; microphone'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+  // ── Los juegos en ventana (WORGS, BACITY, Curveball...): un iframe del mismo origen, con su ficha ──
+  // Su CSS y su JS no se mezclan con el chat. La ficha dice la direccion de su pagina, que puede pedir (microfono para
+  // las voces de WORGS o el chat por cercania de BACITY, mando, pantalla completa), si toma el teclado al abrir y su
+  // evento "salir" (Curveball: que el servidor deje de mandar la partida al dejar la mesa). Los eventos de adentro no
+  // llegan al chat, asi que se le avisa al tiempo de uso (uso.js) para que cuente mientras se juega.
+  const ventanas = new Map(); // id del juego -> su iframe (el ultimo que se abrio)
+  let ventanaSalir = null;    // { evento, id }: lo que hay que avisarle al servidor al dejar la ventana
+  function soltarVentana() {
+    const v = ventanaSalir; ventanaSalir = null;
+    if (!v) return;
+    try { const a = app(); if (a && a.socket) a.socket.emit(v.evento, { id: v.id }); } catch { /* sin socket */ }
+  }
+  // WORGS: el modo que se esta jugando (para el tiempo de uso: "WORGS: Shoppa" o "WORGS: Normal")
+  const usoWorgs = () => { try { const f = ventanas.get('shoppa'), w = f && f.isConnected && f.contentWindow; return w && w.worgsModo && w.worgsModo() === 'normal' ? 'worgsnormal' : 'shoppa'; } catch { return 'shoppa'; } };
+  function ventana(j, mesa) {
+    const c = j.cliente;
+    page.appendChild(head(j.nombre, botonEnlace('/app?juegos=' + ((j.enlace && j.enlace.param) || j.id), j.nombre + ' · __PUENTE_APP__')));
+    const b = el('div', c.clase), marco = el('div', c.clase + '-marco'), ifr = el('iframe', c.clase + '-iframe');
+    ifr.src = c.url + '?v=' + (j.version || 1) + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
+    ventanas.set(j.id, ifr);
+    if (mesa && j.eventos && j.eventos.salir) ventanaSalir = { evento: j.eventos.salir, id: mesa };
+    ifr.title = j.nombre; ifr.allow = (c.permisos || []).join('; '); ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
     let ultimo = 0;
     const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
-    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
-    marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
-  }
-  // ── BACITY ──
-  // Igual que WORGS: en un iframe del mismo origen, pero la pagina la sirve el servidor del juego (/bacity/).
-  // El juego pide su pase con la sesion del chat (bacity.js). (microphone: el chat de voz por cercania)
-  function bcJuego() {
-    page.appendChild(head('BACITY', botonEnlace('/app?juegos=bacity', 'BACITY · __PUENTE_APP__')));
-    const b = el('div', 'jg-gusanos'), marco = el('div', 'jg-gusanos-marco'), ifr = el('iframe', 'jg-gusanos-iframe');
-    ifr.src = '/bacity/?v=1';
-    ifr.title = 'BACITY'; ifr.allow = 'autoplay; fullscreen; microphone; gamepad'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
-    let ultimo = 0;
-    const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
-    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); w.focus(); } catch { /* otro origen */ } });
-    marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
-  }
-  // ── Curveball ──
-  // Como WORGS, el juego entero (sala, mesas, desafios, compu, chat y revancha) vive en un iframe del
-  // mismo origen (/puente/curveball/juego.html) y habla con el socket del chat por parent.app.socket.
-  // Las salas y las partidas las lleva curveball.js; el motor online viene del repo del juego.
-  let cbIfr = null, cbMesaAbierta = null;
-  // Al salir del iframe (o cerrar los juegos) se le avisa al servidor que deje de mandar los snapshots.
-  function soltarCurveball() {
-    const id = cbMesaAbierta; cbMesaAbierta = null;
-    if (!id) return;
-    try { const a = app(); if (a && a.socket) a.socket.emit('curveball:salir', { id }); } catch { /* sin socket */ }
-  }
-  function cbJuego(mesa) {
-    page.appendChild(head('Curveball', botonEnlace('/app?juegos=curveball', 'Curveball · __PUENTE_APP__')));
-    const b = el('div', 'jg-curveball'), marco = el('div', 'jg-curveball-marco'), ifr = el('iframe', 'jg-curveball-iframe');
-    ifr.src = '/puente/curveball/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
-    cbIfr = ifr; cbMesaAbierta = mesa || null;
-    ifr.title = 'Curveball'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
-    let ultimo = 0;
-    const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
-    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
+    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); if (c.foco) w.focus(); } catch { /* otro origen */ } });
     marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
   }
   async function inicio(which) {
-    // la pila queda en la pantalla del juego, para que el tiempo de uso diga "curveball" y no "juegos"
-    if (which === 'curveball') { if (stack.length) stack[stack.length - 1] = ['cbJuego']; return cbJuego(); }
-    // la pila queda en la pantalla del juego, para que el tiempo de uso diga "shoppa" y no "juegos"
-    if (which === 'shoppa') { if (stack.length) stack[stack.length - 1] = ['shJuego']; return shJuego(); }
-    if (which === 'bacity') { if (stack.length) stack[stack.length - 1] = ['bcJuego']; return bcJuego(); }
-    // la sala de un juego de pantalla (el que tenga ficha); si no, la biblioteca
-    if (which && (await fichas().catch(() => [])).some((j) => j.id === which)) return page ? abrirJuego(which, 'inicio') : undefined;
+    // un juego con ficha: su sala (los de pantalla) o su ventana (la pila queda en la vista del juego, para que el
+    // tiempo de uso diga "shoppa" y no "juegos"); si no, la biblioteca
+    const fj = which ? (await fichas().catch(() => [])).find((j) => j.id === which) : null;
+    if (fj && !page) return;
+    if (fj && fj.cliente.tipo === 'ventana') { const v = Object.keys(fj.vistas)[0]; if (stack.length) stack[stack.length - 1] = [v]; return abrirJuego(fj.id, v); }
+    if (fj) return abrirJuego(which, 'inicio');
     if (!page) return;
     return biblioteca();
   }
