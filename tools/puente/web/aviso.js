@@ -10780,7 +10780,6 @@ document.addEventListener('pointerdown', (ev) => {
   // Su pantalla esta aparte (/puente/<web>/ y lo que diga su ficha) y se baja recien la primera vez que se abre. La
   // ficha dice que vistas de la pila son suyas ('mesa', 'fbMesa', 'mrCrear'...) y que funcion del juego abre cada una,
   // su vista de mesa, lo que hay que bajar antes (el mapa de GlobalSiege) y su hoja de estilo.
-  const mrVisto = new Map(), plVisto = new Map(); // (el ultimo estado de cada mesa de GlobalSiege y Pool, para el numerito)
   let fichasP = null;
   const fichas = () => fichasP || (fichasP = fetch('/puente/api/juegos/registro', { cache: 'no-cache' })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error('registro ' + r.status))))
@@ -11135,12 +11134,14 @@ document.addEventListener('pointerdown', (ev) => {
     if (badgeT) return;
     badgeT = setTimeout(async () => {
       badgeT = null;
-      const [d, f, aj, gs, po, cb, gu] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio'), emit('curveball:inicio'), emit('shoppa:inicio')]);
+      // los juegos con mesas, segun su ficha (los que tienen "inicio" y "cambio"; BACITY no tiene mesas)
+      const js = await fichas().catch(() => null);
+      if (!js) return;
+      const rs = await Promise.all(js.filter((j) => j.eventos && j.eventos.inicio && j.eventos.cambio).map((j) => emit(j.eventos.inicio)));
       // (sin contar la partida que esta abierta en la pantalla: ahi ya se esta jugando)
       const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
       const cuenta = (r) => (r.error || !r.mias ? 0 : r.mias.filter(m => m.teToca && String(m.id) !== abierta).length);
-      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po) + cuenta(cb) + cuenta(gu);
-      setBadge(n);
+      setBadge(rs.reduce((n, r) => n + cuenta(r), 0));
     }, 2000);
   }
   function addButtons() {
@@ -11168,35 +11169,47 @@ document.addEventListener('pointerdown', (ev) => {
     if (!a || !a.socket || !addButtons()) { setTimeout(wait, ++tries < 120 ? 500 : 3000); return; }
     setInterval(addButtons, 2000);
     refreshBadge();
-    a.socket.on('truco:estado', (s) => { if (page && window.puenteTruco) window.puenteTruco.estado(s); refreshBadge(); });
-    a.socket.on('truco:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'truco')) show('inicio', t[1]); });
-    a.socket.on('funball:estado', (s) => { if (page && window.puenteFunball) window.puenteFunball.estado(s); refreshBadge(); });
-    a.socket.on('funball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'funball')) show('inicio', t[1]); });
-    a.socket.on('ajedrez:estado', (s) => { if (page && window.puenteAjedrez) window.puenteAjedrez.estado(s); refreshBadge(); });
-    a.socket.on('ajedrez:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'ajedrez')) show('inicio', t[1]); });
-    a.socket.on('mr:estado', (s) => {
-      if (page && window.puenteMR) window.puenteMR.estado(s);
-      const k = s.estado + ':' + !!s.teToca;
-      if (mrVisto.get(s.id) !== k) { mrVisto.set(s.id, k); refreshBadge(); }
-    });
-    a.socket.on('mr:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'globalsiege')) show('inicio', t[1]); });
-    a.socket.on('pool:estado', (s) => {
-      if (page && window.puentePool) window.puentePool.estado(s);
-      const k = s.estado + ':' + !!s.teToca;
-      if (plVisto.get(s.id) !== k) { plVisto.set(s.id, k); refreshBadge(); }
-    });
-    a.socket.on('pool:apunta', (m) => { if (page && window.puentePool) window.puentePool.apunta(m); });
+    // Lo que llega de cada juego, segun su ficha (juegos-registro.js): su estado (a la mesa abierta, y el numerito si
+    // cambio el turno), sus cambios (se arma de nuevo su sala o la biblioteca) y sus eventos propios, que van a la
+    // funcion del juego con ese nombre (el apuntado del Pool: "apunta"). Si el registro no contesta, se reintenta.
+    const visto = new Map(); // "juego:mesa" -> "estado:teToca" (para no pedir el numerito en cada jugada)
+    let conectados = false;
+    (function conectarJuegos() {
+      fichas().then((js) => {
+        if (conectados) return;
+        conectados = true;
+        for (const j of js) {
+          const ev = j.eventos || {}, pantalla = j.cliente.tipo === 'pantalla';
+          const juego = () => (pantalla ? window[j.cliente.global] : null);
+          if (ev.estado && pantalla) a.socket.on(ev.estado, (st) => {
+            const m = juego();
+            if (page && m) m.estado(st);
+            // (los que dicen "teToca", GlobalSiege y Pool: el numerito solo si cambio el turno; los demas lo dicen de
+            // otra manera, "turno", y se pide siempre: refreshBadge ya espera 2 segundos entre pedido y pedido)
+            if (st.teToca === undefined) { refreshBadge(); return; }
+            const k = st.estado + ':' + !!st.teToca, id = j.id + ':' + st.id;
+            if (visto.get(id) !== k) { visto.set(id, k); refreshBadge(); }
+          });
+          // (un juego en ventana arma su sala adentro: aca solo se arma de nuevo la biblioteca)
+          if (ev.cambio) a.socket.on(ev.cambio, () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || (pantalla && t[1] === j.id))) show('inicio', t[1]); });
+          if (pantalla) for (const [k, nombre] of Object.entries(ev)) {
+            if (['inicio', 'estado', 'cambio', 'ver', 'unirse', 'salir'].includes(k)) continue;
+            a.socket.on(nombre, (x) => { const m = juego(); if (page && m && typeof m[k] === 'function') m[k](x); });
+          }
+        }
+      }).catch(() => setTimeout(conectarJuegos, 5000));
+    })();
     // El zumbido de otro jugador (chat-partida.js), de cualquier juego
     a.socket.on('juego:zumbido', (z) => { if (window.puenteZumbido) window.puenteZumbido.recibido(z); });
-    a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
-    a.socket.on('curveball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'curveball')) show('inicio', t[1]); });
-    a.socket.on('shoppa:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && !t[1]) show('inicio'); });
+    // Al reconectar: el juego que tenga una mesa abierta la pide de nuevo (sin animar lo que paso mientras tanto)
     a.socket.on('connect', () => {
-      if (page && window.puenteFunball && window.puenteFunball.abierta()) emit('funball:ver', { id: window.puenteFunball.abierta() }).then(d => d.partida && window.puenteFunball.estado(d.partida, true));
-      else if (page && window.puenteAjedrez && window.puenteAjedrez.abierta()) emit('ajedrez:ver', { id: window.puenteAjedrez.abierta() }).then(d => d.partida && window.puenteAjedrez.estado(d.partida));
-      else if (page && window.puenteMR && window.puenteMR.abierta()) emit('mr:ver', { id: window.puenteMR.abierta() }).then(d => d.partida && window.puenteMR.estado(d.partida));
-      else if (page && window.puentePool && window.puentePool.abierta()) emit('pool:ver', { id: window.puentePool.abierta() }).then(d => d.partida && window.puentePool.estado(d.partida));
-      else if (page && window.puenteTruco && window.puenteTruco.abierta()) emit('truco:ver', { id: window.puenteTruco.abierta() }).then(d => d.partida && window.puenteTruco.estado(d.partida));
+      if (!page) return;
+      fichas().then((js) => {
+        for (const j of js) {
+          const m = j.cliente.tipo === 'pantalla' && window[j.cliente.global], id = m && m.abierta && m.abierta();
+          if (id && j.eventos && j.eventos.ver) { emit(j.eventos.ver, { id }).then((d) => d.partida && m.estado(d.partida, true)); return; }
+        }
+      }).catch(() => { /* sin registro: no hay mesa que pedir */ });
     });
     if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
     document.addEventListener('click', (e) => {
