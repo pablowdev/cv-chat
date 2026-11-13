@@ -799,14 +799,16 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
-  // Truco, Funball y Ajedrez (truco.js, funball.js, ajedrez.js): su pantalla (juego.js; cada uno tiene su repositorio
-  // aparte), en web/<juego>/. Con huella, como aviso.js. (Los dibujos y sonidos del Funball van por sus rutas, arriba)
-  const trArch = req.method === 'GET' && /^\/puente\/(truco|funball|ajedrez)\/(juego\.js)$/.exec(p);
+  // Truco, Funball y Ajedrez (truco.js, funball.js, ajedrez.js): su pantalla (juego.js y su estilo, juego.css; cada uno
+  // tiene su repositorio aparte), en web/<juego>/. Con huella, como aviso.js. (Los dibujos y sonidos del Funball van por
+  // sus rutas, arriba)
+  const trArch = req.method === 'GET' && /^\/puente\/(truco|funball|ajedrez)\/(juego\.(?:js|css))$/.exec(p);
   if (trArch) {
     const file = path.join(STATIC, trArch[1], trArch[2]);
     let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
     const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
     if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    if (trArch[2] === 'juego.css') return send(res, 200, 'text/css', fs.readFileSync(file), { ETag: etag, 'Cache-Control': 'no-cache' });
     const body = fs.readFileSync(file).toString('utf8').replace(/__PUENTE_APP__/g, appName().replace(/[\\'"`\r\n<>]/g, ''));
     return send(res, 200, 'application/javascript', body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }

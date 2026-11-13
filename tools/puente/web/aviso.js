@@ -10829,8 +10829,14 @@ document.addEventListener('pointerdown', (ev) => {
   function cargarJuego(j) {
     if (!cargas.has(j.id)) {
       const base = '/puente/' + j.web + '/', v = '?v=' + (j.version || 1), c = j.cliente;
-      if (c.css && !document.querySelector(`link[data-juego="${j.id}"]`)) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = base + c.css + v; css.dataset.juego = j.id; document.head.appendChild(css); }
-      cargas.set(j.id, (window[c.global] ? Promise.resolve() : (j.antes || []).reduce((p, a) => p.then(() => conScript(base + a + v)), Promise.resolve()).then(() => conScript(base + c.js + v)))
+      // su CSS (de su repositorio): se espera a que llegue, asi el juego no se ve un instante sin estilo (como mucho 4 s)
+      let conCss = Promise.resolve();
+      if (c.css && !document.querySelector(`link[data-juego="${j.id}"]`)) {
+        const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = base + c.css + v; css.dataset.juego = j.id;
+        conCss = new Promise((ok) => { css.onload = ok; css.onerror = ok; setTimeout(ok, 4000); });
+        document.head.appendChild(css);
+      }
+      cargas.set(j.id, Promise.all([conCss, window[c.global] ? Promise.resolve() : (j.antes || []).reduce((p, a) => p.then(() => conScript(base + a + v)), Promise.resolve()).then(() => conScript(base + c.js + v))])
         .then(() => { window[c.global].usar(piezas(j)); globales.add(c.global); })
         .catch((e) => { cargas.delete(j.id); throw e; }));
     }
