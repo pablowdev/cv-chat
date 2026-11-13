@@ -10569,9 +10569,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (!page) return;
     soltarCurveball();
     page.remove(); page = null; stack = []; clearInterval(tickT);
-    if (window.puenteTruco) window.puenteTruco.salir();
-    if (window.puenteFunball) window.puenteFunball.salir();
-    if (window.puenteAjedrez) window.puenteAjedrez.salir();
+    salirJuegos();
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
     refreshBadge();
   }
@@ -10623,17 +10621,10 @@ document.addEventListener('pointerdown', (ev) => {
     clearInterval(tickT);
     soltarCurveball();
     page.textContent = '';
-    if (window.puenteFunball) window.puenteFunball.salir(view);
-    if (window.puenteAjedrez) window.puenteAjedrez.salir();
-    if (window.puenteMR) window.puenteMR.salir();
-    if (window.puentePool) window.puentePool.salir();
-    if (window.puenteTruco) window.puenteTruco.salir();
-    if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
-    if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
-    if (/^fb[A-Z]/.test(view)) { fb(view, arg); return; }
-    if (view === 'ajMesa' || view === 'ajCrear') { aj(view, arg); return; }
-    if (view === 'mesa' || view === 'crear') { tr(view, arg); return; }
-    try { ({ inicio, shJuego, bcJuego, cbJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    salirJuegos(view);
+    const propias = { inicio, shJuego, bcJuego, cbJuego };
+    if (!propias[view]) { abrirJuego(null, view, arg); return; } // (una vista de un juego: la dice su ficha)
+    try { propias[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
@@ -10785,69 +10776,61 @@ document.addEventListener('pointerdown', (ev) => {
     lista.dataset.key = key;
   }
 
-  // ── GlobalSiege (misionrisk.js) ──
-  // Su pantalla esta aparte (/puente/misionrisk/juego.js, con mapa.js y juego.css) y se baja
-  // recien la primera vez que se abre. Usa las mismas piezas que los otros juegos.
-  let mrCarga = null;
-  const mrVisto = new Map();
-  function mr(vista, arg) {
-    const top = stack[stack.length - 1];
-    if (!mrCarga) {
-      const script = (src) => new Promise((ok, mal) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = mal; document.head.appendChild(x); });
-      if (!document.querySelector('link[data-mr]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/misionrisk/juego.css'; css.dataset.mr = '1'; document.head.appendChild(css); }
-      mrCarga = (window.MRMapa ? Promise.resolve() : script('/puente/misionrisk/mapa.js'))
-        .then(() => window.puenteMR ? null : script('/puente/misionrisk/juego.js'))
-        .then(() => window.puenteMR.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, chat: chatPartida, page: () => page, stack: () => stack }))
-        .catch((e) => { mrCarga = null; throw e; });
+  // ── Los juegos de pantalla (cada uno en su repositorio; sus fichas, juegos-registro.js) ──
+  // Su pantalla esta aparte (/puente/<web>/ y lo que diga su ficha) y se baja recien la primera vez que se abre. La
+  // ficha dice que vistas de la pila son suyas ('mesa', 'fbMesa', 'mrCrear'...) y que funcion del juego abre cada una,
+  // su vista de mesa, lo que hay que bajar antes (el mapa de GlobalSiege) y su hoja de estilo.
+  const mrVisto = new Map(), plVisto = new Map(); // (el ultimo estado de cada mesa de GlobalSiege y Pool, para el numerito)
+  let fichasP = null;
+  const fichas = () => fichasP || (fichasP = fetch('/puente/api/juegos/registro', { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('registro ' + r.status))))
+    .then((d) => (d.juegos || []).filter((j) => j.web && j.cliente && j.cliente.tipo === 'pantalla' && j.cliente.global && j.cliente.js))
+    .catch((e) => { fichasP = null; throw e; }));
+  fichas().catch(() => { /* se vuelve a pedir al abrir un juego */ });
+  const cargas = new Map(); // id del juego -> su pantalla lista
+  const globales = new Set(); // los juegos ya cargados (para que suelten su mesa al cambiar de pantalla)
+  const conScript = (src) => new Promise((ok, mal) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = mal; document.head.appendChild(x); });
+  // las piezas del marco que se le prestan a cada juego (todas a todos: cada uno usa las suyas)
+  function piezas(j) {
+    return { el, emit, head, go, back, close, show, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, setBadge, byId, app,
+      cartelMirando, botonSalir, botonZumbido, puedeZumbar, espChat, nombreChat, ctaInvitado, chatPartida, chat: chatPartida, desafio: desafioDM, ajPieza,
+      unirse: (id) => unirseA(j, id), page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } };
+  }
+  function cargarJuego(j) {
+    if (!cargas.has(j.id)) {
+      const base = '/puente/' + j.web + '/', v = '?v=' + (j.version || 1), c = j.cliente;
+      if (c.css && !document.querySelector(`link[data-juego="${j.id}"]`)) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = base + c.css + v; css.dataset.juego = j.id; document.head.appendChild(css); }
+      cargas.set(j.id, (window[c.global] ? Promise.resolve() : (j.antes || []).reduce((p, a) => p.then(() => conScript(base + a + v)), Promise.resolve()).then(() => conScript(base + c.js + v)))
+        .then(() => { window[c.global].usar(piezas(j)); globales.add(c.global); })
+        .catch((e) => { cargas.delete(j.id); throw e; }));
     }
-    if (!page.firstChild) { page.appendChild(head('GlobalSiege')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
-    mrCarga.then(() => {
+    return cargas.get(j.id);
+  }
+  const nombreDe = (id) => (JUEGOS.find((x) => x.id === id) || {}).nombre || 'el juego';
+  // Abre una vista de un juego: el juego por su id (su sala: 'inicio') o, sin id, el que tenga esa vista en su ficha
+  function abrirJuego(id, vista, arg) {
+    const top = stack[stack.length - 1];
+    if (!page.firstChild) { page.appendChild(head(id ? nombreDe(id) : 'Juegos')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
+    let j = null;
+    fichas().then((js) => {
+      j = id ? js.find((x) => x.id === id) : js.find((x) => x.vistas && x.vistas[vista]);
+      if (!j) throw new Error('sin ficha para ' + (id || vista));
+      return cargarJuego(j);
+    }).then(() => {
       if (!page || stack[stack.length - 1] !== top) return;
       page.textContent = '';
-      window.puenteMR[vista](arg);
-    }).catch(() => toast('No se pudo abrir GlobalSiege. Probá de nuevo.', 'error'));
+      window[j.cliente.global][vista === 'inicio' ? 'inicio' : j.vistas[vista]](arg);
+    }).catch((err) => { console.warn('[puente] juegos:', err); toast(`No se pudo abrir ${j ? j.nombre : id ? nombreDe(id) : 'el juego'}. Probá de nuevo.`, 'error'); });
   }
+  // Entrar a una mesa: el evento "unirse" del juego y su vista de mesa
+  async function unirseA(j, id) {
+    const r = await emit(j.eventos.unirse, { id });
+    if (r.error) return toast(r.error, 'error');
+    go(j.mesa, r.id);
+  }
+  // Al cambiar de pantalla (vista: la nueva) o al cerrar Juegos: cada juego cargado suelta su mesa
+  function salirJuegos(vista) { for (const g of globales) { try { if (window[g] && window[g].salir) window[g].salir(vista); } catch (err) { console.warn('[puente] juegos:', err); } } }
 
-  // ── Truco (truco.js) ──
-  // Su pantalla esta aparte (/puente/truco/juego.js, con su propio repositorio) y se baja recien la primera vez
-  // que se abre: la sala, crear partida y la mesa. Las vistas siguen llamandose 'mesa' y 'crear' (enlaces y avisos)
-  let trCarga = null;
-  function tr(vista, arg) {
-    const top = stack[stack.length - 1];
-    if (!trCarga) {
-      trCarga = (window.puenteTruco ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/truco/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
-        .then(() => window.puenteTruco.usar({ el, emit, head, go, back, close, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, setBadge, byId, app,
-          cartelMirando, botonSalir, botonZumbido, puedeZumbar, espChat, nombreChat, ctaInvitado, unirse: joinGame,
-          page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } }))
-        .catch((e) => { trCarga = null; throw e; });
-    }
-    if (!page.firstChild) { page.appendChild(head('Truco')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
-    trCarga.then(() => {
-      if (!page || stack[stack.length - 1] !== top) return;
-      page.textContent = '';
-      window.puenteTruco[vista](arg);
-    }).catch(() => toast('No se pudo abrir el Truco. Probá de nuevo.', 'error'));
-  }
-
-  // ── Pool (pool.js) ──
-  // Su pantalla esta aparte (/puente/pool/juego.js y juego.css) y se baja recien la primera vez que se abre
-  let plCarga = null;
-  const plVisto = new Map();
-  function pl(vista, arg) {
-    const top = stack[stack.length - 1];
-    if (!plCarga) {
-      if (!document.querySelector('link[data-pl]')) { const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/puente/pool/juego.css?v=1'; css.dataset.pl = '1'; document.head.appendChild(css); }
-      plCarga = (window.puentePool ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/pool/juego.js?v=2'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
-        .then(() => window.puentePool.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, chat: chatPartida, desafio: desafioDM, page: () => page, stack: () => stack }))
-        .catch((e) => { plCarga = null; throw e; });
-    }
-    if (!page.firstChild) { page.appendChild(head('Pool')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
-    plCarga.then(() => {
-      if (!page || stack[stack.length - 1] !== top) return;
-      page.textContent = '';
-      window.puentePool[vista](arg);
-    }).catch(() => toast('No se pudo abrir el Pool. Probá de nuevo.', 'error'));
-  }
   // Mensaje directo al desafiado, con el enlace ya escrito (sin mandar)
   function desafioDM(p, text) {
     const a = app();
@@ -11066,11 +11049,9 @@ document.addEventListener('pointerdown', (ev) => {
     // la pila queda en la pantalla del juego, para que el tiempo de uso diga "shoppa" y no "juegos"
     if (which === 'shoppa') { if (stack.length) stack[stack.length - 1] = ['shJuego']; return shJuego(); }
     if (which === 'bacity') { if (stack.length) stack[stack.length - 1] = ['bcJuego']; return bcJuego(); }
-    if (which === 'funball') return fb('inicio');
-    if (which === 'ajedrez') return aj('inicio');
-    if (which === 'globalsiege') return mr('inicio');
-    if (which === 'pool') return pl('inicio');
-    if (which === 'truco') return tr('inicio');
+    // la sala de un juego de pantalla (el que tenga ficha); si no, la biblioteca
+    if (which && (await fichas().catch(() => [])).some((j) => j.id === which)) return page ? abrirJuego(which, 'inicio') : undefined;
+    if (!page) return;
     return biblioteca();
   }
   async function joinGame(id) {
@@ -11121,25 +11102,8 @@ document.addEventListener('pointerdown', (ev) => {
     acts.insertBefore(c, acts.firstChild);
   }
   // ── Funball (funball.js) ──
-  // Su pantalla esta aparte (/puente/funball/juego.js, con su propio repositorio) y se baja recien la primera vez
-  // que se abre. Las vistas siguen llamandose fbMesa, fbCrear, fbReglas y fbTutorial (enlaces y avisos)
+  // Su pantalla esta aparte (/puente/funball/juego.js, con su propio repositorio): la carga abrirJuego, con su ficha
   const FB_ARTE = '/puente/funball/'; // (la tapa en la biblioteca)
-  let fbCarga = null;
-  function fb(vista, arg) {
-    const top = stack[stack.length - 1];
-    if (!fbCarga) {
-      fbCarga = (window.puenteFunball ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/funball/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
-        .then(() => window.puenteFunball.usar({ el, emit, head, go, back, show, toast, avatar, botonEnlace, confirmar, svg, I, beep, byId, app, cartelMirando, botonSalir, chatPartida, ctaInvitado,
-          page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } }))
-        .catch((e) => { fbCarga = null; throw e; });
-    }
-    if (!page.firstChild) { page.appendChild(head('Funball')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
-    fbCarga.then(() => {
-      if (!page || stack[stack.length - 1] !== top) return;
-      page.textContent = '';
-      window.puenteFunball[vista](arg);
-    }).catch(() => toast('No se pudo abrir el Funball. Probá de nuevo.', 'error'));
-  }
   // entrar a una mesa desde la lista de mesas (sin cargar la pantalla antes)
   async function fbJoin(id) {
     const r = await emit('funball:unirse', { id });
@@ -11177,24 +11141,8 @@ document.addEventListener('pointerdown', (ev) => {
       + (AJ_DETALLE[t] ? `<g fill="none" stroke="${det}" stroke-width="${t === 'n' ? 1.3 : 1.2}" stroke-linecap="round">${AJ_DETALLE[t]}${t === 'n' ? `<circle cx="17.4" cy="17.4" r="1.05" fill="${det}" stroke="none"/>` : ''}</g>` : '') + '</svg>';
   };
   const AJ_TAPA = () => `<div class="aj-tapa"><div class="aj-tapa-tab">${Array.from({ length: 16 }, (_, i) => `<span class="${(i + (i >> 2)) % 2 ? 'os' : 'cl'}"></span>`).join('')}</div><div class="aj-tapa-p">${ajPieza('n')}${ajPieza('K')}</div></div>`;
-  // Su pantalla esta aparte (/puente/ajedrez/juego.js, con su propio repositorio) y se baja recien la primera vez
-  // que se abre. Las vistas siguen llamandose ajMesa y ajCrear (enlaces y avisos)
-  let ajCarga = null;
-  function aj(vista, arg) {
-    const top = stack[stack.length - 1];
-    if (!ajCarga) {
-      ajCarga = (window.puenteAjedrez ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/ajedrez/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
-        .then(() => window.puenteAjedrez.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, byId, app, botonSalir, chatPartida, ctaInvitado, ajPieza,
-          page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } }))
-        .catch((e) => { ajCarga = null; throw e; });
-    }
-    if (!page.firstChild) { page.appendChild(head('Ajedrez')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
-    ajCarga.then(() => {
-      if (!page || stack[stack.length - 1] !== top) return;
-      page.textContent = '';
-      window.puenteAjedrez[vista](arg);
-    }).catch(() => toast('No se pudo abrir el Ajedrez. Probá de nuevo.', 'error'));
-  }
+  // Su pantalla esta aparte (/puente/ajedrez/juego.js, con su propio repositorio): la carga abrirJuego, con su ficha.
+  // Los dibujos de las piezas quedan aca: los usa la tapa de la biblioteca, y se le prestan al juego (ajPieza)
   // entrar a una mesa desde la lista de mesas (sin cargar la pantalla antes)
   async function ajJoin(id) {
     const r = await emit('ajedrez:unirse', { id });
