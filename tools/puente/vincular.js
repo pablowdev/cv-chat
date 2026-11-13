@@ -811,8 +811,17 @@ async function handle(req, res) {
     return send(res, 200, 'application/javascript', body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
-  // BACITY: el pase firmado con el que el juego (que corre aparte, en /bacity/) sabe quien es cada uno
-  if (p === '/puente/api/bacity/entrada') return require('./bacity.js').handle(req, res, p, u, { sessionUser, json });
+  // Las direcciones propias de los juegos, de sus modulos de servidor (juegos-registro.js conRutas): el pase de
+  // BACITY (/puente/api/bacity/entrada), las voces grabadas de WORGS (/puente/api/worgs/voz, /puente/worgs/voz/...)
+  if (p.startsWith('/puente/')) {
+    let rutas = [];
+    try { rutas = registro().conRutas(); } catch (err) { warn('juegos: rutas:', err.message); }
+    for (const m of rutas) {
+      if (!m.rutas.some(r => (r.endsWith('/') ? p.startsWith(r) : p === r))) continue;
+      const r = await m.handle(req, res, p, u, { sessionUser, json, send });
+      if (r !== false) return;
+    }
+  }
 
   // Curveball: el juego (juego.html, juego.js, juego.css y tapa.jpg), en web/curveball/. Se sirve solo
   // lo que esta adentro de esa carpeta y con los tipos conocidos, como WORGS. Con huella, como aviso.js.
@@ -835,11 +844,6 @@ async function handle(req, res) {
     if (require('./juegos-registro.js').handle(req, res, p, { json, send, appName, mismaHuella, yaServidas })) return;
   }
 
-  // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio
-  if (p === '/puente/api/worgs/voz' || p === '/puente/api/worgs/voces' || p.startsWith('/puente/worgs/voz/')) {
-    const r = await require('./worgs-voces.js').handle(req, res, p, u, { sessionUser, json, send });
-    if (r !== false) return;
-  }
   // WORGS: el juego (juego.html, motor.js, mapas.js...) y la pagina de prueba de la fisica, en web/worgs/.
   // Se sirve solo lo que esta adentro de esa carpeta y con los tipos conocidos. /puente/shoppa/ (el nombre de antes)
   // sigue andando, para los enlaces viejos. (Proyecto Gusanos se saco.)

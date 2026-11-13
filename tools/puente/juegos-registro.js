@@ -207,4 +207,28 @@ function conChat() {
   return out;
 }
 
-module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, servidores, conChat, _limpiar: limpiar };
+// Las direcciones propias de cada juego: el modulo de servidor que exporta "rutas" (direcciones exactas, o prefijos
+// si terminan en /) y "handle" (req, res, p, u, { sessionUser, json, send }; devuelve false si no era suya). Solo
+// valen las que son de ese juego: /puente/api/<x>/... o /puente/<x>/..., con <x> su id, su carpeta web, su enlace
+// o un alias (asi un juego no puede tomar una direccion del chat). vincular.js las atiende -> [{ id, rutas, handle }]
+const RUTA = /^\/puente\/(?:api\/)?([a-z0-9-]{2,24})\/[\w./-]{0,80}$/;
+let rutasHechas = { firma: null, out: [] };
+function conRutas() {
+  // (se arma de nuevo solo si cambio alguna ficha: lo pregunta cada pedido a /puente/)
+  if (firma() === rutasHechas.firma) return rutasHechas.out;
+  const out = [];
+  for (const j of lista()) {
+    const suyos = new Set([j.id, j.web, ...(j.enlace ? [j.enlace.param, ...j.enlace.alias] : [])].filter(Boolean));
+    for (const m of j.servidor) {
+      let x = null;
+      try { x = require(path.join(__dirname, m)); } catch { continue; }
+      if (!x || !Array.isArray(x.rutas) || typeof x.handle !== 'function') continue;
+      const rutas = x.rutas.filter((r) => { const k = RUTA.exec(typeof r === 'string' ? r : ''); return k && suyos.has(k[1]) && !r.includes('..'); });
+      if (rutas.length) out.push({ id: j.id, rutas, handle: x.handle });
+    }
+  }
+  rutasHechas = { firma: cache.firma, out };
+  return out;
+}
+
+module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, servidores, conChat, conRutas, _limpiar: limpiar };
