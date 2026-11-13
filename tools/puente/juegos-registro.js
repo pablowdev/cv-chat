@@ -34,6 +34,16 @@ let cache = { cuando: 0, juegos: [], firma: '' };
 const ID = /^[a-z0-9-]{2,24}$/, ARCHIVO = /^[\w-]+(\.[\w-]+)*\.[a-z0-9]{1,5}$/i, EVENTO = /^[a-z0-9-]{2,24}:[a-z0-9-]{2,24}$/i;
 const texto = (v, max) => (typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null);
 
+// Un juego en ventana (WORGS, BACITY, Curveball): un iframe del mismo origen. url: su pagina (una ruta del sitio);
+// permisos: lo que el iframe puede pedir; foco: si toma el teclado al abrir; clase: el estilo del marco (jg-...)
+const PERMISOS = ['autoplay', 'fullscreen', 'microphone', 'gamepad', 'camera'];
+function ventana(cli, mal) {
+  const url = typeof cli.url === 'string' && /^\/[\w./-]{1,120}$/.test(cli.url) && !cli.url.includes('..') ? cli.url : null;
+  const permisos = Array.isArray(cli.permisos) ? cli.permisos.filter((p) => PERMISOS.includes(p)) : [];
+  if (!url) { mal('cliente.url invalida (una ruta del sitio)'); return null; }
+  return { tipo: 'ventana', url, permisos, foco: cli.foco === true, clase: /^jg-[a-z-]{2,30}$/.test(cli.clase || '') ? cli.clase : 'jg-gusanos' };
+}
+
 // Revisa una ficha y devuelve la version limpia (o null con el motivo anotado)
 function limpiar(f, archivo) {
   const mal = (m) => { warn(`juegos: ${archivo}: ${m} (se ignora)`); return null; };
@@ -62,11 +72,13 @@ function limpiar(f, archivo) {
   const antes = Array.isArray(f.antes) ? f.antes : [];
   if (antes.some((a) => typeof a !== 'string' || !archivos.includes(a))) return mal('antes: tiene que ser de sus archivos');
   const version = Number.isInteger(f.version) && f.version > 0 && f.version < 100000 ? f.version : 1;
+  const cliente = !tipo ? null : tipo === 'ventana' ? ventana(cli, mal) : { tipo, global: /^[A-Za-z_$][\w$]{0,40}$/.test(cli.global || '') ? cli.global : null, js: ARCHIVO.test(cli.js || '') ? cli.js : null, css: ARCHIVO.test(cli.css || '') ? cli.css : null };
+  if (tipo && !cliente) return null;
   return {
     id: f.id, nombre, sub: texto(f.sub, 80) || '', orden: Number.isFinite(f.orden) ? f.orden : 100,
     tapa, fondo: texto(f.fondo, 120) || '#1e1f22', ajuste: f.ajuste === 'contain' ? 'contain' : null,
     web, archivos, vistas, mesa, antes, version,
-    cliente: tipo ? { tipo, global: /^[A-Za-z_$][\w$]{0,40}$/.test(cli.global || '') ? cli.global : null, js: ARCHIVO.test(cli.js || '') ? cli.js : null, css: ARCHIVO.test(cli.css || '') ? cli.css : null } : null,
+    cliente,
     eventos, enlace: param ? { param, desc: texto(f.enlace.desc, 200) || '' } : null, servidor,
   };
 }
