@@ -56,3 +56,6 @@ tools/puente/pool-motor.js
 tools/puente/web/pool/
 tools/puente/truco.js
 tools/puente/web/truco/
+tools/puente/funball.js
+tools/puente/funball-motor.js
+tools/puente/web/funball/juego.js

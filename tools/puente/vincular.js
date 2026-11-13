@@ -792,10 +792,11 @@ async function handle(req, res) {
     return send(res, 200, tipo, body, { ETag: etag, 'Cache-Control': 'no-cache' });
   }
 
-  // Truco (truco.js): su pantalla (juego.js; su repositorio es aparte), en web/truco/. Con huella, como aviso.js
-  const trArch = req.method === 'GET' && /^\/puente\/truco\/(juego\.js)$/.exec(p);
+  // Truco, Funball y Ajedrez (truco.js, funball.js, ajedrez.js): su pantalla (juego.js; cada uno tiene su repositorio
+  // aparte), en web/<juego>/. Con huella, como aviso.js. (Los dibujos y sonidos del Funball van por sus rutas, arriba)
+  const trArch = req.method === 'GET' && /^\/puente\/(truco|funball|ajedrez)\/(juego\.js)$/.exec(p);
   if (trArch) {
-    const file = path.join(STATIC, 'truco', trArch[1]);
+    const file = path.join(STATIC, trArch[1], trArch[2]);
     let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain', 'No está'); }
     const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
     if (mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
