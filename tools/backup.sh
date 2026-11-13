@@ -17,7 +17,7 @@ umask 077
 cd /opt/haven
 STAMP=$(date -u +%Y-%m-%d_%H%M)
 # (personal2: el Drive personal con el cliente de Google del club, que no comparte el limite con todos
-# los que usan rclone; personal:CV-respaldo es la carpeta de antes, con el cliente de rclone)
+# los que usan rclone y solo ve lo que crea; la carpeta de antes, personal:CV-respaldo, se borro el 13/11/2026)
 REMOTE=${BACKUP_REMOTE:-personal2:CV-respaldo-2}
 ESTADO=/opt/haven/haven-data/puente-respaldo.json
 # Si algo falla, queda anotado (el estado se pisa con "ok" al final)
