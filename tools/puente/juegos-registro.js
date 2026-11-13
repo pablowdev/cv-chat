@@ -74,12 +74,36 @@ function limpiar(f, archivo) {
   const version = Number.isInteger(f.version) && f.version > 0 && f.version < 100000 ? f.version : 1;
   const cliente = !tipo ? null : tipo === 'ventana' ? ventana(cli, mal) : { tipo, global: /^[A-Za-z_$][\w$]{0,40}$/.test(cli.global || '') ? cli.global : null, js: ARCHIVO.test(cli.js || '') ? cli.js : null, css: ARCHIVO.test(cli.css || '') ? cli.css : null };
   if (tipo && !cliente) return null;
+  // desde la lista de mesas de la biblioteca: entrar directo a la mesa ("unirse") o abrir su sala ("sala")
+  const lista = f.lista === 'unirse' ? 'unirse' : 'sala';
+  // en "Ahora en el club": su dibujito y si la mesa "espera rival" (de a dos) o "espera jugadores"
+  const icono = typeof f.icono === 'string' && f.icono.length <= 8 && !/[<>&"'\s]/.test(f.icono) ? f.icono : null;
+  const jugadores = f.jugadores === 2 ? 2 : 'varios';
+  // el nombre de sus mesas segun su modo (WORGS: { "": "WORGS: Shoppa", "normal": "WORGS: Normal" })
+  let modos = null;
+  for (const [k, v] of Object.entries(f.modos || {})) { if (!/^[a-z]{0,16}$/.test(k) || !texto(v, 40)) return mal(`modo ${k} invalido`); (modos = modos || {})[k] = v; }
+  // la tarjeta: "aparte" se muestra solo si su "inicio" dice que esta cuenta puede entrar; "vivo": lo que se lee en
+  // la tarjeta con un numero de su "inicio" ({ campo: 'gente', uno: '1 en la ciudad', varios: '{n} en la ciudad' })
+  const t = f.tarjeta || {}, v = t.vivo || {};
+  const vivo = /^[a-z]{2,16}$/i.test(v.campo || '') && texto(v.uno, 40) && texto(v.varios, 40) && v.varios.includes('{n}') ? { campo: v.campo, uno: v.uno, varios: v.varios } : null;
+  // en las estadisticas: su nombre y color (WORGS: uno por modo)
+  const COLOR = /^#[0-9a-f]{6}$/i;
+  let estadisticas = Array.isArray(f.estadisticas) ? f.estadisticas : [{ id: f.id, nombre, color: f.color }];
+  estadisticas = estadisticas.filter((e) => e && ID.test(e.id || '') && texto(e.nombre, 40)).map((e) => ({ id: e.id, nombre: e.nombre, color: COLOR.test(e.color || '') ? e.color : '#949ba4' }));
   return {
     id: f.id, nombre, sub: texto(f.sub, 80) || '', orden: Number.isFinite(f.orden) ? f.orden : 100,
     tapa, fondo: texto(f.fondo, 120) || '#1e1f22', ajuste: f.ajuste === 'contain' ? 'contain' : null,
     web, archivos, vistas, mesa, antes, version,
     cliente,
-    eventos, enlace: param ? { param, desc: texto(f.enlace.desc, 200) || '' } : null, servidor,
+    eventos, servidor, lista, icono, jugadores, modos, estadisticas,
+    tarjeta: { aparte: t.aparte === true, vivo },
+    // el enlace: su parametro (/app?juegos=<param>), nombres viejos que tambien lo abren, su texto y su imagen apaisada
+    // (la vista previa del enlace en los mensajes, y la de WhatsApp o X)
+    enlace: param ? {
+      param, desc: texto(f.enlace.desc, 200) || '',
+      alias: (Array.isArray(f.enlace.alias) ? f.enlace.alias : []).filter((a) => ID.test(a || '')),
+      imagen: typeof f.enlace.imagen === 'string' && /^\/[\w./?=&%-]{1,160}$/.test(f.enlace.imagen) && !f.enlace.imagen.includes('..') ? f.enlace.imagen : null,
+    } : null,
   };
 }
 
