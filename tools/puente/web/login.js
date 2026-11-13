@@ -373,7 +373,10 @@
     const j = mk('button', 'puente-visita-btn');
     j.type = 'button';
     j.append(mk('span', 'puente-visita-ico', '🎮'), mk('span', 'puente-visita-txt'));
-    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', 'Truco, Pool, Ajedrez, Curveball y más'));
+    // (los juegos que se juegan sin cuenta, de sus fichas: los primeros cuatro y "y más")
+    const nombres = [...new Set(Object.values(NOMBRES))];
+    const lista = nombres.length > 4 ? nombres.slice(0, 4).join(', ') + ' y más' : nombres.length > 1 ? nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1] : nombres[0] || 'Truco, Pool y más';
+    j.lastChild.append(mk('b', '', 'Jugar como invitado'), mk('small', '', lista));
     j.addEventListener('click', aLosJuegos);
     const m = mk('a', 'puente-visita-btn');
     m.href = mercado;
