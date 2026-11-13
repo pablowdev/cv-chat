@@ -10564,11 +10564,11 @@ document.addEventListener('pointerdown', (ev) => {
   }
 
   // ── La pantalla ──
-  let page = null, stack = [], mesa = null, tickT = null;
+  let page = null, stack = [], tickT = null;
   function close() {
     if (!page) return;
     soltarCurveball();
-    page.remove(); page = null; stack = []; mesa = null; clearInterval(tickT);
+    page.remove(); page = null; stack = []; clearInterval(tickT);
     if (window.puenteTruco) window.puenteTruco.salir();
     if (window.puenteFunball) window.puenteFunball.salir();
     if (window.puenteAjedrez) window.puenteAjedrez.salir();
@@ -10620,7 +10620,7 @@ document.addEventListener('pointerdown', (ev) => {
     return h;
   }
   function show(view, arg) {
-    clearInterval(tickT); mesa = null;
+    clearInterval(tickT);
     soltarCurveball();
     page.textContent = '';
     if (window.puenteFunball) window.puenteFunball.salir(view);
