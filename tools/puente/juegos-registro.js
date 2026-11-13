@@ -20,6 +20,8 @@
 //     "version": 1,                        se suma a las direcciones (?v=) para que el navegador no use la vieja
 //     "eventos": { "inicio": "truco:inicio", "estado": "truco:estado", "cambio": "truco:cambio", ... },
 //     "enlace": { "param": "truco", "desc": "..." },
+//     "admin": { "nombre": "Hotel", "url": "/puente/hotel/admin.html" }   su pestaña en el panel de administradores
+//                                          (opcional: una pagina suya que se muestra en un marco)
 //     "servidor": ["truco.js"]             sus modulos en tools/puente/ (puente.js prende los que tienen setup; el
 //                                          que exporta "chat" dice lo que el chat lee del juego: conChat())
 //   }
@@ -102,6 +104,8 @@ function limpiar(f, archivo) {
     cliente,
     eventos, servidor, lista, icono, jugadores, modos, estadisticas, invitados, pagina,
     tarjeta: { aparte: t.aparte === true, vivo },
+    // su pestaña en el panel de administradores (Admin → <nombre>): una pagina suya, en un marco
+    admin: f.admin && texto(f.admin.nombre, 24) && /^\/puente\/[\w./-]{1,120}$/.test(f.admin.url || '') && !f.admin.url.includes('..') ? { nombre: f.admin.nombre, url: f.admin.url } : null,
     // el enlace: su parametro (/app?juegos=<param>), nombres viejos que tambien lo abren, su texto y su imagen apaisada
     // (la vista previa del enlace en los mensajes, y la de WhatsApp o X)
     enlace: param ? {

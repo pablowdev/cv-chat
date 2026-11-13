@@ -3351,6 +3351,15 @@ function leido(sc) {
     // Propuestas de emojis y stickers (la arma el bloque de las propuestas, al final)
     const pp = page.querySelector('.ppz-vista'); if (pp) pp.hidden = v !== 'propuestas';
     if (v === 'propuestas' && pp && window.puentePropuestas) window.puentePropuestas.admin(pp);
+    // (las de los juegos: su pagina se carga la primera vez que se abre)
+    page.querySelectorAll('.pja-vista').forEach(x => {
+      x.hidden = x.dataset.v !== v;
+      if (x.hidden || x.firstChild) return;
+      const f = document.createElement('iframe');
+      f.src = x.dataset.url; f.title = x.dataset.nombre || 'Admin';
+      f.style.cssText = 'position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #1a1a1e;';
+      x.appendChild(f);
+    });
     if (v === 'marketplace') cargarMarketplace();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
@@ -3948,6 +3957,21 @@ function leido(sc) {
     page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
+    // Las pestañas de los juegos que traen la suya (en su ficha, "admin": Admin → Hotel): una pagina del juego en un marco
+    fetch('/puente/api/juegos/registro').then(r => (r.ok ? r.json() : null)).then(d => {
+      if (!page || !d || !Array.isArray(d.juegos)) return;
+      for (const j of d.juegos) {
+        const v = 'ja-' + j.id;
+        if (!j.admin || page.querySelector('.pja-vista[data-v="' + v + '"]')) continue;
+        const t = el('button', 'pm-pestana', j.admin.nombre); t.type = 'button'; t.dataset.v = v;
+        t.addEventListener('click', () => verVista(v));
+        tabs.appendChild(t);
+        const box = el('div', 'pja-vista'); box.hidden = true;
+        box.dataset.v = v; box.dataset.url = j.admin.url; box.dataset.nombre = j.admin.nombre;
+        box.style.cssText = 'flex: 1 1 auto; min-height: 0; position: relative;';
+        page.appendChild(box);
+      }
+    }).catch(() => {});
     document.addEventListener('keydown', onKey, true);
     if (small) { try { history.pushState({ puenteMiembros: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
     else search.focus(); // en el celular no: abriria el teclado

@@ -103,4 +103,5 @@ async function handle(req, res, p, u, h) {
   return h.json(res, 200, { ok: true });
 }
 
-module.exports = { setup, handle, MOTIVOS };
+// (aviso: lo usan tambien las denuncias de CV Hotel, hotel.js, para avisar al mismo canal)
+module.exports = { setup, handle, MOTIVOS, aviso };
