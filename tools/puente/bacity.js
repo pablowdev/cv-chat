@@ -13,12 +13,14 @@
 //   BACITY_SECRETO   la clave compartida con el servidor del juego (la misma en los dos). Sin ella, no hay juego.
 //   BACITY_INTERNO   la direccion del servidor del juego vista desde aca (por defecto http://bacity:8787/bacity)
 //   BACITY_ABIERTO   1: entra todo el mundo. Sin eso, solo los administradores (mientras esta en prueba).
+//   BACITY_AVISO     1: avisa en #que-paso cuando alguien entra a la ciudad. Sin eso, no avisa.
 const crypto = require('crypto');
 const { anunciar } = require('./juegos-aviso.js');
 
 const SECRETO = () => String(process.env.BACITY_SECRETO || '');
 const INTERNO = () => String(process.env.BACITY_INTERNO || 'http://bacity:8787/bacity').replace(/\/+$/, '');
 const ABIERTO = () => process.env.BACITY_ABIERTO === '1';
+const AVISO = () => process.env.BACITY_AVISO === '1';
 const b64 = (x) => Buffer.from(x).toString('base64url');
 let db = null, io = null, warn = () => {};
 let estado = { gente: 0, nombres: [], cuando: 0 }, pidiendo = false, ultimoAviso = 0;
@@ -76,7 +78,7 @@ function handle(req, res, p, u, { sessionUser, json }) {
   lista.push(ahora); pedidos.set(c.id, lista);
   if (pedidos.size > 2000) pedidos.delete(pedidos.keys().next().value);
   // el aviso en #que-paso: solo con el juego abierto a todos, y no mas de uno cada media hora
-  if (ABIERTO() && !c.is_guest && ahora - ultimoAviso > 30 * 60e3) {
+  if (ABIERTO() && AVISO() && !c.is_guest && ahora - ultimoAviso > 30 * 60e3) {
     ultimoAviso = ahora;
     anunciar(db, io, warn, { juego: 'bacity', quien: c.id, texto: 'anda por la ciudad de **BACITY**', enlace: '/app?juegos=bacity' });
   }
