@@ -15,6 +15,7 @@ const JUEGOS = [
   { id: 'truco', nombre: 'Truco' }, { id: 'funball', nombre: 'Funball' },
   { id: 'ajedrez', nombre: 'Ajedrez' }, { id: 'globalsiege', nombre: 'GlobalSiege' },
   { id: 'pool', nombre: 'Pool' },
+  { id: 'curveball', nombre: 'Curveball' },
   // WORGS: los dos modos como dos juegos (el tiempo de uso de antes, cuando solo habia Shoppa, queda en Shoppa)
   { id: 'shoppa', nombre: 'WORGS: Shoppa' }, { id: 'worgsnormal', nombre: 'WORGS: Normal' },
   // BACITY no tiene partidas (es una ciudad abierta): de ella queda el tiempo con el juego abierto
@@ -50,6 +51,10 @@ function partidas() {
   for (const r of filas('SELECT id, j1, j2, ganador, motivo, tiros, inicio, fin, compu FROM puente_pool_partidas')) {
     out.push({ juego: 'pool', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
       detalle: ['8 bolas'], jugadas: r.tiros });
+  }
+  for (const r of filas('SELECT id, j1, j2, ganador, motivo, vidas, inicio, fin, compu, amistosa FROM puente_curveball_partidas')) {
+    out.push({ juego: 'curveball', id: r.id, inicio: r.inicio || r.fin, fin: r.fin, compu: !!r.compu, humanos: [r.j1, r.j2].filter(x => x > 0), ganador: r.ganador, motivo: r.motivo || '',
+      detalle: ['3 vidas' + (r.amistosa ? ', amistosa' : '')] });
   }
   // WORGS: de 2 a 5 personas; el modo decide en cual de los dos juegos cuenta
   for (const r of filas('SELECT id, modo, jugadores, ganador, motivo, inicio, fin FROM puente_worgs_partidas')) {
@@ -226,7 +231,7 @@ function calcular(rango) {
 
   // Ahora: las mesas esperando rival y las partidas en juego
   const ahoraJ = { esperando: 0, jugando: 0 };
-  for (const t of ['puente_truco_mesas', 'puente_funball_mesas', 'puente_ajedrez_mesas', 'puente_mr_mesas', 'puente_pool_mesas', 'puente_shoppa_mesas']) {
+  for (const t of ['puente_truco_mesas', 'puente_funball_mesas', 'puente_ajedrez_mesas', 'puente_mr_mesas', 'puente_pool_mesas', 'puente_curveball_mesas', 'puente_shoppa_mesas']) {
     // ("jugando": las que se movieron en el ultimo dia; las que quedaron abandonadas no cuentan)
     for (const r of filas(`SELECT estado, actualizado FROM ${t}`)) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }

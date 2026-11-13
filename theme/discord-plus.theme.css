@@ -3137,6 +3137,11 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-gusanos { box-sizing: border-box; height: calc(100% - 3.5rem - 1px); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: #070b12; }
 .puente-jg .jg-gusanos-marco { position: relative; height: 100%; background: #070b12; }
 .puente-jg .jg-gusanos-iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #070b12; }
+/* Curveball: igual que WORGS, el juego entero va en un iframe del mismo origen (sala, mesas y partida),
+   a pantalla completa menos la barra de arriba. Su tema es oscuro con neon. */
+.puente-jg .jg-curveball { box-sizing: border-box; height: calc(100% - 3.5rem - 1px); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: #07080c; }
+.puente-jg .jg-curveball-marco { position: relative; height: 100%; background: #07080c; }
+.puente-jg .jg-curveball-iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #07080c; }
 @media (min-width: 1000px) {
   .puente-jg .jg-mesa.jg-mesa2 { grid-template-columns: minmax(0, 1fr) 19rem; }
   .puente-jg .jg-lateral { position: sticky; top: 0.75rem; }

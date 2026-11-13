@@ -59,3 +59,9 @@ tools/puente/web/truco/
 tools/puente/funball.js
 tools/puente/funball-motor.js
 tools/puente/web/funball/juego.js
+tools/puente/ajedrez.js
+tools/puente/ajedrez-motor.js
+tools/puente/web/ajedrez/
+# Curveball: su repositorio (pablowdev/curveball) instala el motor y la pantalla
+tools/puente/curveball-servidor.cjs
+tools/puente/web/curveball/

@@ -747,7 +747,7 @@ async function handle(req, res) {
 
   // Vista previa de los enlaces a los juegos (og:image): tools/puente/web/tapas/<juego>.jpg (y chat.jpg, la del chat), propias
   // de cada servidor (las arma tools/mazo-pixel/tapas-enlace.js); si no estan, va el logo
-  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|worgs|juegos|chat)\.jpg$/.exec(p);
+  const tapa = req.method === 'GET' && /^\/puente\/tapas\/(truco|funball|ajedrez|globalsiege|pool|curveball|worgs|juegos|chat)\.jpg$/.exec(p);
   if (tapa) {
     const file = path.join(STATIC, 'tapas', tapa[1] + '.jpg');
     const quien = lectorDe(req);
@@ -806,6 +806,21 @@ async function handle(req, res) {
 
   // BACITY: el pase firmado con el que el juego (que corre aparte, en /bacity/) sabe quien es cada uno
   if (p === '/puente/api/bacity/entrada') return require('./bacity.js').handle(req, res, p, u, { sessionUser, json });
+
+  // Curveball: el juego (juego.html, juego.js, juego.css y tapa.jpg), en web/curveball/. Se sirve solo
+  // lo que esta adentro de esa carpeta y con los tipos conocidos, como WORGS. Con huella, como aviso.js.
+  const cbArch = req.method === 'GET' && /^\/puente\/curveball\/(juego\.html|juego\.js|juego\.css|tapa\.jpg)$/.exec(p);
+  if (cbArch) {
+    const file = path.join(STATIC, 'curveball', cbArch[1]);
+    let st; try { st = fs.statSync(file); } catch { return send(res, 404, 'text/plain; charset=utf-8', 'No está'); }
+    const ext = cbArch[1].split('.').pop();
+    const tipo = { html: 'text/html; charset=utf-8', js: 'application/javascript; charset=utf-8', css: 'text/css; charset=utf-8', jpg: 'image/jpeg' }[ext];
+    const cache = ext === 'jpg' ? 'public, max-age=604800' : 'no-cache';
+    const etag = '"' + st.size.toString(36) + '-' + Math.round(st.mtimeMs).toString(36) + '"';
+    if (cache === 'no-cache' && mismaHuella(req.headers['if-none-match'], etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-cache' }); return res.end(); }
+    return send(res, 200, tipo, fs.readFileSync(file), { ETag: etag, 'Cache-Control': cache });
+  }
+
   // WORGS: las voces grabadas de cada persona (worgs-voces.js): subir, borrar, la lista y el audio
   if (p === '/puente/api/worgs/voz' || p === '/puente/api/worgs/voces' || p.startsWith('/puente/worgs/voz/')) {
     const r = await require('./worgs-voces.js').handle(req, res, p, u, { sessionUser, json, send });
@@ -1468,12 +1483,13 @@ async function handle(req, res) {
 // una descripcion corta. Los enlaces a los juegos (/app?juegos, /app?juegos=truco)
 // muestran la tapa del juego en vez del logo.
 const JUEGOS_ENLACE = {
-  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y WORGS para jugar con la gente del chat.' },
+  juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool, Curveball y WORGS para jugar con la gente del chat.' },
   truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
   ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.' },
   globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.' },
   pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.' },
+  curveball: { nombre: 'Curveball', desc: 'Bolea, curvea y dejá al rival sin vidas: 1 contra 1, tres vidas, contra alguien del chat o contra la compu.' },
   worgs: { nombre: 'WORGS', desc: 'Serpientes, sogas y explosiones: modo Shoppa o normal, con gente del chat o contra la máquina.' },
 };
 function shareTags(html, url) {

@@ -2058,7 +2058,7 @@ function leido(sc) {
   const GUIA = [{ canal: 'bienvenida', titulo: 'Bienvenida' }, { canal: 'das-deglas', titulo: 'Reglas' }];
   const STATS = /server\s*stats/i;
   const BIENVENIDA_EN = 'cosas'; // a donde lleva "Darles la bienvenida"
-  const ICONO = { truco: '🃏', pool: '🎱', ajedrez: '♟️', funball: '⚽', globalsiege: '🌍' };
+  const ICONO = { truco: '🃏', pool: '🎱', ajedrez: '♟️', funball: '⚽', globalsiege: '🌍', curveball: '🟠' };
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^#/, '').trim();
   const token = () => { try { return localStorage.getItem('haven_token'); } catch { return null; } };
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null && text !== '') n.textContent = text; return n; };
@@ -2125,13 +2125,13 @@ function leido(sc) {
     return c;
   }
   const inicial = (p) => String((p && p.nombre) || '?').trim().charAt(0).toUpperCase() || '?';
-  const mesaTexto = (m) => m.quien + (m.juego === 'truco' || m.juego === 'pool' || m.juego === 'ajedrez' || m.juego === 'funball' ? ' espera rival' : ' espera jugadores');
+  const mesaTexto = (m) => m.quien + (m.juego === 'truco' || m.juego === 'pool' || m.juego === 'ajedrez' || m.juego === 'funball' || m.juego === 'curveball' ? ' espera rival' : ' espera jugadores');
   // (una mesa que espera rival: el boton pregunta si jugar o mirar, en la ventanita)
   function entrar(m) { const b = el('button', 'puente-club-entrar', 'Entrar'); b.type = 'button'; b.addEventListener('click', (e) => { e.stopPropagation(); ventanaMesa(m, true); }); return b; }
   // Abre un enlace del club aca mismo (lo agarra el que abre las mesas de los juegos); antes cierra la hoja de "El club hoy" si estaba abierta
   const irA = (href) => { cerrar(); const a = document.createElement('a'); a.href = href; a.hidden = true; document.body.append(a); a.click(); a.remove(); };
   // Sumarse a una mesa que espera rival: el evento de cada juego, y despues se abre la mesa
-  const UNIRSE = { truco: 'truco:unirse', pool: 'pool:unirse', ajedrez: 'ajedrez:unirse', funball: 'funball:unirse', globalsiege: 'mr:unirse' };
+  const UNIRSE = { truco: 'truco:unirse', pool: 'pool:unirse', ajedrez: 'ajedrez:unirse', funball: 'funball:unirse', globalsiege: 'mr:unirse', curveball: 'curveball:unirse' };
   function jugar(x, boton, cerrar) {
     const s = window.app && window.app.socket, ev = UNIRSE[x.juego];
     let id = null; try { id = new URL(x.enlace, location.origin).searchParams.get(x.juego === 'globalsiege' ? 'globalsiege' : x.juego); } catch { /* sin id */ }
@@ -10567,9 +10567,11 @@ document.addEventListener('pointerdown', (ev) => {
   let page = null, stack = [], mesa = null, tickT = null;
   function close() {
     if (!page) return;
+    soltarCurveball();
     page.remove(); page = null; stack = []; mesa = null; clearInterval(tickT);
     if (window.puenteTruco) window.puenteTruco.salir();
     if (window.puenteFunball) window.puenteFunball.salir();
+    if (window.puenteAjedrez) window.puenteAjedrez.salir();
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
     refreshBadge();
   }
@@ -10578,8 +10580,8 @@ document.addEventListener('pointerdown', (ev) => {
     else close();
   }
   // (juego: en cual se esta, para el tiempo de uso)
-  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : v === 'shJuego' ? usoWorgs() : v === 'bcJuego' ? 'bacity' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
-  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); } };
+  const juegoActual = () => { const v = stack.length ? stack[stack.length - 1][0] : ''; return /^fb/.test(v) ? 'funball' : /^aj/.test(v) ? 'ajedrez' : /^mr/.test(v) ? 'globalsiege' : /^pl/.test(v) ? 'pool' : /^cb/.test(v) ? 'curveball' : v === 'shJuego' ? usoWorgs() : v === 'bcJuego' ? 'bacity' : v === 'mesa' || v === 'crear' ? 'truco' : 'juegos'; };
+  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, desafiar: (p, texto) => desafioDM(p, texto) };
   function frame() {
     if (page) return page;
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
@@ -10619,17 +10621,19 @@ document.addEventListener('pointerdown', (ev) => {
   }
   function show(view, arg) {
     clearInterval(tickT); mesa = null;
+    soltarCurveball();
     page.textContent = '';
-    ajM = null;
     if (window.puenteFunball) window.puenteFunball.salir(view);
+    if (window.puenteAjedrez) window.puenteAjedrez.salir();
     if (window.puenteMR) window.puenteMR.salir();
     if (window.puentePool) window.puentePool.salir();
     if (window.puenteTruco) window.puenteTruco.salir();
     if (/^mr[A-Z]/.test(view)) { mr(view.slice(2).toLowerCase(), arg); return; }
     if (/^pl[A-Z]/.test(view)) { pl(view.slice(2).toLowerCase(), arg); return; }
     if (/^fb[A-Z]/.test(view)) { fb(view, arg); return; }
+    if (view === 'ajMesa' || view === 'ajCrear') { aj(view, arg); return; }
     if (view === 'mesa' || view === 'crear') { tr(view, arg); return; }
-    try { ({ inicio, ajCrear, ajMesa: ajTable, shJuego, bcJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
+    try { ({ inicio, shJuego, bcJuego, cbJuego })[view](arg); } catch (err) { console.warn('[puente] juegos:', err); }
   }
 
   // ── El chat de la partida (chat-partida.js): Funball, Ajedrez y GlobalSiege ──
@@ -10868,6 +10872,7 @@ document.addEventListener('pointerdown', (ev) => {
     { id: 'ajedrez', nombre: 'Ajedrez', sub: '1 contra 1, con o sin reloj', evento: 'ajedrez:inicio', dibujo: () => AJ_TAPA(), fondo: '#2b2d2c', mesa: 'ajMesa' },
     { id: 'globalsiege', nombre: 'GlobalSiege', sub: 'El MissionRisk de siempre', evento: 'mr:inicio', tapa: () => '/puente/misionrisk/banner.webp?v=1', fondo: '#0b2552', mesa: 'mrMesa' },
     { id: 'funball', nombre: 'Funball', sub: 'El clásico de DOS de 1995', evento: 'funball:inicio', tapa: () => FB_ARTE + 'logo.webp', fondo: "url('/puente/funball/fondo.webp') 0 0 / 256px repeat, #4a3f37", ajuste: 'contain', mesa: 'fbMesa' },
+    { id: 'curveball', nombre: 'Curveball', sub: 'Neón, 1 contra 1, 3 vidas', evento: 'curveball:inicio', tapa: () => '/puente/curveball/tapa.jpg?v=1', fondo: '#071019', mesa: 'cbJuego' },
     { id: 'shoppa', nombre: 'WORGS', sub: 'Modo Shoppa o normal', evento: 'shoppa:inicio', tapa: () => '/puente/worgs/tapa.jpg?v=2', fondo: '#1d4fb8', mesa: 'shJuego' },
     // BACITY corre en su propio servidor, en /bacity/ (bacity.js). "aparte": su tarjeta nace oculta y se pide por
     // separado, sin demorar a los demas; se muestra solo si el puente dice que esta cuenta puede entrar. Asi, si el
@@ -10985,7 +10990,7 @@ document.addEventListener('pointerdown', (ev) => {
     const mt = el('div', 'jg-bib-titulo'); mt.append('Mesas esperando rival', el('small', null, 'de todos los juegos'));
     box.appendChild(mt);
     if (!lista.length) { box.appendChild(el('div', 'jg-vacio jg-mesas-vacio', 'Ninguna mesa esperando ahora. Elegí un juego abajo y armá una partida.')); return; }
-    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, shoppa: (id) => { stack = []; go('shJuego', id); } };
+    const unirse = { truco: typeof joinGame === 'function' ? joinGame : null, funball: typeof fbJoin === 'function' ? fbJoin : null, ajedrez: typeof ajJoin === 'function' ? ajJoin : null, curveball: (id) => { stack = []; go('cbJuego', id); }, shoppa: (id) => { stack = []; go('shJuego', id); } };
     const l = el('div', 'jg-seguir'); box.appendChild(l);
     for (const { j, a } of lista.slice(0, 8)) {
       const quien = a.creador || { nombre: '?' };
@@ -11033,12 +11038,36 @@ document.addEventListener('pointerdown', (ev) => {
     ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); w.focus(); } catch { /* otro origen */ } });
     marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
   }
+  // ── Curveball ──
+  // Como WORGS, el juego entero (sala, mesas, desafios, compu, chat y revancha) vive en un iframe del
+  // mismo origen (/puente/curveball/juego.html) y habla con el socket del chat por parent.app.socket.
+  // Las salas y las partidas las lleva curveball.js; el motor online viene del repo del juego.
+  let cbIfr = null, cbMesaAbierta = null;
+  // Al salir del iframe (o cerrar los juegos) se le avisa al servidor que deje de mandar los snapshots.
+  function soltarCurveball() {
+    const id = cbMesaAbierta; cbMesaAbierta = null;
+    if (!id) return;
+    try { const a = app(); if (a && a.socket) a.socket.emit('curveball:salir', { id }); } catch { /* sin socket */ }
+  }
+  function cbJuego(mesa) {
+    page.appendChild(head('Curveball', botonEnlace('/app?juegos=curveball', 'Curveball · __PUENTE_APP__')));
+    const b = el('div', 'jg-curveball'), marco = el('div', 'jg-curveball-marco'), ifr = el('iframe', 'jg-curveball-iframe');
+    ifr.src = '/puente/curveball/juego.html?v=1' + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
+    cbIfr = ifr; cbMesaAbierta = mesa || null;
+    ifr.title = 'Curveball'; ifr.allow = 'autoplay; fullscreen'; ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
+    let ultimo = 0;
+    const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
+    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); } catch { /* otro origen */ } });
+    marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
+  }
   async function inicio(which) {
+    // la pila queda en la pantalla del juego, para que el tiempo de uso diga "curveball" y no "juegos"
+    if (which === 'curveball') { if (stack.length) stack[stack.length - 1] = ['cbJuego']; return cbJuego(); }
     // la pila queda en la pantalla del juego, para que el tiempo de uso diga "shoppa" y no "juegos"
     if (which === 'shoppa') { if (stack.length) stack[stack.length - 1] = ['shJuego']; return shJuego(); }
     if (which === 'bacity') { if (stack.length) stack[stack.length - 1] = ['bcJuego']; return bcJuego(); }
     if (which === 'funball') return fb('inicio');
-    if (which === 'ajedrez') return ajInicio();
+    if (which === 'ajedrez') return aj('inicio');
     if (which === 'globalsiege') return mr('inicio');
     if (which === 'pool') return pl('inicio');
     if (which === 'truco') return tr('inicio');
@@ -11148,495 +11177,29 @@ document.addEventListener('pointerdown', (ev) => {
       + (AJ_DETALLE[t] ? `<g fill="none" stroke="${det}" stroke-width="${t === 'n' ? 1.3 : 1.2}" stroke-linecap="round">${AJ_DETALLE[t]}${t === 'n' ? `<circle cx="17.4" cy="17.4" r="1.05" fill="${det}" stroke="none"/>` : ''}</g>` : '') + '</svg>';
   };
   const AJ_TAPA = () => `<div class="aj-tapa"><div class="aj-tapa-tab">${Array.from({ length: 16 }, (_, i) => `<span class="${(i + (i >> 2)) % 2 ? 'os' : 'cl'}"></span>`).join('')}</div><div class="aj-tapa-p">${ajPieza('n')}${ajPieza('K')}</div></div>`;
-  const AJ_LETRA = { k: 'R', q: 'D', r: 'T', b: 'A', n: 'C' };
-  const AJ_NOMBRE = { q: 'Dama', r: 'Torre', b: 'Alfil', n: 'Caballo' };
-  const AJ_VALOR = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-  // el tablero desde un FEN: { 'e4': 'P', ... }
-  function ajTablero(fen) {
-    const out = {};
-    String(fen || '').split(' ')[0].split('/').forEach((fila, k) => {
-      let f = 0;
-      for (const ch of fila) { if (/\d/.test(ch)) f += +ch; else { out['abcdefgh'[f] + (8 - k)] = ch; f++; } }
-    });
-    return out;
-  }
-  function ajSon(tipo) {
-    if (tipo === 'come') beep(240, 110); else if (tipo === 'jaque') { beep(520, 70); setTimeout(() => beep(700, 90), 80); } else if (tipo === 'fin') { beep(440, 120); setTimeout(() => beep(660, 200), 130); } else beep(330, 60);
-  }
-
-  async function ajInicio() {
-    page.appendChild(head('Ajedrez', botonEnlace('/app?juegos=ajedrez', 'Ajedrez · __PUENTE_APP__')));
-    const b = el('div', 'jg-cuerpo jg-inicio'); page.appendChild(b);
-    const hero = el('div', 'jg-hero aj-hero');
-    const dib = el('div', 'aj-hero-dibujo'); dib.innerHTML = ajPieza('N') + ajPieza('Q');
-    hero.append(dib, el('div', 'jg-hero-t', 'Ajedrez'), el('div', 'jg-hero-s', '1 contra 1, sin reloj o a ritmo de blitz'));
-    const btns = el('div', 'jg-acciones');
-    const nb = el('button', 'jg-btn jg-primario', 'Crear partida'); nb.type = 'button'; nb.addEventListener('click', () => go('ajCrear'));
-    const cb = el('button', 'jg-btn', 'Jugar con la compu'); cb.type = 'button'; cb.addEventListener('click', () => go('ajCrear', 'compu'));
-    btns.append(nb, cb); hero.appendChild(btns);
-    b.appendChild(hero);
-    const box = el('div'); box.appendChild(el('div', 'jg-estado', 'Cargando…')); b.appendChild(box);
-    const d = await emit('ajedrez:inicio');
-    if (!page || !box.isConnected) return;
-    box.textContent = '';
-    if (d.error) { box.appendChild(el('div', 'jg-estado', d.error)); return; }
-    const section = (title, items, render) => { if (!items.length) return; box.appendChild(el('div', 'jg-sub', title)); const l = el('div', 'jg-lista'); items.forEach(x => l.appendChild(render(x))); box.appendChild(l); };
-    const row = (who, top, bottom, label, cls, fn) => {
-      const r = el('button', 'jg-fila'); r.type = 'button';
-      const t = el('div', 'jg-ftexto'); t.append(el('div', 'jg-fnombre', top), el('div', 'jg-fmeta', bottom));
-      r.append(avatar(who), t);
-      if (label) r.appendChild(el('span', 'jg-chip ' + (cls || ''), label));
-      r.addEventListener('click', fn);
-      return r;
-    };
-    const conColor = (c, quien) => c ? `${quien} con ${c === 'w' ? 'blancas' : 'negras'}` : '';
-    const rules = (a) => [a.ritmo, conColor(a.color, 'Jugás'), a.amistosa ? 'amistosa' : ''].filter(Boolean).join(' · ');
-    section('Te desafiaron', d.abiertas.filter(a => a.paraVos), (a) => row(a.creador, a.creador.nombre + ' te desafía', rules(a), 'Jugar', 'azul', () => ajJoin(a.id)));
-    section('Tus partidas', d.mias, (m) => {
-      const who = m.rival || m.invitado || { nombre: '?' };
-      const top = m.estado === 'esperando' ? (m.invitado ? `Esperando a ${m.invitado.nombre}` : 'Esperando rival') : `vs ${who.nombre}`;
-      const res = m.estado === 'terminada' ? (m.motivo === 'anulada' ? 'Anulada' : m.ganaste === null ? 'Tablas' : m.ganaste ? 'Ganaste' : 'Perdiste') : '';
-      const bottom = [res, m.ritmo, m.estado === 'jugando' ? (m.color === 'w' ? 'Con blancas' : 'Con negras') : ''].filter(Boolean).join(' · ');
-      return row(m.estado === 'esperando' && !m.invitado ? { nombre: '?' } : who, top, bottom, m.teToca ? 'Te toca' : '', 'amarillo', () => go('ajMesa', m.id));
-    });
-    section('Mesas esperando rival', d.abiertas.filter(a => !a.paraVos), (a) => row(a.creador, a.creador.nombre, rules(a), 'Jugar', 'azul', () => ajJoin(a.id)));
-    section('Se está jugando', d.enJuego || [], (m) => row(m.jugadores[0], m.jugadores.map(p => p.nombre).join(' vs '), 'Podés mirar la partida', '👀 Mirar', '', () => go('ajMesa', m.id)));
-    if (!d.abiertas.length && !d.mias.length) box.appendChild(el('div', 'jg-vacio', 'No hay mesas esperando. ¡Creá una partida o jugá con la compu!'));
-    const s = d.stats;
-    box.appendChild(el('div', 'jg-sub', 'Tu récord'));
-    const st = el('div', 'jg-stats aj-stats');
-    for (const [n, l] of [[s.ganadas, 'ganadas'], [s.tablas, 'tablas'], [s.perdidas, 'perdidas'], [`${s.compuGanadas}-${s.compuPerdidas}`, 'vs la compu']]) { const x = el('div', 'jg-stat'); x.append(el('div', 'jg-stat-n', String(n)), el('div', 'jg-stat-l', l)); st.appendChild(x); }
-    box.appendChild(st);
-    if (s.amistosasGanadas || s.amistosasPerdidas) box.appendChild(el('div', 'jg-ayuda', `Amistosas: ${s.amistosasGanadas} ${s.amistosasGanadas === 1 ? 'ganada' : 'ganadas'} y ${s.amistosasPerdidas} ${s.amistosasPerdidas === 1 ? 'perdida' : 'perdidas'} (no suman al ranking).`));
-    const rk = el('div', 'jg-rankings'); b.appendChild(rk);
-    for (const [k, title] of [['mes', 'Ranking del mes'], ['total', 'Ranking histórico']]) {
-      const list = d.ranking[k];
-      rk.appendChild(el('div', 'jg-sub', title));
-      if (!list.length) { rk.appendChild(el('div', 'jg-vacio', 'Todavía nadie ganó una partida contra otra persona.')); continue; }
-      const l = el('div', 'jg-lista');
-      list.forEach((p, k2) => { const r = el('div', 'jg-fila jg-rank'); r.append(el('span', 'jg-pos', ['🥇', '🥈', '🥉'][k2] || String(k2 + 1)), avatar(p), el('span', 'jg-fnombre', p.nombre), el('span', 'jg-chip', `${p.ganadas} ${p.ganadas === 1 ? 'victoria' : 'victorias'}`)); l.appendChild(r); });
-      rk.appendChild(l);
+  // Su pantalla esta aparte (/puente/ajedrez/juego.js, con su propio repositorio) y se baja recien la primera vez
+  // que se abre. Las vistas siguen llamandose ajMesa y ajCrear (enlaces y avisos)
+  let ajCarga = null;
+  function aj(vista, arg) {
+    const top = stack[stack.length - 1];
+    if (!ajCarga) {
+      ajCarga = (window.puenteAjedrez ? Promise.resolve() : new Promise((ok, mal) => { const x = document.createElement('script'); x.src = '/puente/ajedrez/juego.js?v=1'; x.onload = ok; x.onerror = mal; document.head.appendChild(x); }))
+        .then(() => window.puenteAjedrez.usar({ el, emit, head, go, back, toast, avatar, botonEnlace, confirmar, svg, I, beep, byId, app, botonSalir, chatPartida, ctaInvitado, ajPieza,
+          page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } }))
+        .catch((e) => { ajCarga = null; throw e; });
     }
+    if (!page.firstChild) { page.appendChild(head('Ajedrez')); page.appendChild(el('div', 'jg-estado', 'Cargando…')); }
+    ajCarga.then(() => {
+      if (!page || stack[stack.length - 1] !== top) return;
+      page.textContent = '';
+      window.puenteAjedrez[vista](arg);
+    }).catch(() => toast('No se pudo abrir el Ajedrez. Probá de nuevo.', 'error'));
   }
+  // entrar a una mesa desde la lista de mesas (sin cargar la pantalla antes)
   async function ajJoin(id) {
     const r = await emit('ajedrez:unirse', { id });
     if (r.error) return toast(r.error, 'error');
     go('ajMesa', r.id);
-  }
-
-  async function ajCrear(modo) {
-    page.appendChild(head(modo === 'compu' ? 'Ajedrez contra la compu' : 'Nueva partida de ajedrez'));
-    const b = el('div', 'jg-cuerpo'); page.appendChild(b);
-    const f = el('div', 'jg-form'); b.appendChild(f);
-    const info = await emit('ajedrez:inicio');
-    if (!page || !f.isConnected) return;
-    const data = { ritmo: 'libre', color: null, modo: modo === 'compu' ? 'compu' : 'abierta', nivel: 2, rival: null, amistosa: false };
-    const seg = (label, key, opts, onChange) => {
-      const w = el('div', 'jg-campo'); w.appendChild(el('span', 'jg-etq', label));
-      const s = el('div', 'jg-seg' + (opts.length > 3 ? ' fb-seg-varias' : ''));
-      for (const [v, l] of opts) {
-        const x = el('button', 'jg-seg-op', l); x.type = 'button'; x.classList.toggle('on', data[key] === v);
-        x.addEventListener('click', () => { data[key] = v; s.querySelectorAll('.jg-seg-op').forEach(y => y.classList.toggle('on', y === x)); if (onChange) onChange(); });
-        s.appendChild(x);
-      }
-      w.appendChild(s); f.appendChild(w); return w;
-    };
-    const HINT = {
-      abierta: 'La mesa queda en la sala y la toma el primero que quiera jugar.',
-      desafio: 'Le mandás un mensaje directo con el enlace a la mesa.',
-      compu: 'Para practicar. No cuenta para el ranking.',
-    };
-    const RHINT = { libre: 'Sin reloj: cada uno juega cuando puede y te avisa cuando te toca.', otro: 'Minutos para cada uno + segundos que se suman en cada jugada. Si se te acaba el tiempo, perdés.' };
-    const ritmos = (info && info.ritmos) || [['libre', 'Sin reloj'], ['3+2', '3+2'], ['5+0', '5+0'], ['10+5', '10+5'], ['15+10', '15+10']];
-    seg('Reloj', 'ritmo', ritmos, () => { rh.textContent = data.ritmo === 'libre' ? RHINT.libre : RHINT.otro; });
-    const rh = el('div', 'jg-ayuda', RHINT.libre); f.appendChild(rh);
-    seg('Tus piezas', 'color', [[null, 'Al azar'], ['w', 'Blancas'], ['b', 'Negras']]);
-    if (modo !== 'compu') seg('Contra quién', 'modo', [['abierta', 'Mesa abierta'], ['desafio', 'Desafiar a alguien'], ['compu', 'La compu']], () => { pick.hidden = data.modo !== 'desafio'; lvl.hidden = data.modo !== 'compu'; hint.textContent = HINT[data.modo]; verAm(); });
-    const lvl = seg('Nivel de la compu', 'nivel', ((info && info.niveles) || ['Fácil', 'Normal', 'Difícil', 'Muy difícil']).map((n, i) => [i + 1, n]));
-    lvl.hidden = data.modo !== 'compu';
-    const hint = el('div', 'jg-ayuda', HINT[data.modo]); f.appendChild(hint);
-    const pick = el('div', 'jg-campo'); pick.hidden = true;
-    const sbox = el('label', 'jg-buscar'); sbox.insertAdjacentHTML('beforeend', svg(I.buscar, 20));
-    const q = el('input'); q.type = 'search'; q.placeholder = 'Buscar a quién desafiar'; sbox.appendChild(q);
-    const list = el('div', 'jg-lista');
-    const chosen = el('div', 'jg-elegido');
-    pick.append(sbox, chosen, list); f.appendChild(pick);
-    let t = null, seq = 0;
-    q.addEventListener('input', () => {
-      clearTimeout(t);
-      t = setTimeout(async () => {
-        const my = ++seq;
-        let ps = [];
-        if (q.value.trim().length >= 2) {
-          try { ps = ((await (await fetch('/puente/api/mercado/personas?q=' + encodeURIComponent(q.value.trim()), { headers: { Authorization: 'Bearer ' + localStorage.getItem('haven_token') } })).json()).personas) || []; } catch { ps = []; }
-        }
-        if (my !== seq || !list.isConnected) return;
-        list.textContent = '';
-        for (const p of ps) {
-          const r = el('button', 'jg-fila'); r.type = 'button';
-          const tx = el('div', 'jg-ftexto'); tx.append(el('div', 'jg-fnombre', p.nombre), el('div', 'jg-fmeta', '@' + p.usuario));
-          r.append(avatar(p), tx);
-          r.addEventListener('click', () => { data.rival = p; chosen.textContent = 'Vas a desafiar a ' + p.nombre; list.textContent = ''; q.value = ''; err.textContent = ''; });
-          list.appendChild(r);
-        }
-      }, 300);
-    });
-    // Competitiva (suma al ranking) o amistosa (queda en el récord, sin sumar). Con la compu no hace falta
-    const AHINT = { false: 'Suma al ranking del mes y al histórico.', true: 'Queda en tu récord como amistosa, pero no suma al ranking.' };
-    const am = seg('Ranking', 'amistosa', [[false, 'Competitiva'], [true, 'Amistosa']], () => { ah.textContent = AHINT[data.amistosa]; });
-    const ah = el('div', 'jg-ayuda', AHINT.false); f.appendChild(ah);
-    const verAm = () => { am.hidden = ah.hidden = data.modo === 'compu' || !!(window.app && window.app.user && window.app.user.isGuest); }; verAm();
-    const err = el('div', 'jg-error'); f.appendChild(err);
-    const go2 = el('button', 'jg-btn jg-primario jg-ancho', modo === 'compu' ? 'Empezar' : 'Crear partida'); go2.type = 'button'; f.appendChild(go2);
-    go2.addEventListener('click', async () => {
-      err.textContent = '';
-      if (data.modo === 'desafio' && !data.rival) { err.textContent = 'Elegí a quién desafiar.'; return; }
-      go2.disabled = true;
-      const r = await emit('ajedrez:crear', { ritmo: data.ritmo, color: data.color, modo: data.modo, nivel: data.nivel, rival: data.rival && data.rival.id, amistosa: data.amistosa });
-      go2.disabled = false;
-      if (r.error) { err.textContent = r.error; return; }
-      if (data.modo === 'desafio') { ajChallenge(data.rival, r.id, data.ritmo, data.amistosa); return; }
-      stack.pop(); go('ajMesa', r.id);
-    });
-  }
-  function ajChallenge(p, id, ritmo, amistosa) {
-    const a = app();
-    const text = `¡Te desafío a un ajedrez${ritmo && ritmo !== 'libre' ? ' (' + ritmo + ')' : ''}${amistosa ? ', amistoso (no suma al ranking)' : ''}! Entrá acá: ${location.origin}/app?ajedrez=${id}`;
-    let done = false;
-    const fill = () => {
-      if (done) return; done = true;
-      setTimeout(() => { const box = byId('message-input'); if (!box) return; box.value = text; box.dispatchEvent(new Event('input', { bubbles: true })); box.focus(); }, 900);
-    };
-    a.socket.once('dm-opened', fill);
-    setTimeout(() => { if (!done) a.socket.off('dm-opened', fill); }, 8000);
-    toast('Mandale el mensaje para que entre a la mesa', 'success');
-    close();
-    a.socket.emit('start-dm', { targetUserId: p.id });
-  }
-  function ajShare(id) {
-    const url = `${location.origin}/app?ajedrez=${id}`;
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(() => toast('Enlace de la mesa copiado', 'success'), () => prompt('Copiá el enlace:', url));
-    else prompt('Copiá el enlace:', url);
-  }
-
-  // ── La mesa ──
-  let ajM = null; // { id, s, sel, busy, recibido }
-  async function ajTable(id) {
-    ajM = { id, s: null, sel: null, busy: false };
-    mesa = { id: 'aj:' + id, s: null };
-    const menu = el('button', 'jg-btn jg-salir', ''); menu.type = 'button'; menu.style.visibility = 'hidden';
-    ajM.menu = menu;
-    page.appendChild(head('Ajedrez', menu));
-    const b = el('div', 'jg-mesa aj-mesa'); page.appendChild(b);
-    b.appendChild(el('div', 'jg-estado', 'Cargando…'));
-    menu.addEventListener('click', () => {
-      const s = ajM && ajM.s;
-      if (!s) return;
-      if (s.estado === 'esperando' && s.soyCreador) { confirmar('¿Cancelar la partida?', 'La mesa se cierra y nadie más puede entrar.', 'Cancelar partida', 'Volver').then(ok => { if (ok) emit('ajedrez:cancelar', { id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); }); }); return; }
-      if (s.estado === 'jugando' && s.soyJugador) {
-        const antes = (s.san || []).length < 2;
-        confirmar('¿Abandonar la partida?', antes ? 'Todavía no empezó: se anula y no cuenta.' : 'Si abandonás, la perdés y gana tu rival.', 'Abandonar', 'Seguir jugando').then(ok => { if (ok) emit('ajedrez:accion', { id, tipo: 'abandonar' }); });
-        return;
-      }
-      ajShare(id);
-    });
-    const d = await emit('ajedrez:ver', { id });
-    if (!page || !ajM || ajM.id !== id) return;
-    if (d.error) { b.textContent = ''; b.appendChild(el('div', 'jg-estado', d.error)); return; }
-    ajRender(d.partida);
-    tickT = setInterval(ajRelojes, 200);
-  }
-  // Los relojes corren aca entre aviso y aviso del servidor
-  function ajRelojes() {
-    if (!page || !ajM || !ajM.s || !ajM.s.reloj) return;
-    const s = ajM.s, R = s.reloj, pasado = performance.now() - ajM.recibido;
-    for (const c of ['w', 'b']) {
-      const x = page.querySelector(`.aj-reloj[data-c="${c}"]`);
-      if (!x) continue;
-      const ms = Math.max(0, R[c] - (R.corre === c ? pasado : 0));
-      const sg = ms / 1000;
-      x.textContent = sg < 20 ? `${Math.floor(sg / 60)}:${String(Math.floor(sg % 60)).padStart(2, '0')}.${Math.floor((sg * 10) % 10)}` : `${Math.floor(sg / 60)}:${String(Math.floor(sg % 60)).padStart(2, '0')}`;
-      x.classList.toggle('corre', R.corre === c);
-      x.classList.toggle('poco', sg < 20 && s.estado === 'jugando');
-    }
-    const pr = page.querySelector('.aj-primera');
-    if (pr && R.primera != null) pr.textContent = Math.max(0, Math.ceil((R.primera - pasado) / 1000)) + ' s';
-  }
-  function ajRender(s) {
-    if (!page || !ajM || ajM.id !== s.id) return;
-    const prev = ajM.s;
-    ajM.s = s; mesa.s = s; ajM.recibido = performance.now();
-    botonSalir(ajM.menu, s);
-    chatPartida(page, s, (t) => emit('ajedrez:accion', { id: s.id, tipo: 'chat', texto: t }), 'ajedrez');
-    if (s.siguiente && prev && !prev.siguiente) { setTimeout(() => { if (page && ajM && ajM.id === s.id) { stack.pop(); go('ajMesa', s.siguiente); } }, 600); }
-    const t = page.querySelector('.jg-titulo');
-    if (t) t.textContent = `Ajedrez · ${s.ritmo}${s.compu ? ' · compu ' + s.nivel.toLowerCase() : ''}`;
-    const b = page.querySelector('.aj-mesa');
-    if (s.estado === 'esperando') {
-      b.textContent = '';
-      const w = el('div', 'jg-espera');
-      const dib = el('div', 'aj-hero-dibujo'); dib.innerHTML = ajPieza(s.yo && s.yo.color === 'b' ? 'k' : 'K');
-      w.append(dib, el('div', 'jg-hero-t', s.invitado ? `Esperando a ${s.invitado.nombre}` : 'Esperando rival'),
-        el('div', 'jg-hero-s', !s.soyJugador ? `${s.yo ? s.yo.nombre : 'Alguien'} te espera (${s.ritmo}${s.yo && s.yo.color ? ', jugás con ' + (s.yo.color === 'w' ? 'negras' : 'blancas') : ''}).` : s.invitado ? 'Cuando entre por el enlace, empieza la partida.' : 'La mesa está en la sala de Juegos: la toma el primero que quiera jugar.'));
-      const acts = el('div', 'jg-acciones');
-      const c = el('button', 'jg-btn', 'Copiar enlace'); c.type = 'button'; c.addEventListener('click', () => ajShare(s.id));
-      acts.appendChild(c);
-      if (!s.soyJugador) { const j = el('button', 'jg-btn jg-primario', 'Jugar'); j.type = 'button'; j.addEventListener('click', () => ajJoin(s.id)); acts.appendChild(j); }
-      else if (s.soyCreador) { const x = el('button', 'jg-btn jg-suave', 'Cancelar partida'); x.type = 'button'; x.addEventListener('click', () => emit('ajedrez:cancelar', { id: s.id }).then(r => { if (r.error) toast(r.error, 'error'); else back(); })); acts.appendChild(x); }
-      w.appendChild(acts); b.appendChild(w); return;
-    }
-    // sonido y animacion de la jugada nueva (la propia ya se movio al soltarla)
-    const nueva = prev && prev.san && s.san && s.san.length === prev.san.length + 1 && s.ultima;
-    const mia = nueva && ajM.optim === s.san.length;
-    if (nueva) { const j = s.san[s.san.length - 1]; ajSon(/#/.test(j) ? 'fin' : /\+/.test(j) ? 'jaque' : /x/.test(j) ? 'come' : 'mueve'); }
-    else if (prev && prev.estado === 'jugando' && s.estado === 'terminada') ajSon('fin');
-    ajM.optim = null;
-    if (!s.teToca) ajM.sel = null;
-    ajDraw(s, nueva && !mia ? s.ultima : null);
-  }
-  function ajDraw(s, animar) {
-    const b = page && page.querySelector('.aj-mesa');
-    if (!b) return;
-    const scroll = b.querySelector('.aj-jugadas');
-    const arriba = scroll ? scroll.scrollTop : 0;
-    b.textContent = '';
-    const negras = s.yo && s.yo.color === 'b';
-    const tab = ajTablero(s.fen);
-    // las comidas: lo que falta de cada color (contando coronaciones)
-    const inicial = { p: 8, n: 2, b: 2, r: 2, q: 1 };
-    const cuenta = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
-    for (const p of Object.values(tab)) { const t = p.toLowerCase(); if (t !== 'k') cuenta[p === p.toUpperCase() ? 'w' : 'b'][t]++; }
-    const material = (c) => Object.entries(cuenta[c]).reduce((a, [t, n]) => a + n * AJ_VALOR[t], 0);
-    const comidas = (c) => { // piezas de c que se comieron
-      const out = [];
-      for (const t of ['q', 'r', 'b', 'n', 'p']) for (let k = 0; k < Math.max(0, inicial[t] - cuenta[c][t]); k++) out.push(c === 'w' ? t.toUpperCase() : t);
-      return out;
-    };
-    const jugador = (p, c, abajo) => {
-      const w = el('div', 'aj-jug' + (abajo ? ' abajo' : ''));
-      const tx = el('div', 'aj-jtexto');
-      tx.appendChild(el('div', 'aj-nom', p ? p.nombre : '?'));
-      const cap = el('div', 'aj-capt');
-      for (const x of comidas(c === 'w' ? 'b' : 'w')) { const i = el('span', 'aj-cp'); i.innerHTML = ajPieza(x); cap.appendChild(i); }
-      const dif = material(c) - material(c === 'w' ? 'b' : 'w');
-      if (dif > 0) cap.appendChild(el('span', 'aj-dif', '+' + dif));
-      tx.appendChild(cap);
-      w.append(avatar(p, 'jg-av'), tx);
-      if (s.turno === c && s.estado === 'jugando') w.classList.add('le-toca');
-      if (s.reloj) { const r = el('div', 'aj-reloj'); r.dataset.c = c; w.appendChild(r); }
-      return w;
-    };
-    const col = el('div', 'aj-tabcol');
-    const yoC = negras ? 'b' : 'w', elC = negras ? 'w' : 'b';
-    col.appendChild(jugador(s.rival, elC, false));
-    // el tablero
-    const T = el('div', 'aj-tablero');
-    const posibles = (s.teToca && s.posibles) || {};
-    const sel = ajM.sel && posibles[ajM.sel] ? ajM.sel : null;
-    if (!sel) ajM.sel = null;
-    const destinos = sel ? posibles[sel] : [];
-    for (let fila = 0; fila < 8; fila++) {
-      for (let col2 = 0; col2 < 8; col2++) {
-        const f = negras ? 7 - col2 : col2, r = negras ? fila : 7 - fila;
-        const sq = 'abcdefgh'[f] + (r + 1);
-        const c = el('div', 'aj-c ' + ((f + r) % 2 ? 'cl' : 'os'));
-        c.dataset.sq = sq;
-        if (s.ultima && (s.ultima.de === sq || s.ultima.a === sq)) c.classList.add('ult');
-        if (sel === sq) c.classList.add('sel');
-        if (destinos.includes(sq)) c.classList.add('dest', tab[sq] ? 'come' : 'vacia');
-        if (s.jaque === sq) c.classList.add('jaque');
-        if (col2 === 0) c.appendChild(el('span', 'aj-num', String(r + 1)));
-        if (fila === 7) c.appendChild(el('span', 'aj-let', 'abcdefgh'[f]));
-        if (tab[sq]) {
-          const p = el('div', 'aj-p'); p.innerHTML = ajPieza(tab[sq]);
-          if (posibles[sq]) p.classList.add('mia');
-          c.appendChild(p);
-        }
-        T.appendChild(c);
-      }
-    }
-    ajInteraccion(T, s);
-    col.appendChild(T);
-    col.appendChild(jugador(s.yo, yoC, true));
-    b.appendChild(col);
-    // al costado
-    const lado = el('div', 'aj-lado');
-    if (s.estado === 'terminada') lado.appendChild(ajFin(s));
-    else {
-      const est = el('div', 'aj-estado');
-      if (s.reloj && s.reloj.primera != null && s.soyJugador) {
-        est.append(el('span', '', s.teToca ? 'Hacé tu primera jugada: ' : `${s.rival.nombre} tiene que hacer su primera jugada: `), el('b', 'aj-primera', ''));
-      } else if (s.teToca) est.textContent = s.jaque ? '¡Jaque! Te toca' : 'Te toca';
-      else if (s.soyJugador) est.textContent = s.rival && s.rival.compu ? 'La compu está pensando…' : `Le toca a ${s.rival ? s.rival.nombre : 'tu rival'}`;
-      else { const t = [s.yo, s.rival].find(p => p && p.color === s.turno); est.textContent = t ? `Le toca a ${t.nombre}` : '👀 Mirando la partida'; }
-      if (s.teToca) est.classList.add('mio');
-      lado.appendChild(est);
-      if (s.tablas === 'rival') {
-        const tb = el('div', 'aj-tablas');
-        tb.appendChild(el('div', '', `${s.rival.nombre} ofrece tablas`));
-        const acc = el('div', 'jg-acciones');
-        const si = el('button', 'jg-btn jg-primario', 'Aceptar'); si.type = 'button'; si.addEventListener('click', () => emit('ajedrez:accion', { id: s.id, tipo: 'aceptar' }));
-        const no = el('button', 'jg-btn', 'Rechazar'); no.type = 'button'; no.addEventListener('click', () => emit('ajedrez:accion', { id: s.id, tipo: 'rechazar' }));
-        acc.append(si, no); tb.appendChild(acc); lado.appendChild(tb);
-      }
-    }
-    // las jugadas, de a pares
-    const lista = el('div', 'aj-jugadas');
-    const san = s.san || [];
-    if (!san.length) lista.appendChild(el('div', 'aj-sinj', s.estado === 'jugando' ? 'Empiezan las blancas.' : 'Sin jugadas.'));
-    for (let k = 0; k < san.length; k += 2) {
-      lista.appendChild(el('span', 'n', (k / 2 + 1) + '.'));
-      for (const j of [k, k + 1]) { const x = el('span', 'j' + (j === san.length - 1 ? ' ult' : ''), san[j] || ''); lista.appendChild(x); }
-    }
-    lado.appendChild(lista);
-    if (s.estado === 'jugando' && s.soyJugador && san.length >= 2) {
-      const acc = el('div', 'jg-acciones aj-acc');
-      const tb = el('button', 'jg-btn jg-suave', s.tablas === 'yo' ? 'Ofreciste tablas' : 'Ofrecer tablas'); tb.type = 'button';
-      tb.disabled = s.tablas === 'yo';
-      tb.addEventListener('click', () => emit('ajedrez:accion', { id: s.id, tipo: 'tablas' }).then(r => { if (r.error) toast(r.error, 'error'); }));
-      acc.appendChild(tb); lado.appendChild(acc);
-    }
-    if (s.log && s.log.length && s.estado === 'jugando') { const lg = el('div', 'jg-log aj-log'); s.log.slice(-2).forEach(l => lg.appendChild(el('div', '', l))); lado.appendChild(lg); }
-    b.appendChild(lado);
-    lista.scrollTop = animar || !scroll ? lista.scrollHeight : Math.max(arriba, lista.scrollHeight);
-    ajRelojes();
-    // la pieza que movio el rival se desliza desde donde estaba
-    if (animar) {
-      const de = T.querySelector(`[data-sq="${animar.de}"]`), a = T.querySelector(`[data-sq="${animar.a}"] .aj-p`);
-      if (de && a) {
-        const r0 = de.getBoundingClientRect(), r1 = a.parentNode.getBoundingClientRect();
-        a.style.transform = `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px)`;
-        a.classList.add('vuela');
-        requestAnimationFrame(() => requestAnimationFrame(() => { a.style.transform = ''; }));
-      }
-    }
-  }
-  function ajFin(s) {
-    const w = el('div', 'jg-fin aj-fin');
-    const won = s.ganador === 'yo', draw = s.ganador === 'empate';
-    const anulada = s.motivo === 'anulada';
-    w.append(el('div', 'jg-hero-t', anulada ? 'Partida anulada' : draw ? 'Tablas' : won ? '¡Ganaste!' : s.soyJugador ? `Ganó ${s.rival.nombre}` : 'Terminó'), el('div', 'jg-hero-s', s.motivoTexto || ''));
-    const acts = el('div', 'jg-acciones');
-    if (s.soyJugador && !s.siguiente) {
-      const r = el('button', 'jg-btn jg-primario', s.revancha && s.revancha.yo ? 'Esperando revancha…' : s.revancha && s.revancha.rival ? `${s.rival.nombre} quiere la revancha: ¡Dale!` : 'Revancha');
-      r.type = 'button'; r.disabled = !!(s.revancha && s.revancha.yo);
-      r.addEventListener('click', () => emit('ajedrez:accion', { id: s.id, tipo: 'revancha' }).then(x => { if (x.error) toast(x.error, 'error'); else if (x.id) { stack.pop(); go('ajMesa', x.id); } }));
-      acts.appendChild(r);
-    }
-    const v = el('button', 'jg-btn', 'Volver a Juegos'); v.type = 'button'; v.addEventListener('click', () => { stack = [['inicio']]; go('inicio', 'ajedrez'); });
-    acts.appendChild(v);
-    ctaInvitado(w, acts);
-    w.appendChild(acts);
-    return w;
-  }
-  // Tocar y tocar, o arrastrar
-  function ajInteraccion(T, s) {
-    let arr = null; // { sq, x, y, fantasma, pieza }
-    const casillaEn = (x, y) => { const e = document.elementFromPoint(x, y); const c = e && e.closest && e.closest('.aj-c'); return c && T.contains(c) ? c.dataset.sq : null; };
-    T.addEventListener('pointerdown', (e) => {
-      if (!ajM || ajM.busy || !s.teToca || e.button > 0) return;
-      const c = e.target.closest('.aj-c'); if (!c) return;
-      const sq = c.dataset.sq, pos = s.posibles || {};
-      if (ajM.sel && ajM.sel !== sq && (pos[ajM.sel] || []).includes(sq)) { e.preventDefault(); ajMover(s, ajM.sel, sq); return; }
-      if (pos[sq]) {
-        e.preventDefault();
-        const ya = ajM.sel === sq;
-        ajM.sel = sq; ajMarcar(T, s);
-        const p = c.querySelector('.aj-p');
-        arr = { sq, x: e.clientX, y: e.clientY, pieza: p, ya, mueve: false };
-        try { T.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
-        return;
-      }
-      if (ajM.sel) { ajM.sel = null; ajMarcar(T, s); }
-    });
-    T.addEventListener('pointermove', (e) => {
-      if (!arr) return;
-      if (!arr.mueve && Math.hypot(e.clientX - arr.x, e.clientY - arr.y) < 6) return;
-      if (!arr.mueve) {
-        arr.mueve = true;
-        const r = arr.pieza.getBoundingClientRect();
-        const f = el('div', 'aj-fantasma'); f.innerHTML = arr.pieza.innerHTML;
-        f.style.width = r.width + 'px'; f.style.height = r.height + 'px';
-        (page || document.body).appendChild(f); arr.fantasma = f;
-        arr.pieza.classList.add('levantada');
-      }
-      arr.fantasma.style.left = e.clientX + 'px'; arr.fantasma.style.top = e.clientY + 'px';
-      const sq = casillaEn(e.clientX, e.clientY);
-      T.querySelectorAll('.aj-c.encima').forEach(x => x.classList.remove('encima'));
-      if (sq && (s.posibles[arr.sq] || []).includes(sq)) T.querySelector(`[data-sq="${sq}"]`).classList.add('encima');
-    });
-    const soltar = (e, cancelado) => {
-      if (!arr) return;
-      const a = arr; arr = null;
-      if (a.fantasma) a.fantasma.remove();
-      if (a.pieza) a.pieza.classList.remove('levantada');
-      T.querySelectorAll('.aj-c.encima').forEach(x => x.classList.remove('encima'));
-      if (cancelado) return;
-      if (a.mueve) {
-        const sq = casillaEn(e.clientX, e.clientY);
-        if (sq && (s.posibles[a.sq] || []).includes(sq)) ajMover(s, a.sq, sq);
-        return;
-      }
-      // tocar de nuevo la elegida la suelta
-      if (a.ya) { ajM.sel = null; ajMarcar(T, s); }
-    };
-    T.addEventListener('pointerup', (e) => soltar(e, false));
-    T.addEventListener('pointercancel', (e) => soltar(e, true));
-  }
-  // marcar la elegida y sus destinos sin dibujar todo de nuevo
-  function ajMarcar(T, s) {
-    const tab = ajTablero(s.fen), dest = (ajM.sel && s.posibles && s.posibles[ajM.sel]) || [];
-    for (const c of T.children) {
-      const sq = c.dataset.sq;
-      c.classList.toggle('sel', sq === ajM.sel);
-      const d = dest.includes(sq);
-      c.classList.toggle('dest', d); c.classList.toggle('come', d && !!tab[sq]); c.classList.toggle('vacia', d && !tab[sq]);
-    }
-  }
-  async function ajMover(s, de, a) {
-    const tab = ajTablero(s.fen), p = tab[de];
-    let cor = null;
-    if (p && p.toLowerCase() === 'p' && (a[1] === '8' || a[1] === '1')) {
-      cor = await ajCoronar(p === 'P');
-      if (!cor || !ajM || ajM.s !== s) return;
-    }
-    ajM.busy = true; ajM.sel = null;
-    // se ve movida enseguida; lo que manda el servidor la acomoda (enroque, al paso, coronacion)
-    const T = page && page.querySelector('.aj-tablero');
-    if (T) {
-      const pd = T.querySelector(`[data-sq="${de}"] .aj-p`), ca = T.querySelector(`[data-sq="${a}"]`);
-      if (pd && ca) { ca.querySelector('.aj-p')?.remove(); pd.classList.remove('mia'); ca.appendChild(pd); }
-      T.querySelectorAll('.aj-c').forEach(c => c.classList.remove('sel', 'dest', 'come', 'vacia', 'ult'));
-      T.querySelector(`[data-sq="${de}"]`)?.classList.add('ult'); ca?.classList.add('ult');
-    }
-    ajM.optim = (s.san || []).length + 1;
-    ajSon(tab[a] ? 'come' : 'mueve');
-    const r = await emit('ajedrez:accion', { id: s.id, tipo: 'mover', de, a, cor });
-    if (!ajM) return;
-    ajM.busy = false;
-    if (r.error) { ajM.optim = null; toast(r.error, 'error'); if (ajM.s) ajDraw(ajM.s, null); }
-  }
-  function ajCoronar(blanca) {
-    return new Promise((res) => {
-      const fondo = el('div', 'jg-aviso-fondo');
-      const box = el('div', 'jg-aviso aj-coronar'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
-      box.appendChild(el('div', 'jg-aviso-t', 'Coronar'));
-      const fila = el('div', 'aj-cor-fila');
-      for (const t of ['q', 'r', 'b', 'n']) {
-        const b = el('button', 'aj-cor-op'); b.type = 'button'; b.title = AJ_NOMBRE[t]; b.setAttribute('aria-label', AJ_NOMBRE[t]);
-        b.innerHTML = ajPieza(blanca ? t.toUpperCase() : t);
-        b.addEventListener('click', () => fin(t));
-        fila.appendChild(b);
-      }
-      box.appendChild(fila);
-      fondo.appendChild(box);
-      const fin = (v) => { document.removeEventListener('keydown', kd, true); fondo.remove(); res(v); };
-      const kd = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(null); } };
-      document.addEventListener('keydown', kd, true);
-      fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(null); });
-      (page || document.body).appendChild(fondo);
-      fila.firstChild.focus();
-    });
   }
 
   // ── Icono y numerito ("te toca") ──
@@ -11650,11 +11213,11 @@ document.addEventListener('pointerdown', (ev) => {
     if (badgeT) return;
     badgeT = setTimeout(async () => {
       badgeT = null;
-      const [d, f, aj, gs, po, gu] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio'), emit('shoppa:inicio')]);
+      const [d, f, aj, gs, po, cb, gu] = await Promise.all([emit('truco:inicio'), emit('funball:inicio'), emit('ajedrez:inicio'), emit('mr:inicio'), emit('pool:inicio'), emit('curveball:inicio'), emit('shoppa:inicio')]);
       // (sin contar la partida que esta abierta en la pantalla: ahi ya se esta jugando)
       const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
       const cuenta = (r) => (r.error || !r.mias ? 0 : r.mias.filter(m => m.teToca && String(m.id) !== abierta).length);
-      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po) + cuenta(gu);
+      const n = cuenta(d) + cuenta(f) + cuenta(aj) + cuenta(gs) + cuenta(po) + cuenta(cb) + cuenta(gu);
       setBadge(n);
     }, 2000);
   }
@@ -11687,7 +11250,7 @@ document.addEventListener('pointerdown', (ev) => {
     a.socket.on('truco:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'truco')) show('inicio', t[1]); });
     a.socket.on('funball:estado', (s) => { if (page && window.puenteFunball) window.puenteFunball.estado(s); refreshBadge(); });
     a.socket.on('funball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'funball')) show('inicio', t[1]); });
-    a.socket.on('ajedrez:estado', (s) => { if (page && ajM && ajM.id === s.id) ajRender(s); refreshBadge(); });
+    a.socket.on('ajedrez:estado', (s) => { if (page && window.puenteAjedrez) window.puenteAjedrez.estado(s); refreshBadge(); });
     a.socket.on('ajedrez:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'ajedrez')) show('inicio', t[1]); });
     a.socket.on('mr:estado', (s) => {
       if (page && window.puenteMR) window.puenteMR.estado(s);
@@ -11704,10 +11267,11 @@ document.addEventListener('pointerdown', (ev) => {
     // El zumbido de otro jugador (chat-partida.js), de cualquier juego
     a.socket.on('juego:zumbido', (z) => { if (window.puenteZumbido) window.puenteZumbido.recibido(z); });
     a.socket.on('pool:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'pool')) show('inicio', t[1]); });
+    a.socket.on('curveball:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && (!t[1] || t[1] === 'curveball')) show('inicio', t[1]); });
     a.socket.on('shoppa:cambio', () => { refreshBadge(); const t = page && stack[stack.length - 1]; if (t && t[0] === 'inicio' && !t[1]) show('inicio'); });
     a.socket.on('connect', () => {
       if (page && window.puenteFunball && window.puenteFunball.abierta()) emit('funball:ver', { id: window.puenteFunball.abierta() }).then(d => d.partida && window.puenteFunball.estado(d.partida, true));
-      else if (page && ajM) emit('ajedrez:ver', { id: ajM.id }).then(d => d.partida && ajRender(d.partida));
+      else if (page && window.puenteAjedrez && window.puenteAjedrez.abierta()) emit('ajedrez:ver', { id: window.puenteAjedrez.abierta() }).then(d => d.partida && window.puenteAjedrez.estado(d.partida));
       else if (page && window.puenteMR && window.puenteMR.abierta()) emit('mr:ver', { id: window.puenteMR.abierta() }).then(d => d.partida && window.puenteMR.estado(d.partida));
       else if (page && window.puentePool && window.puentePool.abierta()) emit('pool:ver', { id: window.puentePool.abierta() }).then(d => d.partida && window.puentePool.estado(d.partida));
       else if (page && window.puenteTruco && window.puenteTruco.abierta()) emit('truco:ver', { id: window.puenteTruco.abierta() }).then(d => d.partida && window.puenteTruco.estado(d.partida));
@@ -11720,12 +11284,13 @@ document.addEventListener('pointerdown', (ev) => {
     // de los enlaces a su misma direccion, asi que va aca la tarjeta de siempre (la de los demas enlaces), con
     // la tapa del juego y el texto que ven WhatsApp o X (vincular.js, JUEGOS_ENLACE). Al tocarla abre el juego.
     const TARJETA = {
-      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool y WORGS para jugar con la gente del chat.', v: '' },
+      juegos: { nombre: 'Juegos', desc: 'Truco, Funball, Ajedrez, GlobalSiege, Pool, Curveball y WORGS para jugar con la gente del chat.', v: '' },
       truco: { nombre: 'Truco', desc: 'Truco argentino, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       funball: { nombre: 'Funball', desc: 'El clásico de DOS de 1995, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '' },
       ajedrez: { nombre: 'Ajedrez', desc: '1 contra 1, sin reloj o a ritmo de blitz. Jugá contra alguien del chat o contra la compu.', v: '' },
       globalsiege: { nombre: 'GlobalSiege', desc: 'El MissionRisk de siempre: la guerra por el mundo, de 2 a 6 ejércitos, con gente del chat o contra la compu.', v: '' },
       pool: { nombre: 'Pool', desc: 'Pool de 8 bolas, 1 contra 1. Jugá contra alguien del chat o contra la compu.', v: '?v=3' },
+      curveball: { nombre: 'Curveball', desc: 'Bolea, curvea y dejá al rival sin vidas: 1 contra 1, tres vidas, contra alguien del chat o contra la compu.', v: '?v=1' },
       worgs: { nombre: 'WORGS', desc: 'Serpientes, sogas y explosiones: modo Shoppa o normal, con gente del chat o contra la máquina.', v: '?v=1' },
     };
     const escH = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -11770,6 +11335,7 @@ document.addEventListener('pointerdown', (ev) => {
         if (j && !JUEGOS.some(x => x.id === j)) return;
         e.preventDefault(); e.stopPropagation(); stack = [];
         if (j === 'shoppa' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { go('shJuego', mesa); return; }
+        if (j === 'curveball' && mesa && /^[a-f0-9]{6,20}$/.test(mesa)) { stack = [['inicio']]; go('cbJuego', mesa); return; }
         go('inicio', j || undefined); return;
       }
       const id = ok && u.searchParams.get('truco'), fid = ok && u.searchParams.get('funball'), aid = ok && u.searchParams.get('ajedrez');
@@ -11779,6 +11345,8 @@ document.addEventListener('pointerdown', (ev) => {
       if (gid && /^[a-f0-9]{6,20}$/.test(gid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('mrMesa', gid); return; }
       const pid = ok && u.searchParams.get('pool');
       if (pid && /^[a-f0-9]{6,20}$/.test(pid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('plMesa', pid); return; }
+      const cbid = ok && u.searchParams.get('curveball');
+      if (cbid && /^[a-f0-9]{6,20}$/.test(cbid)) { e.preventDefault(); e.stopPropagation(); stack = [['inicio']]; go('cbJuego', cbid); return; }
       if (!id || !/^[a-f0-9]{6,20}$/.test(id)) return;
       e.preventDefault(); e.stopPropagation();
       stack = []; go('mesa', id);
@@ -11788,6 +11356,7 @@ document.addEventListener('pointerdown', (ev) => {
     const jq = new URLSearchParams(location.search), jp = aliasJuego(jq.get('juegos')), jm = jq.get('mesa');
     if (jq.has('juegos') && (!jp || JUEGOS.some(x => x.id === jp))) {
       if (jp === 'shoppa' && jm && /^[a-f0-9]{6,20}$/.test(jm)) setTimeout(() => { stack = []; go('shJuego', jm); }, 1500);
+      else if (jp === 'curveball' && jm && /^[a-f0-9]{6,20}$/.test(jm)) setTimeout(() => { stack = []; go('cbJuego', jm); }, 1500);
       else setTimeout(() => { stack = []; go('inicio', jp || undefined); }, 1500);
     }
     const fp = new URLSearchParams(location.search).get('funball');
@@ -11798,6 +11367,8 @@ document.addEventListener('pointerdown', (ev) => {
     if (gp && /^[a-f0-9]{6,20}$/.test(gp)) setTimeout(() => { stack = [['inicio']]; go('mrMesa', gp); }, 1500);
     const pp = new URLSearchParams(location.search).get('pool');
     if (pp && /^[a-f0-9]{6,20}$/.test(pp)) setTimeout(() => { stack = [['inicio']]; go('plMesa', pp); }, 1500);
+    const cbp = new URLSearchParams(location.search).get('curveball');
+    if (cbp && /^[a-f0-9]{6,20}$/.test(cbp)) setTimeout(() => { stack = [['inicio']]; go('cbJuego', cbp); }, 1500);
     addEventListener('resize', () => { if (page && !mobile()) { const bar = byId('server-bar'); page.style.left = bar ? Math.round(bar.getBoundingClientRect().right) + 'px' : '0'; } else if (page) page.style.left = ''; });
   })();
 })();
