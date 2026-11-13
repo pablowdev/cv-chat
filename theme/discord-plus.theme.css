@@ -2546,7 +2546,6 @@ html body .puente-jg .jg-chat-pedir { display: flex; flex-direction: column; ali
 html body .puente-jg .jg-chat-pedir-t { font-size: 0.875rem; color: #b5bac1; }
 /* El que mira una partida (aviso.js: cartelMirando) */
 html body .puente-jg .jg-mirando { margin: 0 auto 0.5rem; padding: 0.375rem 0.75rem; border-radius: 0.5rem; background: #2b2d31; color: #dbdee1; font-size: 0.875rem; text-align: center; }
-html body .puente-jg .pl-pie .jg-mirando { margin: 0; flex: 1 1 100%; }
 /* El zumbido del Pool cuando no estas en la mesa: la pantalla tiembla un momento (aviso.js) */
 html body.puente-zumbido, html body .puente-jg.puente-zumbido { animation: puente-zumbido 0.6s linear; }
 html body .puente-jg .jg-chat-form .jg-zumbido { flex: none; min-height: 2.5rem; padding: 0 0.75rem; font-size: 1.125rem; background: #2b2d31; color: #f2f3f5; }
@@ -3019,7 +3018,6 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-btn.jg-primario { background: #5865f2; color: #fff; }
 .puente-jg .jg-btn.jg-primario:hover { background: #4752c4; }
 .puente-jg .jg-btn.jg-suave { background: #26252a; color: #b5bac1; }
-.puente-jg .jg-btn.jg-envido-btn { background: #3b2f0b; color: #f0b232; }
 .puente-jg .jg-ancho { width: 100%; }
 .puente-jg .jg-hero { text-align: center; padding: 1.25rem 1rem; margin-bottom: 0.5rem; border-radius: 1rem; background: #1f4d36; }
 /* Inicio de Juegos en pantallas anchas: el banner y los botones a la izquierda, las partidas,
@@ -3096,135 +3094,29 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-lnombre { min-width: 0; font-weight: 700; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .puente-jg .jg-lpuntos { font-size: 1.5rem; font-weight: 800; color: #fff; }
 .puente-jg .jg-meta { flex: 0 0 auto; font-size: 0.75rem; color: #949ba4; }
-.puente-jg .jg-rival { position: relative; display: flex; justify-content: center; min-height: 3.5rem; }
-.puente-jg .jg-dorsos { display: flex; gap: 0.25rem; }
-.puente-jg .jg-globo { position: absolute; top: 0; right: 0.25rem; max-width: 60%; padding: 0.375rem 0.75rem; border-radius: 1rem 1rem 0.25rem 1rem; background: #f2f3f5; color: #1a1a1e; font-size: 0.875rem; font-weight: 700; animation: puente-fade 0.2s ease-out; }
-.puente-jg .jg-globo.mio { position: static; align-self: flex-end; border-radius: 1rem 1rem 1rem 0.25rem; background: #5865f2; color: #fff; }
-.puente-jg .jg-pano {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; padding: 0.75rem 0.5rem; border-radius: 1.25rem;
-  background: #1f6b45; box-shadow: inset 0 0 0 4px #17563a, inset 0 0 40px rgba(0,0,0,0.25);
-}
 .puente-jg .jg-baza { position: relative; display: flex; flex-direction: column; align-items: center; gap: 0.375rem; padding: 0.25rem 0; border-radius: 0.75rem; }
 .puente-jg .jg-baza.actual { background: rgba(255,255,255,0.06); }
 .puente-jg .jg-hueco { width: var(--jg-jugada); height: calc(var(--jg-jugada) * 1.47); border-radius: 0.5rem; border: 2px dashed rgba(255,255,255,0.18); }
 .puente-jg .jg-bres { font-size: 0.6875rem; font-weight: 800; color: #c9e6d4; text-transform: uppercase; }
 .puente-jg .jg-baza.gano-yo .jg-bres { color: #fff; }
 .puente-jg .jg-status { text-align: center; min-height: 3rem; }
-.puente-jg .jg-canto { display: inline-block; padding: 0.375rem 0.875rem; border-radius: 999px; background: #5865f2; color: #fff; font-weight: 800; font-size: 1rem; }
-.puente-jg .jg-canto.rival { background: #f0b232; color: #1a1a1e; animation: jg-salta 0.35s ease-out; }
-@keyframes jg-salta { 0% { transform: scale(0.7); } 70% { transform: scale(1.08); } 100% { transform: scale(1); } }
 .puente-jg .jg-turno { margin-top: 0.25rem; font-weight: 700; color: #f2f3f5; }
 .puente-jg .jg-ultimo { margin-top: 0.25rem; font-size: 0.8125rem; color: #949ba4; }
 .puente-jg .jg-reloj { position: relative; height: 0.25rem; margin: 0.5rem auto 0; max-width: 12rem; border-radius: 999px; background: #2e2d32; overflow: visible; }
 .puente-jg .jg-reloj > span:first-child { display: block; height: 100%; width: 100%; border-radius: 999px; background: #4e5058; transition: width 0.5s linear; }
 .puente-jg .jg-reloj.mio > span:first-child { background: #f0b232; }
 .puente-jg .jg-reloj-t { position: absolute; right: -2.25rem; top: -0.4375rem; font-size: 0.75rem; color: #949ba4; }
-.puente-jg .jg-mano { display: flex; justify-content: center; gap: 0.5rem; padding-top: 0.25rem; }
-.puente-jg .jg-mano.juega .jg-carta { cursor: pointer; }
-.puente-jg .jg-mano.juega .jg-carta:hover, .puente-jg .jg-mano.juega .jg-carta:active { transform: translateY(-0.5rem); }
-.puente-jg .jg-envido { text-align: center; font-size: 0.8125rem; color: #949ba4; margin-top: -0.25rem; }
-.puente-jg .jg-cantos { display: flex; flex-wrap: wrap; gap: 0.375rem; justify-content: center; }
-.puente-jg .jg-cantos .jg-btn { min-height: 2.5rem; padding: 0 0.875rem; font-size: 0.9375rem; }
 .puente-jg .jg-gritos { display: flex; flex-wrap: wrap; gap: 0.375rem; justify-content: center; padding: 0.5rem; border-radius: 0.875rem; background: #2e2d32; }
-.puente-jg .jg-grito { padding: 0.5rem 0.75rem; border: 0; border-radius: 999px; background: #36353b; color: #f2f3f5; font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
-/* Mesa del Truco como las de antes (CyberJuegos): a la izquierda el juego, con las cartas del
-   rival arriba y las tuyas abajo; en el medio las jugadas, una encima de otra; al costado el
-   tanteador con fosforos y el chat con el rival (aviso.js, render y lateral) */
-.puente-jg .jg-mesa.jg-mesa2 { max-width: 76rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; }
-.puente-jg .jg-juego { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
 /* Proyecto Gusanos: el juego terminado va en un iframe, a pantalla completa menos la barra de arriba.
    El alto sale del alto de la pantalla del chat (que ya es fija) y no se mezcla con su scroll. */
 .puente-jg .jg-gusanos { box-sizing: border-box; height: calc(100% - 3.5rem - 1px); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: #070b12; }
 .puente-jg .jg-gusanos-marco { position: relative; height: 100%; background: #070b12; }
 .puente-jg .jg-gusanos-iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #070b12; }
-/* Curveball: igual que WORGS, el juego entero va en un iframe del mismo origen (sala, mesas y partida),
-   a pantalla completa menos la barra de arriba. Su tema es oscuro con neon. */
-.puente-jg .jg-curveball { box-sizing: border-box; height: calc(100% - 3.5rem - 1px); min-height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); background: #07080c; }
-.puente-jg .jg-curveball-marco { position: relative; height: 100%; background: #07080c; }
-.puente-jg .jg-curveball-iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: #07080c; }
-@media (min-width: 1000px) {
-  .puente-jg .jg-mesa.jg-mesa2 { grid-template-columns: minmax(0, 1fr) 19rem; }
-  .puente-jg .jg-lateral { position: sticky; top: 0.75rem; }
-}
-.puente-jg .jg-carta.rival { width: calc(var(--jg-mano) * 0.6); height: calc(var(--jg-mano) * 0.6 * 1.47); }
-.puente-jg .jg-dorsos { gap: 0.375rem; }
-.puente-jg .jg-pano.jg-pano2 { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: calc(var(--jg-jugada) * 0.25); padding: 0.875rem 0.5rem; }
-.puente-jg .jg-pila { position: relative; flex: 0 0 auto; width: calc(var(--jg-jugada) * 1.45); height: calc(var(--jg-jugada) * 1.47 * 1.5); }
-.puente-jg .jg-pila .jg-carta { position: absolute; transform: rotate(var(--giro, 0deg)); box-shadow: 0 3px 10px rgba(0,0,0,0.45); }
-.puente-jg .jg-pila .de-rival { top: 0; right: 0; }
-.puente-jg .jg-pila .de-yo { bottom: 0; left: 0; }
-.puente-jg .jg-pila .jg-carta.gano { box-shadow: 0 0 0 3px #f0b232, 0 3px 12px rgba(0,0,0,0.5); }
-.puente-jg .jg-pila .jg-carta.parda { filter: saturate(0.7); }
-.puente-jg .jg-carta.jg-entra-yo { animation: jg-entra-yo 0.38s cubic-bezier(0.2, 0.8, 0.3, 1.1) backwards; }
-.puente-jg .jg-carta.jg-entra-rival { animation: jg-entra-rival 0.38s cubic-bezier(0.2, 0.8, 0.3, 1.1) backwards; }
-@keyframes jg-entra-yo { from { transform: translateY(160%) rotate(0deg) scale(1.25); opacity: 0.4; } to { transform: rotate(var(--giro, 0deg)); opacity: 1; } }
-@keyframes jg-entra-rival { from { transform: translateY(-160%) rotate(0deg) scale(0.8); opacity: 0.4; } to { transform: rotate(var(--giro, 0deg)); opacity: 1; } }
-/* Repartir: las cartas salen del mazo de a una, alternadas, y las tuyas se dan vuelta */
-.puente-jg .jg-carta.jg-reparte { animation: jg-reparte 0.42s cubic-bezier(0.25, 0.8, 0.35, 1) var(--d, 0s) backwards; }
-@keyframes jg-reparte { from { transform: translate(35vw, -12vh) rotate(-35deg) scale(0.6); opacity: 0; } 30% { opacity: 1; } to { transform: none; opacity: 1; } }
-.puente-jg .jg-carta.mia-reparte::after {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 3; pointer-events: none;
-  background: url("/puente/cartas/dorso.webp?v=4") center / cover no-repeat, #9b2244;
-  animation: jg-destapa 0.5s ease calc(var(--d, 0s) + 0.9s) both;
-}
-@keyframes jg-destapa { 0% { opacity: 1; transform: scaleX(1); } 50% { opacity: 1; transform: scaleX(0); } 51% { opacity: 0; } 100% { opacity: 0; transform: scaleX(0); } }
-.puente-jg .jg-lateral { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
-.puente-jg .jg-tanteador { display: flex; justify-content: space-around; gap: 0.5rem; padding: 0.75rem 0.5rem; border-radius: 0.875rem; background: #1f6b45; box-shadow: inset 0 0 0 4px #17563a; }
-.puente-jg .jg-tcol { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; min-width: 0; flex: 1 1 0; }
-.puente-jg .jg-tnombre { max-width: 100%; font-size: 0.8125rem; font-weight: 800; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.puente-jg .jg-tnum { font-size: 1.125rem; font-weight: 800; color: #fff; }
-.puente-jg .jg-fosforos { width: 2.5rem; height: auto; overflow: visible; }
 /* Los fosforos del marcador: en tablet y celular, donde el tanteador del costado queda abajo */
 .puente-jg .jg-marcador { flex-wrap: wrap; row-gap: 0.25rem; }
-.puente-jg .jg-marcador-fos { flex: 1 0 100%; display: flex; justify-content: space-between; gap: 1rem; }
-.puente-jg .jg-fosforos.jg-fosforos-c { width: auto; height: 1.625rem; max-width: 48%; }
-@media (max-width: 999px) { .puente-jg .jg-lateral .jg-tanteador { display: none; } }
-@media (min-width: 1000px) { .puente-jg .jg-marcador-fos { display: none; } }
-/* El tanto que se muestra al final de la mano (si lo pidieron ver), sobre el paño o al terminar */
-.puente-jg .jg-pano.jg-pano2 { position: relative; }
-/* El paño del Truco: fieltro de mesa de juego (grano fino oscuro y claro, unas fibras largas muy suaves, mas claro al
-   centro como bajo una lampara y mas oscuro hacia los bordes). El verde de base es el de siempre */
-.puente-jg .jg-pano.jg-pano2 {
-  background:
-    radial-gradient(ellipse 75% 70% at 50% 45%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 60%),
-    radial-gradient(ellipse 120% 110% at 50% 50%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.32) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.45' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.06 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0 0 0 -0.12'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='h'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0.22 0 0 -0.08'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3C/svg%3E"),
-    #1f6b45;
 }
-.puente-jg .jg-muestra { position: absolute; left: 0; right: 0; top: 0; min-height: 100%; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem; border-radius: inherit; background: rgba(14, 40, 27, 0.95); text-align: center; animation: puente-fade 0.2s ease-out; }
-.puente-jg .jg-muestra.fija { position: static; min-height: 0; margin-top: 1rem; border-radius: 0.875rem; background: rgba(0, 0, 0, 0.22); }
-.puente-jg .jg-muestra-t { font-size: 1rem; font-weight: 800; color: #fff; }
-.puente-jg .jg-muestra-cartas { display: flex; gap: 0.5rem; justify-content: center; }
-.puente-jg .jg-muestra .jg-carta.jugada { width: calc(var(--jg-jugada) * 0.85); height: calc(var(--jg-jugada) * 0.85 * 1.47); }
-.puente-jg .jg-muestra-r { font-weight: 700; color: #c9e6d4; }
-.puente-jg .jg-muestra.mintio .jg-muestra-r { color: #f0b232; }
-.puente-jg .jg-tanto-sel { min-height: 2.5rem; padding: 0 0.75rem; border-radius: 0.625rem; border: 1px solid #4e5058; background: #2b2a30; color: #f2f3f5; font: inherit; font-size: 0.9375rem; }
-/* Lo que va pasando en la mesa del Truco, que se lea bien */
-.puente-jg .jg-mesa2 .jg-ultimo { width: fit-content; max-width: 100%; margin: 0.375rem auto 0; padding: 0.3125rem 0.875rem; border-radius: 0.875rem; background: rgba(255, 255, 255, 0.08); font-size: 0.9375rem; font-weight: 600; line-height: 1.35; color: #e3e5e8; }
-.puente-jg .jg-mesa2 .jg-turno { font-size: 1.0625rem; }
-.puente-jg .jg-mesa2 .jg-envido { font-size: 0.875rem; color: #c4c9ce; }
-/* La mesa del Truco no salta al jugar: cada parte guarda su lugar aunque cambie lo que tiene adentro
-   (las cartas que quedan, los textos del estado, la linea del envido, los botones de los cantos y tu globo) */
-.puente-jg .jg-mesa2 .jg-rival { min-height: calc(var(--jg-mano) * 0.6 * 1.47); }
-.puente-jg .jg-mesa2 .jg-status { position: relative; min-height: 7rem; }
-.puente-jg .jg-mesa2 .jg-status .jg-globo.mio { position: absolute; right: 0.25rem; bottom: -0.25rem; z-index: 4; max-width: 60%; }
-.puente-jg .jg-mesa2 .jg-mano { min-height: calc(var(--jg-mano) * 1.47 + 0.25rem); }
-.puente-jg .jg-mesa2 .jg-envido { min-height: 1.25rem; }
-.puente-jg .jg-mesa2 .jg-cantos { min-height: calc(2.5rem * 2 + 0.375rem); align-content: flex-start; }
-.puente-jg .jg-mesa2 .jg-reloj-t { color: #c4c9ce; }
+}
 .puente-jg .jg-fin .jg-log { font-size: 0.875rem; color: #dcefe3; }
-/* La chicana: un boton que aparece un ratito sobre el paño, con una barrita que se acaba */
-.puente-jg .jg-chicana-w { position: absolute; left: 0; right: 0; bottom: 0.625rem; z-index: 6; display: flex; justify-content: center; padding: 0 0.5rem; pointer-events: none; }
-.puente-jg .jg-chicana { position: relative; overflow: hidden; max-width: 100%; padding: 0.625rem 1.125rem 0.75rem; border: 0; border-radius: 999px; background: #f0b232; color: #1a1a1e; font: inherit; font-size: 0.9375rem; font-weight: 800; cursor: pointer; pointer-events: auto; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45); animation: jg-salta 0.35s ease-out; }
-.puente-jg .jg-chicana::after { content: ""; position: absolute; left: 0; bottom: 0; width: 100%; height: 4px; background: rgba(0, 0, 0, 0.35); transform-origin: left; animation: jg-chicana-t var(--dur, 6s) linear forwards; }
-@keyframes jg-chicana-t { to { transform: scaleX(0); } }
-.puente-jg .jg-palito { stroke: #f1dfb4; stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45)); }
-.puente-jg .jg-cabeza { fill: #c8281e; stroke: #7a1208; stroke-width: 0.6; }
-.puente-jg .jg-malas { stroke: rgba(255,255,255,0.45); stroke-width: 1; stroke-dasharray: 3 2; }
-.puente-jg .jg-fosforo-nuevo { animation: jg-fosforo 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; transform-box: fill-box; transform-origin: center; }
-@keyframes jg-fosforo { from { opacity: 0; transform: translateY(-12px) rotate(-25deg); } to { opacity: 1; transform: none; } }
 .puente-jg .jg-chat { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-radius: 0.875rem; background: #111114; border: 1px solid #2e2d32; }
 .puente-jg .jg-chat-t { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #b5bac1; }
 .puente-jg .jg-chat-lista { display: flex; flex-direction: column; gap: 0.25rem; height: 14rem; overflow-y: auto; font-size: 0.875rem; line-height: 1.35; color: #dbdee1; overflow-wrap: anywhere; scrollbar-width: thin; }
@@ -3232,53 +3124,12 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-msg.mio b { color: #8ea1ff; }
 .puente-jg .jg-chat-vacio { margin: auto; color: #6d7179; font-size: 0.8125rem; text-align: center; }
 .puente-jg .jg-chat-rapidos { display: flex; gap: 0.25rem; overflow-x: auto; scrollbar-width: none; }
-.puente-jg .jg-chat-rapidos .jg-grito { flex: 0 0 auto; padding: 0.3125rem 0.625rem; font-size: 0.75rem; }
 .puente-jg .jg-chat-form { display: flex; gap: 0.375rem; }
 .puente-jg .jg-chat-form input { flex: 1 1 auto; min-width: 0; height: 2.5rem; padding: 0 0.75rem; border-radius: 0.625rem; border: 1px solid #2e2d32; background: #1e1f22; color: #f2f3f5; font: inherit; font-size: 1rem; outline: none; }
 .puente-jg .jg-chat-form input:focus { border-color: #5865f2; }
 .puente-jg .jg-chat-form .jg-btn { min-height: 2.5rem; padding: 0 0.875rem; }
-@media (prefers-reduced-motion: reduce) { .puente-jg .jg-carta.jg-reparte, .puente-jg .jg-carta.jg-entra-yo, .puente-jg .jg-carta.jg-entra-rival, .puente-jg .jg-fosforo-nuevo { animation: none; } .puente-jg .jg-carta.mia-reparte::after { display: none; } }
-/* Las cartas (dibujo simple: numero y palo) */
-.puente-jg .jg-carta {
-  position: relative; flex: 0 0 auto; width: var(--jg-mano); height: calc(var(--jg-mano) * 1.47); border-radius: 0.625rem; background: #fbfaf6; color: #222;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.35); transition: transform 0.15s ease; display: flex; align-items: center; justify-content: center;
 }
-.puente-jg .jg-carta.jugada { width: var(--jg-jugada); height: calc(var(--jg-jugada) * 1.47); }
-.puente-jg .jg-carta.chica { width: var(--jg-chica); height: calc(var(--jg-chica) * 1.47); }
-.puente-jg .jg-carta.dorso { background: url('/puente/cartas/dorso.webp?v=4') center / cover no-repeat, repeating-linear-gradient(45deg, #9b2244 0 6px, #b8325a 6px 12px); box-shadow: inset 0 0 0 3px #fbfaf6, 0 2px 4px rgba(0,0,0,0.35); }
-.puente-jg .jg-num { position: absolute; top: 0.25rem; left: 0.375rem; font-size: 1.25rem; font-weight: 800; line-height: 1; font-family: Georgia, 'Times New Roman', serif; }
-.puente-jg .jg-num.abajo { top: auto; left: auto; bottom: 0.25rem; right: 0.375rem; transform: rotate(180deg); }
-.puente-jg .jg-palo { display: block; width: 2.5rem; height: 3.3rem; line-height: 0; }
-.puente-jg .jg-palo svg, .puente-jg .jg-esq-palo svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.15)); }
-.puente-jg .jg-carta.jugada .jg-num { font-size: 0.9375rem; }
-.puente-jg .jg-carta.jugada .jg-palo { width: 1.75rem; height: 2.3rem; }
-.puente-jg .palo-espada { color: #1e5aa8; box-shadow: inset 0 0 0 3px #1e5aa8, 0 2px 6px rgba(0,0,0,0.35); }
-.puente-jg .palo-basto { color: #2f7d32; box-shadow: inset 0 0 0 3px #2f7d32, 0 2px 6px rgba(0,0,0,0.35); }
-.puente-jg .palo-oro { color: #b07d00; box-shadow: inset 0 0 0 3px #d9a400, 0 2px 6px rgba(0,0,0,0.35); }
-.puente-jg .palo-copa { color: #b3243a; box-shadow: inset 0 0 0 3px #b3243a, 0 2px 6px rgba(0,0,0,0.35); }
 
-/* Cartas con dibujo (si el servidor tiene /puente/cartas/): la imagen ocupa la carta, dentro
-   del borde del palo, y el numero con el palo en dos esquinas */
-.puente-jg .jg-carta.con-dibujo { overflow: hidden; }
-/* Los dibujos de este servidor ya traen el numero y el palo en las esquinas */
-.puente-jg .jg-carta.con-dibujo .jg-esq { display: none; }
-.puente-jg .jg-carta.con-dibujo .jg-dibujo { background: #fff; }
-.puente-jg .jg-dibujo {
-  position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); object-fit: cover;
-  border-radius: 0.4375rem; background: #2e2d32; pointer-events: none; -webkit-user-select: none; user-select: none;
-}
-.puente-jg .jg-esq {
-  position: absolute; top: 0.3125rem; left: 0.3125rem; display: flex; flex-direction: column; align-items: center;
-  min-width: 1.5rem; padding: 0.1875rem 0.125rem 0.1875rem; border-radius: 0.4375rem; line-height: 1; gap: 0.0625rem;
-  background: rgba(251, 250, 246, 0.94); box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-}
-.puente-jg .jg-esq b { font-size: 1.0625rem; font-weight: 800; font-family: Georgia, 'Times New Roman', serif; }
-.puente-jg .jg-esq-palo { display: block; width: 1.25rem; height: 1.6875rem; line-height: 0; }
-.puente-jg .jg-esq.abajo { top: auto; left: auto; bottom: 0.3125rem; right: 0.3125rem; transform: rotate(180deg); }
-.puente-jg .jg-carta.jugada .jg-esq { min-width: 1.125rem; padding: 0.125rem 0.0625rem; top: 0.25rem; left: 0.25rem; }
-.puente-jg .jg-carta.jugada .jg-esq.abajo { top: auto; left: auto; bottom: 0.25rem; right: 0.25rem; }
-.puente-jg .jg-carta.jugada .jg-esq b { font-size: 0.8125rem; }
-.puente-jg .jg-carta.jugada .jg-esq-palo { width: 0.9375rem; height: 1.25rem; }
 
 /* "Está escribiendo…" como en Discord: tres puntitos que laten uno detras del otro
    (se agrandan, se iluminan y suben un poquito) y los nombres en negrita (aviso.js) */
@@ -3345,91 +3196,14 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 .puente-jg .jg-enlinea { display: inline-block; width: 0.5rem; height: 0.5rem; margin-right: 0.375rem; border-radius: 50%; background: #23a55a; vertical-align: 0.0625rem; }
 .puente-jg .jg-tapa-vivo { position: absolute; left: 0.5rem; bottom: 0.5rem; padding: 0.1875rem 0.5625rem; border-radius: 999px; background: rgba(0,0,0,0.72); color: #fff; font-size: 0.75rem; font-weight: 700; }
 .puente-jg .jg-tapa-vivo::before { content: ''; display: inline-block; width: 0.5rem; height: 0.5rem; margin-right: 0.375rem; border-radius: 50%; background: #23a55a; vertical-align: 0.0625rem; }
-.puente-jg .fb-hero { background: linear-gradient(160deg, #2b2f8f 0%, #1c1d4f 100%); }
-.puente-jg .fb-hero-dibujo svg { display: block; width: 7.5rem; height: auto; margin: 0 auto 0.25rem; }
 .puente-jg .fb-seg-varias { flex-wrap: wrap; }
 .puente-jg .fb-seg-varias .jg-seg-op { flex: 1 1 45%; }
-.puente-jg .fb-mesa { gap: 0.5rem; }
-.puente-jg .fb-tablero {
-  display: block; width: 100%; max-width: 38rem; height: auto; margin: 0 auto; border-radius: 1rem;
-  background: radial-gradient(120% 90% at 50% 40%, #3a3640 0%, #232126 70%, #19181b 100%);
-  -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-}
-.puente-jg .fb-celda { cursor: pointer; }
-/* Visor del tablero: acercar, alejar y mover (aviso.js, fbVisor) */
-.puente-jg .fb-visor { position: relative; width: 100%; max-width: 38rem; margin: 0 auto; border-radius: 1rem; overflow: hidden; touch-action: none; }
-.puente-jg .fb-visor .fb-tablero { max-width: none; border-radius: 0; touch-action: none; }
-.puente-jg .fb-visor.fb-cerca { cursor: grab; }
-.puente-jg .fb-zoom { position: absolute; top: 0.5rem; right: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
-.puente-jg .fb-zoom-btn { width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 0.5rem; background: rgba(17, 18, 20, 0.72); color: #f2f3f5; font: 700 1.125rem/1 Inter, system-ui, sans-serif; cursor: pointer; }
-.puente-jg .fb-zoom-btn:hover { background: rgba(17, 18, 20, 0.9); }
-.puente-jg .fb-num { font: 800 9.5px/1 Inter, system-ui, sans-serif; fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2.2px; pointer-events: none; }
-/* Como en el original: rectangulos finos, amarillo la bola elegida y lila los destinos */
-.puente-jg .fb-destino { fill: none; stroke: #eaa8f5; stroke-width: 1.5; shape-rendering: crispEdges; }
-.puente-jg .fb-sel { fill: none; stroke: #f6f600; stroke-width: 1.5; shape-rendering: crispEdges; }
-.puente-jg .fb-muestra { pointer-events: none; }
-.puente-jg .fb-ganador { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; transition: opacity 0.25s; image-rendering: pixelated; }
-.puente-jg .fb-ganador.fb-oculto { opacity: 0; }
-.puente-jg .fb-visor:has(.fb-ganador:not(.fb-oculto)) .fb-zoom { display: none; }
-.puente-jg .fb-meta { stroke-width: 2; }
-.puente-jg .fb-meta-r { fill: rgba(242, 63, 67, 0.22); stroke: #f23f43; }
-.puente-jg .fb-meta-v { fill: rgba(35, 165, 90, 0.22); stroke: #23a55a; }
 .puente-jg .fb-vuela { transition: transform 0.3s cubic-bezier(0.3, 0.7, 0.4, 1); pointer-events: none; }
 .puente-jg .fb-vuela.fb-tp { transition-duration: 0.18s; opacity: 0.85; }
 .puente-jg .fb-boom { fill: none; stroke: #f0b232; stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: fb-boom 0.35s ease-out forwards; }
 .puente-jg .fb-boom-explota, .puente-jg .fb-boom-dispara { stroke: #ff6b2c; }
 .puente-jg .fb-boom-anulan, .puente-jg .fb-boom-revienta { stroke: #e0d4ff; }
 .puente-jg .fb-boom-huevo { stroke: #fff3c4; }
-.puente-jg .fb-arania { pointer-events: none; }
-.puente-jg .fb-marcador .jg-lpuntos { min-width: 1.5rem; }
-.puente-jg .fb-color { flex: 0 0 auto; width: 0.75rem; height: 0.75rem; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.3); }
-.puente-jg .fb-color-r { background: radial-gradient(circle at 35% 30%, #ffb3b0, #e5383b 45%, #7a0b12); }
-.puente-jg .fb-color-v { background: radial-gradient(circle at 35% 30%, #c3ffd9, #23a55a 45%, #05502a); }
-.puente-jg .fb-pie { text-align: center; font-size: 0.75rem; color: #80848e; padding: 0 1rem; }
-.puente-jg .fb-reglas { display: flex; flex-direction: column; gap: 0.5rem; }
-.puente-jg .fb-regla { display: flex; flex-direction: column; gap: 0.125rem; padding: 0.625rem 0.75rem; border-radius: 0.75rem; background: #2e2d32; font-size: 0.875rem; color: #dbdee1; line-height: 1.35; }
-.puente-jg .fb-regla b { color: #f2f3f5; font-size: 0.9375rem; }
-.puente-jg .fb-con-base { flex-direction: row; align-items: center; gap: 0.75rem; }
-.puente-jg .fb-con-base > div { display: flex; flex-direction: column; gap: 0.125rem; }
-.puente-jg .fb-base-ico { flex: 0 0 auto; width: 3rem; height: auto; }
-/* Pantallas del Funball con el aspecto del original: fondo de piedra, losas grises con el texto
-   grabado y carteles negros con letras amarillas. Las texturas son del servidor (web/funball/) */
-.puente-jg .fb-ui { background: #4a3f37 url(/puente/funball/fondo.webp) repeat; background-size: 256px; }
-.puente-jg .jg-cuerpo.fb-ui { max-width: none; min-height: 100%; }
-.puente-jg .jg-cuerpo.fb-ui > * { max-width: 40rem; margin-left: auto; margin-right: auto; }
-.puente-jg .fb-ui .fb-hero { background: none; padding: 0 0 0.75rem; }
-.puente-jg .fb-logo { display: block; width: 100%; height: auto; border-radius: 0.25rem; box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,0.55); image-rendering: auto; }
-.puente-jg .fb-ui .fb-cartel { margin: 0.75rem 0; padding: 0.5rem 0.75rem; background: #000; border: 2px solid #6b6258; box-shadow: inset 0 0 0 2px #000, 0 2px 0 rgba(0,0,0,0.5);
-  color: #f8f400; font: 700 1rem/1.2 "Courier New", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.06em; }
-.puente-jg .fb-ui .jg-btn, .puente-jg .fb-ui .jg-fila, .puente-jg .fb-ui .jg-stat, .puente-jg .fb-ui .jg-seg-op, .puente-jg .fb-ui .fb-regla {
-  background: #8c929a url(/puente/funball/losa.webp) repeat; background-size: 160px;
-  border: 0; border-radius: 2px; color: #24272b;
-  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.55), inset -3px -3px 0 rgba(0,0,0,0.45), 3px 4px 0 rgba(0,0,0,0.6);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.45), 0 -1px 0 rgba(0,0,0,0.35);
-}
-.puente-jg .fb-ui .jg-btn { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 800; }
-.puente-jg .fb-ui .jg-btn:hover, .puente-jg .fb-ui .jg-fila:hover { filter: brightness(1.08); }
-.puente-jg .fb-ui .jg-btn:active, .puente-jg .fb-ui .jg-seg-op.on { box-shadow: inset 3px 3px 0 rgba(0,0,0,0.45), inset -2px -2px 0 rgba(255,255,255,0.35); transform: translate(2px, 3px); }
-.puente-jg .fb-ui .jg-btn.jg-primario { color: #6a0a06; }
-.puente-jg .fb-ui .jg-seg { background: rgba(0,0,0,0.35); border-radius: 2px; }
-.puente-jg .fb-ui .jg-seg-op.on { color: #6a0a06; }
-.puente-jg .fb-ui .jg-fnombre, .puente-jg .fb-ui .fb-regla b, .puente-jg .fb-ui .jg-stat-n { color: #1a1c1f; }
-.puente-jg .fb-ui .jg-fmeta, .puente-jg .fb-ui .jg-stat-l, .puente-jg .fb-ui .fb-regla span { color: #1f2226; font-weight: 600; }
-.puente-jg .fb-ui .jg-sub, .puente-jg .fb-ui .jg-etq { display: inline-block; padding: 0.25rem 0.625rem; background: #000; border: 2px solid #6b6258; color: #f8f400; font-family: "Courier New", ui-monospace, monospace; }
-.puente-jg .fb-ui .jg-vacio, .puente-jg .fb-ui .jg-estado { color: #f2e8d8; text-shadow: 0 1px 2px #000; }
-.puente-jg .fb-ui .jg-marcador { background: #000; border: 2px solid #6b6258; border-radius: 2px; color: #f8f400; }
-.puente-jg .fb-ui .jg-marcador .jg-lnombre, .puente-jg .fb-ui .jg-marcador .jg-meta, .puente-jg .fb-ui .jg-marcador .jg-lpuntos { color: #f8f400; font-family: "Courier New", ui-monospace, monospace; font-weight: 700; }
-.puente-jg .fb-ui .jg-status { padding: 0.5rem 0.75rem; background: #000; border: 2px solid #6b6258; }
-.puente-jg .fb-ui .jg-turno, .puente-jg .fb-ui .jg-ultimo { color: #f8f400; font-family: "Courier New", ui-monospace, monospace; font-weight: 700; text-transform: uppercase; }
-.puente-jg .fb-ui .fb-pie { color: #f2e8d8; text-shadow: 0 1px 2px #000; }
-.puente-jg .fb-ui .fb-visor { border-radius: 2px; box-shadow: 0 0 0 2px #6b6258, 3px 4px 0 2px rgba(0,0,0,0.6); }
-/* Tutorial del Funball (aviso.js, fbTutorial) */
-.puente-jg .fb-tut { max-width: none; min-height: 100%; }
-.puente-jg .fb-tut > * { box-sizing: border-box; width: 100%; max-width: 38rem; margin-left: auto; margin-right: auto; }
-.puente-jg .fb-tut-titulo { align-self: center; width: auto; padding: 0.25rem 1rem; background: #000; border: 2px solid #6b6258; color: #e9a8f5; font: 700 1.125rem/1.2 "Courier New", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
-.puente-jg .fb-ui .fb-tut-texto { margin: 0; text-transform: none; letter-spacing: 0.02em; text-align: center; line-height: 1.35; }
-.puente-jg .fb-tut-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.puente-jg .fb-tut-n { color: #f8f400; font: 700 0.9375rem "Courier New", ui-monospace, monospace; text-shadow: 0 1px 2px #000; }
 @keyframes fb-titila { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.45; } }
 @keyframes fb-boom { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(3.4); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .puente-jg .fb-vuela { transition-duration: 0.05s; } }
@@ -3461,89 +3235,14 @@ html.puente-md-sin-ubicacion .dm-safety-notice[data-kind="gps"] { display: none 
 .mk-foro { display: block; margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-tertiary, #1e1f22); color: var(--text-link, #00a8fc); font-size: 14px; text-decoration: none; }
 .mk-foro:hover { text-decoration: underline; }
 
-/* Ajedrez (aviso.js, ajedrez.js): el tablero en los colores del club, arriba el rival y abajo vos
-   con las piezas comidas y el reloj; al costado (o abajo en el celular) las jugadas y las tablas */
-.puente-jg .aj-hero { background: #2b2d2c; }
-.puente-jg .aj-hero-dibujo { display: flex; justify-content: center; height: 5.5rem; margin-bottom: 0.25rem; }
-.puente-jg .aj-hero-dibujo svg { height: 100%; width: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
-.puente-jg .aj-hero .jg-hero-s { color: #c9c7c6; }
-.puente-jg .jg-espera .aj-hero-dibujo { height: 4rem; }
-.puente-jg .aj-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .puente-jg .aj-tapa { position: absolute; inset: 0; background: #2b2d2c; }
 .puente-jg .aj-tapa-tab { position: absolute; inset: 12% 22%; display: grid; grid-template-columns: repeat(4, 1fr); transform: perspective(26rem) rotateX(48deg); border-radius: 0.25rem; overflow: hidden; box-shadow: 0 1rem 1.5rem rgba(0,0,0,0.5); }
 .puente-jg .aj-tapa-tab span.cl { background: #f1e4e9; }
 .puente-jg .aj-tapa-tab span.os { background: #b9577d; }
 .puente-jg .aj-tapa-p { position: absolute; left: 0; right: 0; bottom: 10%; display: flex; justify-content: center; height: 62%; }
 .puente-jg .aj-tapa-p svg { height: 100%; width: auto; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.55)); }
-.puente-jg .aj-mesa { max-width: 76rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; align-items: start; }
-@media (min-width: 900px) {
-  .puente-jg .aj-mesa { grid-template-columns: auto 17rem; justify-content: center; }
-  .puente-jg .aj-lado { position: sticky; top: 0.75rem; }
-  .puente-jg .aj-jugadas { max-height: calc(100vh - 20rem); }
-}
-.puente-jg .aj-tabcol { display: flex; flex-direction: column; gap: 0.375rem; width: min(100%, calc(100vh - 12.5rem)); width: min(100%, calc(100dvh - 12.5rem)); min-width: min(100%, 17rem); margin: 0 auto; }
 /* en la compu la columna del tablero es auto: necesita un ancho propio (lo que entre al lado de las jugadas y de alto) */
-@media (min-width: 900px) {
-  .puente-jg .aj-tabcol { width: min(calc(100vw - 27rem), calc(100vh - 12.5rem), 52rem); width: min(calc(100vw - 27rem), calc(100dvh - 12.5rem), 52rem); }
 }
-.puente-jg .aj-jug { display: flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; padding: 0.25rem 0.375rem; border-radius: 0.625rem; }
-.puente-jg .aj-jug .jg-av { flex: 0 0 2rem; width: 2rem; height: 2rem; font-size: 0.875rem; }
-.puente-jg .aj-jtexto { flex: 1 1 auto; min-width: 0; }
-.puente-jg .aj-nom { font-weight: 700; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9375rem; }
-.puente-jg .aj-jug.le-toca .aj-nom::after { content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; margin-left: 0.375rem; border-radius: 50%; background: #57c785; vertical-align: middle; }
-.puente-jg .aj-capt { display: flex; align-items: center; min-height: 1.125rem; flex-wrap: wrap; }
-.puente-jg .aj-cp { display: inline-block; width: 1.125rem; height: 1.125rem; margin-right: -0.3125rem; }
-.puente-jg .aj-cp svg { width: 100%; height: 100%; display: block; }
-.puente-jg .aj-dif { margin-left: 0.5rem; font-size: 0.75rem; font-weight: 700; color: #949ba4; }
-.puente-jg .aj-reloj { flex: 0 0 auto; min-width: 4.75rem; padding: 0.25rem 0.625rem; border-radius: 0.375rem; background: #232227; color: #949ba4; font: 700 1.375rem/1.2 ui-monospace, "SFMono-Regular", Consolas, monospace; text-align: right; font-variant-numeric: tabular-nums; }
-.puente-jg .aj-reloj.corre { background: #f2f3f5; color: #111214; }
-.puente-jg .aj-reloj.corre.poco { background: #da373c; color: #fff; }
-.puente-jg .aj-tablero {
-  position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); aspect-ratio: 1; width: 100%;
-  border-radius: 0.375rem; overflow: hidden; box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.5); touch-action: none; -webkit-user-select: none; user-select: none;
-}
-.puente-jg .aj-c { position: relative; aspect-ratio: 1; }
-.puente-jg .aj-c.cl { background: #f1e4e9; }
-.puente-jg .aj-c.os { background: #b9577d; }
-.puente-jg .aj-c.ult::before, .puente-jg .aj-c.sel::before, .puente-jg .aj-c.jaque::before, .puente-jg .aj-c.encima::before { content: ""; position: absolute; inset: 0; pointer-events: none; }
-.puente-jg .aj-c.ult::before { background: rgba(255, 205, 64, 0.42); }
-.puente-jg .aj-c.sel::before { background: rgba(88, 101, 242, 0.5); }
-.puente-jg .aj-c.encima::before { box-shadow: inset 0 0 0 4px rgba(255,255,255,0.75); }
-.puente-jg .aj-c.jaque::before { background: radial-gradient(circle, #ff2a2a 0%, rgba(230,0,0,0.75) 30%, rgba(169,0,0,0) 72%); }
-.puente-jg .aj-c.dest.vacia::after { content: ""; position: absolute; left: 36%; top: 36%; width: 28%; height: 28%; border-radius: 50%; background: rgba(20, 16, 24, 0.28); pointer-events: none; z-index: 2; }
-.puente-jg .aj-c.dest.come::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 0.3rem rgba(20, 16, 24, 0.3); pointer-events: none; z-index: 2; }
-.puente-jg .aj-c.dest { cursor: pointer; }
-.puente-jg .aj-p { position: absolute; inset: 0; z-index: 1; }
-.puente-jg .aj-p svg { display: block; width: 100%; height: 100%; pointer-events: none; }
-.puente-jg .aj-p.mia { cursor: grab; }
-.puente-jg .aj-p.levantada { opacity: 0.3; }
-.puente-jg .aj-p.vuela { transition: transform 0.2s ease-out; z-index: 3; }
-.puente-jg .aj-fantasma { position: fixed; z-index: 100008; pointer-events: none; transform: translate(-50%, -55%) scale(1.12); filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5)); }
-.puente-jg .aj-fantasma svg { display: block; width: 100%; height: 100%; }
-.puente-jg .aj-num, .puente-jg .aj-let { position: absolute; z-index: 2; font-size: clamp(0.5625rem, 1.6vw, 0.75rem); font-weight: 700; line-height: 1; pointer-events: none; }
-.puente-jg .aj-num { top: 0.1875rem; left: 0.25rem; }
-.puente-jg .aj-let { bottom: 0.1875rem; right: 0.25rem; }
-.puente-jg .aj-c.cl .aj-num, .puente-jg .aj-c.cl .aj-let { color: #b9577d; }
-.puente-jg .aj-c.os .aj-num, .puente-jg .aj-c.os .aj-let { color: #f1e4e9; }
-.puente-jg .aj-lado { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
-.puente-jg .aj-estado { padding: 0.75rem; border-radius: 0.75rem; background: #2e2d32; color: #dbdee1; text-align: center; font-weight: 700; }
-.puente-jg .aj-estado.mio { background: #57c785; color: #0e2318; }
-.puente-jg .aj-tablas { padding: 0.75rem; border-radius: 0.75rem; background: #3b2f0b; color: #f0b232; text-align: center; font-weight: 700; display: flex; flex-direction: column; gap: 0.5rem; }
-.puente-jg .aj-jugadas { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) minmax(0, 1fr); align-content: start; gap: 0.125rem 0.25rem; max-height: 12rem; overflow-y: auto; padding: 0.5rem; border-radius: 0.75rem; background: #232227; font-size: 0.875rem; }
-.puente-jg .aj-jugadas .n { color: #6d6f78; text-align: right; padding: 0.125rem 0.25rem 0.125rem 0; }
-.puente-jg .aj-jugadas .j { padding: 0.125rem 0.375rem; border-radius: 0.25rem; color: #dbdee1; font-weight: 600; }
-.puente-jg .aj-jugadas .j.ult { background: #3a3940; color: #fff; }
-.puente-jg .aj-sinj { grid-column: 1 / -1; padding: 0.25rem; color: #949ba4; text-align: center; }
-.puente-jg .aj-acc .jg-btn { flex: 1 1 auto; }
-.puente-jg .aj-log { margin: 0; font-size: 0.8125rem; color: #949ba4; }
-.puente-jg .aj-fin { padding: 1.25rem 1rem; background: #2b2d2c; }
-.puente-jg .aj-coronar { max-width: 22rem; }
-.puente-jg .aj-cor-fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
-.puente-jg .aj-cor-op { aspect-ratio: 1; padding: 0.25rem; border: 0; border-radius: 0.5rem; background: #f1e4e9; cursor: pointer; }
-.puente-jg .aj-cor-op:nth-child(even) { background: #b9577d; }
-.puente-jg .aj-cor-op:hover, .puente-jg .aj-cor-op:focus-visible { outline: 3px solid #5865f2; }
-.puente-jg .aj-cor-op svg { display: block; width: 100%; height: 100%; }
-@media (prefers-reduced-motion: reduce) { .puente-jg .aj-p.vuela { transition: none; } }
 
 /* Imagenes como en Discord (aviso.js, puente-imagenes-discord): el menu del clic derecho con el
    aspecto del de los mensajes, la barra de arriba a la derecha de la imagen abierta y la ✕ de las
