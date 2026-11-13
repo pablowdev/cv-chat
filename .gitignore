@@ -46,3 +46,11 @@ tools/puente/worgs-voces.js
 tools/puente/web/tapas/gusanos.jpg
 
 tools/puente/web/worgs/comunidad/
+# Juegos en su propio repositorio (se instalan en el servidor con el script de cada uno): no vuelven a este
+tools/misionrisk/
+tools/puente/misionrisk.js
+tools/puente/misionrisk-motor.js
+tools/puente/web/misionrisk/
+tools/puente/pool.js
+tools/puente/pool-motor.js
+tools/puente/web/pool/
