@@ -2171,9 +2171,38 @@ function leido(sc) {
     t.append(el('b', '', b.nombre + ':'), document.createTextNode(' ' + ciudadLista(b, 3) + (b.gente === 1 ? ' anda' : ' andan') + ' por la ciudad'));
     const a = el('button', 'puente-club-entrar', 'Entrar'); a.type = 'button'; a.title = 'Entrar a ' + b.nombre;
     r.append(el('span', 'puente-club-mesa-ico', fichaClub(b.juego).icono || '🏙️'), t, a);
-    r.title = 'Entrar a ' + b.nombre;
-    r.addEventListener('click', (e) => { e.stopPropagation(); irA(b.enlace); });
+    // tocar el renglon (o su boton): primero la ventanita con quienes estan, y ahi Entrar o Cerrar
+    r.title = 'Ver quiénes están';
+    r.addEventListener('click', (e) => { e.stopPropagation(); ventanaCiudad(b); });
     return r;
+  }
+  function ventanaCiudad(b) {
+    document.querySelector('.puente-club-ventana-fondo')?.remove();
+    const fondo = el('div', 'puente-club-ventana-fondo');
+    const v = el('div', 'puente-club-ventana');
+    v.setAttribute('role', 'dialog'); v.setAttribute('aria-label', b.nombre);
+    const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', esc); };
+    const esc = (e) => { if (e.key === 'Escape') cerrar(); };
+    document.addEventListener('keydown', esc);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(); });
+    const cab = el('div', 'puente-club-ventana-cab');
+    cab.append(el('span', 'puente-club-ventana-ico', fichaClub(b.juego).icono || '🏙️'), el('span', 'puente-club-ventana-t', b.nombre));
+    v.append(cab);
+    v.append(el('div', 'puente-club-ventana-s', (b.gente === 1 ? '1 persona' : b.gente + ' personas') + ' en la ciudad ahora'));
+    v.append(el('div', 'puente-club-ventana-sub', b.gente === 1 ? 'Anda' : 'Andan'));
+    const l = el('ul', 'puente-club-ventana-lista');
+    for (const q of b.quienes || []) { const li = el('li', 'puente-club-ventana-quien'); li.append(foto(q, 'chica'), el('span', '', q.nombre)); l.append(li); }
+    const inv = b.invitados | 0;
+    if (inv) l.append(el('li', 'puente-club-gris', ((b.quienes || []).length ? 'y ' : '') + inv + (inv === 1 ? ' invitado' : ' invitados')));
+    v.append(l);
+    const acc = el('div', 'puente-club-ventana-acc');
+    const c = el('button', 'puente-club-ventana-cerrar', 'Cerrar'); c.type = 'button'; c.addEventListener('click', cerrar);
+    const en = el('button', 'puente-club-entrar', 'Entrar'); en.type = 'button';
+    en.addEventListener('click', () => { cerrar(); irA(b.enlace); });
+    acc.append(c, en);
+    v.append(acc);
+    fondo.append(v);
+    document.body.append(fondo);
   }
 
   function pintarTarjeta() {
