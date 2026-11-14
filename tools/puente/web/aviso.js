@@ -5875,6 +5875,8 @@ document.addEventListener('pointerdown', (ev) => {
   const asked = new Set();
   const sinDiscord = new Set(); // mensajes que no estan en Discord: la vista previa de Haven, sin esperar
   // Lo que viene con el historial (embeds.js), antes de que Haven lo dibuje (lo pone la parte de las previas)
+  // (para la tarjeta de los enlaces a juegos: un mensaje con la lista vacia es uno al que le quitaron la vista previa)
+  window.puenteVistaQuitada = (id) => { const l = known.get(String(id)); return Array.isArray(l) && l.length === 0; };
   window.puenteEmbedsDatos = (embeds, sin) => {
     if (embeds && typeof embeds === 'object') for (const [id, list] of Object.entries(embeds)) if (Array.isArray(list)) known.set(String(id), list);
     if (Array.isArray(sin)) for (const id of sin) { sinDiscord.add(String(id)); if (sinDiscord.size > 5000) sinDiscord.clear(); }
@@ -11318,7 +11320,7 @@ document.addEventListener('pointerdown', (ev) => {
     const tarjetas = () => {
       for (const l of document.querySelectorAll('.message-content a[href], .thread-msg-content a[href]')) {
         if (l.closest('.link-preview')) continue;
-        { const msg = l.closest('[data-msg-id]'); if (msg && msg.dataset.sinVista === '1') continue; } // (le quitaron la vista previa)
+        { const msg = l.closest('[data-msg-id]'); if (msg && (msg.dataset.sinVista === '1' || (window.puenteVistaQuitada && window.puenteVistaQuitada(msg.dataset.msgId)))) continue; } // (le quitaron la vista previa)
         let u; try { u = new URL(l.href); } catch { continue; }
         if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
         const p = u.searchParams.get('juegos'), f = p ? fichaDeEnlace(p) : null;
