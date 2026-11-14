@@ -70,6 +70,36 @@ function armar(db, io, warn) {
   return d;
 }
 
+// BACITY (corre en su propio servidor, puente/bacity.js en su repositorio): quienes andan por la ciudad ahora. Se le
+// pregunta como mucho cada 15 segundos y solo cuando alguien mira la tarjeta. Sin la clave del juego, nada.
+let ciudad = { at: 0, d: null, pidiendo: null };
+function enLaCiudad(db) {
+  const clave = String(process.env.BACITY_SECRETO || '');
+  if (clave.length < 24) return Promise.resolve(null);
+  if (Date.now() - ciudad.at < 15e3) return Promise.resolve(ciudad.d);
+  if (!ciudad.pidiendo) {
+    const interno = String(process.env.BACITY_INTERNO || 'http://bacity:8787/bacity').replace(/\/+$/, '');
+    ciudad.pidiendo = fetch(interno + '/interno/estado', { headers: { 'x-bacity-clave': clave }, signal: AbortSignal.timeout(3000) })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((e) => {
+        let d = null;
+        if (e && (e.jugadores | 0) > 0) {
+          const q = db.prepare('SELECT avatar FROM users WHERE COALESCE(display_name, username) = ? AND COALESCE(is_guest, 0) = 0 ORDER BY id LIMIT 1');
+          const nombres = (Array.isArray(e.nombres) ? e.nombres : []).slice(0, 30).map(String);
+          d = { gente: e.jugadores | 0, invitados: e.invitados | 0, quienes: nombres.map((n) => { let f = null; try { f = (q.get(n) || {}).avatar || null; } catch { /* sin foto */ } return { nombre: n, foto: f }; }) };
+        }
+        ciudad = { at: Date.now(), d, pidiendo: null };
+        return d;
+      });
+  }
+  return ciudad.pidiendo;
+}
+// Quien puede entrar a la ciudad: todos con BACITY_ABIERTO=1; si no, los administradores (como puente/bacity.js)
+function veCiudad(db, id) {
+  if (process.env.BACITY_ABIERTO === '1') return true;
+  try { return !!(db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id) || {}).is_admin; } catch { return false; }
+}
+
 async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   if (p !== '/puente/api/club') return false;
   if (req.method !== 'GET') return json(res, 405, { error: 'solo GET' });
@@ -86,7 +116,9 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   const ajenas = (l) => l.filter(x => !(x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => x);
   // las propias van aparte: la tarjeta las muestra primero, con "Volver" (la que se esta jugando y la que espera rival)
   const propias = (l) => l.filter(x => (x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => ({ ...x, teToca: toca === user.id }));
-  return json(res, 200, m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos);
+  let bacity = null;
+  try { if (veCiudad(db, user.id)) { const c = await enLaCiudad(db); if (c) bacity = { juego: 'bacity', nombre: 'BACITY', enlace: '/app?juegos=bacity', ...c }; } } catch (err) { warn('club: bacity:', err.message); }
+  return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity });
 }
 
 module.exports = { handle, enDiscord, cuentas };

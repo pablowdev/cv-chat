@@ -2157,8 +2157,28 @@ function leido(sc) {
     });
   }
 
+  // BACITY: quienes andan por la ciudad ahora (un renglon, con "Entrar"; el servidor lo manda solo a quien puede entrar)
+  const ciudadLista = (b, max) => {
+    const nom = (b.quienes || []).map(q => q.nombre), inv = b.invitados | 0;
+    const partes = nom.slice(0, max), resto = nom.length - partes.length + inv;
+    if (resto > 0) partes.push(partes.length ? (resto === 1 ? '1 más' : resto + ' más') : (resto === 1 ? '1 invitado' : resto + ' invitados'));
+    return partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : (partes[0] || 'alguien');
+  };
+  function filaCiudad(b) {
+    if (!b || !(b.gente > 0) || !b.enlace) return null;
+    const r = el('div', 'puente-club-mesa puente-club-ciudad');
+    const t = el('span', 'puente-club-mesa-txt');
+    t.append(el('b', '', b.nombre + ':'), document.createTextNode(' ' + ciudadLista(b, 3) + (b.gente === 1 ? ' anda' : ' andan') + ' por la ciudad'));
+    const a = el('button', 'puente-club-entrar', 'Entrar'); a.type = 'button'; a.title = 'Entrar a ' + b.nombre;
+    r.append(el('span', 'puente-club-mesa-ico', fichaClub(b.juego).icono || '🏙️'), t, a);
+    r.title = 'Entrar a ' + b.nombre;
+    r.addEventListener('click', (e) => { e.stopPropagation(); irA(b.enlace); });
+    return r;
+  }
+
   function pintarTarjeta() {
     if (!tarjeta || !datos) return;
+    const ciudad = filaCiudad(datos.bacity);
     tarjeta.replaceChildren();
     const cab = el('div', 'puente-club-cab');
     const n = el('span', 'puente-club-n');
@@ -2190,6 +2210,7 @@ function leido(sc) {
       r.title = 'Volver a tu partida';
       r.addEventListener('click', (e) => { e.stopPropagation(); irA(mia.enlace); });
       tarjeta.append(r);
+      if (ciudad) tarjeta.append(ciudad);
       tarjeta.hidden = false;
       return;
     }
@@ -2212,6 +2233,7 @@ function leido(sc) {
       });
       tarjeta.append(r);
     }
+    if (ciudad) tarjeta.append(ciudad);
     tarjeta.hidden = false;
   }
 
@@ -2443,6 +2465,19 @@ function leido(sc) {
       r.append(a); mesas.append(r);
     }
     cuerpo.append(mesas);
+    const bc = datos.bacity;
+    if (bc && bc.gente > 0 && bc.enlace) {
+      const c = caja('EN ' + String(bc.nombre).toUpperCase() + ' AHORA');
+      const g = el('div', 'puente-club-gente');
+      for (const p of bc.quienes || []) { const x = el('span', 'puente-club-persona'); x.append(foto(p, 'chica'), el('span', '', p.nombre)); g.append(x); }
+      const inv = bc.invitados | 0;
+      if (inv) g.append(el('span', 'puente-club-persona puente-club-gris', ((bc.quienes || []).length ? 'y ' : '') + inv + (inv === 1 ? ' invitado' : ' invitados')));
+      c.append(g);
+      const b = el('button', 'puente-club-link', 'Entrar a la ciudad ›'); b.type = 'button'; b.dataset.ir = '1';
+      b.addEventListener('click', () => irA(bc.enlace));
+      c.append(b);
+      cuerpo.append(c);
+    }
     if (datos.nuevos && datos.nuevos.length) {
       const c = caja(datos.nuevos.length === 1 ? 'SE SUMÓ HOY' : 'SE SUMARON HOY');
       const g = el('div', 'puente-club-gente');
