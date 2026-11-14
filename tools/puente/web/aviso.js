@@ -10613,6 +10613,23 @@ document.addEventListener('pointerdown', (ev) => {
       g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + ms / 1000); o.stop(actx.currentTime + ms / 1000 + 0.02);
     } catch { /* sin sonido */ }
   }
+  // El aviso de la sala de espera (se sumo alguien a tu mesa, alguien marco que esta listo): dos notas que suben,
+  // mas notorias que beep. Como mucho una vez cada 700 ms, por si llegan varios cambios juntos
+  let campanitaT = 0;
+  function campanita() {
+    const t = Date.now(); if (t - campanitaT < 700) return; campanitaT = t;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume().catch(() => {});
+      const nota = (freq, desde, dura) => {
+        const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + desde;
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.13, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dura);
+        o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dura + 0.02);
+      };
+      nota(880, 0, 0.22); nota(1318.5, 0.12, 0.32);
+    } catch { /* sin sonido */ }
+  }
 
   // ── La pantalla ──
   let page = null, stack = [], tickT = null;
@@ -10846,7 +10863,7 @@ document.addEventListener('pointerdown', (ev) => {
   const conScript = (src) => new Promise((ok, mal) => { const x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = mal; document.head.appendChild(x); });
   // las piezas del marco que se le prestan a cada juego (todas a todos: cada uno usa las suyas)
   function piezas(j) {
-    return { el, emit, head, go, back, close, show, toast, avatar, botonEnlace, confirmar, svg, I, beep, mobile, setBadge, byId, app,
+    return { el, emit, head, go, back, close, show, toast, avatar, botonEnlace, confirmar, svg, I, beep, campanita, mobile, setBadge, byId, app,
       cartelMirando, botonSalir, botonZumbido, puedeZumbar, espChat, nombreChat, ctaInvitado, chatPartida, chat: chatPartida, desafio: desafioDM, ajPieza,
       unirse: (id) => unirseA(j, id), page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } };
   }
