@@ -327,6 +327,17 @@ function medallas(havenId, pre) {
   let tr = null;
   try { tr = require('./truco.js').stats(havenId); } catch { /* sin juegos */ }
   if (tr && tr.ganadas >= 10) add('truquero', '🃏', 'Viejo truquero', `Ganó ${tr.ganadas} partidas de truco en ${appName()}`);
+  // Las de cada juego con modulo propio (CV Hotel: Anfitrión, Mueblero, Huésped fiel): el que exporta
+  // insignias(havenId) -> [[id, emoji, nombre, detalle], ...]. Un juego que falla no tira a los demas
+  try {
+    const path = require('path');
+    for (const m of require('./juegos-registro.js').servidores()) {
+      let x = null;
+      try { x = require(path.join(__dirname, m)); } catch { continue; }
+      if (!x || typeof x.insignias !== 'function') continue;
+      try { for (const i of x.insignias(havenId) || []) if (Array.isArray(i) && i.length === 4 && /^[a-z0-9-]{2,30}$/.test(String(i[0]))) add(String(i[0]), String(i[1]).slice(0, 8), String(i[2]).slice(0, 40), String(i[3]).slice(0, 140)); } catch (err) { warn('logros: insignias de ' + m + ':', err.message); }
+    }
+  } catch { /* sin el registro de juegos */ }
   // La mudanza (mudanza-plan.js): Fundador y Campeón de la Copa
   try { for (const m of require('./mudanza-plan.js').insignias(havenId)) add(...m); } catch { /* sin mudanza */ }
   if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',
