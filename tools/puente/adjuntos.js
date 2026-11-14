@@ -30,6 +30,17 @@ function extOf(name) {
   return EXT_ALIASES[ext] || ext;
 }
 
+// La extension de una foto segun lo que es de verdad (una PNG que se llama .jpg, como las que manda el celular a
+// veces): la limpieza de Haven (exiftool) no toca una foto cuyo nombre no coincide con lo que es, y la rechaza.
+function extReal(buf, ext) {
+  if (!IMAGE_EXTS.has(ext) || !buf || buf.length < 12) return ext;
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'jpg';
+  if (buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') return 'png';
+  if (buf.toString('latin1', 0, 4) === 'GIF8') return 'gif';
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return 'webp';
+  return ext;
+}
+
 function human(bytes) {
   if (bytes >= 1024 ** 3) return (bytes / 1024 ** 3).toFixed(1) + ' GB';
   if (bytes >= 1024 ** 2) return (bytes / 1024 ** 2).toFixed(1) + ' MB';
@@ -66,12 +77,16 @@ function privacidad() {
 async function localize(a) {
   if (!a || !a.id || !/^\d+$/.test(String(a.id))) return fallback(a);
   ensureDir();
-  const file = `${a.id}.${extOf(a.filename)}`;
-  const dest = path.join(DIR, file);
-  try {
-    const st = fs.statSync(dest);
-    if (st.size > 0) return lineFor(a, file, st.size); // ya descargado
-  } catch { /* no existe todavia */ }
+  const ext0 = extOf(a.filename);
+  // ya descargado (una foto pudo quedar con otra extension, la de lo que era de verdad)
+  for (const e of IMAGE_EXTS.has(ext0) ? [ext0, ...[...IMAGE_EXTS].filter((x) => x !== ext0)] : [ext0]) {
+    try {
+      const st = fs.statSync(path.join(DIR, `${a.id}.${e}`));
+      if (st.size > 0) return lineFor(a, `${a.id}.${e}`, st.size);
+    } catch { /* no existe todavia */ }
+  }
+  let file = `${a.id}.${ext0}`;
+  let dest = path.join(DIR, file);
   if (!a.url || (a.size && a.size > MAX_BYTES) || freeBytes() - (a.size || 0) < MIN_FREE_BYTES) return fallback(a);
   const tmp = dest + '.part';
   // Hasta 3 intentos: si Discord no contesta un momento, la foto no queda como enlace pelado
@@ -84,6 +99,8 @@ async function localize(a) {
       if (len > MAX_BYTES) return fallback(a);
       const buf = Buffer.from(await res.arrayBuffer());
       if (!buf.length || buf.length > MAX_BYTES) return fallback(a);
+      const ext1 = extReal(buf, ext0);
+      if (ext1 !== ext0) { file = `${a.id}.${ext1}`; dest = path.join(DIR, file); }
       // Como lo que se sube en CV Chat: pasa por la limpieza de Haven (src/privacyPass.js: sin la ubicacion
       // ni los datos de la camara en fotos y videos) en una carpeta que no se muestra, y recien despues va
       // a uploads/. Si la limpieza no lo acepta, queda el enlace de Discord.
