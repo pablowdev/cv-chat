@@ -9276,6 +9276,25 @@ document.addEventListener('pointerdown', (ev) => {
       names.insertAdjacentElement('afterend', row);
     }
     if (st) st.then(d => paintStats(popup, profile, d));
+    // Su muñeco de CV Hotel (hotel.js lo arma como imagen: /puente/api/hotel/muneco/<id>.png). Si no armó uno, nada
+    {
+      const pid = String(profile.id);
+      const img = new Image();
+      img.alt = ''; img.decoding = 'async';
+      img.onload = () => {
+        if (!popup.isConnected || popup.dataset.puenteMedallas !== pid || popup.querySelector('.puente-perfil-hotel')) return;
+        const box = document.createElement('div');
+        box.className = 'puente-perfil-hotel';
+        box.style.cssText = 'display:flex;align-items:center;gap:10px;margin:8px 0 2px;';
+        img.style.cssText = 'height:72px;width:auto;image-rendering:pixelated;flex:none;';
+        const t = document.createElement('span');
+        t.style.cssText = 'font-size:12px;opacity:.8;';
+        t.textContent = isSelf ? 'Tu muñeco en CV Hotel' : 'Su muñeco en CV Hotel';
+        box.append(img, t);
+        (popup.querySelector('.puente-perfil-est') || popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', box);
+      };
+      img.src = '/puente/api/hotel/muneco/' + encodeURIComponent(pid) + '.png';
+    }
     if (isSelf) {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
