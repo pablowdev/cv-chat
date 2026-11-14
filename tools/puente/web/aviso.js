@@ -10650,7 +10650,7 @@ document.addEventListener('pointerdown', (ev) => {
     const v = stack.length ? stack[stack.length - 1][0] : '', j = fichasYa.find((x) => x.vistas && x.vistas[v]);
     return !j ? 'juegos' : j.id === 'shoppa' ? usoWorgs() : j.id;
   };
-  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, desafiar: (p, texto) => desafioDM(p, texto) };
+  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, abrirJuego: (id) => { if (/^[a-z0-9-]{2,24}$/.test(String(id || ''))) go('inicio', id); }, /* (las mesas de juego de CV Hotel: Atrás vuelve al hotel) */ desafiar: (p, texto) => desafioDM(p, texto) };
   function frame() {
     if (page) return page;
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
