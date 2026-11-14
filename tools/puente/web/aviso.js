@@ -6167,6 +6167,8 @@ document.addEventListener('pointerdown', (ev) => {
     const content = msgEl.querySelector('.message-content, .thread-msg-content');
     if (!content) return;
     content.querySelectorAll(':scope .link-preview, :scope > .puente-embeds').forEach(n => n.remove());
+    // (una lista vacia es una vista previa quitada con la ✕: la tarjeta de los enlaces a juegos tampoco va)
+    if (!list.length) msgEl.dataset.sinVista = '1'; else delete msgEl.dataset.sinVista;
     list = list.filter(e => !deForo(msgEl, e)); // (el tema del foro ya tiene su conversacion)
     if (!list.length) return;
     const box = el('div', 'puente-embeds');
@@ -11316,6 +11318,7 @@ document.addEventListener('pointerdown', (ev) => {
     const tarjetas = () => {
       for (const l of document.querySelectorAll('.message-content a[href], .thread-msg-content a[href]')) {
         if (l.closest('.link-preview')) continue;
+        { const msg = l.closest('[data-msg-id]'); if (msg && msg.dataset.sinVista === '1') continue; } // (le quitaron la vista previa)
         let u; try { u = new URL(l.href); } catch { continue; }
         if (u.origin !== location.origin || !/^\/app\/?$/.test(u.pathname) || !u.searchParams.has('juegos')) continue;
         const p = u.searchParams.get('juegos'), f = p ? fichaDeEnlace(p) : null;
