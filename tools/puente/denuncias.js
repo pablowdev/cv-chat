@@ -49,13 +49,15 @@ function nombre(userId) {
   return u ? (u.display_name || u.username) : null;
 }
 
-function aviso(text) {
+// nombre: con quien sale el aviso (por defecto "Denuncias"; CV Hotel avisa sus muebles para revisar como "CV Hotel")
+function aviso(text, nombre) {
+  const quien = typeof nombre === 'string' && nombre.trim() ? nombre.trim().slice(0, 32) : 'Denuncias';
   const ch = db.prepare('SELECT id, code FROM channels WHERE name = ? AND is_dm = 0').get(ADMIN_CHANNEL());
   if (!ch) { warn(`denuncias: no esta el canal #${ADMIN_CHANNEL()} para avisar`); return false; }
-  const r = db.prepare('INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, NULL, ?, 1, ?)').run(ch.id, text, 'Denuncias');
+  const r = db.prepare('INSERT INTO messages (channel_id, user_id, content, is_webhook, webhook_username) VALUES (?, NULL, ?, 1, ?)').run(ch.id, text, quien);
   io.to(`channel:${ch.code}`).emit('new-message', { channelCode: ch.code, message: {
-    id: r.lastInsertRowid, content: text, created_at: new Date().toISOString(), username: 'Denuncias', user_id: null,
-    is_webhook: 1, webhook_username: 'Denuncias', reactions: [], reply_to: null, replyContext: null, edited_at: null, thread: null } });
+    id: r.lastInsertRowid, content: text, created_at: new Date().toISOString(), username: quien, user_id: null,
+    is_webhook: 1, webhook_username: quien, reactions: [], reply_to: null, replyContext: null, edited_at: null, thread: null } });
   return true;
 }
 
