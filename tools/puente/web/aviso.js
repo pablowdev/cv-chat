@@ -9383,7 +9383,7 @@ document.addEventListener('pointerdown', (ev) => {
         img.style.cssText = 'height:72px;width:auto;image-rendering:pixelated;flex:none;';
         const t = document.createElement('span');
         t.style.cssText = 'font-size:12px;opacity:.8;';
-        t.textContent = isSelf ? 'Tu muñeco en CV Hotel' : 'Su muñeco en CV Hotel';
+        t.textContent = isSelf ? 'Tu Javo en CV Hotel' : 'Su Javo en CV Hotel';
         box.append(img, t);
         (popup.querySelector('.puente-perfil-est') || popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', box);
       };
