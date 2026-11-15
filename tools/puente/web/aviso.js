@@ -2365,6 +2365,26 @@ function leido(sc) {
 
   // ── La Guía ──
   // Los mensajes de un canal, como los manda Haven (con sus reacciones y autores)
+  // Si la conexion esta caida (la app recien vuelve de segundo plano), espera a que vuelva (hasta 30 s)
+  function conectado() {
+    const s = app.socket;
+    if (!s) return Promise.resolve(false);
+    if (s.connected) return Promise.resolve(true);
+    return new Promise((res) => {
+      const t = setTimeout(() => { s.off('connect', ok); res(false); }, 30000);
+      const ok = () => { clearTimeout(t); s.off('connect', ok); res(true); };
+      s.on('connect', ok);
+    });
+  }
+  async function traerConReintento(code, actual) {
+    for (let i = 0; i < 3; i++) {
+      if (!(await conectado())) return null;
+      const l = await traer(code, actual);
+      if (l) return l;
+      if (!hoja) return null;
+    }
+    return null;
+  }
   function traer(code, actual) {
     return new Promise((res) => {
       const s = app.socket;
@@ -2407,10 +2427,16 @@ function leido(sc) {
     const pie = el('div', 'puente-guia-pie', 'La volvés a ver tocando "Guía del club", arriba de los canales');
     cuerpo.append(pie);
     for (const { g, msgs } of cajas) {
-      const lista = await traer(g.code, app.currentChannel === g.code);
+      const lista = await traerConReintento(g.code, app.currentChannel === g.code);
       if (!hoja || !msgs.isConnected) return;
       msgs.replaceChildren();
-      if (!lista) { msgs.textContent = 'No se pudo cargar. Probá de nuevo en un momento.'; continue; }
+      if (!lista) {
+        msgs.append(el('span', '', 'No se pudo cargar. '));
+        const otra = el('button', 'puente-guia-editar', 'Reintentar'); otra.type = 'button';
+        otra.addEventListener('click', () => abrirGuia());
+        msgs.append(otra);
+        continue;
+      }
       const orden = lista.slice().sort((a, b) => a.id - b.id);
       let prev = null;
       for (const m of orden) {
