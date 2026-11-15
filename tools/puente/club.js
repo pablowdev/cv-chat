@@ -118,7 +118,18 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   const propias = (l) => l.filter(x => (x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => ({ ...x, teToca: toca === user.id }));
   let bacity = null;
   try { if (veCiudad(db, user.id)) { const c = await enLaCiudad(db); if (c) bacity = { juego: 'bacity', nombre: 'BACITY', enlace: '/app?juegos=bacity', ...c }; } } catch (err) { warn('club: bacity:', err.message); }
-  return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity });
+  // CV Hotel (corre adentro del chat, hotel.js de su repositorio): quienes estan en las salas, solo si esta cuenta puede entrar
+  let hotel = null;
+  try {
+    let H = null; try { H = require('./hotel.js'); } catch { /* sin hotel */ }
+    const a = H && typeof H.ahora === 'function' ? H.ahora(user.id) : null;
+    if (a && a.gente > 0) {
+      const q = db.prepare('SELECT COALESCE(display_name, username) n, avatar FROM users WHERE id = ?');
+      const quienes = (a.ids || []).map((id) => q.get(id)).filter(Boolean).map((x) => ({ nombre: x.n, foto: x.avatar || null }));
+      hotel = { juego: 'hotel', nombre: 'CV Hotel', enlace: '/app?juegos=hotel', gente: a.gente, invitados: 0, quienes };
+    }
+  } catch (err) { warn('club: hotel:', err.message); }
+  return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity, hotel });
 }
 
 module.exports = { handle, enDiscord, cuentas };

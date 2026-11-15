@@ -2164,13 +2164,21 @@ function leido(sc) {
     if (resto > 0) partes.push(partes.length ? (resto === 1 ? '1 más' : resto + ' más') : (resto === 1 ? '1 invitado' : resto + ' invitados'));
     return partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : (partes[0] || 'alguien');
   };
+  // Los lugares donde se "anda" (BACITY y CV Hotel): como se dicen
+  const LUGAR = {
+    bacity: { fila: ['anda', 'andan', 'por la ciudad'], ventana: 'en la ciudad ahora', sub: ['Anda', 'Andan'], link: 'Entrar a la ciudad ›', ico: '🏙️' },
+    hotel: { fila: ['está', 'están', 'en el hotel'], ventana: 'en el hotel ahora', sub: ['Está', 'Están'], link: 'Entrar al hotel ›', ico: '🏨' },
+  };
+  const lugar = (b) => LUGAR[b.juego] || LUGAR.bacity;
+  const lugares = () => [datos && datos.bacity, datos && datos.hotel].filter(b => b && b.gente > 0 && b.enlace);
   function filaCiudad(b) {
     if (!b || !(b.gente > 0) || !b.enlace) return null;
+    const L = lugar(b);
     const r = el('div', 'puente-club-mesa puente-club-ciudad');
     const t = el('span', 'puente-club-mesa-txt');
-    t.append(el('b', '', b.nombre + ':'), document.createTextNode(' ' + ciudadLista(b, 3) + (b.gente === 1 ? ' anda' : ' andan') + ' por la ciudad'));
+    t.append(el('b', '', b.nombre + ':'), document.createTextNode(' ' + ciudadLista(b, 3) + ' ' + (b.gente === 1 ? L.fila[0] : L.fila[1]) + ' ' + L.fila[2]));
     const a = el('button', 'puente-club-entrar', 'Entrar'); a.type = 'button'; a.title = 'Entrar a ' + b.nombre;
-    r.append(el('span', 'puente-club-mesa-ico', fichaClub(b.juego).icono || '🏙️'), t, a);
+    r.append(el('span', 'puente-club-mesa-ico', fichaClub(b.juego).icono || L.ico), t, a);
     // tocar el renglon (o su boton): primero la ventanita con quienes estan, y ahi Entrar o Cerrar
     r.title = 'Ver quiénes están';
     r.addEventListener('click', (e) => { e.stopPropagation(); ventanaCiudad(b); });
@@ -2186,10 +2194,11 @@ function leido(sc) {
     document.addEventListener('keydown', esc);
     fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(); });
     const cab = el('div', 'puente-club-ventana-cab');
-    cab.append(el('span', 'puente-club-ventana-ico', fichaClub(b.juego).icono || '🏙️'), el('span', 'puente-club-ventana-t', b.nombre));
+    const L = lugar(b);
+    cab.append(el('span', 'puente-club-ventana-ico', fichaClub(b.juego).icono || L.ico), el('span', 'puente-club-ventana-t', b.nombre));
     v.append(cab);
-    v.append(el('div', 'puente-club-ventana-s', (b.gente === 1 ? '1 persona' : b.gente + ' personas') + ' en la ciudad ahora'));
-    v.append(el('div', 'puente-club-ventana-sub', b.gente === 1 ? 'Anda' : 'Andan'));
+    v.append(el('div', 'puente-club-ventana-s', (b.gente === 1 ? '1 persona' : b.gente + ' personas') + ' ' + L.ventana));
+    v.append(el('div', 'puente-club-ventana-sub', b.gente === 1 ? L.sub[0] : L.sub[1]));
     const l = el('ul', 'puente-club-ventana-lista');
     for (const q of b.quienes || []) { const li = el('li', 'puente-club-ventana-quien'); li.append(foto(q, 'chica'), el('span', '', q.nombre)); l.append(li); }
     const inv = b.invitados | 0;
@@ -2207,7 +2216,7 @@ function leido(sc) {
 
   function pintarTarjeta() {
     if (!tarjeta || !datos) return;
-    const ciudad = filaCiudad(datos.bacity);
+    const ciudades = lugares().map(filaCiudad).filter(Boolean);
     tarjeta.replaceChildren();
     const cab = el('div', 'puente-club-cab');
     const n = el('span', 'puente-club-n');
@@ -2239,7 +2248,7 @@ function leido(sc) {
       r.title = 'Volver a tu partida';
       r.addEventListener('click', (e) => { e.stopPropagation(); irA(mia.enlace); });
       tarjeta.append(r);
-      if (ciudad) tarjeta.append(ciudad);
+      for (const c of ciudades) tarjeta.append(c);
       tarjeta.hidden = false;
       return;
     }
@@ -2262,7 +2271,7 @@ function leido(sc) {
       });
       tarjeta.append(r);
     }
-    if (ciudad) tarjeta.append(ciudad);
+    for (const c of ciudades) tarjeta.append(c);
     tarjeta.hidden = false;
   }
 
@@ -2520,15 +2529,14 @@ function leido(sc) {
       r.append(a); mesas.append(r);
     }
     cuerpo.append(mesas);
-    const bc = datos.bacity;
-    if (bc && bc.gente > 0 && bc.enlace) {
+    for (const bc of lugares()) {
       const c = caja('EN ' + String(bc.nombre).toUpperCase() + ' AHORA');
       const g = el('div', 'puente-club-gente');
       for (const p of bc.quienes || []) { const x = el('span', 'puente-club-persona'); x.append(foto(p, 'chica'), el('span', '', p.nombre)); g.append(x); }
       const inv = bc.invitados | 0;
       if (inv) g.append(el('span', 'puente-club-persona puente-club-gris', ((bc.quienes || []).length ? 'y ' : '') + inv + (inv === 1 ? ' invitado' : ' invitados')));
       c.append(g);
-      const b = el('button', 'puente-club-link', 'Entrar a la ciudad ›'); b.type = 'button'; b.dataset.ir = '1';
+      const b = el('button', 'puente-club-link', lugar(bc).link); b.type = 'button'; b.dataset.ir = '1';
       b.addEventListener('click', () => irA(bc.enlace));
       c.append(b);
       cuerpo.append(c);
