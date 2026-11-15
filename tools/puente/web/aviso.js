@@ -13207,6 +13207,17 @@ document.addEventListener('pointerdown', (ev) => {
         } catch { antes = null; }
       }
       const r = original.apply(this, arguments);
+      // Haven pone la fila de reacciones pegada al texto; las vistas previas de CV Chat (citas de mensajes y temas
+      // del foro) van ahi mismo, asi que la reaccion nueva quedaba arriba de la cita. Va debajo, como al abrir el canal.
+      try {
+        for (const el of document.querySelectorAll(`[data-msg-id="${messageId}"]`)) {
+          const fila = el.querySelector('.reactions-row');
+          if (!fila) continue;
+          let ult = null;
+          for (let n = fila.nextElementSibling; n && n.classList.contains('puente-vista-chat'); n = n.nextElementSibling) ult = n;
+          if (ult) ult.after(fila);
+        }
+      } catch { /* queda donde la puso Haven */ }
       // Despues de que se separa el emoji del numero (splitReaction, mas arriba)
       if (antes) setTimeout(() => {
         for (const [el, c] of antes) {
