@@ -94,6 +94,11 @@ function enLaCiudad(db) {
   }
   return ciudad.pidiendo;
 }
+// El nombre que se ve, de la ficha instalada del juego (asi un cambio de nombre no queda duplicado aca)
+function nombreDeJuego(id, siNo) {
+  try { const j = require('./juegos-registro.js').lista().find((x) => x.id === id); if (j && j.nombre) return String(j.nombre); } catch { /* sin registro */ }
+  return siNo;
+}
 // Quien puede entrar a la ciudad: todos con BACITY_ABIERTO=1; si no, los administradores (como puente/bacity.js)
 function veCiudad(db, id) {
   if (process.env.BACITY_ABIERTO === '1') return true;
@@ -117,7 +122,7 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   // las propias van aparte: la tarjeta las muestra primero, con "Volver" (la que se esta jugando y la que espera rival)
   const propias = (l) => l.filter(x => (x.uids || []).includes(user.id)).slice(0, 4).map(({ uids, toca, ...x }) => ({ ...x, teToca: toca === user.id }));
   let bacity = null;
-  try { if (veCiudad(db, user.id)) { const c = await enLaCiudad(db); if (c) bacity = { juego: 'bacity', nombre: 'BACITY', enlace: '/app?juegos=bacity', ...c }; } } catch (err) { warn('club: bacity:', err.message); }
+  try { if (veCiudad(db, user.id)) { const c = await enLaCiudad(db); if (c) bacity = { juego: 'bacity', nombre: nombreDeJuego('bacity', 'BACITY'), enlace: '/app?juegos=bacity', ...c }; } } catch (err) { warn('club: bacity:', err.message); }
   // CV Hotel (corre adentro del chat, hotel.js de su repositorio): quienes estan en las salas, solo si esta cuenta puede entrar
   let hotel = null;
   try {
