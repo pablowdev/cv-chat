@@ -1407,6 +1407,11 @@ async function handle(req, res) {
     const r = await campana.handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  // Los atajos de la columna de la izquierda (atajos.js)
+  if (p === '/puente/api/atajos') {
+    const r = await require('./atajos.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/guardados' || p === '/puente/api/guardados/ids') {
     const r = await require('./guardados.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;

@@ -161,6 +161,8 @@ function start(deps) {
   require('./informe.js').setup({ db, log, warn, publicUrl });
   require('./actividad.js').setup({ db, io, log, warn });
   require('./guardados.js').setup({ db, io, log, warn });
+  // Los atajos de cada persona en la columna de la izquierda (atajos.js)
+  require('./atajos.js').setup({ db, io, log, warn });
   // Emojis y stickers que propone la gente (se votan en #que-paso, los aprueba un admin)
   require('./propuestas.js').setup({ db, io, log, warn });
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se

@@ -142,4 +142,4 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity, hotel });
 }
 
-module.exports = { handle, enDiscord, cuentas };
+module.exports = { handle, enDiscord, cuentas, enLaCiudad, veCiudad };

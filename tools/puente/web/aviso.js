@@ -15795,3 +15795,245 @@ var puenteSinUbicacion = (function () {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enganchar); else enganchar();
 })();
+// Atajos: debajo de los iconos fijos de la columna de la izquierda (en la PC y en el celular), los accesos directos
+// que arma cada persona: juegos (con cuantos hay adentro) y otras partes de la app (canales, foro, wiki, Marketplace,
+// Guardados). Se guardan en su cuenta (atajos.js). "+" agrega; clic derecho o mantener apretado: subir, bajar o sacar;
+// en la PC tambien se pueden arrastrar para cambiar el orden. (puente-atajos-columna)
+(function () {
+  'use strict';
+  if (window.name === 'cv-ventana') return;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
+  const PARTES = {
+    foro: { nombre: 'Foro', ico: 'M4 5h16v10H8l-4 4V5zm3 3v2h10V8H7zm0 4v1h7v-1H7z' },
+    wiki: { nombre: 'Wiki', ico: 'M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zm2 2v11a1 1 0 0 0 1 1h9V7a1 1 0 0 0-1-1H7zm2 2h6v2H9V8zm0 4h6v2H9v-2z' },
+    mercado: { nombre: 'Marketplace', ico: 'M6 7V6a6 6 0 0 1 12 0v1h3l-1.5 13h-15L3 7h3zm2 0h8V6a4 4 0 0 0-8 0v1z' },
+    guardados: { nombre: 'Guardados', ico: 'M6 3h12v18l-6-4-6 4V3z' },
+  };
+  let atajos = [], gente = {}, maximo = 8, fichas = null, cargado = false;
+
+  const st = el('style');
+  st.textContent = '.puente-at{position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:visible!important;padding:0!important;border-radius:14px!important;background:#2a2930!important;color:#e8e8ee;font-weight:700;font-size:13px;line-height:1;user-select:none}'
+    + '.puente-at img{width:100%;height:100%;object-fit:cover;border-radius:14px;display:block;pointer-events:none}'
+    + '.puente-at svg{width:22px;height:22px}'
+    + '.puente-at:hover{filter:brightness(1.12)}'
+    + '.puente-at.arrastrando{opacity:.4}'
+    + '.puente-at-n{position:absolute;right:-5px;bottom:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#23a55a;color:#fff;font-size:11px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px #1e1f22;pointer-events:none}'
+    + '.puente-at-mas{background:transparent!important;border:1.5px dashed #5a5a66!important;color:#a0a0ae;font-size:22px;font-weight:400}'
+    + '.puente-at-mas:hover{border-color:#ff3d7f!important;color:#ff3d7f}'
+    + '.puente-at-menu{position:fixed;z-index:100000;background:#2b2d31;border:1px solid #3f4147;border-radius:10px;padding:6px;min-width:170px;box-shadow:0 12px 32px rgba(0,0,0,.45)}'
+    + '.puente-at-menu button{display:block;width:100%;text-align:left;background:none;border:0;color:#e8e8ee;font-size:14px;padding:8px 10px;border-radius:6px;cursor:pointer}'
+    + '.puente-at-menu button:hover{background:#3a3c42}.puente-at-menu button.rojo{color:#f2777a}'
+    + '.puente-at-fondo{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px}'
+    + '.puente-at-hoja{background:#2b2d31;color:#e8e8ee;border-radius:14px;width:min(440px,100%);max-height:min(620px,90vh);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)}'
+    + '.puente-at-cab{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #3f4147;font-size:16px;font-weight:700}'
+    + '.puente-at-cuerpo{overflow:auto;padding:10px 16px 16px}'
+    + '.puente-at-sub{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#a0a0ae;margin:12px 0 8px}'
+    + '.puente-at-grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}'
+    + '.puente-at-op{display:flex;align-items:center;gap:8px;background:#1e1f22;border:1px solid #3f4147;border-radius:10px;padding:7px 8px;color:#e8e8ee;font-size:13px;cursor:pointer;text-align:left}'
+    + '.puente-at-op:hover{border-color:#6a6a78}.puente-at-op.si{border-color:#ff3d7f;background:#3a1f2b}'
+    + '.puente-at-op .mini{width:28px;height:28px;border-radius:8px;flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#2a2930;font-weight:700}'
+    + '.puente-at-op .mini img{width:100%;height:100%;object-fit:cover}.puente-at-op .mini svg{width:18px;height:18px}'
+    + '.puente-at-pie{padding:10px 16px 14px;border-top:1px solid #3f4147;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#a0a0ae}'
+    + '.puente-at-pie button{background:#ff3d7f;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer}'
+    + '.puente-at-x{background:none;border:0;color:#a0a0ae;font-size:22px;cursor:pointer;line-height:1}';
+  document.head.appendChild(st);
+
+  const icono = (d) => '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + d + '"/></svg>';
+  const ficha = (id) => (fichas || []).find((j) => j.id === id) || null;
+  const canal = (code) => { try { return ((window.app && window.app.channels) || []).find((c) => c.code === code) || null; } catch { return null; } };
+  const claveDe = (a) => a.tipo + ':' + (a.id || a.code || '');
+
+  // Lo que se ve de cada atajo: nombre, imagen o dibujo, y si sigue existiendo
+  function datosDe(a) {
+    if (a.tipo === 'juego') { const j = ficha(a.id); return j ? { nombre: j.nombre, img: j.tapa || (j.enlace && j.enlace.imagen) || null, fondo: j.fondo } : null; }
+    if (a.tipo === 'canal') { const c = canal(a.code); return c ? { nombre: '#' + c.name, letras: '#' + String(c.name || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2) } : null; }
+    const p = PARTES[a.tipo]; return p ? { nombre: p.nombre, ico: p.ico } : null;
+  }
+  function pintarDentro(n, d) {
+    if (d.img) {
+      const im = el('img'); im.alt = ''; im.draggable = false;
+      // (si la imagen no llega: las iniciales del nombre)
+      im.addEventListener('error', () => { im.remove(); n.prepend(document.createTextNode(String(d.nombre || '?').replace(/[^\p{L}\p{N} ]/gu, '').split(' ').map((p) => p.charAt(0)).join('').slice(0, 2).toUpperCase())); });
+      im.src = d.img; n.append(im); if (d.fondo) n.style.setProperty('background', d.fondo, 'important');
+    }
+    else if (d.ico) n.insertAdjacentHTML('beforeend', icono(d.ico));
+    else n.append(document.createTextNode(d.letras || '?'));
+  }
+
+  // Cerrar lo que este abierto a la izquierda (juegos, Marketplace, foro) antes de ir a otro lado
+  function cerrarPaginas() {
+    try { let k = 0; while (window.puenteJuegos && window.puenteJuegos.abierto() && k++ < 20) window.puenteJuegos.atras(); } catch { /* sigue */ }
+    try { let k = 0; while (window.puenteMercado && window.puenteMercado.abierto() && k++ < 20) window.puenteMercado.atras(); } catch { /* sigue */ }
+    try { if (window.puenteForo && window.puenteForo.abierto()) window.puenteForo.cerrar(); } catch { /* sigue */ }
+  }
+  function abrir(a) {
+    try {
+      if (a.tipo === 'juego') { cerrarPaginas(); window.puenteJuegos && window.puenteJuegos.abrirJuego(a.id); }
+      else if (a.tipo === 'canal') { cerrarPaginas(); window.app && window.app.switchChannel(a.code); }
+      else if (a.tipo === 'foro') window.puenteForo && window.puenteForo.abrir();
+      else if (a.tipo === 'wiki') window.puenteForo && window.puenteForo.abrir('https://circulovicioso.club/wiki');
+      else if (a.tipo === 'mercado') { cerrarPaginas(); window.puenteMercado && window.puenteMercado.abrir(); }
+      else if (a.tipo === 'guardados') window.puenteGuardados && window.puenteGuardados.abrir();
+    } catch (err) { console.warn('[puente] atajo:', err); }
+  }
+
+  async function guardar() {
+    try {
+      const r = await fetch('/puente/api/atajos', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }, body: JSON.stringify({ atajos }) });
+      const d = await r.json().catch(() => null);
+      if (d && Array.isArray(d.atajos)) atajos = d.atajos;
+    } catch { /* la proxima */ }
+    pintar();
+  }
+  async function cargar() {
+    const tk = token();
+    if (!tk) return;
+    try {
+      if (!fichas) { const r = await fetch('/puente/api/juegos/registro'); const d = await r.json(); fichas = Array.isArray(d.juegos) ? d.juegos : []; }
+      const r = await fetch('/puente/api/atajos', { headers: { Authorization: 'Bearer ' + tk } });
+      if (!r.ok) return;
+      const d = await r.json();
+      atajos = Array.isArray(d.atajos) ? d.atajos : [];
+      gente = d.gente || {};
+      maximo = d.maximo || 8;
+      cargado = true;
+      pintar();
+    } catch { /* la proxima */ }
+  }
+
+  // El menu de un atajo (clic derecho o mantener apretado)
+  function menu(a, x, y) {
+    document.querySelector('.puente-at-menu')?.remove();
+    const m = el('div', 'puente-at-menu');
+    const i = atajos.findIndex((b) => claveDe(b) === claveDe(a));
+    const op = (t, fn, rojo) => { const b = el('button', rojo ? 'rojo' : '', t); b.type = 'button'; b.addEventListener('click', () => { m.remove(); fn(); }); m.append(b); };
+    op('Abrir', () => abrir(a));
+    if (i > 0) op('Subir', () => { atajos.splice(i - 1, 0, atajos.splice(i, 1)[0]); guardar(); });
+    if (i >= 0 && i < atajos.length - 1) op('Bajar', () => { atajos.splice(i + 1, 0, atajos.splice(i, 1)[0]); guardar(); });
+    op('Sacar de la barra', () => { atajos = atajos.filter((b) => claveDe(b) !== claveDe(a)); guardar(); }, true);
+    document.body.append(m);
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+    m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+    setTimeout(() => document.addEventListener('pointerdown', function fuera(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('pointerdown', fuera, true); } }, true), 0);
+  }
+
+  // La ventana para agregar: juegos, otras partes y canales; tocar marca o desmarca
+  function elegir() {
+    document.querySelector('.puente-at-fondo')?.remove();
+    const fondo = el('div', 'puente-at-fondo');
+    const hoja = el('div', 'puente-at-hoja'); hoja.setAttribute('role', 'dialog'); hoja.setAttribute('aria-label', 'Agregar atajos');
+    const cab = el('div', 'puente-at-cab'); cab.append(el('span', '', 'Tus atajos'));
+    const x = el('button', 'puente-at-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); cab.append(x);
+    const cuerpo = el('div', 'puente-at-cuerpo');
+    const pie = el('div', 'puente-at-pie'); const cuenta = el('span'); const listo = el('button', '', 'Listo'); listo.type = 'button'; pie.append(cuenta, listo);
+    const cerrar = () => { fondo.remove(); guardar(); };
+    x.addEventListener('click', cerrar); listo.addEventListener('click', cerrar);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrar(); });
+    const contar = () => { cuenta.textContent = atajos.length + ' de ' + maximo; };
+    const opcion = (a, d, grilla) => {
+      const b = el('button', 'puente-at-op'); b.type = 'button';
+      const mini = el('span', 'mini'); pintarDentro(mini, d);
+      b.append(mini, el('span', '', d.nombre));
+      const marcar = () => b.classList.toggle('si', atajos.some((y) => claveDe(y) === claveDe(a)));
+      b.addEventListener('click', () => {
+        const ya = atajos.findIndex((y) => claveDe(y) === claveDe(a));
+        if (ya >= 0) atajos.splice(ya, 1);
+        else if (atajos.length < maximo) atajos.push(a);
+        else { cuenta.textContent = 'Ya tenés ' + maximo + ': sacá uno para agregar otro'; return; }
+        marcar(); contar(); pintar();
+      });
+      marcar(); grilla.append(b);
+    };
+    const seccion = (titulo, items) => {
+      if (!items.length) return;
+      cuerpo.append(el('div', 'puente-at-sub', titulo));
+      const g = el('div', 'puente-at-grilla'); cuerpo.append(g);
+      for (const [a, d] of items) opcion(a, d, g);
+    };
+    seccion('Juegos', (fichas || []).map((j) => { const a = { tipo: 'juego', id: j.id }; return [a, datosDe(a)]; }).filter((p) => p[1]));
+    seccion('Otras partes', Object.keys(PARTES).map((k) => { const a = { tipo: k }; return [a, datosDe(a)]; }));
+    let canales = [];
+    try { canales = ((window.app && window.app.channels) || []).filter((c) => c && c.code && !c.is_dm && !c.isDm && c.name); } catch { canales = []; }
+    seccion('Canales', canales.slice(0, 80).map((c) => { const a = { tipo: 'canal', code: c.code }; return [a, datosDe(a)]; }).filter((p) => p[1]));
+    contar();
+    hoja.append(cab, cuerpo, pie); fondo.append(hoja); document.body.append(fondo);
+  }
+
+  // Un atajo en la columna (cls: 'server-icon' en la PC, 'puente-rail-btn' en el celular)
+  let arrastrado = null;
+  function nodo(a, cls) {
+    const d = datosDe(a);
+    if (!d) return null;
+    const n = el(cls === 'server-icon' ? 'div' : 'button', cls + ' puente-at puente-at-x-item');
+    if (n.tagName === 'BUTTON') n.type = 'button';
+    n.title = d.nombre; n.setAttribute('aria-label', d.nombre); n.setAttribute('role', 'button'); n.tabIndex = 0;
+    pintarDentro(n, d);
+    const g = a.tipo === 'juego' ? gente[a.id] | 0 : 0;
+    if (g > 0) { const c = el('span', 'puente-at-n', g > 99 ? '99+' : String(g)); n.append(c); n.title = d.nombre + ' · ' + g + (g === 1 ? ' persona adentro' : ' personas adentro'); }
+    n.addEventListener('click', (e) => { e.stopPropagation(); if (n.dataset.largo) { delete n.dataset.largo; return; } abrir(a); });
+    n.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(a); } });
+    n.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); menu(a, e.clientX, e.clientY); });
+    // mantener apretado (celular): el menu
+    let t = null;
+    n.addEventListener('touchstart', (e) => { const p = e.touches[0]; t = setTimeout(() => { n.dataset.largo = '1'; menu(a, p.clientX, p.clientY); }, 550); }, { passive: true });
+    for (const ev of ['touchend', 'touchmove', 'touchcancel']) n.addEventListener(ev, () => clearTimeout(t), { passive: true });
+    // arrastrar (PC)
+    if (cls === 'server-icon') {
+      n.draggable = true;
+      n.addEventListener('dragstart', (e) => { arrastrado = claveDe(a); n.classList.add('arrastrando'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', arrastrado); } catch { /* sigue */ } });
+      n.addEventListener('dragend', () => { n.classList.remove('arrastrando'); arrastrado = null; });
+      n.addEventListener('dragover', (e) => { if (arrastrado) e.preventDefault(); });
+      n.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const de = atajos.findIndex((b) => claveDe(b) === arrastrado), a2 = atajos.findIndex((b) => claveDe(b) === claveDe(a));
+        if (de < 0 || a2 < 0 || de === a2) return;
+        atajos.splice(a2, 0, atajos.splice(de, 1)[0]); guardar();
+      });
+    }
+    return n;
+  }
+
+  // Pinta los atajos en las dos columnas, despues del ultimo icono fijo
+  function pintarEn(barra, despuesDe, cls, sepCls) {
+    if (!barra) return;
+    for (const v of barra.querySelectorAll('.puente-at-x-item, .puente-at-sep')) v.remove();
+    const ancla = despuesDe.map((s) => barra.querySelector(s)).find(Boolean);
+    if (!ancla) return;
+    const sep = el('div', sepCls + ' puente-at-sep');
+    const lista = [sep];
+    for (const a of atajos) { const n = nodo(a, cls); if (n) lista.push(n); }
+    const mas = el(cls === 'server-icon' ? 'div' : 'button', cls + ' puente-at puente-at-mas puente-at-x-item', '+');
+    if (mas.tagName === 'BUTTON') mas.type = 'button';
+    mas.title = 'Agregar un atajo'; mas.setAttribute('aria-label', 'Agregar un atajo'); mas.setAttribute('role', 'button'); mas.tabIndex = 0;
+    mas.addEventListener('click', (e) => { e.stopPropagation(); elegir(); });
+    lista.push(mas);
+    ancla.after(...lista);
+  }
+  function pintar() {
+    if (!cargado) return;
+    pintarEn(document.getElementById('server-bar'), ['.puente-fo-btn', '.puente-jg-btn', '.puente-mk-btn', '#home-server'], 'server-icon', 'server-separator');
+    pintarEn(document.getElementById('puente-rail'), ['.puente-fo-btn', '.puente-jg-btn', '.puente-mk-btn', '.puente-rail-server'], 'puente-rail-btn', 'puente-rail-sep');
+  }
+  // si alguna columna se vuelve a armar (o los iconos fijos llegan despues), se vuelven a poner
+  function revisar() {
+    if (!cargado) return;
+    for (const id of ['server-bar', 'puente-rail']) {
+      const b = document.getElementById(id);
+      if (!b) continue;
+      const mas = b.querySelector('.puente-at-mas'), fijo = b.querySelector('.puente-fo-btn');
+      if (!mas || (fijo && !(fijo.compareDocumentPosition(mas) & Node.DOCUMENT_POSITION_FOLLOWING))) { pintar(); return; }
+      // (los canales llegan despues que los atajos: cuando aparecen, se pintan los que faltaban)
+      if (b.querySelectorAll('.puente-at-x-item:not(.puente-at-mas)').length !== atajos.filter((a) => datosDe(a)).length) { pintar(); return; }
+    }
+  }
+  let intentos = 0;
+  (function esperar() {
+    if (!token() || !document.getElementById('server-bar') && !document.getElementById('puente-rail')) { if (++intentos < 60) setTimeout(esperar, 1000); return; }
+    cargar();
+    setInterval(revisar, 2000);
+    setInterval(() => { if (document.visibilityState === 'visible') cargar(); }, 30000);
+  })();
+  window.puenteAtajos = { abrir: elegir, recargar: cargar };
+})();
