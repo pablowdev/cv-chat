@@ -8608,9 +8608,16 @@ document.addEventListener('pointerdown', (ev) => {
   })();
 })();
 
-// Quien entro como invitado (jugar sin cuenta, login.js) no tiene canales: al cerrar Juegos quedaba la bienvenida vacia
-// de Haven ("Bienvenido a CV Chat", y atras el banner viejo). En su lugar, lo que gana con la cuenta, el boton para
-// crearla y el de volver a los juegos (html.puente-invitado: el tema esconde lo de Haven)
+// Quien entro como invitado (jugar sin cuenta, login.js) no tiene canales: Haven le dejaba la bienvenida vacia ("Bienvenido
+// a CV Chat", con el banner viejo) y la columna de la izquierda sin nada. En su lugar (html.puente-invitado; el tema
+// esconde lo de Haven):
+// - al cerrar Juegos, su pantalla de inicio: la invitacion a crear la cuenta y lo que pasa en el club para que se quede
+//   (el desafio del dia, las mesas que esperan rival, los rankings del mes, jugar con un amigo, un pedacito del chat, el
+//   Marketplace y el foro);
+// - en la columna de la izquierda: lo que pasa ahora en el club y los juegos, con cuanta gente hay en cada uno.
+// Los datos: /puente/api/portada (lo mismo que ve la pantalla de entrar), la sala de cada juego (su "inicio", como la
+// biblioteca) y /puente/api/juegos/desafio (desafio.js). Se actualizan cada minuto mientras se ven. Los enlaces a los
+// juegos y a las mesas son enlaces comunes (/app?juegos=pool, /app?truco=<id>): los abre aca mismo el de Juegos.
 (function () {
   'use strict';
   if (window.name === 'cv-ventana') return;
@@ -8621,37 +8628,350 @@ document.addEventListener('pointerdown', (ev) => {
   if (!invitado) return;
   document.documentElement.classList.add('puente-invitado');
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const num = (n) => (Number(n) || 0).toLocaleString('es-AR');
+  const dominio = location.hostname.replace(/^chat\./, '');
+  const MERCADO = 'https://marketplace.' + dominio + '/', FORO = 'https://foro.' + dominio + '/';
+  const toast = (t) => { try { if (window.app && window.app._showToast) window.app._showToast(t, 'success'); } catch { /* sin aviso */ } };
   // Sale de la cuenta temporal (se borra al irse) y va a crear la suya o a entrar con la que tiene
   const salirA = (url) => {
     try { ['haven_token', 'haven_user'].forEach((k) => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
     location.href = url;
   };
-  function poner() {
+  const crearCuenta = () => salirA('/?registro=1');
+  // Un enlace afuera del chat (el foro, el Marketplace): en otra pestaña, asi el invitado no pierde su lugar
+  const afuera = (cls, texto, url) => { const a = el('a', cls, texto); a.href = url; a.target = '_blank'; a.rel = 'noopener'; return a; };
+  // La foto de alguien, o su inicial
+  function avatar(nombre, foto, cls) {
+    const a = el('span', cls || 'pic-av');
+    const inicial = () => { a.textContent = String(nombre || '?').trim().charAt(0).toUpperCase() || '?'; };
+    if (foto) { const i = el('img'); i.src = foto; i.alt = ''; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.onerror = () => { i.remove(); inicial(); }; a.appendChild(i); } else inicial();
+    return a;
+  }
+
+  // ── El armado ──
+  const S = {};
+  let estadoRanking = '';
+  function tarjeta(titulo, cls) {
+    const c = el('section', 'pic-card ' + cls), h = el('h3', 'pic-card-t', titulo), b = el('div', 'pic-card-b');
+    c.append(h, b); c.hidden = true;
+    return { c, h, b };
+  }
+  function armarCasa() {
     const w = document.getElementById('no-channel-msg');
     if (!w) return false;
     if (document.getElementById('puente-invitado-casa')) return true;
     const box = el('div', 'puente-inv-casa'); box.id = 'puente-invitado-casa';
-    box.append(el('div', 'puente-inv-ico', '🎮'), el('h2', 'puente-inv-t', 'Estás jugando como invitado'),
+    // La invitacion a crear la cuenta
+    const hero = el('section', 'pic-hero'), txt = el('div', 'pic-hero-txt');
+    txt.append(el('div', 'puente-inv-ico', '🎮'), el('h2', 'puente-inv-t', 'Estás jugando como invitado'),
       el('p', 'puente-inv-s', 'Tu nombre de invitado es temporal: cuando te vas, se borra. Con tu cuenta, que es gratis:'));
     const ul = el('ul', 'puente-inv-lista');
-    for (const [ico, txt] of [
+    for (const [ico, t] of [
       ['🏆', 'Tus partidas quedan guardadas y entrás al ranking de cada juego'],
       ['💬', 'Entrás al chat del club'],
       ['📚', 'Leés y escribís en el foro'],
       ['🛍️', 'Comprás y vendés en el Marketplace, sin comisiones'],
-    ]) { const li = el('li'); li.append(el('span', 'puente-inv-li-ico', ico), el('span', null, txt)); ul.appendChild(li); }
+    ]) { const li = el('li'); li.append(el('span', 'puente-inv-li-ico', ico), el('span', null, t)); ul.appendChild(li); }
+    txt.appendChild(ul);
+    const bot = el('div', 'pic-hero-btns');
     const crear = el('button', 'puente-inv-btn primario', 'Crear mi cuenta gratis'); crear.type = 'button';
-    crear.addEventListener('click', () => salirA('/?registro=1'));
+    crear.addEventListener('click', crearCuenta);
     const juegos = el('button', 'puente-inv-btn', 'Volver a los juegos'); juegos.type = 'button';
     juegos.addEventListener('click', () => { if (window.puenteJuegos) window.puenteJuegos.abrir(); });
     const ya = el('button', 'puente-inv-ya', 'Ya tengo cuenta'); ya.type = 'button';
     ya.addEventListener('click', () => salirA('/'));
-    box.append(ul, crear, juegos, ya);
+    bot.append(crear, juegos, ya);
+    hero.append(txt, bot);
+    // Lo que pasa en el club
+    const g = el('div', 'pic-grilla');
+    S.desafio = tarjeta('🏆 Desafío del día', 'pic-desafio');
+    S.mesas = tarjeta('🎲 Te están esperando para jugar', 'pic-mesas');
+    S.ranking = tarjeta('🥇 Rankings del mes', 'pic-ranking');
+    S.amigo = tarjeta('👥 Jugá con un amigo', 'pic-amigo');
+    S.chat = tarjeta('💬 Ahora en el chat', 'pic-chat');
+    S.mk = tarjeta('🛍️ En el Marketplace', 'pic-mk');
+    S.foro = tarjeta('📚 En el foro', 'pic-foro');
+    g.append(S.desafio.c, S.mesas.c, S.ranking.c, S.amigo.c, S.chat.c, S.mk.c, S.foro.c);
+    box.append(hero, g);
     w.appendChild(box);
     return true;
   }
+  function armarLado() {
+    const list = document.getElementById('channel-list');
+    if (!list) return false;
+    if (document.getElementById('puente-inv-lado')) return true;
+    const lado = el('div'); lado.id = 'puente-inv-lado';
+    S.ahora = el('div', 'pil-ahora'); S.ahora.hidden = true;
+    S.lista = el('div', 'pil-juegos');
+    const c = el('button', 'pil-cuenta', 'Crear mi cuenta gratis'); c.type = 'button';
+    c.addEventListener('click', crearCuenta);
+    lado.append(S.ahora, el('div', 'pil-tit', 'Juegos'), S.lista, c, el('div', 'pil-nota', 'Con tu cuenta entrás al chat del club, tus partidas quedan guardadas y aparecés en los rankings.'));
+    list.parentElement.insertBefore(lado, list);
+    return true;
+  }
+
+  // ── Los datos ──
+  let fichas = null, ultimo = 0, pidiendo = false;
+  const json = (url, conSesion) => fetch(url, conSesion ? { headers: { Authorization: 'Bearer ' + tok } } : undefined).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  // La sala de un juego (su "inicio"), como la biblioteca; sin respuesta en 8 s, nada
+  function sala(ev) {
+    return new Promise((res) => {
+      const a = window.app;
+      if (!a || !a.socket) { res(null); return; }
+      let listo = false;
+      const t = setTimeout(() => { if (!listo) { listo = true; res(null); } }, 8000);
+      try { a.socket.emit(ev, {}, (r) => { if (listo) return; listo = true; clearTimeout(t); res(r || null); }); } catch { clearTimeout(t); res(null); }
+    });
+  }
+  async function actualizar() {
+    if (pidiendo) return;
+    pidiendo = true;
+    try {
+      if (!fichas) { const r = await json('/puente/api/juegos/registro'); fichas = r && Array.isArray(r.juegos) ? r.juegos.filter((j) => j.enlace) : null; }
+      const js = fichas || [];
+      const [portada, desafio, salas] = await Promise.all([json('/puente/api/portada'), json('/puente/api/juegos/desafio', true),
+        Promise.all(js.map((j) => (j.eventos && j.eventos.inicio ? sala(j.eventos.inicio) : Promise.resolve(null))))]);
+      ultimo = Date.now();
+      pintarLado(js, salas, portada);
+      pintarDesafio(desafio);
+      pintarMesas(portada);
+      pintarRanking(js, salas);
+      pintarAmigo(js);
+      pintarChat(portada);
+      pintarMercado(portada);
+      pintarForo(portada);
+    } catch (err) { console.warn('[puente] invitado:', err); }
+    pidiendo = false;
+  }
+
+  // ── La columna de la izquierda: el club ahora y los juegos ──
+  // Lo que se lee en la fila de un juego (y si esta "en vivo"), con lo que contesto su sala; null: no se muestra
+  function estadoDe(j, d) {
+    if (j.tarjeta && j.tarjeta.aparte) {
+      if (!d || (d.error && !d.soloUsuarios)) return null; // (en prueba, solo para administradores: no se ve)
+      if (d.soloUsuarios) return { t: '🔒 Solo usuarios' };
+      const vt = j.tarjeta.vivo, n = vt && d[vt.campo];
+      return n > 0 ? { t: n === 1 ? vt.uno : vt.varios.replace('{n}', n), vivo: true } : { t: j.sub };
+    }
+    if (d && d.tableros && !d.tableros.length) return null; // (este servidor no lo tiene)
+    if (!j.invitados) return { t: '🔒 Solo usuarios' };
+    const act = (d && d.activas) || 0, esp = (d && d.abiertas || []).length;
+    if (esp) return { t: esp === 1 ? '1 mesa esperando rival' : num(esp) + ' mesas esperando', vivo: true };
+    if (act) return { t: act === 1 ? '1 partida ahora' : num(act) + ' partidas ahora', vivo: true };
+    return { t: j.sub };
+  }
+  function pintarLado(js, salas, portada) {
+    if (!S.lista && !armarLado()) return;
+    const bits = [];
+    if (portada) {
+      if (portada.conectados) bits.push(num(portada.conectados) + (portada.conectados === 1 ? ' conectado' : ' conectados'));
+      if (portada.partidas) bits.push(num(portada.partidas) + (portada.partidas === 1 ? ' partida en juego' : ' partidas en juego'));
+      if (portada.mensajesHoy) bits.push(num(portada.mensajesHoy) + (portada.mensajesHoy === 1 ? ' mensaje hoy' : ' mensajes hoy'));
+    }
+    S.ahora.textContent = '';
+    if (bits.length) { S.ahora.append(el('b', null, 'Ahora en el club'), el('span', null, bits.join(' · '))); S.ahora.hidden = false; } else S.ahora.hidden = true;
+    S.lista.textContent = '';
+    js.forEach((j, i) => {
+      const e = estadoDe(j, salas[i]);
+      if (!e) return;
+      const a = el('a', 'pil-juego'); a.href = '/app?juegos=' + encodeURIComponent(j.enlace.param);
+      const img = el('img', 'pil-tapa'); img.alt = ''; img.loading = 'lazy'; img.src = j.enlace.imagen || j.tapa || ''; img.onerror = () => { img.style.visibility = 'hidden'; };
+      const tx = el('span', 'pil-txt');
+      tx.append(el('b', null, j.nombre), el('small', e.vivo ? 'vivo' : null, e.t || ''));
+      a.append(img, tx);
+      S.lista.appendChild(a);
+    });
+  }
+
+  // ── La pantalla de inicio ──
+  function pintarDesafio(d) {
+    const T = S.desafio;
+    if (!T) return;
+    if (!d || !d.juego) { T.c.hidden = true; return; }
+    T.b.textContent = '';
+    const j = d.juego, enlace = '/app?juegos=' + encodeURIComponent(j.param);
+    if (j.imagen) { const a = el('a', 'pic-desafio-tapa'); a.href = enlace; const i = el('img'); i.src = j.imagen; i.alt = j.nombre; i.loading = 'lazy'; a.appendChild(i); T.b.appendChild(a); }
+    T.b.appendChild(el('div', 'pic-desafio-t', 'Ganale a la compu al ' + j.nombre));
+    if (d.total) {
+      T.b.appendChild(el('div', 'pic-s', d.total === 1 ? 'Hoy ya lo logró 1 persona:' : 'Hoy ya lo lograron ' + num(d.total) + ' personas:'));
+      const fila = el('div', 'pic-desafio-gente');
+      for (const g of d.ganadores.slice(0, 8)) {
+        const p = el('span', 'pic-persona'); p.title = g.nombre + (g.victorias > 1 ? ' (' + g.victorias + ' veces)' : '');
+        p.append(avatar(g.nombre, g.avatar), el('span', null, g.nombre));
+        fila.appendChild(p);
+      }
+      T.b.appendChild(fila);
+    } else T.b.appendChild(el('div', 'pic-s', 'Nadie lo logró todavía hoy. ¿Sos el primero?'));
+    const acc = el('div', 'pic-acc');
+    const jugar = el('a', 'pic-btn primario', 'Jugar ahora'); jugar.href = enlace;
+    acc.appendChild(jugar);
+    T.b.append(acc, el('div', 'pic-nota', 'Como invitado, tu victoria no queda anotada: con tu cuenta entrás a la lista de hoy. Mañana, otro juego.'));
+    T.c.hidden = false;
+  }
+  function pintarMesas(portada) {
+    const T = S.mesas;
+    if (!T) return;
+    if (!portada) { T.c.hidden = true; return; }
+    T.b.textContent = '';
+    const ab = (portada.abiertas || []).slice(0, 6);
+    if (!ab.length) {
+      T.b.appendChild(el('div', 'pic-s', 'Ninguna mesa esperando ahora. Armá una en cualquier juego: aparece acá y en la página de los juegos, y se suma alguien del club.'));
+      const acc = el('div', 'pic-acc'), b = el('button', 'pic-btn', 'Ver los juegos'); b.type = 'button';
+      b.addEventListener('click', () => { if (window.puenteJuegos) window.puenteJuegos.abrir(); });
+      acc.appendChild(b); T.b.appendChild(acc);
+    } else {
+      const ul = el('ul', 'pic-lista');
+      for (const m of ab) {
+        const li = el('li', 'pic-fila');
+        const t = el('div', 'pic-fila-txt');
+        t.append(el('b', null, m.nombre + (m.detalle ? ' ' + m.detalle : '')), el('span', null, (m.quien || 'Alguien') + ' busca rival'));
+        const a = el('a', 'pic-btn chico primario', 'Jugar'); a.href = m.enlace;
+        li.append(t, a); ul.appendChild(li);
+      }
+      T.b.appendChild(ul);
+    }
+    T.c.hidden = false;
+  }
+  function pintarRanking(js, salas) {
+    const T = S.ranking;
+    if (!T) return;
+    const conRanking = [];
+    js.forEach((j, i) => {
+      const r = salas[i] && salas[i].ranking;
+      if (!r) return;
+      const mes = Array.isArray(r.mes) ? r.mes : [], total = Array.isArray(r.total) ? r.total : [];
+      if (mes.length) conRanking.push({ j, filas: mes, de: 'del mes' });
+      else if (total.length) conRanking.push({ j, filas: total, de: 'de siempre' });
+    });
+    if (!conRanking.length) { T.c.hidden = true; return; }
+    if (!conRanking.some((x) => x.j.id === estadoRanking)) estadoRanking = conRanking[0].j.id;
+    T.b.textContent = '';
+    const chips = el('div', 'pic-chips');
+    for (const x of conRanking) {
+      const b = el('button', 'pic-chip' + (x.j.id === estadoRanking ? ' actual' : ''), x.j.nombre); b.type = 'button';
+      b.setAttribute('aria-pressed', String(x.j.id === estadoRanking));
+      b.addEventListener('click', () => { estadoRanking = x.j.id; pintarRanking(js, salas); });
+      chips.appendChild(b);
+    }
+    T.b.appendChild(chips);
+    const x = conRanking.find((y) => y.j.id === estadoRanking);
+    const ol = el('ol', 'pic-ranking-l');
+    x.filas.slice(0, 5).forEach((f, i) => {
+      const li = el('li');
+      li.append(el('span', 'pic-pos', String(i + 1)), avatar(f.nombre, f.avatar), el('span', 'pic-nom', f.nombre || 'Alguien'),
+        el('span', 'pic-val', num(f.ganadas) + (f.ganadas === 1 ? ' ganada' : ' ganadas')));
+      ol.appendChild(li);
+    });
+    T.b.append(ol, el('div', 'pic-nota', 'Partidas ganadas ' + x.de + ' entre personas. Con tu cuenta, las tuyas cuentan.'));
+    T.c.hidden = false;
+  }
+  // Jugar con un amigo: el enlace de un juego, para mandarselo (entra con un nombre, sin registrarse)
+  function pasarEnlace(j) {
+    const url = location.origin + '/app?juegos=' + encodeURIComponent(j.enlace.param);
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) { navigator.share({ title: j.nombre + ' · __PUENTE_APP__', text: '¿Jugamos ' + j.nombre + '?', url }).catch(() => {}); return; }
+    const listo = () => toast('Enlace de ' + j.nombre + ' copiado: mandáselo y armá una mesa');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(listo, () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+  function pintarAmigo(js) {
+    const T = S.amigo;
+    if (!T || T.b.childNodes.length) return; // (no cambia: se arma una vez)
+    const para = js.filter((j) => j.invitados);
+    if (!para.length) return;
+    T.b.appendChild(el('div', 'pic-s', 'Mandale a quien quieras el enlace de un juego: entra con un nombre, sin registrarse. Armá una mesa y, cuando entre, la ve en «Mesas esperando rival» y se suma.'));
+    const chips = el('div', 'pic-chips');
+    for (const j of para) {
+      const b = el('button', 'pic-chip', '🔗 ' + j.nombre); b.type = 'button';
+      b.title = 'Copiar el enlace de ' + j.nombre;
+      b.addEventListener('click', () => pasarEnlace(j));
+      chips.appendChild(b);
+    }
+    T.b.appendChild(chips);
+    T.c.hidden = false;
+  }
+  function pintarChat(portada) {
+    const T = S.chat;
+    if (!T) return;
+    const ch = portada && portada.chat;
+    if (!ch || !ch.mensajes || !ch.mensajes.length) { T.c.hidden = true; return; }
+    T.h.textContent = '💬 Ahora en #' + ch.canal;
+    T.b.textContent = '';
+    const ul = el('ul', 'pic-msjs');
+    for (const m of ch.mensajes.slice(-5)) {
+      const li = el('li', 'pic-msj'), cuerpo = el('div', 'pic-msj-c'), cab = el('div', 'pic-msj-cab');
+      cab.append(el('b', null, m.autor || '?'), el('span', null, m.hora || ''));
+      cuerpo.appendChild(cab);
+      if (m.texto) {
+        // los emojis del club (:cv1:) con su imagen, como en el chat
+        const tx = el('div', 'pic-msj-t'), em = m.emojis && typeof m.emojis === 'object' ? m.emojis : {};
+        String(m.texto).split(/(:[A-Za-z0-9_]{1,40}:)/).forEach((parte) => {
+          const n = /^:([A-Za-z0-9_]{1,40}):$/.exec(parte), u = n && em[n[1]];
+          if (u && /^https?:\/\//.test(u)) { const i = el('img', 'pic-emoji'); i.src = u; i.alt = parte; i.title = parte; i.loading = 'lazy'; tx.appendChild(i); }
+          else if (parte) tx.appendChild(document.createTextNode(parte));
+        });
+        cuerpo.appendChild(tx);
+      }
+      if (m.imagen) { const i = el('img', 'pic-msj-img'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; cuerpo.appendChild(i); }
+      li.append(avatar(m.autor, m.foto), cuerpo);
+      ul.appendChild(li);
+    }
+    const acc = el('div', 'pic-acc'), b = el('button', 'pic-btn primario', 'Sumate a la charla: creá tu cuenta'); b.type = 'button';
+    b.addEventListener('click', crearCuenta);
+    acc.appendChild(b);
+    T.b.append(ul, acc);
+    T.c.hidden = false;
+  }
+  function pintarMercado(portada) {
+    const T = S.mk;
+    if (!T) return;
+    const it = (portada && portada.mercado) || [];
+    if (!it.length) { T.c.hidden = true; return; }
+    T.b.textContent = '';
+    const g = el('div', 'pic-tienda');
+    for (const x of it.slice(0, 4)) {
+      const a = afuera('pic-tienda-item', null, x.url);
+      const f = el('span', 'pic-tienda-foto'), i = el('img'); i.src = x.foto; i.alt = ''; i.loading = 'lazy'; f.appendChild(i);
+      a.append(f, el('b', null, x.precio), el('span', 'pic-tienda-t', x.titulo));
+      g.appendChild(a);
+    }
+    const acc = el('div', 'pic-acc');
+    acc.appendChild(afuera('pic-btn', 'Ver todo el Marketplace', MERCADO));
+    T.b.append(g, acc);
+    T.c.hidden = false;
+  }
+  function pintarForo(portada) {
+    const T = S.foro;
+    if (!T) return;
+    const ts = (portada && portada.foro) || [];
+    if (!ts.length) { T.c.hidden = true; return; }
+    T.b.textContent = '';
+    const ul = el('ul', 'pic-foro');
+    for (const t of ts.slice(0, 5)) {
+      const li = el('li');
+      const r = t.respuestas == null ? '' : ' · ' + num(t.respuestas) + (t.respuestas === 1 ? ' respuesta' : ' respuestas');
+      li.append(afuera('pic-foro-tema', t.tema, t.url), el('span', 'pic-s', (t.canal ? t.canal + ' · ' : '') + 'de ' + (t.autor || '?') + r));
+      ul.appendChild(li);
+    }
+    const acc = el('div', 'pic-acc');
+    acc.appendChild(afuera('pic-btn', 'Leer el foro', FORO));
+    T.b.append(ul, acc);
+    T.c.hidden = false;
+  }
+
+  // ── Arranque y actualizacion ──
   let n = 0;
-  (function esperar() { if (!poner() && ++n < 100) setTimeout(esperar, 200); })();
+  (function esperar() {
+    const casa = armarCasa(), app = window.app;
+    if (!casa || !app || !app.socket) { if (++n < 150) setTimeout(esperar, 200); return; }
+    armarLado(); // (la columna puede llegar un poco despues: pintarLado la vuelve a buscar)
+    actualizar();
+  })();
+  // cada minuto, mientras se ve (la ventana de Juegos tapa las dos cosas)
+  const seVe = () => document.visibilityState === 'visible' && !(window.puenteJuegos && window.puenteJuegos.abierto());
+  setInterval(() => { if (seVe() && Date.now() - ultimo > 55e3) actualizar(); }, 15e3);
+  document.addEventListener('visibilitychange', () => { if (seVe() && Date.now() - ultimo > 30e3) actualizar(); });
+  // (al cerrar Juegos, lo de antes de abrirlos puede tener un rato: se pide de nuevo)
+  document.addEventListener('click', () => setTimeout(() => { if (seVe() && ultimo && Date.now() - ultimo > 30e3) actualizar(); }, 300), true);
   // El panel de la derecha (el viejo de "Unirse al chat de voz") no se le muestra (el tema lo esconde): si Haven lo
   // abre igual en el celular (deslizando desde el borde), se cierra, asi no queda la pantalla oscurecida sin nada
   let m = 0;

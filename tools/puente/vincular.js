@@ -1458,6 +1458,11 @@ async function handle(req, res) {
     const r = await require('./panel-estadisticas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  // El desafio del dia (desafio.js): para la pantalla de inicio del invitado
+  if (p === '/puente/api/juegos/desafio') {
+    const r = await require('./desafio.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
   // Capa 2 en Admin (capa2-admin.js): lo que manda el juego y la gente de cada minuto (solo administradores)
   if (p === '/puente/api/capa2/estadisticas') {
     const r = await require('./capa2-admin.js').handle(req, res, p, u, { sessionUser, json });

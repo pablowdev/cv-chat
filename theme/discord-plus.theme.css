@@ -667,19 +667,111 @@ html.puente-invitado #right-sidebar, html.puente-invitado #mobile-users-btn, htm
 html.puente-invitado #puente-atajos { display: none !important; }
 /* ...ni el buscador (la caja de la PC y la lupa del celular): sin canales no hay nada que buscar */
 html.puente-invitado body #search-container.puente-busca-caja, html.puente-invitado #search-container, html.puente-invitado #puente-lupa { display: none !important; }
-.puente-inv-casa { box-sizing: border-box; width: min(30rem, 100%); margin: auto; padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px)); color: #dbdee1; text-align: center; }
-.puente-inv-ico { font-size: 2.75rem; line-height: 1; }
-.puente-inv-t { margin: 0.75rem 0 0.375rem; color: #fbfbfb; font-size: 1.5rem; font-weight: 800; line-height: 1.2; }
-.puente-inv-s { margin: 0 0 1.125rem; color: #b5bac1; font-size: 0.9375rem; line-height: 1.45; }
-.puente-inv-lista { display: grid; gap: 0.5rem; margin: 0 0 1.5rem; padding: 0; list-style: none; text-align: left; }
-.puente-inv-lista li { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0.875rem; border: 1px solid #29292d; border-radius: 0.75rem; background: #1e1e22; font-size: 0.9375rem; line-height: 1.35; }
-.puente-inv-li-ico { flex: none; font-size: 1.25rem; }
-.puente-inv-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 2.875rem; margin: 0 0 0.5rem; border: 0; border-radius: 0.625rem; background: #2e2d32; color: #f2f3f5; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
+/* La pantalla de inicio del invitado (aviso.js): la invitacion arriba y abajo, en tarjetas, lo que pasa en el club */
+html.puente-invitado #no-channel-msg { align-items: flex-start; }
+.puente-inv-casa { container-type: inline-size; box-sizing: border-box; width: min(66rem, 100%); margin: 0 auto; padding: 1.25rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px)); color: #dbdee1; text-align: left; }
+.pic-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem 1.75rem; align-items: center; margin-bottom: 1rem; padding: 1.25rem 1.5rem; border: 1px solid #29292d; border-radius: 1rem; background: linear-gradient(135deg, #2a2350 0%, #1e1e22 65%); }
+.puente-inv-ico { font-size: 2.25rem; line-height: 1; }
+.puente-inv-t { margin: 0.5rem 0 0.25rem; color: #fbfbfb; font-size: 1.5rem; font-weight: 800; line-height: 1.2; }
+.puente-inv-s { margin: 0 0 0.875rem; color: #b5bac1; font-size: 0.9375rem; line-height: 1.45; }
+.puente-inv-lista { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.puente-inv-lista li { display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0.75rem; border: 1px solid #29292d; border-radius: 0.75rem; background: rgba(30, 30, 34, 0.85); font-size: 0.875rem; line-height: 1.35; }
+.puente-inv-li-ico { flex: none; font-size: 1.125rem; }
+.pic-hero-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.pic-hero-btns .puente-inv-btn { flex: 1 1 12rem; width: auto; }
+.pic-hero-btns .puente-inv-ya { margin: 0 auto; }
+.puente-inv-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 2.875rem; margin: 0; border: 0; border-radius: 0.625rem; background: #2e2d32; color: #f2f3f5; font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; }
 .puente-inv-btn:hover { background: #36353b; }
 .puente-inv-btn.primario { background: #5865f2; color: #fff; }
 .puente-inv-btn.primario:hover { background: #4752c4; }
-.puente-inv-ya { margin-top: 0.375rem; padding: 0.375rem; border: 0; background: none; color: #949ba4; font: inherit; font-size: 0.875rem; cursor: pointer; }
+.puente-inv-ya { align-self: center; padding: 0.375rem; border: 0; background: none; color: #949ba4; font: inherit; font-size: 0.875rem; cursor: pointer; }
 .puente-inv-ya:hover { color: #dbdee1; text-decoration: underline; }
+/* (segun el lugar que tiene: angosta, todo apilado; ancha, la lista de a dos y los botones al costado) */
+@container (min-width: 34rem) { .puente-inv-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 54rem) {
+  .pic-hero { grid-template-columns: minmax(0, 1fr) minmax(13rem, 17rem); }
+  .pic-hero-btns { flex-direction: column; align-items: stretch; }
+  .pic-hero-btns .puente-inv-btn { flex: none; width: 100%; }
+}
+@media (max-width: 600px) { .pic-hero { padding: 1rem; } }
+.pic-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 1rem; align-items: start; }
+.pic-card { container-type: inline-size; min-width: 0; padding: 1rem; border: 1px solid #29292d; border-radius: 0.875rem; background: #1e1e22; }
+.pic-card-t { margin: 0 0 0.75rem; color: #f2f3f5; font-size: 1rem; font-weight: 700; }
+.pic-s { color: #b5bac1; font-size: 0.875rem; line-height: 1.45; }
+.pic-nota { margin-top: 0.625rem; color: #949ba4; font-size: 0.8125rem; line-height: 1.4; }
+.pic-acc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.pic-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.5rem; padding: 0 1rem; border: 0; border-radius: 0.5rem; background: #2e2d32; color: #f2f3f5 !important; font: inherit; font-size: 0.9375rem; font-weight: 700; text-decoration: none !important; cursor: pointer; }
+.pic-btn:hover { background: #36353b; }
+.pic-btn.primario { background: #5865f2; color: #fff !important; }
+.pic-btn.primario:hover { background: #4752c4; }
+.pic-btn.chico { flex: none; min-height: 2rem; padding: 0 0.875rem; font-size: 0.875rem; }
+.pic-av { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; overflow: hidden; background: #5865f2; color: #fff; font-size: 0.75rem; font-weight: 700; }
+.pic-av img { width: 100%; height: 100%; object-fit: cover; }
+.pic-desafio-tapa { display: block; margin: 0 0 0.75rem; border-radius: 0.625rem; overflow: hidden; }
+.pic-desafio-tapa img { display: block; width: 100%; aspect-ratio: 1200 / 630; object-fit: cover; }
+/* (con lugar, la tapa del juego al costado y lo demas a la derecha) */
+@container (min-width: 26rem) {
+  .pic-desafio .pic-card-b { display: grid; grid-template-columns: 10rem minmax(0, 1fr); column-gap: 0.875rem; align-items: start; }
+  .pic-desafio-tapa { grid-row: 1 / span 6; margin: 0; }
+  .pic-desafio .pic-card-b > :not(.pic-desafio-tapa) { grid-column: 2; }
+}
+.pic-desafio-t { margin-bottom: 0.375rem; color: #fbfbfb; font-size: 1.0625rem; font-weight: 700; }
+.pic-desafio-gente { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.5rem; }
+.pic-persona { display: inline-flex; align-items: center; gap: 0.375rem; max-width: 100%; padding: 0.1875rem 0.625rem 0.1875rem 0.1875rem; border-radius: 999px; background: #2b2d31; font-size: 0.8125rem; }
+.pic-persona > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-persona .pic-av { width: 1.375rem; height: 1.375rem; font-size: 0.625rem; }
+.pic-lista, .pic-msjs, .pic-foro, .pic-ranking-l { margin: 0; padding: 0; list-style: none; }
+.pic-fila { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-top: 1px solid #29292d; }
+.pic-fila:first-child { border-top: 0; padding-top: 0; }
+.pic-fila-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pic-fila-txt b { color: #f2f3f5; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-fila-txt span { color: #b5bac1; font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-chips { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 0.75rem; }
+.pic-amigo .pic-chips { margin: 0.75rem 0 0; }
+.pic-chip { min-height: 2rem; padding: 0 0.75rem; border: 1px solid #3f4147; border-radius: 999px; background: transparent; color: #b5bac1; font: inherit; font-size: 0.8125rem; cursor: pointer; }
+.pic-chip:hover { border-color: #5c5e66; color: #f2f3f5; }
+.pic-chip.actual { border-color: #5865f2; background: rgba(88, 101, 242, 0.18); color: #f2f3f5; }
+.pic-ranking-l li { display: flex; align-items: center; gap: 0.625rem; padding: 0.375rem 0; }
+.pic-pos { flex: none; width: 1.25rem; color: #949ba4; font-size: 0.875rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.pic-ranking-l li:first-child .pic-pos { color: #f0b232; }
+.pic-nom { flex: 1; min-width: 0; color: #f2f3f5; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-val { flex: none; color: #b5bac1; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.pic-msj { display: flex; gap: 0.625rem; padding: 0.375rem 0; }
+.pic-msj-c { flex: 1; min-width: 0; }
+.pic-msj-cab { display: flex; align-items: baseline; gap: 0.5rem; }
+.pic-msj-cab b { color: #f2f3f5; font-size: 0.875rem; }
+.pic-msj-cab span { color: #949ba4; font-size: 0.75rem; }
+.pic-msj-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; color: #dbdee1; font-size: 0.875rem; line-height: 1.4; overflow-wrap: anywhere; } /* (los largos, en 4 lineas) */
+.pic-emoji { width: 1.25rem; height: 1.25rem; vertical-align: -0.25rem; object-fit: contain; }
+.pic-msj-img { display: block; max-width: 100%; max-height: 10rem; margin-top: 0.25rem; border-radius: 0.375rem; }
+.pic-tienda { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
+.pic-tienda-item { display: flex; flex-direction: column; gap: 0.125rem; min-width: 0; color: #dbdee1 !important; text-decoration: none !important; }
+.pic-tienda-foto { display: block; aspect-ratio: 1; border-radius: 0.5rem; overflow: hidden; background: #2b2d31; }
+.pic-tienda-foto img { width: 100%; height: 100%; object-fit: cover; }
+.pic-tienda-item b { color: #f2f3f5; font-size: 0.9375rem; }
+.pic-tienda-t { color: #b5bac1; font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-foro li { display: flex; flex-direction: column; padding: 0.375rem 0; border-top: 1px solid #29292d; }
+.pic-foro li:first-child { border-top: 0; padding-top: 0; }
+.pic-foro-tema { color: #f2f3f5 !important; font-size: 0.9375rem; font-weight: 600; text-decoration: none !important; }
+.pic-foro-tema:hover { text-decoration: underline !important; }
+.pic-foro .pic-s { font-size: 0.8125rem; }
+/* La columna de la izquierda del invitado (sin canales): el club ahora y los juegos, con cuanta gente hay en cada uno */
+html.puente-invitado #channel-list { display: none !important; }
+#puente-inv-lado { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.25rem 0 1rem; }
+.pil-ahora { display: flex; flex-direction: column; gap: 0.125rem; margin: 0.25rem 0.25rem 0.75rem; padding: 0.625rem 0.75rem; border: 1px solid #29292d; border-radius: 0.625rem; background: #1e1e22; color: #b5bac1; font-size: 0.8125rem; line-height: 1.35; }
+.pil-ahora b { display: flex; align-items: center; gap: 0.375rem; color: #f2f3f5; font-size: 0.8125rem; }
+.pil-ahora b::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #23a55a; }
+.pil-tit { margin: 0.25rem 0.5rem 0.375rem; color: #949ba4; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.pil-juego { display: flex; align-items: center; gap: 0.625rem; margin: 0 0.25rem; padding: 0.375rem 0.5rem; border-radius: 0.5rem; color: #dbdee1 !important; text-decoration: none !important; }
+.pil-juego:hover { background: #2e2d32; color: #fff !important; }
+.pil-tapa { flex: none; width: 3.25rem; height: 2rem; border-radius: 0.3125rem; object-fit: cover; background: #2b2d31; }
+.pil-txt { display: flex; flex-direction: column; min-width: 0; }
+.pil-txt b { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pil-txt small { color: #949ba4; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pil-txt small.vivo { color: #3ba55d; }
+.pil-cuenta { display: block; box-sizing: border-box; width: calc(100% - 0.5rem); min-height: 2.5rem; margin: 1rem 0.25rem 0.5rem; border: 0; border-radius: 0.5rem; background: #5865f2; color: #fff; font: inherit; font-size: 0.9375rem; font-weight: 700; cursor: pointer; }
+.pil-cuenta:hover { background: #4752c4; }
+.pil-nota { margin: 0 0.5rem; color: #949ba4; font-size: 0.75rem; line-height: 1.4; }
 html:not(.puente-bienvenida):not(.puente-con-canal) #channel-header-name { visibility: hidden; }
 
 /* ── Barra superior ────────────────────────────────── */
