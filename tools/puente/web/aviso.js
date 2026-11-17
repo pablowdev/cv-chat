@@ -4061,12 +4061,14 @@ function leido(sc) {
       if (!page || !d || !Array.isArray(d.juegos)) return;
       for (const j of d.juegos) {
         const v = 'ja-' + j.id;
-        if (!j.admin || page.querySelector('.pja-vista[data-v="' + v + '"]')) continue;
-        const t = el('button', 'pm-pestana', j.admin.nombre); t.type = 'button'; t.dataset.v = v;
+        // (Capa 2 no trae la suya: la arma el chat con lo que manda el juego, capa2-admin.js)
+        const ad = j.admin || (j.id === 'bacity' ? { nombre: j.nombre || 'Capa 2', url: '/puente/capa2-admin' } : null);
+        if (!ad || page.querySelector('.pja-vista[data-v="' + v + '"]')) continue;
+        const t = el('button', 'pm-pestana', ad.nombre); t.type = 'button'; t.dataset.v = v;
         t.addEventListener('click', () => verVista(v));
         tabs.appendChild(t);
         const box = el('div', 'pja-vista'); box.hidden = true;
-        box.dataset.v = v; box.dataset.url = j.admin.url; box.dataset.nombre = j.admin.nombre;
+        box.dataset.v = v; box.dataset.url = ad.url; box.dataset.nombre = ad.nombre;
         box.style.cssText = 'flex: 1 1 auto; min-height: 0; position: relative;';
         page.appendChild(box);
       }

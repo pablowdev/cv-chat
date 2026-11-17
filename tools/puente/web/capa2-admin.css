@@ -1,0 +1,110 @@
+/* Capa 2 en Admin (capa2-admin.html, en un marco del panel de administradores). Oscuro como el chat; el color de las
+   series es el de Capa 2 (#e8437f, validado sobre el fondo); los textos van siempre en los grises del chat */
+:root {
+  --fondo: #1a1a1e; --caja: #1e1e22; --borde: #29292d; --grilla: #2e2e33;
+  --texto: #f2f3f5; --texto2: #b5bac1; --apagado: #949ba4;
+  --serie: #e8437f; --serie-area: rgba(232, 67, 127, 0.10); --azul: #5865f2;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--fondo); color: var(--texto); }
+body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+#c2 { max-width: 1200px; margin: 0 auto; padding: 16px 16px 40px; }
+.c2-sin { color: var(--apagado); padding: 24px 0; text-align: center; }
+
+.c2-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.c2-cab h1 { margin: 0; font-size: 1.375rem; font-weight: 800; }
+.c2-sub { margin: 2px 0 0; color: var(--apagado); font-size: 0.875rem; }
+.c2-cab-der { display: flex; align-items: center; gap: 10px; }
+.c2-cuando { color: var(--apagado); font-size: 0.8125rem; }
+.c2-btn { min-height: 34px; padding: 0 14px; border: 1px solid #3f4147; border-radius: 8px; background: #2b2d31; color: var(--texto); font: inherit; font-weight: 600; cursor: pointer; }
+.c2-btn:hover { background: #35373c; }
+.c2-error { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: rgba(240, 178, 50, 0.12); border: 1px solid rgba(240, 178, 50, 0.4); color: #f0d39a; }
+.c2-cargando { opacity: 0.6; transition: opacity 0.2s; }
+
+/* Los numeros de arriba */
+.c2-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.c2-tile { padding: 12px 14px; border: 1px solid var(--borde); border-radius: 12px; background: var(--caja); min-width: 0; }
+.c2-tile-l { color: var(--texto2); font-size: 0.8125rem; }
+.c2-tile-v { margin-top: 2px; font-size: 1.75rem; font-weight: 700; line-height: 1.15; }
+.c2-tile-s { margin-top: 2px; color: var(--apagado); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Las secciones */
+.c2-sec { margin-bottom: 14px; padding: 14px; border: 1px solid var(--borde); border-radius: 12px; background: var(--caja); min-width: 0; }
+.c2-sec-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.c2-sec h2 { margin: 0; font-size: 1rem; font-weight: 700; }
+.c2-sec-s { color: var(--apagado); font-size: 0.8125rem; }
+.c2-dos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 900px) { .c2-dos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .c2-dos > .c2-sec { margin-bottom: 0; } .c2-dos { margin-bottom: 14px; } }
+
+/* Los graficos (SVG): marcas finas, grilla apenas visible, textos en gris */
+.c2-graf { position: relative; width: 100%; }
+.c2-graf svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.c2-graf svg:focus { outline: none; }
+.c2-graf svg:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; border-radius: 4px; }
+.c2-grilla { stroke: var(--grilla); stroke-width: 1; shape-rendering: crispEdges; }
+.c2-eje { fill: var(--apagado); font-size: 11px; font-family: inherit; }
+.c2-linea { fill: none; stroke: var(--serie); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.c2-area { fill: var(--serie-area); stroke: none; }
+.c2-solo { fill: var(--serie); stroke: var(--caja); stroke-width: 2; }
+.c2-cruz { stroke: #6d6f78; stroke-width: 1; shape-rendering: crispEdges; pointer-events: none; }
+.c2-punto { fill: var(--serie); stroke: var(--caja); stroke-width: 2; pointer-events: none; }
+.c2-barra { fill: var(--serie); cursor: default; }
+.c2-barra:hover, .c2-barra:focus, .c2-barra.actual { fill: #f06a9b; outline: none; }
+.c2-golpe { fill: transparent; }
+.c2-tip { position: absolute; z-index: 2; pointer-events: none; min-width: 120px; padding: 8px 10px; border: 1px solid #3f4147; border-radius: 8px; background: #111214; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); white-space: nowrap; }
+.c2-tip-v { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--texto); }
+.c2-tip-v::before { content: ''; width: 12px; height: 2px; border-radius: 1px; background: var(--serie); }
+.c2-tip-l { color: var(--texto2); font-size: 0.8125rem; }
+.c2-tip-x { color: var(--apagado); font-size: 0.8125rem; }
+.c2-vacio { padding: 28px 0; color: var(--apagado); text-align: center; }
+details.c2-tabla-de { margin-top: 8px; }
+details.c2-tabla-de summary { color: var(--apagado); font-size: 0.8125rem; cursor: pointer; }
+details.c2-tabla-de .c2-tabla-caja { max-height: 260px; margin-top: 6px; }
+
+/* Las tablas */
+.c2-tabla-caja { overflow: auto; border: 1px solid var(--borde); border-radius: 8px; }
+table.c2-tabla { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.c2-tabla th, .c2-tabla td { padding: 7px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--borde); }
+.c2-tabla th { position: sticky; top: 0; z-index: 1; background: #232327; color: var(--texto2); font-weight: 600; }
+.c2-tabla th.ord { cursor: pointer; user-select: none; }
+.c2-tabla th.ord:hover { color: var(--texto); }
+.c2-tabla th .flecha { margin-left: 4px; color: var(--apagado); }
+.c2-tabla td.n, .c2-tabla th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.c2-tabla tr:last-child td { border-bottom: 0; }
+.c2-tabla tbody tr:hover td { background: #232327; }
+.c2-tabla .c2-apagado { color: var(--apagado); }
+.c2-marca { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #2e2d32; color: var(--texto2); font-size: 0.6875rem; font-weight: 700; vertical-align: 1px; }
+.c2-estrellas { color: #f0b232; letter-spacing: 1px; }
+
+/* Herramientas de una seccion (buscar, filtrar) */
+.c2-herr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.c2-buscar { min-width: 0; flex: 1 1 200px; max-width: 320px; min-height: 34px; padding: 0 10px; border: 1px solid #3f4147; border-radius: 8px; background: #111214; color: var(--texto); font: inherit; }
+.c2-buscar:focus { border-color: var(--azul); outline: none; }
+.c2-chip { min-height: 30px; padding: 0 10px; border: 1px solid #3f4147; border-radius: 999px; background: transparent; color: var(--texto2); font: inherit; font-size: 0.8125rem; cursor: pointer; }
+.c2-chip:hover { color: var(--texto); }
+.c2-chip.actual { border-color: var(--azul); background: rgba(88, 101, 242, 0.18); color: var(--texto); }
+
+/* Los eventos */
+.c2-eventos { max-height: 520px; overflow: auto; border: 1px solid var(--borde); border-radius: 8px; }
+.c2-ev { display: grid; grid-template-columns: 84px 26px minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 7px 10px; border-bottom: 1px solid var(--borde); }
+.c2-ev:last-child { border-bottom: 0; }
+.c2-ev-t { color: var(--apagado); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.c2-ev-i { text-align: center; }
+.c2-ev-x { min-width: 0; overflow-wrap: anywhere; }
+.c2-ev-x b { font-weight: 600; }
+.c2-ev-x span { color: var(--texto2); }
+
+/* Mundo y servidor: datos sueltos */
+.c2-datos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.c2-dato { padding: 8px 10px; border-radius: 8px; background: #232327; }
+.c2-dato-l { color: var(--apagado); font-size: 0.75rem; }
+.c2-dato-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  #c2 { padding: 12px 12px 32px; }
+  .c2-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .c2-tile-v { font-size: 1.375rem; }
+  .c2-sec { padding: 12px; }
+  .c2-ev { grid-template-columns: 64px 22px minmax(0, 1fr); }
+}

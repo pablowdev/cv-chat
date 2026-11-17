@@ -156,6 +156,8 @@ function start(deps) {
   require('./presencia.js').setup({ db, io, log, warn });
   require('./panel-estadisticas.js').setup({ db, io, log, warn });
   require('./juegos-estadisticas.js').setup({ db, warn });
+  // Capa 2 en Admin: anota cada minuto cuanta gente hay en la ciudad (capa2-admin.js)
+  require('./capa2-admin.js').setup({ db, log, warn });
   require('./uso.js').setup({ db, log, warn }); // (despues: usa puente_activos)
   require('./medidas.js').setup({ db, io, log, warn });
   require('./informe.js').setup({ db, log, warn, publicUrl });
