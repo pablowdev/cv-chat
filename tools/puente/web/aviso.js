@@ -15858,12 +15858,29 @@ var puenteSinUbicacion = (function () {
         else if (!div && franja) sacar();
       }).observe(lista, { childList: true });
       // Se va sola cuando bajas hasta el ultimo mensaje (despues de haberte movido: si entra todo en pantalla, queda)
+      const alFinal = () => lista.scrollHeight - lista.scrollTop - lista.clientHeight < 40;
       lista.addEventListener('scroll', () => {
         if (!franja) return;
-        const abajo = lista.scrollHeight - lista.scrollTop - lista.clientHeight < 40;
-        if (!abajo) bajo = true;
+        if (!alFinal()) bajo = true;
         else if (bajo) sacar();
       }, { passive: true });
+      // ...y si ya estas en el ultimo mensaje y queres seguir bajando (con el dedo, la ruedita o las teclas), tambien:
+      // ahi la lista ya no se mueve y no hay scroll que lo avise (antes habia que subir y volver a bajar)
+      lista.addEventListener('wheel', (e) => { if (franja && e.deltaY > 0 && alFinal()) sacar(); }, { passive: true });
+      let dedoY = null;
+      lista.addEventListener('touchstart', (e) => { dedoY = e.touches.length === 1 ? e.touches[0].clientY : null; }, { passive: true });
+      lista.addEventListener('touchmove', (e) => {
+        if (!franja || dedoY === null || e.touches.length !== 1) return;
+        if (dedoY - e.touches[0].clientY > 24 && alFinal()) { dedoY = null; sacar(); }
+      }, { passive: true });
+      lista.addEventListener('touchend', () => { dedoY = null; }, { passive: true });
+      lista.addEventListener('touchcancel', () => { dedoY = null; }, { passive: true });
+      document.addEventListener('keydown', (e) => {
+        if (!franja || (e.key !== 'End' && e.key !== 'PageDown')) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        if (alFinal()) sacar();
+      }, true);
     })(0);
   })();
 })();
