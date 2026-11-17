@@ -667,6 +667,9 @@ html.puente-invitado #right-sidebar, html.puente-invitado #mobile-users-btn, htm
 html.puente-invitado #puente-atajos { display: none !important; }
 /* ...ni el buscador (la caja de la PC y la lupa del celular): sin canales no hay nada que buscar */
 html.puente-invitado body #search-container.puente-busca-caja, html.puente-invitado #search-container, html.puente-invitado #puente-lupa { display: none !important; }
+/* ...y arriba, en el encabezado, "CV Chat" en vez de "Seleccioná un canal" (aviso.js), a la vista desde el principio:
+   sin canales no hace falta esperar a ver si se abre uno (la pagina lo esconde hasta entonces, vincular.js) */
+html.puente-invitado:not(.puente-con-canal) header.channel-header #channel-header-name { visibility: visible !important; }
 /* La pantalla de inicio del invitado (aviso.js): la invitacion arriba y abajo, en tarjetas, lo que pasa en el club */
 html.puente-invitado #no-channel-msg { align-items: flex-start; }
 .puente-inv-casa { container-type: inline-size; box-sizing: border-box; width: min(66rem, 100%); margin: 0 auto; padding: 1.25rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px)); color: #dbdee1; text-align: left; }

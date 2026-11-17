@@ -8985,6 +8985,21 @@ document.addEventListener('pointerdown', (ev) => {
       if (o && !b.classList.contains('mobile-sidebar-open')) o.classList.remove('active');
     }).observe(b, { attributes: true, attributeFilter: ['class'] });
   })();
+  // Arriba, en el encabezado, Haven le pone "Seleccioná un canal", pero no tiene canales: ahi va el nombre del chat.
+  // Haven lo vuelve a escribir (al mostrar la bienvenida, al cambiar el idioma): se pone de nuevo. Con un canal
+  // abierto (no le pasa), queda el nombre del canal.
+  let q = 0;
+  (function encabezado() {
+    const h = document.getElementById('channel-header-name');
+    if (!h) { if (++q < 100) setTimeout(encabezado, 200); return; }
+    const poner = () => {
+      if ((window.app && window.app.currentChannel) || h._scrambling || h.textContent === 'CV Chat') return;
+      h.textContent = 'CV Chat';
+      delete h.dataset.originalText; // (el efecto de letras mezcladas de algunos temas se guarda el texto de antes)
+    };
+    new MutationObserver(poner).observe(h, { childList: true, characterData: true, subtree: true });
+    poner();
+  })();
 })();
 
 // Marca html.puente-con-canal mientras hay un canal abierto (la bienvenida de
