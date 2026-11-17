@@ -26,6 +26,10 @@ a { color: inherit; text-decoration: none; }
 .puente-sala-txt { display: flex; flex-direction: column; gap: 2px; padding: 12px 96px 14px 16px; }
 .puente-sala-txt b { font-size: 1.125rem; }
 .puente-sala-txt small { color: #b5bac1; font-size: 0.875rem; }
+/* Lo que pasa ahora en ese juego (juegos.js): "2 partidas ahora · 1 mesa esperando" */
+.puente-sala-txt small.puente-sala-vivo { display: flex; align-items: center; gap: 6px; color: #3ba55d; font-weight: 600; }
+.puente-sala-txt small.puente-sala-vivo[hidden] { display: none; }
+.puente-sala-vivo::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #23a55a; }
 .puente-sala-jugar { position: absolute; right: 14px; bottom: 14px; padding: 8px 18px; border-radius: 999px; background: #5865f2; color: #fff; font-size: 0.9375rem; font-weight: 700; }
 .puente-sala-juego:hover .puente-sala-jugar { background: #4752c4; }
 .puente-sala-mesas:not(:empty) { margin-top: 1.5rem; padding: 16px; border: 1px solid #2e2f35; border-radius: 14px; background: #1a191e; }

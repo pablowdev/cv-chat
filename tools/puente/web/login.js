@@ -97,6 +97,39 @@
   }
 })();
 
+// La entrada de invitado: los errores de Haven llegan en ingles ("That username is currently in use"), aca en
+// castellano. Y el nombre con el que entro queda recordado en este navegador (la proxima vez ya esta escrito, login.js)
+(function () {
+  'use strict';
+  const ES = [
+    [/currently in use/i, 'Ese nombre lo está usando otro invitado. Elegí otro (o tocá el 🎲).'],
+    [/taken by a registered member/i, 'Ese nombre es de alguien del club. Elegí otro (o tocá el 🎲).'],
+    [/reserved|banned/i, 'Ese nombre no se puede usar. Elegí otro (o tocá el 🎲).'],
+    [/3-20 characters/i, 'El nombre tiene que tener entre 3 y 20 caracteres.'],
+    [/letters, numbers, underscores/i, 'El nombre solo puede tener letras, números y _ (sin espacios ni tildes).'],
+    [/username required/i, 'Poné un nombre para jugar.'],
+    [/18 years/i, 'Marcá la casilla para entrar.'],
+    [/Terms of Service/i, 'Marcá la casilla para entrar.'],
+    [/disabled/i, 'Ahora no se puede entrar como invitado.'],
+    [/too many/i, 'Hubo demasiados intentos. Esperá un rato y probá de nuevo.'],
+  ];
+  const orig = window.fetch;
+  window.fetch = function (input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (!/\/api\/auth\/guest-login(\?|$)/.test(url)) return orig.call(this, input, init);
+    let nombre = '';
+    try { nombre = String(JSON.parse((init && init.body) || '{}').username || ''); } catch { nombre = ''; }
+    return orig.call(this, input, init).then(async (r) => {
+      if (r.ok) { try { if (/^[A-Za-z0-9_]{3,20}$/.test(nombre)) localStorage.setItem('puente_inv_nombre', nombre); } catch { /* sin almacenamiento */ } return r; }
+      let d = null;
+      try { d = await r.clone().json(); } catch { return r; }
+      const es = d && typeof d.error === 'string' && ES.find(([re]) => re.test(d.error));
+      if (!es) return r;
+      return new Response(JSON.stringify(Object.assign({}, d, { error: es[1] })), { status: r.status, statusText: r.statusText, headers: { 'Content-Type': 'application/json' } });
+    });
+  };
+})();
+
 // El aviso de los terminos sale en ingles (a la traduccion de Haven le falta):
 // en castellano, sin tocar el enlace (Haven le engancha la ventana de los terminos)
 (function () {
@@ -306,10 +339,61 @@
       if (!p) { p = mk('div', 'puente-jugar-aviso'); p.id = 'puente-jugar-aviso'; form.insertBefore(p, form.firstChild); }
       p.textContent = '';
       p.append(mk('b', '', cual ? '🎮 ' + cual + ': elegí tu nombre' : tipo === 'truco' ? '🃏 Jugá al truco como invitado' : '🎮 Jugá como invitado'),
-        mk('span', '', (tipo === 'truco' || cual ? '' : 'Truco, Pool, Ajedrez y GlobalSiege, contra la compu, contra la gente del club o de a varios en el mismo dispositivo. ')
-          + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después creás tu cuenta gratis.'));
+        mk('span', '', (tipo === 'truco' || cual ? '' : listaJuegos() + ': contra la compu, contra la gente del club o de a varios en el mismo dispositivo. ')
+          + 'Elegí un nombre para jugar (letras, números o _). Es temporal: cuando te vas, se borra. Si te gusta, después te quedás con él y creás tu cuenta gratis.'));
       const u = document.getElementById('guest-username');
-      if (u) { u.placeholder = 'Tu nombre para jugar'; u.focus(); }
+      if (u) {
+        u.placeholder = 'Tu nombre para jugar';
+        // el que usó la vez pasada en este navegador, ya escrito
+        if (!u.value) { try { const antes = localStorage.getItem('puente_inv_nombre'); if (antes && /^[A-Za-z0-9_]{3,20}$/.test(antes)) u.value = antes; } catch { /* sin almacenamiento */ } }
+        // el dado: inventa uno
+        if (!document.getElementById('puente-inv-dado')) {
+          const caja = mk('div', 'puente-inv-nombre');
+          u.parentNode.insertBefore(caja, u);
+          caja.appendChild(u);
+          const d = mk('button', 'puente-inv-dado', '🎲'); d.type = 'button'; d.id = 'puente-inv-dado';
+          d.title = 'Inventame un nombre'; d.setAttribute('aria-label', 'Inventame un nombre');
+          d.addEventListener('click', () => { u.value = nombreAlAzar(); u.dispatchEvent(new Event('input', { bubbles: true })); u.focus(); });
+          caja.appendChild(d);
+        }
+        u.focus();
+      }
+      // Los textos de Haven del formulario, puestos aca (sin esperar la traduccion: asi no se ven un instante en ingles)
+      for (const [sel, txt] of [['label[for="guest-username"]', 'Tu nombre'], ['#guest-username ~ small, .puente-inv-nombre ~ small', '3 a 20 letras, números o _ (sin espacios ni tildes)'], ['button[type="submit"]', 'Entrar como invitado']]) {
+        const x = form.querySelector(sel);
+        if (x) { x.removeAttribute('data-i18n'); x.textContent = txt; }
+      }
+      // Una sola casilla, arriba del boton, en lugar de las dos de Haven de abajo (escondidas, login.css): las marca a
+      // las dos. Sin marcarla, un solo aviso al lado (no los dos de Haven, uno despues del otro)
+      if (!document.getElementById('puente-inv-acepto')) {
+        const age = document.getElementById('age-checkbox'), eula = document.getElementById('eula-checkbox');
+        const submit = form.querySelector('button[type="submit"]');
+        if (age && eula && submit) {
+          const ac = mk('label', 'puente-inv-acepto'); ac.id = 'puente-inv-acepto';
+          const cb = mk('input'); cb.type = 'checkbox'; cb.checked = age.checked && eula.checked;
+          const tx = mk('span', '', 'Tengo 18 años o más y acepto los ');
+          const t = mk('a', '', 'Términos'); t.href = '#';
+          t.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); const l = document.getElementById('eula-link'); if (l) l.click(); });
+          tx.appendChild(t);
+          ac.append(cb, tx);
+          const err = mk('div', 'puente-inv-acepto-err', 'Marcá la casilla para entrar.'); err.hidden = true;
+          cb.addEventListener('change', () => {
+            for (const x of [age, eula]) if (x.checked !== cb.checked) { x.checked = cb.checked; x.dispatchEvent(new Event('change', { bubbles: true })); }
+            if (cb.checked) err.hidden = true;
+          });
+          form.insertBefore(ac, submit);
+          form.insertBefore(err, submit);
+          document.addEventListener('submit', (e) => {
+            if (e.target !== form || !document.documentElement.classList.contains('puente-jugar')) return;
+            if (!cb.checked && age.checked && eula.checked) cb.checked = true; // (las marco la ventana de los terminos)
+            if (cb.checked) { age.checked = eula.checked = true; return; }
+            e.preventDefault(); e.stopImmediatePropagation();
+            err.hidden = false;
+            cb.focus();
+          }, true);
+        }
+      }
+      document.documentElement.classList.remove('puente-pre');
       // "Volver al inicio de sesion" sale del modo invitado; si vino de elegir un juego, de vuelta a los juegos
       const atras = document.getElementById('guest-back-btn');
       if (atras && !atras.dataset.puente) {
@@ -331,7 +415,16 @@
   const FICHAS_AFUERA = /*__PUENTE_JUEGOS__*/null;
   const NOMBRES = {}, TAPAS = {};
   for (const [k, d] of Object.entries((FICHAS_AFUERA && FICHAS_AFUERA.invitados) || {})) { NOMBRES[k] = d.nombre; TAPAS[k] = d.tapa; }
-  function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); location.href = PAGINA_JUEGOS; }
+  // "Truco, Pool, Ajedrez, ... y Capa 2": los que se juegan sin cuenta, de sus fichas
+  function listaJuegos() {
+    const n = [...new Set(Object.values(NOMBRES))];
+    return n.length > 1 ? n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1] : n[0] || 'Truco, Pool y más';
+  }
+  // Un nombre al azar para el dado: un bicho de aca y un numero (solo letras, numeros y _, como pide Haven)
+  const BICHOS = ['Carpincho', 'Hornero', 'Yacare', 'Tero', 'Puma', 'Zorro', 'Quirquincho', 'Peludo', 'Guanaco', 'Condor', 'Mulita', 'Vizcacha', 'Lechuza',
+    'Chaja', 'Tatu', 'Benteveo', 'Zorzal', 'Coati', 'Dorado', 'Surubi', 'Tucan', 'Picaflor', 'Huemul', 'Yaguarete', 'Aguara', 'Tapir', 'Pejerrey', 'Corzuela'];
+  const nombreAlAzar = () => BICHOS[Math.floor(Math.random() * BICHOS.length)] + '_' + (10 + Math.floor(Math.random() * 990));
+  function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); ss.del('puente_inv'); location.href = PAGINA_JUEGOS; }
   // Los juegos que son solo con cuenta (CV Hotel...): llegando a uno sin sesion, en vez del nombre de invitado, una
   // tarjeta que lo dice, con la tapa del juego, e invita a crear la cuenta (o a entrar con la suya); despues de entrar
   // sigue al juego (puente_volver, como la cuenta unica)
@@ -346,6 +439,7 @@
   }
   function soloUsuarios(volver) {
     const j = soloDe(volver);
+    document.documentElement.classList.remove('puente-pre');
     if (!j || document.getElementById('puente-solo')) return;
     ss.set('puente_volver', volver);
     ss.del('puente_jugar');
@@ -486,7 +580,7 @@
     const grid = mk('div', 'puente-pasando-grid');
     // 2. Un pedacito del chat
     if (d.chat && d.chat.mensajes && d.chat.mensajes.length) {
-      const p = panel('Ahora en #' + d.chat.canal, 'puente-panel-chat');
+      const p = panel('Novedades del club', 'puente-panel-chat'); // (los anuncios de #círculo-vicioso, portada.js)
       const ul = mk('ul', 'puente-chat');
       for (const m of d.chat.mensajes) {
         const li = mk('li', 'puente-chat-msg');
@@ -528,7 +622,7 @@
         li.append(t, b);
         ul.appendChild(li);
       }
-      if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', 'Truco, Pool, Ajedrez y GlobalSiege contra la compu, o armá una mesa y que se sume alguien del club.'));
+      if (!ul.children.length) p.appendChild(mk('p', 'puente-panel-s', listaJuegos() + '. Jugá contra la compu o armá una mesa y que se sume alguien del club.'));
       else p.appendChild(ul);
       const b = mk('button', 'puente-panel-btn', 'Ver todos los juegos'); b.type = 'button';
       b.addEventListener('click', aLosJuegos);
@@ -579,7 +673,30 @@
   const tipo = ss.get('puente_jugar');
   if (tipo === 'truco' || tipo === 'juegos') {
     const volver = new URLSearchParams(location.search).get('volver') || ss.get('puente_volver') || '';
-    if (juegoDe(volver)) elegir(volver); else if (soloDe(volver)) soloUsuarios(volver); else aLosJuegos();
+    // Un invitado al que se le corto la sesion en esta pestaña (estuvo mas de media hora afuera y se borro su nombre,
+    // invitados.js, o se le vencio): entra solo de nuevo, con el mismo nombre, y vuelve a la sala de ese juego (aviso.js
+    // anota donde estaba). Si no se puede (el nombre ya lo tiene otro), a elegir el nombre como siempre
+    let prev = null;
+    try { prev = JSON.parse(ss.get('puente_inv') || 'null'); } catch { prev = null; }
+    if (prev && /^[A-Za-z0-9_]{3,20}$/.test(prev.nombre || '') && Date.now() - (prev.at || 0) < 24 * 3600e3) reentrar(prev, volver);
+    else if (juegoDe(volver)) elegir(volver); else if (soloDe(volver)) soloUsuarios(volver); else aLosJuegos();
+  }
+  async function reentrar(prev, volver) {
+    ss.del('puente_inv'); // (un intento: si no sale, sigue como siempre)
+    const ir = /^\/app(\?[\w=&%.-]*)?$/.test(prev.sala || '') ? prev.sala : '/app';
+    try {
+      const r = await fetch('/api/auth/guest-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: prev.nombre, eulaVersion: '2.0', ageVerified: true }) });
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.token && d.user) {
+        localStorage.setItem('haven_token', d.token);
+        localStorage.setItem('haven_user', JSON.stringify(d.user));
+        localStorage.setItem('haven_eula_accepted', '2.0');
+        location.replace(ir);
+        return;
+      }
+    } catch { /* sin conexion: a elegir el nombre */ }
+    const v = volver || location.origin + ir;
+    if (juegoDe(v)) elegir(v); else if (soloDe(v)) soloUsuarios(v); else aLosJuegos();
   }
 })();
 

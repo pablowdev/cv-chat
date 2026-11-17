@@ -407,7 +407,12 @@ function injectScript(req, res, src) {
           html = html.replace('<div class="logo">⬡</div>', '<img class="puente-login-logo" src="/puente/logo-carga.png" alt="">')
             .replace('<h1>HAVEN</h1>', `<h1>${name}</h1><p class="puente-login-sub">¡Qué bueno verte por acá!</p>`)
             .replace('</head>', '<link rel="preload" href="/puente/logo-carga.png" as="image"><link rel="stylesheet" href="/puente/login.css">' +
-              (email.on() ? '<meta name="puente-email" content="1">' : '') + '</head>');
+              (email.on() ? '<meta name="puente-email" content="1">' : '') +
+              // Llegando a jugar como invitado (?jugar=, afuera.js): la tarjeta no se ve hasta que login.js pone la entrada de
+              // invitado y saca html.puente-pre (si no, se veia un instante el formulario de usuario y contraseña, en
+              // ingles). Como mucho 2,5 s. (Sin script: la pagina no deja los de adentro)
+              '<style>@keyframes puente-pre-ver{to{visibility:visible}}html.puente-pre .auth-card{visibility:hidden;animation:puente-pre-ver 0s 2.5s forwards}</style></head>');
+          if (/[?&]jugar=/.test(req.url || '')) html = html.replace(/<html\b([^>]*)>/i, (m, a) => (/\bclass="/i.test(a) ? m.replace(/\bclass="/i, 'class="puente-pre ') : '<html' + a + ' class="puente-pre">'));
         }
         // La pantalla "Bienvenido a Haven" (y el banner del servidor que la
         // acompana) no se muestra ni un instante: aviso.js abre un canal enseguida.
@@ -704,7 +709,8 @@ async function handle(req, res) {
       const e = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const R = registro();
       const pj = R.lista().filter((j) => j.enlace && R.tapaDe(j) && R.abierto(j)).sort((a, b) => (a.pagina || 1e6) - (b.pagina || 1e6) || a.orden - b.orden);
-      const lista = pj.map((j) => `      <a class="puente-sala-juego${j.invitados ? '' : ' solo'}" href="__CHAT__/app?juegos=${e(j.enlace.param)}"><span class="puente-sala-tapa"><img src="${e(j.enlace.imagen)}" alt="${e(j.nombre)}" width="1200" height="630">${j.invitados ? '' : '<span class="puente-sala-solo">Solo usuarios</span>'}</span><span class="puente-sala-txt"><b>${e(j.nombre)}</b><small>${e(j.sub)}</small></span><span class="puente-sala-jugar">Jugar</span></a>`).join('\n');
+      // (puente-sala-vivo: lo que pasa ahora en ese juego, lo pone juegos.js)
+      const lista = pj.map((j) => `      <a class="puente-sala-juego${j.invitados ? '' : ' solo'}" data-juego="${e(j.id)}" href="__CHAT__/app?juegos=${e(j.enlace.param)}"><span class="puente-sala-tapa"><img src="${e(j.enlace.imagen)}" alt="${e(j.nombre)}" width="1200" height="630">${j.invitados ? '' : '<span class="puente-sala-solo">Solo usuarios</span>'}</span><span class="puente-sala-txt"><b>${e(j.nombre)}</b><small>${e(j.sub)}</small><small class="puente-sala-vivo" hidden></small></span><span class="puente-sala-jugar">Jugar</span></a>`).join('\n');
       // (la descripcion dice "sin registrarte": ahi van solo los que se juegan como invitado)
       const nombres = e(yNombres(pj.filter((j) => j.invitados).map((j) => j.nombre)));
       body = body.toString('utf8').replace('__JUEGOS_LISTA__', () => lista).replace(/__JUEGOS_NOMBRES__/g, () => nombres).replace(/__CHAT__/g, chat).replace(/__ORIGEN__/g, chat.replace(/^(https?:\/\/)chat\./, '$1juegos.'));
@@ -1461,6 +1467,11 @@ async function handle(req, res) {
   // El desafio del dia (desafio.js): para la pantalla de inicio del invitado
   if (p === '/puente/api/juegos/desafio') {
     const r = await require('./desafio.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
+  // "Quedate con este nombre": el invitado pasa a ser una cuenta (invitados.js)
+  if (p === '/puente/api/invitado/cuenta') {
+    const r = await require('./invitados.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
   // Capa 2 en Admin (capa2-admin.js): lo que manda el juego y la gente de cada minuto (solo administradores)

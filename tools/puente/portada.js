@@ -38,19 +38,24 @@ function quienJuega(db, id) {
 // A quien le toca en una partida en juego (para el 'Te toca' de la tarjeta del club; solo con conIds, nunca sale afuera;
 // "leToca" del juego, si lo tiene)
 function leToca(j, g) { try { return typeof j.leToca === 'function' ? j.leToca(g) : null; } catch { return null; } }
+// porJuego: cada juego, cuantas partidas se jugaron en los ultimos 30 minutos y cuantas mesas publicas esperan rival
+// (para la pagina de los juegos, juegos.js)
 function mesas(db, conIds) {
   let jugando = 0;
-  const abiertas = [], enJuego = [];
+  const abiertas = [], enJuego = [], porJuego = {};
   let juegos = [];
   try { juegos = JUEGOS(); } catch { /* sin el registro */ }
   for (const j of juegos) {
     let filas = [];
     try { filas = db.prepare(`SELECT estado, actualizado FROM ${j.tabla}`).all(); } catch { continue; }
+    const pj = porJuego[j.juego] = { jugando: 0, esperando: 0 };
     for (const r of filas) {
       let g; try { g = JSON.parse(r.estado); } catch { continue; }
       if (g.estado === 'jugando') jugando++;
+      if (g.estado === 'esperando' && g.publica) pj.esperando++;
       // (la ultima jugada de verdad: el chat, los zumbidos y el barrido no cuentan; chat-partida.js)
       const ultima = g.estado === 'jugando' ? require('./chat-partida.js').ultimaJugada(g) : 0;
+      if (g.estado === 'jugando' && Date.now() - ultima < 30 * 60e3) pj.jugando++;
       if (g.estado === 'jugando' && Date.now() - ultima < 30 * 60e3) {
         // (todas: con invitados y con la compu tambien; en GlobalSiege, los ejercitos de la compu cuentan una vez)
         const todos = g.jugadores || (g.asientos || []).map(a => (a && a.uid) || -1);
@@ -69,11 +74,22 @@ function mesas(db, conIds) {
   enJuego.sort((a, b) => b.at - a.at);
   // (con ids: todas, para que club.js saque las de cada uno antes de quedarse con 4)
   const n = conIds ? 50 : 4;
-  return { jugando, abiertas: abiertas.slice(0, n).map(({ creado, ...x }) => x), enJuego: enJuego.slice(0, n).map(({ at, ...x }) => x) };
+  return { jugando, abiertas: abiertas.slice(0, n).map(({ creado, ...x }) => x), enJuego: enJuego.slice(0, n).map(({ at, ...x }) => x), porJuego };
 }
 
+// Capa 2: cuanta gente hay en la ciudad (la ultima muestra de capa2-admin.js, si es de los ultimos 3 minutos)
+function enLaCiudad(db) {
+  try {
+    const r = db.prepare('SELECT minuto, jugadores FROM puente_capa2_minutos ORDER BY minuto DESC LIMIT 1').get();
+    return r && Date.now() / 60e3 - r.minuto < 3 ? Math.max(0, r.jugadores | 0) : null;
+  } catch { return null; }
+}
+
+// Los anuncios para todos: sin el "@everyone" (o "@here") del principio, que afuera no dice nada
+const sinTodos = (t) => String(t || '').replace(/(^|\s)@(everyone|here)\b[ \t]*/gi, '$1').trim();
+
 async function armar(db, io, warn) {
-  const datos = { conectados: 0, mensajesHoy: 0, partidas: 0, chat: null, abiertas: [], mercado: [], foro: [] };
+  const datos = { conectados: 0, mensajesHoy: 0, partidas: 0, chat: null, abiertas: [], porJuego: {}, mercado: [], foro: [] };
   // Conectados ahora (personas, sin invitados)
   try {
     const ids = new Set();
@@ -88,7 +104,8 @@ async function armar(db, io, warn) {
       WHERE m.created_at >= ? AND COALESCE(c.is_dm, 0) = 0 AND COALESCE(c.is_group, 0) = 0`).get(desde).n;
   } catch (err) { warn('portada: mensajes:', err.message); }
   // Las mesas
-  try { const m = mesas(db); datos.partidas = m.jugando; datos.abiertas = m.abiertas; } catch (err) { warn('portada: mesas:', err.message); }
+  try { const m = mesas(db); datos.partidas = m.jugando; datos.abiertas = m.abiertas; datos.porJuego = m.porJuego; } catch (err) { warn('portada: mesas:', err.message); }
+  { const c = enLaCiudad(db); if (c !== null) datos.porJuego.bacity = { ciudad: c }; }
   // El pedacito del chat
   try {
     const vistas = require('./vistas.js');
@@ -96,7 +113,7 @@ async function armar(db, io, warn) {
     const pub = ch && vistas.canalPublico(ch.code);
     if (pub) {
       const filas = vistas.ultimosDatos(pub, 6).filter(r => r.texto || r.imagen);
-      if (filas.length) datos.chat = { canal: pub.name, mensajes: filas.map(r => ({ autor: r.autor, foto: r.foto, texto: r.texto, emojis: r.emojis, imagen: r.imagen, hora: r.hora })) };
+      if (filas.length) datos.chat = { canal: pub.name, mensajes: filas.map(r => ({ autor: r.autor, foto: r.foto, texto: sinTodos(r.texto), emojis: r.emojis, imagen: r.imagen, hora: r.hora })) };
     }
   } catch (err) { warn('portada: chat:', err.message); }
   // El Marketplace y el foro

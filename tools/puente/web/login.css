@@ -126,6 +126,18 @@ html:not(.puente-jugar) #guest-login-section, html:not(.puente-jugar) #guest-for
 .puente-jugar-aviso { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; padding: 12px 14px; border-radius: 8px; background: rgba(88, 101, 242, 0.15); color: #dbdee1; font-size: 0.9rem; line-height: 1.4; text-align: left; }
 .puente-jugar-aviso b { font-size: 1rem; color: #fff; }
 .puente-jugar #guest-form > p[data-i18n="auth.guest.desc"] { display: none; }
+/* El nombre: con el dado para que invente uno (login.js) */
+.puente-inv-nombre { position: relative; }
+.puente-inv-nombre input { padding-right: 48px !important; }
+.puente-inv-dado { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; background: transparent; font-size: 1.25rem; line-height: 1; cursor: pointer; }
+.puente-inv-dado:hover { background: rgba(255, 255, 255, 0.08); }
+/* Una sola casilla, arriba del boton, en lugar de las dos de Haven de abajo (que se marcan con esta) */
+html.puente-jugar #eula-notice { display: none !important; }
+.puente-inv-acepto { display: flex; align-items: flex-start; gap: 10px; margin: 2px 0 12px; color: #b5bac1; font-size: 0.875rem; line-height: 1.4; text-align: left; cursor: pointer; }
+.puente-inv-acepto input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: #5865f2; cursor: pointer; }
+.puente-inv-acepto a { color: #00a8fc; }
+.puente-inv-acepto-err { margin: -4px 0 12px; color: #f23f43; font-size: 0.875rem; text-align: left; }
+.puente-inv-acepto-err[hidden] { display: none; }
 
 /* Para los que no tienen cuenta (login.js): que es el club y tres accesos sin cuenta (jugar, el Marketplace y
    el foro). El logo, el nombre y eso van en una columna aparte (.puente-lado, fuera de la tarjeta): en la compu

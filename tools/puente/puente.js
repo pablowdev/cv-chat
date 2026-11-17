@@ -160,6 +160,8 @@ function start(deps) {
   require('./capa2-admin.js').setup({ db, log, warn });
   // El desafio del dia, para la pantalla del invitado (desafio.js)
   require('./desafio.js').setup({ db, warn });
+  // Los invitados: 30 minutos para volver antes de que se borre su nombre, y "Quedate con este nombre" (invitados.js)
+  require('./invitados.js').setup({ db, io, log, warn });
   require('./uso.js').setup({ db, log, warn }); // (despues: usa puente_activos)
   require('./medidas.js').setup({ db, io, log, warn });
   require('./informe.js').setup({ db, log, warn, publicUrl });

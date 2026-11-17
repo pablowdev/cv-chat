@@ -3,13 +3,14 @@
 // Un invitado (o una cuenta que ya no existe: los invitados se borran solos) que cerro la app no vuelve, y
 // en una mesa no deja jugar a los demas. Cada 15 segundos se mira en todos los juegos quien esta sentado
 // sin estar conectado:
-//  - En una mesa que espera gente: al minuto se lo levanta (si la habia armado el, en GlobalSiege la mesa
-//    pasa al siguiente; en los de dos, la mesa se cierra).
+//  - En una mesa que espera gente: a los 10 minutos se lo levanta (si la habia armado el, en GlobalSiege la mesa
+//    pasa al siguiente; en los de dos, la mesa se cierra). Antes era al minuto, pero en el celular alcanza con irse
+//    a WhatsApp a pasarle el enlace a un amigo para que se corte la conexion (su cuenta espera 30, invitados.js).
 //  - En una partida empezada: tiene 3 minutos para volver (por si se le corto); despues abandona, como si
 //    hubiera tocado Abandonar (en GlobalSiege su ejercito lo sigue la compu; en los de dos gana el otro).
 // Las cuentas de verdad no se tocan: para ellas estan los plazos de cada juego.
 
-const ESPERA_MS = 60e3, JUEGO_MS = 3 * 60e3;
+const ESPERA_MS = 10 * 60e3, JUEGO_MS = 3 * 60e3;
 let db, io, log, warn;
 const desde = new Map(); // "juego:mesa:uid" -> cuando se lo vio desconectado por primera vez
 

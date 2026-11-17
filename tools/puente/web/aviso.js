@@ -8634,10 +8634,113 @@ document.addEventListener('pointerdown', (ev) => {
   const toast = (t) => { try { if (window.app && window.app._showToast) window.app._showToast(t, 'success'); } catch { /* sin aviso */ } };
   // Sale de la cuenta temporal (se borra al irse) y va a crear la suya o a entrar con la que tiene
   const salirA = (url) => {
-    try { ['haven_token', 'haven_user'].forEach((k) => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+    try { ['haven_token', 'haven_user'].forEach((k) => localStorage.removeItem(k)); ['puente_jugar', 'puente_inv'].forEach((k) => sessionStorage.removeItem(k)); } catch { /* sin almacenamiento */ }
     location.href = url;
   };
-  const crearCuenta = () => salirA('/?registro=1');
+  // Donde esta: la mesa abierta (/app?truco=<mesa>), el juego (/app?juegos=pool) o el chat. Para volver ahi despues de
+  // quedarse con el nombre, o si se le corto la sesion (login.js lo hace entrar de nuevo, con el mismo nombre)
+  // (la mesa va con el id del juego, como las de portada.js; la sala, con el de su enlace)
+  function lugar() {
+    try {
+      const J = window.puenteJuegos;
+      if (!J || !J.abierto()) return { donde: '/app', sala: '/app' };
+      const f = (fichas || []).find((x) => x.id === J.juego());
+      if (!f) return { donde: '/app?juegos', sala: '/app?juegos' };
+      const sala = '/app?juegos=' + encodeURIComponent((f.enlace && f.enlace.param) || f.id);
+      const g = f.cliente && f.cliente.tipo === 'pantalla' && window[f.cliente.global];
+      const mesa = g && typeof g.abierta === 'function' && g.abierta();
+      return { donde: mesa ? '/app?' + f.id + '=' + encodeURIComponent(mesa) : sala, sala };
+    } catch { return { donde: '/app', sala: '/app' }; }
+  }
+  const donde = () => lugar().donde;
+  // Para login.js: con que nombre y donde estaba (solo en esta pestaña: si cierra y vuelve otro dia, elige de nuevo)
+  const anotar = () => {
+    try {
+      const u = (window.app && window.app.user) || JSON.parse(localStorage.getItem('haven_user') || '{}');
+      if (u && u.username && sessionStorage.getItem('puente_jugar')) sessionStorage.setItem('puente_inv', JSON.stringify({ nombre: u.username, ...lugar(), at: Date.now() }));
+    } catch { /* sin almacenamiento */ }
+  };
+  setInterval(anotar, 20e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') anotar(); });
+  addEventListener('pagehide', anotar);
+  // Salir (el boton de la cuenta): se va de verdad, sin volver a entrar solo
+  document.addEventListener('click', (e) => {
+    if (e.target instanceof Element && e.target.closest('#logout-btn')) { try { ['puente_jugar', 'puente_inv'].forEach((k) => sessionStorage.removeItem(k)); } catch { /* sin almacenamiento */ } }
+  }, true);
+
+  // ── "Quedate con tu nombre" (invitados.js): su nombre de invitado pasa a ser su cuenta, sin salir de donde esta ──
+  // La abren todos los "Crear mi cuenta" del invitado (aca, en Juegos y en Configuración). "Prefiero otro nombre" es el
+  // registro de siempre
+  let cuentaAbierta = null;
+  function crearCuenta() {
+    if (cuentaAbierta) return;
+    let yo = {};
+    try { yo = (window.app && window.app.user) || JSON.parse(localStorage.getItem('haven_user') || '{}'); } catch { yo = {}; }
+    const velo = el('div', 'puente-inv-cuenta-velo');
+    const c = el('div', 'puente-inv-cuenta');
+    c.setAttribute('role', 'dialog'); c.setAttribute('aria-modal', 'true'); c.setAttribute('aria-labelledby', 'pic-cuenta-t');
+    const x = el('button', 'pic-cuenta-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar');
+    const t = el('h2', 'pic-cuenta-t', 'Quedate con tu nombre'); t.id = 'pic-cuenta-t';
+    const s = el('p', 'pic-cuenta-s');
+    s.append('Tu nombre de invitado, ', el('b', '', yo.username || ''), ', pasa a ser tu cuenta. Es gratis: seguís donde estás, con tus mesas, y desde ahora tus partidas quedan guardadas.');
+    const f = el('form', 'pic-cuenta-form'); f.noValidate = true;
+    const campo = (id, label, tipo, ayuda, auto) => {
+      const w = el('div', 'pic-campo'), l = el('label', '', label), i = el('input');
+      l.htmlFor = id; i.id = id; i.type = tipo; i.autocomplete = auto; i.required = true;
+      w.append(l, i, el('small', '', ayuda));
+      f.appendChild(w);
+      return i;
+    };
+    const em = campo('pic-email', 'Email', 'email', 'Para recuperar la contraseña si la olvidás. No se muestra a nadie.', 'email'); em.maxLength = 200;
+    const cl = campo('pic-clave', 'Contraseña', 'password', '8 caracteres o más.', 'new-password'); cl.maxLength = 128;
+    const err = el('div', 'pic-cuenta-error'); err.setAttribute('role', 'alert');
+    const ok = el('button', 'puente-inv-btn primario', 'Crear mi cuenta'); ok.type = 'submit';
+    f.append(err, ok);
+    const otros = el('div', 'pic-cuenta-otros');
+    const otro = el('button', 'puente-inv-ya', 'Prefiero otro nombre'); otro.type = 'button';
+    otro.addEventListener('click', () => salirA('/?registro=1'));
+    const ya = el('button', 'puente-inv-ya', 'Ya tengo cuenta'); ya.type = 'button';
+    ya.addEventListener('click', () => salirA('/?volver=' + encodeURIComponent(location.origin + donde())));
+    otros.append(otro, ya);
+    c.append(x, t, s, f, otros);
+    const esc = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrar(); } };
+    function cerrar() { if (!cuentaAbierta) return; velo.remove(); c.remove(); cuentaAbierta = null; document.removeEventListener('keydown', esc, true); }
+    x.addEventListener('click', cerrar);
+    velo.addEventListener('click', cerrar);
+    document.addEventListener('keydown', esc, true);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const correo = em.value.trim(), clave = cl.value;
+      if (!correo) { err.textContent = 'Poné tu email.'; em.focus(); return; }
+      if (clave.length < 8) { err.textContent = 'La contraseña tiene que tener 8 caracteres o más.'; cl.focus(); return; }
+      ok.disabled = true; ok.textContent = 'Creando tu cuenta…';
+      let d = null;
+      try {
+        const r = await fetch('/puente/api/invitado/cuenta', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: correo, clave }) });
+        d = await r.json().catch(() => null);
+      } catch { d = null; }
+      if (!d || !d.ok || !d.token) {
+        ok.disabled = false; ok.textContent = 'Crear mi cuenta';
+        err.textContent = (d && d.error) || 'No se pudo crear la cuenta. Probá de nuevo en un momento.';
+        if (d && d.campo === 'email') em.focus(); else if (d && d.campo === 'clave') cl.focus();
+        return;
+      }
+      // Ya es una cuenta: con su sesion nueva, de vuelta a donde estaba (ahi ya ve los canales y sus partidas cuentan)
+      const ir = donde();
+      try {
+        localStorage.setItem('haven_token', d.token);
+        localStorage.setItem('haven_user', JSON.stringify(d.user));
+        localStorage.setItem('cv_ya_entro', '1');
+        ['puente_jugar', 'puente_inv'].forEach((k) => sessionStorage.removeItem(k));
+      } catch { /* sin almacenamiento */ }
+      location.replace(ir);
+    });
+    document.body.append(velo, c);
+    cuentaAbierta = c;
+    setTimeout(() => { try { em.focus(); } catch { /* sin foco */ } }, 30);
+  }
+  window.puenteInvitado = { crearCuenta, donde };
   // Un enlace afuera del chat (el foro, el Marketplace): en otra pestaña, asi el invitado no pierde su lugar
   const afuera = (cls, texto, url) => { const a = el('a', cls, texto); a.href = url; a.target = '_blank'; a.rel = 'noopener'; return a; };
   // La foto de alguien, o su inicial
@@ -8894,7 +8997,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (!T) return;
     const ch = portada && portada.chat;
     if (!ch || !ch.mensajes || !ch.mensajes.length) { T.c.hidden = true; return; }
-    T.h.textContent = '💬 Ahora en #' + ch.canal;
+    T.h.textContent = '📣 Novedades del club'; // (son los anuncios de #círculo-vicioso, portada.js)
     T.b.textContent = '';
     const ul = el('ul', 'pic-msjs');
     for (const m of ch.mensajes.slice(-5)) {
@@ -11439,6 +11542,7 @@ document.addEventListener('pointerdown', (ev) => {
   function piezas(j) {
     return { el, emit, head, go, back, close, show, toast, avatar, botonEnlace, confirmar, svg, I, beep, campanita, mobile, setBadge, byId, app,
       cartelMirando, botonSalir, botonZumbido, puedeZumbar, espChat, nombreChat, ctaInvitado, chatPartida, chat: chatPartida, desafio: desafioDM, ajPieza,
+      invitado: esInvitado, notaInvitado, botonCompartir, crearCuenta: cuentaDeInvitado,
       unirse: (id) => unirseA(j, id), page: () => page, stack: () => stack, nuevaPila: (p) => { stack = p; } };
   }
   function cargarJuego(j) {
@@ -11755,7 +11859,8 @@ document.addEventListener('pointerdown', (ev) => {
     };
     const acts = el('div', 'jg-acciones');
     const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta gratis'); c.type = 'button';
-    c.addEventListener('click', () => ir(true));
+    // (quedarse con su nombre: despues de crear la cuenta vuelve aca y ya entra)
+    c.addEventListener('click', () => { if (window.puenteInvitado) cuentaDeInvitado(); else ir(true); });
     const y = el('button', 'jg-btn', 'Ya tengo cuenta'); y.type = 'button';
     y.addEventListener('click', () => ir(false));
     acts.append(c, y);
@@ -11771,11 +11876,35 @@ document.addEventListener('pointerdown', (ev) => {
     if (!(window.app && window.app.user && window.app.user.isGuest)) return;
     w.appendChild(el('div', 'jg-hero-s', 'Jugaste como invitado. Con tu cuenta (gratis) quedan tus partidas y el ranking, y entrás al chat del club.'));
     const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta'); c.type = 'button';
-    c.addEventListener('click', () => {
-      try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
-      location.href = '/?registro=1';
-    });
+    c.addEventListener('click', cuentaDeInvitado);
     acts.insertBefore(c, acts.firstChild);
+  }
+  // "Crear mi cuenta" del invitado: quedarse con su nombre, sin salir de donde esta (window.puenteInvitado, el bloque del
+  // invitado). Si no esta, como antes: sale de la cuenta temporal (se borra) y va a crear la suya
+  function cuentaDeInvitado() {
+    if (window.puenteInvitado && typeof window.puenteInvitado.crearCuenta === 'function') { window.puenteInvitado.crearCuenta(); return; }
+    try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); ['puente_jugar', 'puente_inv'].forEach(k => sessionStorage.removeItem(k)); } catch { /* sin almacenamiento */ }
+    location.href = '/?registro=1';
+  }
+  // En la sala de un juego, para el invitado: en lugar de "Tu récord" (siempre en 0: sus partidas no se guardan), la
+  // invitacion a quedarse con su nombre. La usa cada juego (A.notaInvitado) donde pone el récord
+  function notaInvitado(box) {
+    box.appendChild(el('div', 'jg-sub', 'Tu récord'));
+    const w = el('div', 'jg-invitado-nota');
+    w.append(el('div', 'jg-invitado-nota-t', 'Estás jugando como invitado'),
+      el('div', 'jg-invitado-nota-s', 'Tus partidas no quedan guardadas ni suman al ranking. Con tu cuenta (gratis), sí: quedate con tu nombre y seguí jugando donde estás.'));
+    const b = el('button', 'jg-btn jg-primario', 'Crear mi cuenta'); b.type = 'button';
+    b.addEventListener('click', cuentaDeInvitado);
+    w.appendChild(b);
+    box.appendChild(w);
+  }
+  // "Compartir" para la mesa que espera rival, junto a "Copiar enlace": en el celular abre WhatsApp y los demas (el menu
+  // del telefono). En la computadora no hace falta (null). La usa cada juego (A.botonCompartir)
+  function botonCompartir(url, titulo, texto) {
+    if (!navigator.share || !mobile()) return null;
+    const b = el('button', 'jg-btn', 'Compartir'); b.type = 'button';
+    b.addEventListener('click', () => { navigator.share({ title: titulo || '__PUENTE_APP__', text: texto || '', url }).catch(() => { /* lo cerro */ }); });
+    return b;
   }
   // ── Funball (funball.js) ──
   // Su pantalla esta aparte (/puente/funball/juego.js, con su propio repositorio): la carga abrirJuego, con su ficha
@@ -13083,6 +13212,9 @@ document.addEventListener('pointerdown', (ev) => {
     'section-update', 'section-connectivity', 'section-badges', 'section-invite', 'section-cleanup', 'section-modmode'];
   const ALL = [...USER, ...ADMIN].flatMap(c => c.ids).concat(REMOVED);
   let built = false, current = null, refs = {};
+  // Quien entro como invitado (sin cuenta): solo idioma y accesibilidad
+  const esInv = () => !!(window.app && window.app.user && window.app.user.isGuest);
+  const misCats = () => (esInv() ? USER.filter(c => c.id === 'idioma' || c.id === 'acces') : USER);
 
   const navItemFor = id => document.querySelector(`#settings-nav .settings-nav-item[data-target="${id}"]`);
   // Haven esconde algunas secciones segun los permisos (su item del menu queda oculto)
@@ -13274,7 +13406,16 @@ document.addEventListener('pointerdown', (ev) => {
         nav.appendChild(b);
       }
     };
-    group('Ajustes de usuario', USER);
+    // El invitado: solo lo que le sirve (idioma y accesibilidad) y, arriba de todo, quedarse con su nombre (su cuenta).
+    // Mi cuenta (contraseña, dos pasos, email), el perfil y los avisos son de las cuentas
+    if (esInv()) {
+      nav.appendChild(el('div', 'pas-grupo', 'Tu cuenta'));
+      const b = el('button', 'pas-item pas-crear'); b.type = 'button';
+      b.append(el('span', 'pas-ico', '⭐'), el('span', 'pas-nombre', 'Crear mi cuenta'), el('span', 'pas-flecha', '›'));
+      b.addEventListener('click', () => { document.getElementById('close-settings-btn')?.click(); setTimeout(() => window.puenteInvitado && window.puenteInvitado.crearCuenta(), 50); });
+      nav.appendChild(b);
+    }
+    group('Ajustes de usuario', misCats());
     const app = window.app;
     if (app && typeof app._hasAnyAdminSettingsAccess === 'function' && app._hasAnyAdminSettingsAccess()) group('Administración', ADMIN);
     // Encabezado del contenido (en el celular, con la flecha para volver)
@@ -13323,7 +13464,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (!built) return;
     // En la computadora se abre en "Mi cuenta"; en el celular, en la lista
     if (mobile()) { backToList(); for (const x of refs.extras) x.hidden = true; }
-    else show(current || USER[0]);
+    else show(current || misCats()[0]);
   }
   window.puenteAjustes = {
     enDetalle: () => !!(refs.modal && refs.modal.classList.contains('pas-detalle') && mobile() && document.getElementById('settings-modal')?.style.display === 'flex'),

@@ -14,7 +14,7 @@ const SIEMPRE = {
   sabes: 'sabés', haces: 'hacés', recibes: 'recibís', prefieres: 'preferís', sientes: 'sentís', vuelves: 'volvés',
   escribes: 'escribís', envías: 'enviás', perteneces: 'pertenecés', conoces: 'conocés', estás: 'estás', ves: 'ves',
   usas: 'usás', cambias: 'cambiás', borras: 'borrás', eliges: 'elegís', subes: 'subís', abres: 'abrís', cierras: 'cerrás',
-  creas: 'creás', guardas: 'guardás', activas: 'activás', desactivas: 'desactivás', escuchas: 'escuchás', hablas: 'hablás',
+  creas: 'creás', guardas: 'guardás', escuchas: 'escuchás', hablas: 'hablás', compartes: 'compartís',
   entras: 'entrás', sales: 'salís', pierdes: 'perdés', recuerdas: 'recordás', olvidas: 'olvidás', mandas: 'mandás',
   intentas: 'intentás', pegas: 'pegás', configuras: 'configurás', escoges: 'elegís', buscas: 'buscás', tocas: 'tocás',
   // con pronombre
@@ -69,10 +69,15 @@ const DESCRIBEN = new Set(['muestra', 'oculta', 'silencia', 'busca', 'comprueba'
   'pasa', 'reinicia', 'crea', 'configura', 'copia', 'instala', 'sube', 'espera', 'recarga']);
 const A_VOS = /(^|[^A-Za-zÁÉÍÓÚáéíóúñ])(tu|tus|te|ti|contigo|vos|sos)(?=[^A-Za-zÁÉÍÓÚáéíóúñ]|$)/i;
 const reTi = new RegExp('(^|[^' + W + '])(por|para|a|de|sin|con|sobre|entre|hacia|según) ti(?=[^' + W + ']|$)', 'gi');
+// "Activas" tambien es adjetivo ("Sesiones activas"): pasa al vos solo como verbo, despues de "si" o de un pronombre
+// ("si los activas de nuevo" -> "si los activás de nuevo")
+const reActivas = new RegExp('(^|[^' + W + '])((?:si|lo|la|los|las|le|les|me|te|nos)\\s+)(activas|desactivas)(?=[^' + W + ']|$)', 'gi');
+const ACTIVAS = { activas: 'activás', desactivas: 'desactivás' };
 
 function voseo(s) {
   if (typeof s !== 'string' || !s) return s;
   let r = s.replace(reSiempre, (m, pre, w) => pre + conMayuscula(w, SIEMPRE[w.toLowerCase()]));
+  r = r.replace(reActivas, (m, pre, pron, w) => pre + pron + conMayuscula(w, ACTIVAS[w.toLowerCase()]));
   r = r.replace(/\bhaz clic\b/gi, (m) => conMayuscula(m, 'hacé clic'));
   const habla = r !== s || A_VOS.test(s);
   r = r.replace(reInicio, (m, pre, w) => (DESCRIBEN.has(w.toLowerCase()) && !habla ? m : pre + conMayuscula(w, IMPERATIVO[w.toLowerCase()])));

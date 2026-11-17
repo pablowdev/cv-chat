@@ -163,8 +163,12 @@
     if (overlay) { overlay.remove(); overlay = null; }
   }
 
+  // Quien entro como invitado (a jugar una partida, login.js) no ve el cartel: recien con su cuenta
+  const invitado = () => {
+    try { const t = localStorage.getItem('haven_token') || ''; return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).isGuest === true; } catch { return false; }
+  };
   function show() {
-    if (overlay || installed() || store('l', s => s.getItem(NEVER_KEY))) return;
+    if (overlay || installed() || invitado() || store('l', s => s.getItem(NEVER_KEY))) return;
     // No encima de otro cartel de Haven (por ejemplo el de codigos de recuperacion)
     const busy = [...document.querySelectorAll('.modal-overlay')].some(m => m.id !== 'puente-instalar-modal' && getComputedStyle(m).display !== 'none');
     if (busy) { setTimeout(show, 4000); return; }
