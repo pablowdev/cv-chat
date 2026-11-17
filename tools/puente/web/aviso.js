@@ -570,7 +570,8 @@ function sheetDrag(sheet, opts) {
 
   const $ = (id) => document.getElementById(id);
   const left = () => document.querySelector('[data-haven-region="navigation-sidebar"]');
-  const right = () => document.querySelector('.right-sidebar');
+  // (el invitado no tiene panel de la derecha: sin canales no hay miembros que mostrar)
+  const right = () => (document.documentElement.classList.contains('puente-invitado') ? null : document.querySelector('.right-sidebar'));
 
   function scrollsSideways(el) {
     for (let n = el; n && n !== document.body; n = n.parentElement) {
@@ -8605,6 +8606,65 @@ document.addEventListener('pointerdown', (ev) => {
   })();
 })();
 
+// Quien entro como invitado (jugar sin cuenta, login.js) no tiene canales: al cerrar Juegos quedaba la bienvenida vacia
+// de Haven ("Bienvenido a CV Chat", y atras el banner viejo). En su lugar, lo que gana con la cuenta, el boton para
+// crearla y el de volver a los juegos (html.puente-invitado: el tema esconde lo de Haven)
+(function () {
+  'use strict';
+  if (window.name === 'cv-ventana') return;
+  let tok = '';
+  try { tok = localStorage.getItem('haven_token') || ''; } catch { return; }
+  let invitado = false;
+  try { invitado = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).isGuest === true; } catch { /* no es */ }
+  if (!invitado) return;
+  document.documentElement.classList.add('puente-invitado');
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  // Sale de la cuenta temporal (se borra al irse) y va a crear la suya o a entrar con la que tiene
+  const salirA = (url) => {
+    try { ['haven_token', 'haven_user'].forEach((k) => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+    location.href = url;
+  };
+  function poner() {
+    const w = document.getElementById('no-channel-msg');
+    if (!w) return false;
+    if (document.getElementById('puente-invitado-casa')) return true;
+    const box = el('div', 'puente-inv-casa'); box.id = 'puente-invitado-casa';
+    box.append(el('div', 'puente-inv-ico', '🎮'), el('h2', 'puente-inv-t', 'Estás jugando como invitado'),
+      el('p', 'puente-inv-s', 'Tu nombre de invitado es temporal: cuando te vas, se borra. Con tu cuenta, que es gratis:'));
+    const ul = el('ul', 'puente-inv-lista');
+    for (const [ico, txt] of [
+      ['🏆', 'Tus partidas quedan guardadas y entrás al ranking de cada juego'],
+      ['💬', 'Entrás al chat del club'],
+      ['📚', 'Leés y escribís en el foro'],
+      ['🛍️', 'Comprás y vendés en el Marketplace, sin comisiones'],
+    ]) { const li = el('li'); li.append(el('span', 'puente-inv-li-ico', ico), el('span', null, txt)); ul.appendChild(li); }
+    const crear = el('button', 'puente-inv-btn primario', 'Crear mi cuenta gratis'); crear.type = 'button';
+    crear.addEventListener('click', () => salirA('/?registro=1'));
+    const juegos = el('button', 'puente-inv-btn', 'Volver a los juegos'); juegos.type = 'button';
+    juegos.addEventListener('click', () => { if (window.puenteJuegos) window.puenteJuegos.abrir(); });
+    const ya = el('button', 'puente-inv-ya', 'Ya tengo cuenta'); ya.type = 'button';
+    ya.addEventListener('click', () => salirA('/'));
+    box.append(ul, crear, juegos, ya);
+    w.appendChild(box);
+    return true;
+  }
+  let n = 0;
+  (function esperar() { if (!poner() && ++n < 100) setTimeout(esperar, 200); })();
+  // El panel de la derecha (el viejo de "Unirse al chat de voz") no se le muestra (el tema lo esconde): si Haven lo
+  // abre igual en el celular (deslizando desde el borde), se cierra, asi no queda la pantalla oscurecida sin nada
+  let m = 0;
+  (function cuerpo() {
+    const b = document.getElementById('app-body');
+    if (!b) { if (++m < 100) setTimeout(cuerpo, 200); return; }
+    new MutationObserver(() => {
+      if (!b.classList.contains('mobile-right-open')) return;
+      b.classList.remove('mobile-right-open');
+      const o = document.getElementById('mobile-overlay');
+      if (o && !b.classList.contains('mobile-sidebar-open')) o.classList.remove('active');
+    }).observe(b, { attributes: true, attributeFilter: ['class'] });
+  })();
+})();
+
 // Marca html.puente-con-canal mientras hay un canal abierto (la bienvenida de
 // Haven esta oculta). El tema la usa en vez de un selector :has() sobre toda la
 // app, que hacia recalcular los estilos de la pagina entera en cada letra.
@@ -9378,25 +9438,6 @@ document.addEventListener('pointerdown', (ev) => {
       names.insertAdjacentElement('afterend', row);
     }
     if (st) st.then(d => paintStats(popup, profile, d));
-    // Su muñeco de CV Hotel (hotel.js lo arma como imagen: /puente/api/hotel/muneco/<id>.png). Si no armó uno, nada
-    {
-      const pid = String(profile.id);
-      const img = new Image();
-      img.alt = ''; img.decoding = 'async';
-      img.onload = () => {
-        if (!popup.isConnected || popup.dataset.puenteMedallas !== pid || popup.querySelector('.puente-perfil-hotel')) return;
-        const box = document.createElement('div');
-        box.className = 'puente-perfil-hotel';
-        box.style.cssText = 'display:flex;align-items:center;gap:10px;margin:8px 0 2px;';
-        img.style.cssText = 'height:72px;width:auto;image-rendering:pixelated;flex:none;';
-        const t = document.createElement('span');
-        t.style.cssText = 'font-size:12px;opacity:.8;';
-        t.textContent = isSelf ? 'Tu Javo en CV Hotel' : 'Su Javo en CV Hotel';
-        box.append(img, t);
-        (popup.querySelector('.puente-perfil-est') || popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', box);
-      };
-      img.src = '/puente/api/hotel/muneco/' + encodeURIComponent(pid) + '.png';
-    }
     if (isSelf) {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
@@ -10792,11 +10833,86 @@ document.addEventListener('pointerdown', (ev) => {
     b.addEventListener('click', () => {
       const url = /^https?:\/\//.test(ruta) ? ruta : location.origin + ruta;
       if (navigator.share && mobile()) { navigator.share({ title: titulo, url }).catch(() => {}); return; }
-      const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
-      else prompt('Copiá el enlace:', url);
+      copiarEnlace(url);
     });
     return b;
+  }
+  function copiarEnlace(url) {
+    const done = () => toast('Enlace copiado: pegalo en un canal o en un mensaje', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('Copiá el enlace:', url));
+    else prompt('Copiá el enlace:', url);
+  }
+  // Clic derecho en la tapa de un juego (o mantenerla apretada con el dedo): su menu, para copiar el enlace sin abrirlo
+  let tapaSinClic = 0, menuTapa = null;
+  function cerrarMenuTapa() {
+    if (!menuTapa) return;
+    menuTapa.remove(); menuTapa = null;
+    document.removeEventListener('pointerdown', fueraDelMenu, true);
+    document.removeEventListener('keydown', escMenu, true);
+    document.removeEventListener('scroll', cerrarMenuTapa, true);
+    removeEventListener('resize', cerrarMenuTapa);
+    removeEventListener('blur', cerrarMenuTapa);
+  }
+  function fueraDelMenu(e) {
+    if (!menuTapa || menuTapa.contains(e.target)) return;
+    cerrarMenuTapa();
+    tapaSinClic = Date.now() + 400; // (el toque que cierra el menu no abre el juego que habia debajo)
+  }
+  function escMenu(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrarMenuTapa(); } }
+  function menuDeJuego(j, x, y, dedo) {
+    cerrarMenuTapa();
+    const url = location.origin + '/app?juegos=' + ((j.enlace && j.enlace.param) || j.id);
+    const m = el('div', 'jg-menu'); m.setAttribute('role', 'menu');
+    const op = (txt, fn) => {
+      const b = el('button', 'jg-menu-op', txt); b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.addEventListener('click', (e) => { e.stopPropagation(); cerrarMenuTapa(); fn(); });
+      m.appendChild(b);
+    };
+    op('Copiar enlace', () => copiarEnlace(url));
+    if (navigator.share && mobile()) op('Compartir…', () => navigator.share({ title: j.nombre + ' · __PUENTE_APP__', url }).catch(() => {}));
+    op('Abrir ' + j.nombre, () => go('inicio', j.id));
+    m.style.visibility = 'hidden';
+    document.body.appendChild(m);
+    menuTapa = m;
+    // donde se ve: junto al puntero; con el dedo, arriba de donde toco (si no entra, abajo)
+    const r = m.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+    let left = dedo ? x - r.width / 2 : x, top = dedo ? y - r.height - 16 : y;
+    if (dedo && top < 8) top = y + 24;
+    m.style.left = Math.round(Math.max(8, Math.min(left, W - r.width - 8))) + 'px';
+    m.style.top = Math.round(Math.max(8, Math.min(top, H - r.height - 8))) + 'px';
+    m.style.visibility = '';
+    setTimeout(() => {
+      if (menuTapa !== m) return;
+      document.addEventListener('pointerdown', fueraDelMenu, true);
+      document.addEventListener('keydown', escMenu, true);
+      document.addEventListener('scroll', cerrarMenuTapa, true);
+      addEventListener('resize', cerrarMenuTapa);
+      addEventListener('blur', cerrarMenuTapa);
+    }, 0);
+  }
+  function menuDeTapa(t, j) {
+    let timer = null, x0 = 0, y0 = 0, abierto = 0;
+    const abrir = (x, y, dedo) => {
+      clearTimeout(timer); timer = null;
+      tapaSinClic = Date.now() + 700;
+      if (menuTapa && Date.now() - abierto < 800) return; // (el dedo: el del navegador llega despues que el propio)
+      abierto = Date.now();
+      menuDeJuego(j, x, y, dedo);
+    };
+    t.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); abrir(e.clientX, e.clientY, !!(timer || Date.now() - abierto < 800)); });
+    t.addEventListener('touchstart', (e) => {
+      clearTimeout(timer); timer = null;
+      if (e.touches.length !== 1) return;
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+      timer = setTimeout(() => { timer = null; if (!t.isConnected) return; if (navigator.vibrate) navigator.vibrate(15); abrir(x0, y0, true); }, 500);
+    }, { passive: true });
+    t.addEventListener('touchmove', (e) => {
+      const p = e.touches[0];
+      if (timer && p && (Math.abs(p.clientX - x0) > 10 || Math.abs(p.clientY - y0) > 10)) { clearTimeout(timer); timer = null; }
+    }, { passive: true });
+    const soltar = (e) => { clearTimeout(timer); timer = null; if (Date.now() < tapaSinClic && e.cancelable) e.preventDefault(); };
+    t.addEventListener('touchend', soltar);
+    t.addEventListener('touchcancel', soltar);
   }
   function head(title, right) {
     const h = el('div', 'jg-head');
@@ -11106,8 +11222,11 @@ document.addEventListener('pointerdown', (ev) => {
       ponerTapa(caja, j, true);
       caja.append(badge, vivo);
       t.append(caja, el('div', 'jg-tapa-n', j.nombre), el('div', 'jg-tapa-s', j.sub));
-      t.addEventListener('click', () => go('inicio', j.id));
+      t.addEventListener('click', () => { if (Date.now() < tapaSinClic) return; go('inicio', j.id); });
+      menuDeTapa(t, j);
       if (j.tarjeta.aparte) t.style.display = 'none';
+      // (quien entro como invitado ve todos los juegos: los que son solo con cuenta, con su cartel)
+      else if (!j.invitados && esInvitado()) soloEnTapa(vivo);
       grilla.appendChild(t);
       tarjetas[j.id] = { t, badge, vivo };
     }
@@ -11118,8 +11237,11 @@ document.addEventListener('pointerdown', (ev) => {
     // "aparte" (BACITY): su tarjeta nace oculta y se pide por separado, sin demorar a los demas; se muestra solo si su
     // "inicio" dice que esta cuenta puede entrar (si el juego no esta instalado, o esta en prueba, no se ve nada)
     for (const j of JUEGOS.filter(x => x.tarjeta.aparte && x.eventos.inicio)) emit(j.eventos.inicio).then((d) => {
-      if (!page || !b.isConnected || !d || d.error || (d.tableros && !d.tableros.length)) return;
+      // (a quien entro como invitado, el que es solo con cuenta se le muestra igual: al tocarlo se le dice)
+      const solo = !!(d && d.error && d.soloUsuarios && esInvitado());
+      if (!page || !b.isConnected || !d || (d.error && !solo) || (d.tableros && !d.tableros.length)) return;
       tarjetas[j.id].t.style.display = ''; contar();
+      if (solo) { soloEnTapa(tarjetas[j.id].vivo); return; }
       const vt = j.tarjeta.vivo, n = vt && d[vt.campo];
       const vv = n > 0 ? (n === 1 ? vt.uno : vt.varios.replace('{n}', n)) : '';
       if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
@@ -11224,6 +11346,19 @@ document.addEventListener('pointerdown', (ev) => {
     // tiempo de uso diga "shoppa" y no "juegos"); si no, la biblioteca
     const fj = which ? (await fichas().catch(() => [])).find((j) => j.id === which) : null;
     if (fj && !page) return;
+    // quien entro como invitado, a un juego que es solo con cuenta: se le dice y se lo invita a crearla. Lo dice la
+    // ficha ("invitados"); los "aparte" lo confirman en su "inicio" (asi uno que si deja jugar sin cuenta, como Capa 2,
+    // no se le cierra mientras su ficha no lo diga; y si no contesta, se abre y el juego dice lo suyo)
+    if (fj && !fj.invitados && esInvitado()) {
+      let solo = true;
+      if (fj.tarjeta.aparte && fj.eventos.inicio) {
+        const top = stack[stack.length - 1];
+        const d = await emit(fj.eventos.inicio).catch(() => null);
+        if (!page || stack[stack.length - 1] !== top) return;
+        solo = !!(d && d.error && !/conexi|contest/i.test(d.error));
+      }
+      if (solo) return soloUsuarios(fj);
+    }
     if (fj && fj.cliente.tipo === 'ventana') { const v = Object.keys(fj.vistas)[0]; if (stack.length) stack[stack.length - 1] = [v]; return abrirJuego(fj.id, v); }
     if (fj) return abrirJuego(which, 'inicio');
     if (!page) return;
@@ -11258,6 +11393,40 @@ document.addEventListener('pointerdown', (ev) => {
       (page || document.body).appendChild(fondo);
       bNo.focus();
     });
+  }
+  // Quien entro como invitado (jugar sin cuenta, login.js)
+  function esInvitado() { return !!(window.app && window.app.user && window.app.user.isGuest); }
+  // El cartel de una tapa que es solo con cuenta (para el invitado)
+  function soloEnTapa(vivo) { vivo.textContent = 'Solo usuarios'; vivo.classList.add('solo'); vivo.style.display = ''; }
+  // Un juego que es solo con cuenta, para quien entro como invitado: su tapa, que es solo para usuarios y la invitacion
+  // a crear la cuenta o a entrar con la suya. La temporal se borra al salir (como en ctaInvitado); al entrar, la
+  // cuenta unica (puente_volver) lo trae de vuelta a este juego
+  function soloUsuarios(j) {
+    page.appendChild(head(j.nombre));
+    const w = el('div', 'jg-cuerpo jg-solo');
+    const hero = el('div', 'jg-hero jg-solo-hero');
+    const img = el('img', 'jg-solo-tapa'); img.alt = ''; img.draggable = false;
+    img.src = (j.enlace && j.enlace.imagen) || j.tapa || '';
+    img.addEventListener('error', () => img.remove());
+    if (img.src) hero.appendChild(img);
+    hero.append(el('div', 'jg-hero-t', j.nombre + ' es solo para usuarios'),
+      el('div', 'jg-hero-s', 'Para entrar necesitás tu cuenta. Es gratis: con ella quedan tus partidas y el ranking, y entrás al chat del club, al foro y al Marketplace.'));
+    const volver = location.origin + '/app?juegos=' + encodeURIComponent((j.enlace && j.enlace.param) || j.id);
+    const ir = (registro) => {
+      try { ['haven_token', 'haven_user'].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem('puente_jugar'); } catch { /* sin almacenamiento */ }
+      location.href = '/?' + (registro ? 'registro=1&' : '') + 'volver=' + encodeURIComponent(volver);
+    };
+    const acts = el('div', 'jg-acciones');
+    const c = el('button', 'jg-btn jg-primario', 'Crear mi cuenta gratis'); c.type = 'button';
+    c.addEventListener('click', () => ir(true));
+    const y = el('button', 'jg-btn', 'Ya tengo cuenta'); y.type = 'button';
+    y.addEventListener('click', () => ir(false));
+    acts.append(c, y);
+    hero.appendChild(acts);
+    const otro = el('button', 'jg-btn jg-suave jg-ancho', '← Elegir otro juego'); otro.type = 'button';
+    otro.addEventListener('click', back);
+    w.append(hero, otro);
+    page.appendChild(w);
   }
   // Al terminar una partida, quien jugo sin cuenta (invitado, login.js): la invitacion a hacerse la cuenta.
   // La temporal se borra al salir, asi que se sale de esa y se va a crear la nueva (truco, funball, ajedrez)
@@ -16031,6 +16200,8 @@ var puenteSinUbicacion = (function () {
   let intentos = 0;
   (function esperar() {
     if (!token() || !document.getElementById('server-bar') && !document.getElementById('puente-rail')) { if (++intentos < 60) setTimeout(esperar, 1000); return; }
+    // (quien entro como invitado no tiene donde guardarlos: ni atajos ni el "+")
+    try { if (JSON.parse(atob(token().split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).isGuest) return; } catch { /* sigue */ }
     cargar();
     setInterval(revisar, 2000);
     setInterval(() => { if (document.visibilityState === 'visible') cargar(); }, 30000);

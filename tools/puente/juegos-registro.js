@@ -83,9 +83,10 @@ function limpiar(f, archivo) {
   const icono = typeof f.icono === 'string' && f.icono.length <= 8 && !/[<>&"'\s]/.test(f.icono) ? f.icono : null;
   const jugadores = f.jugadores === 2 ? 2 : 'varios';
   // sin cuenta: si se puede jugar como invitado (la entrada de invitado, login.js) y su lugar en la pagina publica
-  // de los juegos (juegos.html; sin "pagina" no aparece ahi, pero sus enlaces igual llevan a jugar como invitado)
+  // de los juegos (juegos.html, donde estan todos: primero los que tienen "pagina", en ese orden, y despues los demas
+  // por "orden"; los que no son para invitados, con el cartel "Solo usuarios")
   const invitados = f.invitados === true;
-  const pagina = invitados && Number.isInteger(f.pagina) && f.pagina > 0 && f.pagina < 1000 ? f.pagina : null;
+  const pagina = Number.isInteger(f.pagina) && f.pagina > 0 && f.pagina < 1000 ? f.pagina : null;
   // el nombre de sus mesas segun su modo (WORGS: { "": "WORGS: Shoppa", "normal": "WORGS: Normal" })
   let modos = null;
   for (const [k, v] of Object.entries(f.modos || {})) { if (!/^[a-z]{0,16}$/.test(k) || !texto(v, 40)) return mal(`modo ${k} invalido`); (modos = modos || {})[k] = v; }
@@ -178,8 +179,26 @@ function paraPaginas() {
     const d = { nombre: j.nombre, tapa: (j.enlace && j.enlace.imagen) || null };
     for (const k of [j.id, ...(j.enlace ? [j.enlace.param, ...j.enlace.alias] : [])]) if (!invitados[k]) invitados[k] = d;
   }
+  // y los que son solo con cuenta (CV Hotel...): llegando a uno sin sesion, login.js lo dice e invita a crearla
+  const solo = {};
+  for (const j of lista().filter((x) => !x.invitados && x.enlace)) {
+    const d = { nombre: j.nombre, tapa: j.enlace.imagen || null };
+    for (const k of [j.id, j.enlace.param, ...j.enlace.alias]) if (!solo[k] && !invitados[k]) solo[k] = d;
+  }
   // (JSON dentro de un <script> o un .js: sin "<" ni separadores de linea sueltos)
-  return JSON.stringify({ mesas, invitados }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  return JSON.stringify({ mesas, invitados, solo }).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
+// Si un juego se muestra en la pagina publica de los juegos (juegos.html): los "aparte" pueden estar en prueba (solo
+// para administradores) y lo dice su modulo de servidor, si exporta abierto() (CV Hotel). Si no lo dice, se muestra
+function abierto(j) {
+  if (!j || !j.tarjeta.aparte) return true;
+  for (const m of j.servidor) {
+    let x = null;
+    try { x = require(path.join(__dirname, m)); } catch { continue; }
+    if (x && typeof x.abierto === 'function') { try { return x.abierto() === true; } catch { return false; } }
+  }
+  return true;
 }
 
 // Los modulos de servidor de todos los juegos (su "servidor"), sin repetir, en el orden de las fichas: puente.js los
@@ -235,4 +254,4 @@ function conRutas() {
   return out;
 }
 
-module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, servidores, conChat, conRutas, _limpiar: limpiar };
+module.exports = { setup, handle, lista, firma, tapaDe, deEnlace, paraPaginas, abierto, servidores, conChat, conRutas, _limpiar: limpiar };

@@ -332,6 +332,42 @@
   const NOMBRES = {}, TAPAS = {};
   for (const [k, d] of Object.entries((FICHAS_AFUERA && FICHAS_AFUERA.invitados) || {})) { NOMBRES[k] = d.nombre; TAPAS[k] = d.tapa; }
   function aLosJuegos() { ss.del('puente_jugar'); ss.del('puente_volver'); location.href = PAGINA_JUEGOS; }
+  // Los juegos que son solo con cuenta (CV Hotel...): llegando a uno sin sesion, en vez del nombre de invitado, una
+  // tarjeta que lo dice, con la tapa del juego, e invita a crear la cuenta (o a entrar con la suya); despues de entrar
+  // sigue al juego (puente_volver, como la cuenta unica)
+  const SOLO = {}, SOLO_TAPAS = {};
+  for (const [k, d] of Object.entries((FICHAS_AFUERA && FICHAS_AFUERA.solo) || {})) { SOLO[k] = d.nombre; SOLO_TAPAS[k] = d.tapa; }
+  function soloDe(url) {
+    let u; try { u = new URL(url, location.origin); } catch { return null; }
+    if (u.origin !== location.origin || u.pathname.replace(/\/$/, '') !== '/app') return null;
+    const q = u.searchParams;
+    const j = Object.keys(SOLO).find(k => q.has(k)) || q.get('juegos');
+    return SOLO[j] ? j : null;
+  }
+  function soloUsuarios(volver) {
+    const j = soloDe(volver);
+    if (!j || document.getElementById('puente-solo')) return;
+    ss.set('puente_volver', volver);
+    ss.del('puente_jugar');
+    const velo = mk('div', 'puente-velo');
+    const c = mk('div', 'puente-solo'); c.id = 'puente-solo';
+    c.setAttribute('role', 'dialog'); c.setAttribute('aria-modal', 'true'); c.setAttribute('aria-labelledby', 'puente-solo-t');
+    const i = mk('img', 'puente-jugar-tapa'); i.src = SOLO_TAPAS[j] || '/puente/tapas/' + j + '.jpg'; i.alt = ''; i.onerror = () => i.remove();
+    const t = mk('h2', 'puente-solo-t', SOLO[j] + ' es solo para usuarios'); t.id = 'puente-solo-t';
+    const s = mk('p', 'puente-solo-s', 'Para entrar necesitás tu cuenta de CV Chat. Es gratis, y con la misma entrás también al chat del club, al foro, al Marketplace y a todos los juegos.');
+    const crear = mk('button', 'puente-solo-btn primario', 'Crear mi cuenta gratis'); crear.type = 'button';
+    const entrar = mk('button', 'puente-solo-btn', 'Ya tengo cuenta'); entrar.type = 'button';
+    const otro = mk('button', 'puente-solo-otro', '← Elegir otro juego'); otro.type = 'button';
+    // (al formulario de siempre, en su pestaña: al entrar, puente_volver lo lleva al juego)
+    const ir = (tab) => { velo.remove(); c.remove(); irAlFormulario(tab); };
+    crear.addEventListener('click', () => ir('register'));
+    entrar.addEventListener('click', () => ir('login'));
+    otro.addEventListener('click', aLosJuegos);
+    velo.addEventListener('click', aLosJuegos);
+    c.append(i, t, s, crear, entrar, otro);
+    document.body.append(velo, c);
+    try { crear.focus({ preventScroll: true }); } catch { /* sin foco */ }
+  }
   let portada = null;
   const datos = () => portada || (portada = fetch('/puente/api/portada').then(r => (r.ok ? r.json() : null)).catch(() => null));
   // El juego al que va (la sala de un juego o una mesa, solo en el chat), o nada
@@ -543,7 +579,7 @@
   const tipo = ss.get('puente_jugar');
   if (tipo === 'truco' || tipo === 'juegos') {
     const volver = new URLSearchParams(location.search).get('volver') || ss.get('puente_volver') || '';
-    if (juegoDe(volver)) elegir(volver); else aLosJuegos();
+    if (juegoDe(volver)) elegir(volver); else if (soloDe(volver)) soloUsuarios(volver); else aLosJuegos();
   }
 })();
 

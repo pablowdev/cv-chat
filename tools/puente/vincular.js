@@ -698,11 +698,15 @@ async function handle(req, res) {
     // La pagina de los juegos (juegos.html) se ve en juegos.<dominio> y lleva al chat (PUBLIC_URL)
     if (file === 'juegos.html') {
       const chat = String(publicUrl || '').replace(/\/+$/, '').replace(/["<>&]/g, '');
-      // los juegos que se juegan sin cuenta, en el orden de su ficha ("pagina")
+      // todos los juegos (los que tienen su tapa apaisada y estan abiertos a todos): primero los de "pagina", en ese
+      // orden, y despues los demas por "orden". Los que no se juegan como invitado llevan el cartel "Solo usuarios": al
+      // elegirlo, login.js lo dice e invita a crear la cuenta
       const e = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      const pj = registro().lista().filter((j) => j.pagina && registro().tapaDe(j)).sort((a, b) => a.pagina - b.pagina);
-      const lista = pj.map((j) => `      <a class="puente-sala-juego" href="__CHAT__/app?juegos=${e(j.enlace.param)}"><span class="puente-sala-tapa"><img src="${e(j.enlace.imagen)}" alt="${e(j.nombre)}" width="1200" height="630"></span><span class="puente-sala-txt"><b>${e(j.nombre)}</b><small>${e(j.sub)}</small></span><span class="puente-sala-jugar">Jugar</span></a>`).join('\n');
-      const nombres = e(yNombres(pj.map((j) => j.nombre)));
+      const R = registro();
+      const pj = R.lista().filter((j) => j.enlace && R.tapaDe(j) && R.abierto(j)).sort((a, b) => (a.pagina || 1e6) - (b.pagina || 1e6) || a.orden - b.orden);
+      const lista = pj.map((j) => `      <a class="puente-sala-juego${j.invitados ? '' : ' solo'}" href="__CHAT__/app?juegos=${e(j.enlace.param)}"><span class="puente-sala-tapa"><img src="${e(j.enlace.imagen)}" alt="${e(j.nombre)}" width="1200" height="630">${j.invitados ? '' : '<span class="puente-sala-solo">Solo usuarios</span>'}</span><span class="puente-sala-txt"><b>${e(j.nombre)}</b><small>${e(j.sub)}</small></span><span class="puente-sala-jugar">Jugar</span></a>`).join('\n');
+      // (la descripcion dice "sin registrarte": ahi van solo los que se juegan como invitado)
+      const nombres = e(yNombres(pj.filter((j) => j.invitados).map((j) => j.nombre)));
       body = body.toString('utf8').replace('__JUEGOS_LISTA__', () => lista).replace(/__JUEGOS_NOMBRES__/g, () => nombres).replace(/__CHAT__/g, chat).replace(/__ORIGEN__/g, chat.replace(/^(https?:\/\/)chat\./, '$1juegos.'));
     }
     if (clave) {
