@@ -3149,6 +3149,14 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 @keyframes jg-aviso-entra { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
 .puente-jg .jg-icono { flex: 0 0 auto; width: 2.75rem; height: 2.75rem; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: #b5bac1; cursor: pointer; }
 .puente-jg .jg-icono:hover { background: #2e2d32; color: #fff; }
+/* La campanita de la biblioteca ("Avisame cuando alguien busque partida", busco-partida.js) */
+.puente-jg .jg-head-der { flex: 0 0 auto; display: flex; align-items: center; }
+.puente-jg .jg-icono.jg-busco-on { color: #f2f3f5; position: relative; }
+.puente-jg .jg-icono.jg-busco-on::after { content: ''; position: absolute; top: 0.6rem; right: 0.6rem; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #23a55a; box-shadow: 0 0 0 2px #1a191e; }
+.puente-jg .jg-busco-lista { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 1rem; }
+.puente-jg .jg-busco-fila { display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem; padding: 0 0.75rem; border-radius: 0.5rem; background: #2b2a30; color: #f2f3f5; font-size: 1rem; font-weight: 600; cursor: pointer; }
+.puente-jg .jg-busco-fila input { width: 1.25rem; height: 1.25rem; accent-color: #5865f2; flex: 0 0 auto; cursor: pointer; }
+.puente-jg .jg-busco-nota { margin-top: 0.75rem; font-size: 0.8125rem; color: #949ba4; line-height: 1.35; }
 .puente-jg .jg-cuerpo { max-width: 40rem; margin: 0 auto; padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
 .puente-jg .jg-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; min-height: 2.75rem; padding: 0 1rem;

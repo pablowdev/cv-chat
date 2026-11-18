@@ -27,6 +27,8 @@ function anunciar(db, io, warn, { juego, quien, texto, enlace }) {
     io.to(`channel:${ch.code}`).emit('new-message', { channelCode: ch.code, message: {
       id: r.lastInsertRowid, content, created_at: new Date().toISOString(), username: 'Juegos', user_id: null,
       is_webhook: 1, webhook_username: 'Juegos', reactions: [], reply_to: null, replyContext: null, edited_at: null, thread: null } });
+    // y a quienes pidieron que les avisen de las mesas de este juego (busco-partida.js)
+    try { require('./busco-partida.js').avisar({ juego, quien, nombre, texto, enlace }); } catch (err) { if (warn) warn('juegos: busco:', err.message); }
   } catch (err) { if (warn) warn(`juegos: aviso en #${CANAL()}:`, err.message); }
 }
 

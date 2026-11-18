@@ -259,4 +259,4 @@ async function handle(req, res, p, u, h) {
 }
 
 // plano, persona y personalizados tambien los usa guardados.js
-module.exports = { setup, handle, plano, persona, personalizados };
+module.exports = { setup, handle, plano, persona, personalizados, destacados };

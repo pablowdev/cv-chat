@@ -124,12 +124,12 @@ const lugarBrevo = () => !!brevo && salidos('brevo') < BREVO_CAP;
 // Si un envio masivo puede mandar uno mas sin comerse la reserva de los mails importantes
 const hayLugarMasivo = () => enElDia() < CUPO_MASIVO + (brevo ? CUPO_MASIVO_BREVO : 0);
 
-async function porResend(to, subject, html, text) {
+async function porResend(to, subject, html, text, headers) {
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html, text }),
+      body: JSON.stringify(Object.assign({ from, to: [to], subject, html, text }, headers ? { headers } : {})),
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) { warn('email: Resend respondio', r.status, (await r.text().catch(() => '')).slice(0, 200)); return false; }
@@ -141,12 +141,12 @@ function remitente() {
   const m = from.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
   return m ? { name: m[1] || appName(), email: m[2].trim() } : { name: appName(), email: from };
 }
-async function porBrevo(to, subject, html, text) {
+async function porBrevo(to, subject, html, text, headers) {
   try {
     const r = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'api-key': brevo, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ sender: remitente(), to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+      body: JSON.stringify(Object.assign({ sender: remitente(), to: [{ email: to }], subject, htmlContent: html, textContent: text }, headers ? { headers } : {})),
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) { warn('email: Brevo respondio', r.status, (await r.text().catch(() => '')).slice(0, 200)); return false; }
@@ -154,7 +154,9 @@ async function porBrevo(to, subject, html, text) {
   } catch (err) { warn('email: no pude mandar el mail por Brevo:', err.message); return false; }
 }
 
-async function sendMail(to, subject, title, paragraphs, button, footer) {
+// paragraphs: textos; para el resumen semanal (resumen-semanal.js) tambien { titulo } (un subtitulo) y { texto, url }
+// (una linea que es un enlace). opts.baja: el enlace para dejar de recibir ese mail (abajo y en List-Unsubscribe)
+async function sendMail(to, subject, title, paragraphs, button, footer, opts = {}) {
   if (!lugarResend() && !lugarBrevo()) {
     warn('email: se llego al limite de mails del dia; no se manda');
     return false;
@@ -166,17 +168,21 @@ async function sendMail(to, subject, title, paragraphs, button, footer) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px 28px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2e3035">
 ${logo ? `<tr><td align="center" style="padding-bottom:16px"><img src="${esc(logo)}" width="88" height="88" alt="" style="display:block;border:0"></td></tr>` : ''}
 <tr><td style="font-size:22px;font-weight:700;text-align:center;padding-bottom:16px">${esc(title)}</td></tr>
-${paragraphs.map(p => `<tr><td style="font-size:15px;line-height:1.5;padding-bottom:12px">${esc(p)}</td></tr>`).join('')}
+${paragraphs.map(p => typeof p === 'string' ? `<tr><td style="font-size:15px;line-height:1.5;padding-bottom:12px">${esc(p)}</td></tr>`
+  : p && p.titulo ? `<tr><td style="font-size:17px;font-weight:700;padding:12px 0 8px">${esc(p.titulo)}</td></tr>`
+  : p && p.url ? `<tr><td style="font-size:15px;line-height:1.45;padding-bottom:10px"><a href="${esc(p.url)}" style="color:#4752c4;text-decoration:none">${esc(p.texto)}</a></td></tr>` : '').join('')}
 <tr><td align="center" style="padding:12px 0 20px"><a href="${esc(button[1])}" style="display:inline-block;background:#5865f2;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">${esc(button[0])}</a></td></tr>
-<tr><td style="font-size:12px;line-height:1.5;color:#80848e">${esc(footer)}<br><br>Si el botón no funciona, copiá este enlace en el navegador:<br><span style="word-break:break-all">${esc(button[1])}</span></td></tr>
+<tr><td style="font-size:12px;line-height:1.5;color:#80848e">${esc(footer)}${opts.baja ? ` <a href="${esc(opts.baja)}" style="color:#80848e">Dejar de recibir este mail</a>` : ''}<br><br>Si el botón no funciona, copiá este enlace en el navegador:<br><span style="word-break:break-all">${esc(button[1])}</span></td></tr>
 </table>
 <div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#80848e;padding-top:12px">${esc(name)}</div>
 </td></tr></table></body></html>`;
-  const text = `${title}\n\n${paragraphs.join('\n\n')}\n\n${button[0]}: ${button[1]}\n\n${footer}\n\n${name}`;
+  const plano = paragraphs.map(p => typeof p === 'string' ? p : p && p.titulo ? p.titulo.toUpperCase() : p && p.url ? `${p.texto}\n${p.url}` : '').filter(Boolean);
+  const text = `${title}\n\n${plano.join('\n\n')}\n\n${button[0]}: ${button[1]}\n\n${footer}${opts.baja ? `\nPara dejar de recibir este mail: ${opts.baja}` : ''}\n\n${name}`;
+  const headers = opts.baja ? { 'List-Unsubscribe': `<${opts.baja}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : null;
   // Primero Resend; si no tiene lugar o falla, Brevo
   let via = null;
-  if (lugarResend() && await porResend(to, subject, html, text)) via = 'resend';
-  else if (lugarBrevo() && await porBrevo(to, subject, html, text)) via = 'brevo';
+  if (lugarResend() && await porResend(to, subject, html, text, headers)) via = 'resend';
+  else if (lugarBrevo() && await porBrevo(to, subject, html, text, headers)) via = 'brevo';
   if (!via) return false;
   db.prepare('INSERT INTO puente_email_salidos (enviado, via) VALUES (?, ?)').run(Date.now(), via);
   db.prepare('DELETE FROM puente_email_salidos WHERE enviado < ?').run(Date.now() - 2 * DIA_MS);

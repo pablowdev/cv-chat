@@ -9836,7 +9836,7 @@ document.addEventListener('pointerdown', (ev) => {
     return p;
   }
   function paintStats(popup, profile, d) {
-    if (!d || !d.mensajes || !popup.isConnected || popup.dataset.puenteMedallas !== String(profile.id) || popup.querySelector('.puente-perfil-est')) return;
+    if (!d || !d.mensajes || !popup.isConnected || popup.dataset.puenteMedallas !== String(profile.id) || popup.querySelector('.puente-perfil-est:not(.puente-perfil-juegos)')) return;
     const names = popup.querySelector('.profile-popup-names');
     if (!names) return;
     const row = document.createElement('div');
@@ -9846,6 +9846,43 @@ document.addEventListener('pointerdown', (ev) => {
     if (d.canal) dato('#' + d.canal, '', 'Donde más escribe');
     if (d.puestoMes) dato('#' + d.puestoMes, 'del mes', 'Puesto en el ranking de mensajes de este mes');
     (popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', row);
+  }
+
+  // Sus juegos (perfil-juegos.js): partidas y ganadas de cada uno, los que mas jugo primero
+  const juegosDe = new Map();
+  function loadJuegos(id) {
+    const hit = juegosDe.get(id);
+    if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.p;
+    const tk = token();
+    if (!tk) return Promise.resolve(null);
+    const p = fetch('/puente/api/perfil/juegos?u=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tk } })
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    juegosDe.set(id, { at: Date.now(), p });
+    return p;
+  }
+  function paintJuegos(popup, profile, d) {
+    if (!d || !d.juegos || !d.juegos.length || !popup.isConnected || popup.dataset.puenteMedallas !== String(profile.id) || popup.querySelector('.puente-perfil-juegos')) return;
+    const names = popup.querySelector('.profile-popup-names');
+    if (!names) return;
+    const row = document.createElement('div');
+    row.className = 'puente-perfil-est puente-perfil-juegos';
+    const muestra = d.juegos.slice(0, 4);
+    for (const j of muestra) {
+      const b = document.createElement('span'); b.className = 'puente-perfil-dato';
+      b.title = `${j.nombre}: ${j.partidas} ${j.partidas === 1 ? 'partida' : 'partidas'}, ${j.ganadas} ${j.ganadas === 1 ? 'ganada' : 'ganadas'}`;
+      const x = document.createElement('b'); x.textContent = j.nombre;
+      b.append('🎮 ', x, ` ${j.ganadas}/${j.partidas}`);
+      row.appendChild(b);
+    }
+    if (d.juegos.length > muestra.length) {
+      const resto = d.juegos.slice(muestra.length);
+      const b = document.createElement('span'); b.className = 'puente-perfil-dato';
+      b.title = resto.map(j => `${j.nombre}: ${j.ganadas}/${j.partidas}`).join(' · ');
+      b.textContent = '+' + resto.length;
+      row.appendChild(b);
+    }
+    row.title = 'Partidas ganadas / jugadas en los Juegos de CV Chat';
+    (popup.querySelector('.puente-perfil-est:not(.puente-perfil-juegos)') || popup.querySelector('.puente-medallas') || names).insertAdjacentElement('afterend', row);
   }
 
   function paint(popup, profile, data, isSelf, st) {
@@ -9878,6 +9915,7 @@ document.addEventListener('pointerdown', (ev) => {
       names.insertAdjacentElement('afterend', row);
     }
     if (st) st.then(d => paintStats(popup, profile, d));
+    loadJuegos(profile.id).then(d => paintJuegos(popup, profile, d));
     if (isSelf) {
       const a = document.createElement('a');
       a.className = 'puente-historia-btn';
@@ -11188,6 +11226,7 @@ document.addEventListener('pointerdown', (ev) => {
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
     enlace: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z',
+    campana: 'M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z',
   };
   const app = () => window.app;
   const emit = (ev, data) => new Promise((resolve) => {
@@ -11274,6 +11313,54 @@ document.addEventListener('pointerdown', (ev) => {
       const url = /^https?:\/\//.test(ruta) ? ruta : location.origin + ruta;
       if (navigator.share && mobile()) { navigator.share({ title: titulo, url }).catch(() => {}); return; }
       copiarEnlace(url);
+    });
+    return b;
+  }
+  // La campanita de la biblioteca: "Avisame cuando alguien busque partida" de cada juego (busco-partida.js). Al
+  // armar alguien una mesa abierta, llega el aviso (en la app o en el celular), como mucho unos pocos por dia
+  function botonBusco() {
+    const b = el('button', 'jg-icono'); b.type = 'button';
+    b.title = 'Avisame cuando alguien busque partida'; b.setAttribute('aria-label', b.title);
+    b.innerHTML = svg(I.campana, 22);
+    const marcar = (n) => b.classList.toggle('jg-busco-on', n > 0);
+    emit('busco:leer').then((d) => { if (d && d.mios) marcar(d.mios.length); });
+    b.addEventListener('click', async () => {
+      const d = await emit('busco:leer');
+      if (!d || d.error || !d.juegos) return toast((d && d.error) || 'No se pudo cargar.', 'error');
+      let mios = new Set(d.mios || []);
+      const fondo = el('div', 'jg-aviso-fondo');
+      const box = el('div', 'jg-aviso jg-busco'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true');
+      box.append(el('div', 'jg-aviso-t', 'Avisame cuando alguien busque partida'),
+        el('div', 'jg-aviso-s', 'Cuando alguien del club arme una mesa abierta de estos juegos, te llega un aviso para entrar (como mucho 4 por día).'));
+      const lista = el('div', 'jg-busco-lista');
+      for (const j of d.juegos) {
+        const fila = el('label', 'jg-busco-fila');
+        const c = el('input'); c.type = 'checkbox'; c.checked = mios.has(j.id);
+        c.addEventListener('change', async () => {
+          c.disabled = true;
+          const r = await emit('busco:poner', { juego: j.id, si: c.checked });
+          c.disabled = false;
+          if (!r || r.error) { c.checked = !c.checked; return toast((r && r.error) || 'No se pudo guardar.', 'error'); }
+          mios = new Set(r.mios || []); marcar(mios.size);
+        });
+        fila.append(c, el('span', '', j.nombre));
+        lista.appendChild(fila);
+      }
+      const acc = el('div', 'jg-aviso-acc');
+      const listo = el('button', 'jg-btn', 'Listo'); listo.type = 'button';
+      acc.appendChild(listo);
+      const nota = 'Notification' in window && Notification.permission !== 'granted' ? el('div', 'jg-busco-nota', 'Para que te lleguen con la app cerrada, activá las notificaciones de CV Chat.') : null;
+      box.append(lista);
+      if (nota) box.appendChild(nota);
+      box.appendChild(acc);
+      fondo.appendChild(box);
+      const fin = () => { document.removeEventListener('keydown', kd, true); fondo.remove(); };
+      const kd = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(); } };
+      document.addEventListener('keydown', kd, true);
+      listo.addEventListener('click', fin);
+      fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(); });
+      (page || document.body).appendChild(fondo);
+      listo.focus();
     });
     return b;
   }
@@ -11644,7 +11731,10 @@ document.addEventListener('pointerdown', (ev) => {
     if (!page || stack[stack.length - 1] !== top || vez !== bibVez) return;
     const JUEGOS_EN_RED = enRed(JUEGOS);
     // el enlace de la biblioteca es el de la pagina de los juegos (juegos.<dominio>, juegos.html): se ve sin cuenta
-    page.appendChild(head('Juegos', botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__')));
+    const der = el('div', 'jg-head-der');
+    if (!esInvitado()) der.appendChild(botonBusco());
+    der.appendChild(botonEnlace('https://juegos.' + location.hostname.replace(/^chat\./, '') + '/', 'Juegos · __PUENTE_APP__'));
+    page.appendChild(head('Juegos', der));
     const b = el('div', 'jg-bib'); page.appendChild(b);
     const seguir = el('div'); b.appendChild(seguir);
     const mesasBox = el('div'); b.appendChild(mesasBox); // las mesas que esperan rival, de todos los juegos (pintarMesas)

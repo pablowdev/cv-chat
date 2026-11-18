@@ -1,0 +1,7 @@
+[Unit]
+Description=Haven: mandar un mail si el chat deja de contestar
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/haven/tools/vigia.sh

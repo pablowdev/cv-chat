@@ -171,21 +171,29 @@ function start(deps) {
   require('./atajos.js').setup({ db, io, log, warn });
   // Emojis y stickers que propone la gente (se votan en #que-paso, los aprueba un admin)
   require('./propuestas.js').setup({ db, io, log, warn });
+  // "Avisame cuando alguien busque partida" de cada juego (la campanita de Juegos)
+  // (lo nuevo, cada uno por su lado: si uno falla, el resto del puente sigue)
+  try { require('./busco-partida.js').setup({ db, io, log, warn }); } catch (err) { warn('busco:', err.message); }
+  // Los juegos de cada uno en su tarjeta, y "La semana en CV Chat" por mail los domingos
+  try { require('./perfil-juegos.js').setup({ warn }); } catch (err) { warn('perfil juegos:', err.message); }
+  try { require('./resumen-semanal.js').setup({ db, log, warn, publicUrl }); } catch (err) { warn('resumen:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.
   const registroJuegos = require('./juegos-registro.js');
   registroJuegos.setup({ log, warn });
-  const prendidos = [];
+  const prendidos = [], caidos = [];
   for (const m of registroJuegos.servidores()) {
     const ruta = path.join(__dirname, m);
-    if (!fs.existsSync(ruta)) { warn(`juegos: falta ${m}`); continue; }
+    if (!fs.existsSync(ruta)) { warn(`juegos: falta ${m}`); caidos.push({ modulo: m, error: 'Falta el archivo en el servidor.' }); continue; }
     try {
       const x = require(ruta);
       if (x && typeof x.setup === 'function') { x.setup({ db, io, log, warn }); prendidos.push(m); }
-    } catch (err) { warn(`juegos: ${m} no arrancó:`, err.message); }
+    } catch (err) { warn(`juegos: ${m} no arrancó:`, err.message); caidos.push({ modulo: m, error: err.message }); }
   }
   log(`juegos: ${prendidos.length} prendidos (${prendidos.join(', ')})`);
+  // Las alertas para los admins al celular: respaldo, disco, reinicios por error y los juegos que no arrancaron
+  try { const alertas = require('./alertas.js'); alertas.setup({ db, log, warn }); alertas.juegosCaidos(caidos); } catch (err) { warn('alertas:', err.message); }
   // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
   require('./invitados-fuera.js').setup({ db, io, log, warn });
   require('./leidos.js').setup({ db, io, log, warn });

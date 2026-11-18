@@ -663,6 +663,11 @@ async function handle(req, res) {
     const r = await dospasos.handle(req, res, p, { json, readJson });
     if (r !== false) return;
   }
+  // "Dejar de recibir" el resumen de los domingos, desde el mail (resumen-semanal.js)
+  if (p === '/puente/resumen/baja') {
+    const r = await require('./resumen-semanal.js').handle(req, res, p, u, { json });
+    if (r !== false) return;
+  }
 
   if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css' || p === '/puente/capa2-admin' || p === '/puente/capa2-admin.js' || p === '/puente/capa2-admin.css')) {
     const file = p === '/puente/juegos' ? 'juegos.html' : p === '/puente/capa2-admin' ? 'capa2-admin.html' : p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
@@ -1405,6 +1410,11 @@ async function handle(req, res) {
     return back(ajeno ? { ok: '1', historial: 'ajeno' } : { ok: '1', mensajes: String(moved) });
   }
 
+  // Los juegos de cada uno en su tarjeta de perfil (perfil-juegos.js)
+  if (p === '/puente/api/perfil/juegos') {
+    const r = await require('./perfil-juegos.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
   if (p.startsWith('/puente/api/perfil/') || p.startsWith('/puente/fuentes/')) {
     const r = await require('./perfil.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;

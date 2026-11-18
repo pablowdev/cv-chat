@@ -6,10 +6,10 @@ CV Chat es el chat de [Círculo Vicioso Club](https://circulovicioso.club): la c
 - **Conectado a Discord durante la mudanza:** lo que se escribe en un lado aparece en el otro al instante, con las cuentas vinculadas, la identidad verificada, los mismos accesos según los roles y todo el historial desde 2020.
 - **Una sola cuenta:** la misma para el chat, la página y el foro, con verificación en dos pasos y código por email en cada dispositivo nuevo.
 - **Mensajes privados cifrados de punta a punta,** sin que nadie tenga que configurar nada.
-- **Juegos:** Truco, Funball, Ajedrez, GlobalSiege y Pool, contra gente del chat o contra la compu, con su propia página ([juegos.circulovicioso.club](https://juegos.circulovicioso.club)) para jugar sin tener cuenta.
+- **Juegos:** Truco, Funball, Ajedrez, GlobalSiege y Pool, contra gente del chat o contra la compu, con su propia página ([juegos.circulovicioso.club](https://juegos.circulovicioso.club)) para jugar sin tener cuenta, partidas para mirar en vivo y un aviso al celular cuando alguien busca partida del juego que elegiste.
 - **El foro adentro del chat:** el foro de siempre se abre dentro de la app, se actualiza solo y sus avisos llegan a la misma campanita.
-- **Lo de la comunidad:** Marketplace (también en [marketplace.circulovicioso.club](https://marketplace.circulovicioso.club), visible sin cuenta), wiki, Guardados, medallas y rachas, "Tu historia", Actividad, el ranking del mes y "Tu año en CV Chat".
-- **Para administrar:** miembros, estadísticas de uso y de los juegos, informe semanal por mail, denuncias y moderación.
+- **Lo de la comunidad:** Marketplace (también en [marketplace.circulovicioso.club](https://marketplace.circulovicioso.club), visible sin cuenta), wiki, Guardados, medallas y rachas, "Tu historia", Actividad, el ranking del mes, "Tu año en CV Chat", los juegos de cada uno en su perfil y "La semana en CV Chat" por mail los domingos (con baja en el mismo mail).
+- **Para administrar:** miembros, estadísticas de uso y de los juegos, informe semanal por mail, alertas al celular (respaldo, disco, errores, juegos caídos) y un vigía que avisa por mail si el chat no contesta, denuncias y moderación.
 
 ## Basado en Haven
 
