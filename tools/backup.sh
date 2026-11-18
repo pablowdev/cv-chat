@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copia de seguridad diaria de Haven, subida con rclone (por ejemplo a Google Drive).
-# BACKUP_REMOTE: destino rclone (por defecto gdrive:Haven-backups).
+# BACKUP_REMOTE: destino rclone (por defecto personal2:CV-respaldo-2, el Drive personal).
 #  - Base de datos: copia en caliente con la API de backup de SQLite (consistente
 #    aunque Haven este funcionando), comprimida con zstd.
 #  - Configuracion: docker-compose.yml, Caddyfile, .env, parches, herramientas,
@@ -66,13 +66,14 @@ else
     --transfers 4 --checkers 8 --bwlimit 12M --drive-chunk-size 16M --timeout 2m --retries 5 --exclude "*.part" \
     || echo "!! los archivos subidos no terminaron de copiarse; siguen la noche siguiente"
 fi
-# Segunda copia, solo la base de datos y 7 dias, en la cuenta del club (BACKUP_REMOTE2, por defecto
-# gdrive:Haven-backups, 15 GB): si falla, la principal ya esta y solo queda anotado
-REMOTE2=${BACKUP_REMOTE2:-gdrive:Haven-backups}
+# Segunda copia: desde el 18/11/2026 no hay (el dueno pidio que la cuenta del club no guarde mas
+# respaldos; todo va a su Drive personal). Solo se hace si alguien pone BACKUP_REMOTE2 a proposito, y
+# ahi lo viejo se borra sin pasar por la papelera, que tambien ocupa lugar.
+REMOTE2=${BACKUP_REMOTE2:-}
 AVISO2=""
-if ! { timeout 30m rclone copy "$OUT" "$REMOTE2" --include "haven-db_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5 \
-       && rclone delete "$REMOTE2" --min-age 7d --config /opt/haven/tools/rclone.conf; }; then
-  AVISO2=',"aviso":"la segunda copia (cuenta del club) no se pudo subir"'
+if [ -n "$REMOTE2" ] && ! { timeout 30m rclone copy "$OUT" "$REMOTE2" --include "haven-db_$STAMP.*" --config /opt/haven/tools/rclone.conf --drive-chunk-size 16M --timeout 2m --retries 5 \
+       && rclone delete "$REMOTE2" --min-age 7d --drive-use-trash=false --config /opt/haven/tools/rclone.conf; }; then
+  AVISO2=',"aviso":"la segunda copia no se pudo subir"'
 fi
 if [ -n "$ERROR1" ]; then
   printf '{"ok":false,"fecha":"%s","error":"%s"%s}\n' "$(date -u +%FT%TZ)" "$ERROR1" "$AVISO2" > "$ESTADO"
