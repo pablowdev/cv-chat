@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
     <application>
         <activity android:name=".Lanzador">
-            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://chat.circulovicioso.club/app?app=play" tools:replace="android:value" />
+            <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="https://chat.circulovicioso.club/app?app=play&amp;v=1.0.5" tools:replace="android:value" />
         </activity>
     </application>
 </manifest>

@@ -61,6 +61,20 @@ public class Lanzador extends LauncherActivity {
         return false; // primero el permiso y la actualizacion
     }
 
+    // Lo que se abre desde afuera (un enlace a chat.circulovicioso.club, los accesos directos del icono) va sin
+    // "app=": la pagina no sabia que era la app (a la de Play le ofrecia bajar el APK). Se le suma, con la version.
+    @Override
+    protected Uri getLaunchingUrl() {
+        Uri u = super.getLaunchingUrl();
+        try {
+            if (u == null || !"chat.circulovicioso.club".equals(u.getHost()) || u.getQueryParameter("app") != null) return u;
+            String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            return u.buildUpon().appendQueryParameter("app", BuildConfig.TIENDA ? "play" : "android").appendQueryParameter("v", v == null ? "" : v).build();
+        } catch (Exception e) {
+            return u;
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

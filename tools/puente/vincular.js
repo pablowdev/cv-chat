@@ -1410,6 +1410,11 @@ async function handle(req, res) {
     return back(ajeno ? { ok: '1', historial: 'ajeno' } : { ok: '1', mensajes: String(moved) });
   }
 
+  // "Mandar mi opinión" sobre la app (opiniones.js)
+  if (p === '/puente/api/opinion') {
+    const r = await require('./opiniones.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   // Los juegos de cada uno en su tarjeta de perfil (perfil-juegos.js)
   if (p === '/puente/api/perfil/juegos') {
     const r = await require('./perfil-juegos.js').handle(req, res, p, u, { sessionUser, json });

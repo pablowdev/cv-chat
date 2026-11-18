@@ -177,6 +177,8 @@ function start(deps) {
   // Los juegos de cada uno en su tarjeta, y "La semana en CV Chat" por mail los domingos
   try { require('./perfil-juegos.js').setup({ warn }); } catch (err) { warn('perfil juegos:', err.message); }
   try { require('./resumen-semanal.js').setup({ db, log, warn, publicUrl }); } catch (err) { warn('resumen:', err.message); }
+  // "Mandar mi opinión" sobre la app (para la prueba de Google Play)
+  try { require('./opiniones.js').setup({ db, log, warn }); } catch (err) { warn('opiniones:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.

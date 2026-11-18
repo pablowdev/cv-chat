@@ -1,3 +1,12 @@
 <resources>
     <string name="asset_statements">[{ "relation": ["delegate_permission/common.handle_all_urls"], "target": { "namespace": "web", "site": "https://chat.circulovicioso.club" } }]</string>
+    <!-- Los accesos directos del icono (xml/atajos.xml) -->
+    <string name="atajo_juegos">Juegos</string>
+    <string name="atajo_juegos_largo">Jugar con la gente del club</string>
+    <string name="atajo_foro">Foro</string>
+    <string name="atajo_foro_largo">Abrir el foro</string>
+    <string name="atajo_mercado">Marketplace</string>
+    <string name="atajo_mercado_largo">Ver el Marketplace</string>
+    <string name="atajo_opinar">Opinar</string>
+    <string name="atajo_opinar_largo">Mandar mi opinión sobre la app</string>
 </resources>

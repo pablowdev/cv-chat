@@ -13474,6 +13474,8 @@ document.addEventListener('pointerdown', (ev) => {
       const valor = em && em.email ? em.email + (em.confirmado ? ' · confirmado' : ' · sin confirmar') : 'Sin email · para recuperar la contraseña';
       row(null, '✉️', 'Email de recuperación', valor, !!(em && em.confirmado), em && em.email ? 'Cambiar' : 'Agregar', () => window.puenteEmail.open());
     }
+    // La app de Android esta en prueba: "Mandar mi opinión" (opiniones.js)
+    if (window.puenteOpinion && window.puenteOpinion.esApp()) row(null, '📱', 'App de Android (en prueba)', 'Contanos qué anda mal o qué mejorar', true, 'Opinar', () => window.puenteOpinion.abrir());
     box.appendChild(caja);
   }
 
@@ -16792,4 +16794,103 @@ var puenteSinUbicacion = (function () {
     setInterval(() => { if (document.visibilityState === 'visible') cargar(); }, 30000);
   })();
   window.puenteAtajos = { abrir: elegir, recargar: cargar };
+})();
+// "Mandar mi opinión" sobre la app (opiniones.js): para la prueba de Google Play. Quien usa la app de Android la
+// encuentra en Configuración → Mi cuenta; ademas, al segundo dia de usar la app, una tarjeta una sola vez; y
+// /app?opinion=1 (el enlace de los mails a los testers) la abre directo. Llega a los admins.
+(function () {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch { return null; } return v; };
+  const ses = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch { return null; } return v; };
+  if (q.get('v')) ses('puente_app_v', q.get('v'));
+  const plataforma = () => window.__puentePlataforma || '';
+  const esApp = () => plataforma() === 'android-app';
+  const usuario = () => (window.app && window.app.user) || null;
+  const toast = (t, k) => { try { window.app._showToast(t, k || 'info'); } catch { /* sin aviso */ } };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const css = document.createElement('style');
+  css.textContent = `
+    .pop-fondo { position: fixed; inset: 0; z-index: 100050; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,.7); animation: puente-fade .15s ease-out; }
+    .pop-caja { width: 100%; max-width: 27rem; max-height: calc(100vh - 2rem); overflow: auto; padding: 1.25rem; border-radius: .75rem; background: #242429; box-shadow: 0 .5rem 2rem rgba(0,0,0,.6); color: #dbdee1; box-sizing: border-box; }
+    .pop-t { font-size: 1.25rem; font-weight: 800; color: #f2f3f5; }
+    .pop-s { margin-top: .5rem; font-size: .9375rem; line-height: 1.4; color: #b5bac1; }
+    .pop-estrellas { display: flex; gap: .25rem; margin-top: 1rem; }
+    .pop-estrellas button { width: 2.5rem; height: 2.5rem; border: 0; border-radius: .5rem; background: #2b2a30; color: #4e5058; font-size: 1.375rem; cursor: pointer; }
+    .pop-estrellas button.si { color: #f0b232; }
+    .pop-texto { display: block; width: 100%; box-sizing: border-box; min-height: 7rem; margin-top: .75rem; padding: .75rem; border: 1px solid #3f3f46; border-radius: .5rem; background: #1a191e; color: #f2f3f5; font: inherit; font-size: 1rem; resize: vertical; }
+    .pop-texto:focus { outline: 2px solid #5865f2; border-color: transparent; }
+    .pop-acc { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+    .pop-btn { min-height: 2.75rem; padding: 0 1.125rem; border: 0; border-radius: .5rem; background: #4e5058; color: #fff; font-size: .9375rem; font-weight: 600; cursor: pointer; }
+    .pop-btn.pop-si { background: #5865f2; }
+    .pop-btn:disabled { opacity: .6; cursor: default; }`;
+  document.head.appendChild(css);
+
+  let abierta = false;
+  function abrir() {
+    const u = usuario();
+    if (abierta || !u || u.isGuest) return;
+    abierta = true;
+    const fondo = el('div', 'pop-fondo');
+    const caja = el('div', 'pop-caja'); caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true');
+    const app = esApp();
+    caja.append(el('div', 'pop-t', app ? '¿Qué te parece la app?' : '¿Qué te parece CV Chat?'),
+      el('div', 'pop-s', app ? 'Estás probando la app de CV Chat para Android antes que nadie. Contanos qué anda mal, qué falta o qué cambiarías: lo leemos todo y lo arreglamos en las próximas versiones.'
+        : 'Contanos qué anda mal, qué falta o qué cambiarías: lo leemos todo.'));
+    let puntaje = null;
+    const est = el('div', 'pop-estrellas'); est.setAttribute('aria-label', 'Puntaje (opcional)');
+    const bs = [1, 2, 3, 4, 5].map((n) => {
+      const b = el('button', '', '★'); b.type = 'button'; b.setAttribute('aria-label', n + (n === 1 ? ' estrella' : ' estrellas'));
+      b.addEventListener('click', () => { puntaje = puntaje === n ? null : n; bs.forEach((x, i) => x.classList.toggle('si', !!puntaje && i < puntaje)); });
+      est.appendChild(b); return b;
+    });
+    const t = el('textarea', 'pop-texto'); t.maxLength = 1500; t.placeholder = 'Ej.: las notificaciones no me llegan, me gustaría poder…';
+    const acc = el('div', 'pop-acc');
+    const no = el('button', 'pop-btn', 'Ahora no'); no.type = 'button';
+    const si = el('button', 'pop-btn pop-si', 'Mandar'); si.type = 'button';
+    acc.append(no, si);
+    caja.append(est, t, acc);
+    fondo.appendChild(caja);
+    const fin = () => { abierta = false; document.removeEventListener('keydown', kd, true); fondo.remove(); };
+    const kd = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(); } };
+    document.addEventListener('keydown', kd, true);
+    no.addEventListener('click', fin);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(); });
+    si.addEventListener('click', async () => {
+      const texto = t.value.trim();
+      if (texto.length < 3) { t.focus(); return toast('Escribí qué te pareció.', 'error'); }
+      si.disabled = true; si.textContent = 'Mandando…';
+      try {
+        const res = await fetch('/puente/api/opinion', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ls('haven_token') },
+          body: JSON.stringify({ texto, puntaje, plataforma: plataforma(), version: ses('puente_app_v') || null }) });
+        const r = await res.json().catch(() => null);
+        if (!res.ok) throw new Error((r && r.error) || 'No se pudo mandar. Probá de nuevo.');
+      } catch (err) { si.disabled = false; si.textContent = 'Mandar'; return toast(err.message || 'No se pudo mandar. Probá de nuevo.', 'error'); }
+      fin();
+      ls('puente_opinion_pedida', '1');
+      toast('¡Gracias! Lo vamos a leer.', 'success');
+    });
+    document.body.appendChild(fondo);
+    setTimeout(() => t.focus(), 50);
+  }
+  window.puenteOpinion = { abrir, esApp };
+
+  let tries = 0;
+  (function esperar() {
+    const u = usuario();
+    if (!u) { if (++tries < 120) setTimeout(esperar, 500); return; }
+    if (u.isGuest) return;
+    // /app?opinion=1 (desde un mail): se abre ya
+    if (q.get('opinion') === '1') { setTimeout(abrir, 1500); return; }
+    if (!esApp()) return;
+    // en la app de Android: al segundo dia de usarla, una sola vez
+    if (!ls('puente_app_desde')) ls('puente_app_desde', String(Date.now()));
+    const desde = Number(ls('puente_app_desde')) || Date.now();
+    if (!ls('puente_opinion_pedida') && Date.now() - desde > 864e5) {
+      setTimeout(() => {
+        if (document.visibilityState !== 'visible' || document.querySelector('.pop-fondo, .jg-aviso-fondo, #settings-modal.active, .modal.active')) return;
+        ls('puente_opinion_pedida', '1'); abrir();
+      }, 25000);
+    }
+  })();
 })();

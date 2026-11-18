@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accesos directos al mantener apretado el icono de CV Chat (desde la 1.0.5). Lanzador les suma app= y v=,
+     asi la pagina sabe que es la app (getLaunchingUrl) -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="juegos" android:enabled="true" android:icon="@drawable/atajo_juegos"
+        android:shortcutShortLabel="@string/atajo_juegos" android:shortcutLongLabel="@string/atajo_juegos_largo">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="club.circulovicioso.chat"
+            android:targetClass="club.circulovicioso.chat.Lanzador" android:data="https://chat.circulovicioso.club/app?juegos" />
+    </shortcut>
+    <shortcut android:shortcutId="foro" android:enabled="true" android:icon="@drawable/atajo_foro"
+        android:shortcutShortLabel="@string/atajo_foro" android:shortcutLongLabel="@string/atajo_foro_largo">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="club.circulovicioso.chat"
+            android:targetClass="club.circulovicioso.chat.Lanzador" android:data="https://chat.circulovicioso.club/app?foro" />
+    </shortcut>
+    <shortcut android:shortcutId="mercado" android:enabled="true" android:icon="@drawable/atajo_mercado"
+        android:shortcutShortLabel="@string/atajo_mercado" android:shortcutLongLabel="@string/atajo_mercado_largo">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="club.circulovicioso.chat"
+            android:targetClass="club.circulovicioso.chat.Lanzador" android:data="https://chat.circulovicioso.club/app?mercado" />
+    </shortcut>
+    <shortcut android:shortcutId="opinar" android:enabled="true" android:icon="@drawable/atajo_opinar"
+        android:shortcutShortLabel="@string/atajo_opinar" android:shortcutLongLabel="@string/atajo_opinar_largo">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="club.circulovicioso.chat"
+            android:targetClass="club.circulovicioso.chat.Lanzador" android:data="https://chat.circulovicioso.club/app?opinion=1" />
+    </shortcut>
+</shortcuts>
