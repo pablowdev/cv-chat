@@ -10,7 +10,7 @@ const email = require('/tools/puente/email.js');
 
 const POR_DIA = 75; // el plan gratis manda 100 por dia y CV Chat usa unos 10 para confirmar emails
 const PAUSA_MS = 1200; // Resend acepta 2 por segundo
-const GRUPO = 'https://groups.google.com/g/cv-chat-testers';
+const GRUPO = 'https://groups.google.com/g/cv-chat-testers/about';
 const PRUEBA = 'https://play.google.com/apps/testing/club.circulovicioso.chat';
 
 const ASUNTO = 'Probá CV Chat en Google Play antes que nadie';

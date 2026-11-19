@@ -84,7 +84,7 @@
   // Android: mientras la app esta en prueba en Google Play, el cartel invita a sumarse a la prueba, con los 3 pasos
   // a mano (cada uno su boton). Tiene su propio "No mostrar de nuevo": a quien habia cerrado el de antes le aparece
   if (descarga === 'Android') NEVER_KEY = 'puente_play_nunca';
-  const GRUPO = 'https://groups.google.com/g/cv-chat-testers';
+  const GRUPO = 'https://groups.google.com/g/cv-chat-testers/about';
   const PRUEBA = 'https://play.google.com/apps/testing/club.circulovicioso.chat';
   const PLAY = 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat';
 

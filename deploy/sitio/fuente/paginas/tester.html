@@ -1,0 +1,48 @@
+<div class="tester">
+  <section class="caja tester__intro">
+    <div class="caja__cuerpo">
+      <p class="rotulo">app de android · en prueba</p>
+      <h1 class="titulo">Sé tester de CV Chat</h1>
+      <p>La app de CV Chat para Android está en prueba en Google Play. Con vos la publicamos para todos, y te llevás la medalla <b>📱 Tester de la app</b> en tu perfil, para siempre.</p>
+      <p class="tester__aviso" id="no-android" hidden>Hacelo desde el celular Android donde vas a usar la app.</p>
+    </div>
+  </section>
+
+  <section class="caja tester__paso">
+    <div class="caja__cuerpo">
+      <p class="tester__num">1</p>
+      <h2 class="titulo-2">Unite al grupo de prueba</h2>
+      <a class="btn btn--rosa" href="https://groups.google.com/g/cv-chat-testers/about" target="_blank" rel="noopener">Unirme al grupo</a>
+      <p>Tocá <b>Unirse al grupo</b>, con la cuenta de Google de tu celular.</p>
+    </div>
+  </section>
+
+  <section class="caja tester__paso">
+    <div class="caja__cuerpo">
+      <p class="tester__num">2</p>
+      <h2 class="titulo-2">Activá la prueba</h2>
+      <a class="btn btn--rosa" href="https://play.google.com/apps/testing/club.circulovicioso.chat" target="_blank" rel="noopener">Activar la prueba</a>
+      <p>Tocá <b>Convertirse en verificador</b>. Usá la misma cuenta de Google que en el paso 1.</p>
+    </div>
+  </section>
+
+  <section class="caja tester__paso">
+    <div class="caja__cuerpo">
+      <p class="tester__num">3</p>
+      <h2 class="titulo-2">Instalá la app</h2>
+      <a class="btn btn--rosa" href="https://play.google.com/store/apps/details?id=club.circulovicioso.chat" target="_blank" rel="noopener">Instalar desde Google Play</a>
+      <p>Tocá <b>Instalar</b>, abrila y entrá con tu cuenta de CV Chat. ¡Listo, ya sos tester!</p>
+    </div>
+  </section>
+
+  <section class="caja tester__fin">
+    <div class="caja__cuerpo">
+      <p>Usala estas semanas como siempre. Si algo anda mal o se te ocurre una mejora, mantené apretado el ícono de la app y tocá <b>Opinar</b>.</p>
+      <p class="chico">¿Tenías la app que se bajaba de la página? Desinstalala antes del paso 3: es la misma, pero Play no deja instalarla encima. ¿Play dice que la app no está disponible? Esperá unos minutos después del paso 2 y volvé a tocar el botón.</p>
+    </div>
+  </section>
+</div>
+<script>
+// En la PC o el iPhone: avisar que es desde el celular Android
+(function () { if (!/Android/i.test(navigator.userAgent)) { var n = document.getElementById('no-android'); if (n) n.hidden = false; } })();
+</script>
