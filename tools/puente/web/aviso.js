@@ -17130,7 +17130,7 @@ var puenteSinUbicacion = (function () {
   function enPlay(texto) {
     const fondo = el('div', 'pop-fondo');
     const caja = el('div', 'pop-caja'); caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true');
-    caja.append(el('div', 'pop-t', '¿Nos ayudás con Google?'),
+    caja.append(el('div', 'pop-t', '¿Nos ayudás con la app de CV Chat?'),
       el('div', 'pop-s', 'Google aprueba la app según las opiniones que los testers dejan en Google Play. Copiamos lo que escribiste: pegalo en la página de la app, en "Comentarios privados para el desarrollador".'));
     const acc = el('div', 'pop-acc');
     const no = el('button', 'pop-btn', 'Ahora no'); no.type = 'button';
