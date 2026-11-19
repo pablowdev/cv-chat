@@ -3588,16 +3588,23 @@ function leido(sc) {
     }
     const ct = el('div', 'pa2-scroll'); ct.appendChild(t);
     ct.appendChild(el('div', 'pe-nota', '"Pedir opinión": CV Chat le avisa (campanita y celular) que deje su opinión en Google Play, en los comentarios privados de la prueba, que son los que ve Google (una vez por día como mucho). El tiempo es el que tuvieron la app a la vista y en uso. "Lo que más usa" son las secciones en las que más tiempo pasaron (canales, juegos, mensajes directos, foro). Tocá un nombre para ver su perfil y mandarle un mensaje.'));
-    box.appendChild(tarjeta('Los testers', ct, 'pe-ancha'));
+    box.appendChild(tarjeta(`Los testers (${fmt(d.testers.length)})`, ct, 'pe-ancha'));
 
     // 5. A quienes invitar
     const ci = el('div', 'pe-tabla');
     const filaC = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(4rem, .6fr) minmax(8rem, 1.3fr) minmax(7.5rem, 1fr)'; for (const c of celdas) { const x = el('span'); if (c instanceof Node) x.appendChild(c); else x.textContent = c; f.appendChild(x); } return f; };
-    ci.appendChild(filaC(['Persona', 'En CV Chat (7 días)', 'Días', 'Nota', ''], 'pe-tabla-cab'));
+    ci.appendChild(filaC(['Persona', 'En CV Chat (14 días)', 'Días', 'Nota', ''], 'pe-tabla-cab'));
+    if (!d.candidatos.length) ci.appendChild(el('div', 'pm-sin', 'Todavía nadie: la lista se va llenando a medida que la gente entra desde el navegador de su celular Android.'));
     for (const x of d.candidatos) ci.appendChild(filaC([personaApp(x), duracion(x.min7), String(x.dias7), x.apk ? 'Usa la app del APK: que se pase a la de Play' : '', botonInvitar(x)]));
-    const cc = el('div', 'pa2-scroll'); cc.appendChild(ci);
-    cc.appendChild(el('div', 'pe-nota', 'La gente que más usó CV Chat esta semana y todavía no abrió la app de Play. "Invitar": CV Chat le manda un aviso a su campanita y al celular con el enlace a circulovicioso.club/tester (una vez por día como mucho).'));
-    box.appendChild(tarjeta('A quiénes invitar', cc, 'pe-ancha'));
+    const cc = el('div', 'pa2-scroll'); cc.appendChild(el('div', 'pe-nota pa2-explica', 'Usan CV Chat desde el navegador de un celular Android (no la app) y todavía no son testers: son los más fáciles de sumar. Se sabe desde el 19/11, así que la lista se va llenando.')); cc.appendChild(ci);
+    if (d.otros && d.otros.length) {
+      const co = el('div', 'pe-tabla');
+      co.appendChild(filaC(['Persona', 'En CV Chat (14 días)', 'Días', 'Nota', ''], 'pe-tabla-cab'));
+      for (const x of d.otros) co.appendChild(filaC([personaApp(x), duracion(x.min7), String(x.dias7), x.apk ? 'Usa la app del APK: que se pase a la de Play' : '', botonInvitar(x)]));
+      cc.append(el('div', 'pa2-subtitulo', `Otros que usan mucho CV Chat (${fmt(d.otros.length)})`), el('div', 'pe-nota pa2-explica', 'Los que más usaron CV Chat en las últimas 2 semanas, sin el dato de desde qué dispositivo (puede ser la PC o un iPhone). Invitalos si sabés que tienen Android.'), co);
+    }
+    cc.appendChild(el('div', 'pe-nota', '"Invitar": CV Chat le manda un aviso a su campanita y al celular con el enlace a circulovicioso.club/tester (una vez por día como mucho).'));
+    box.appendChild(tarjeta(`A quiénes invitar (${fmt(d.candidatos.length)} desde Android)`, cc, 'pe-ancha'));
 
     // 6. Opiniones
     const op = el('div', 'pa2-opiniones');
@@ -15967,7 +15974,9 @@ var puenteSinUbicacion = (function () {
     // (desde la app de Android: cual, para la pestaña App del panel; tester-play.js)
     let app;
     try { if (window.__puentePlataforma === 'android-app') app = sessionStorage.getItem('puente_app_play') ? 'play' : 'apk'; } catch { /* sin almacenamiento */ }
-    const body = JSON.stringify({ s: suma, v: visitas, a: app });
+    // (y si es el navegador de un celular Android: candidato a tester de la app)
+    const disp = !app && /Android/i.test(navigator.userAgent) && window.__puentePlataforma === 'celular-web' ? 'android-web' : undefined;
+    const body = JSON.stringify({ s: suma, v: visitas, a: app, d: disp });
     suma = {}; visitas = 0;
     try { fetch('/puente/api/uso', { method: 'POST', keepalive: true, headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body }).catch(() => {}); } catch { /* la proxima */ }
   }

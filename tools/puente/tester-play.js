@@ -29,6 +29,7 @@ function setup(ctx) {
     ) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS puente_invitados_tester (user_id INTEGER PRIMARY KEY, cuando INTEGER NOT NULL, por INTEGER);
     CREATE TABLE IF NOT EXISTS puente_pedidos_opinion (user_id INTEGER PRIMARY KEY, cuando INTEGER NOT NULL, por INTEGER);
+    CREATE TABLE IF NOT EXISTS puente_android_web (user_id INTEGER PRIMARY KEY, primero TEXT NOT NULL, ultimo TEXT NOT NULL);
   `);
   // por donde llego cada tester (la cookie cv_tester_de: la pagina /tester, el cartel del chat...)
   if (!db.prepare("SELECT 1 FROM pragma_table_info('puente_testers_play') WHERE name = 'origen'").get()) db.exec('ALTER TABLE puente_testers_play ADD COLUMN origen TEXT');
@@ -55,6 +56,12 @@ function uso(dia, userId, app, filas, visitas) {
     ON CONFLICT(dia, user_id, app, seccion) DO UPDATE SET seg = seg + excluded.seg, visitas = visitas + excluded.visitas`);
   for (const [k, n] of filas) poner.run(dia, userId, app, k, n, 0);
   if (visitas) poner.run(dia, userId, app, filas.length ? filas[0][0] : 'otros', 0, visitas);
+}
+
+// uso.js: esta persona uso CV Chat desde el navegador de un celular Android (no la app): candidata a tester
+function android(userId, dia) {
+  if (!db) return;
+  db.prepare('INSERT INTO puente_android_web (user_id, primero, ultimo) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET ultimo = excluded.ultimo').run(userId, dia, dia);
 }
 
 // Para logros.js: [[id, emoji, nombre, detalle]]
@@ -120,13 +127,17 @@ function datos() {
   });
   const ids = new Set(testers.map((t) => t.id));
 
-  // A quienes invitar: la gente que mas uso CV Chat en la ultima semana y todavia no es tester
-  const candidatos = db.prepare(`SELECT user_id, SUM(seg) s, COUNT(DISTINCT dia) d FROM puente_uso WHERE dia >= ? GROUP BY user_id ORDER BY s DESC LIMIT 80`).all(hace(6))
+  // A quienes invitar: primero los que usan CV Chat desde el navegador de un celular Android (se sabe desde el 19/11);
+  // despues, aparte, los que mas lo usaron en la semana sin ese dato. Ninguno es tester todavia
+  const androidWeb = new Set(db.prepare('SELECT user_id FROM puente_android_web WHERE ultimo >= ?').all(dias[0]).map((r) => r.user_id));
+  const candidatos = db.prepare(`SELECT user_id, SUM(seg) s, COUNT(DISTINCT dia) d FROM puente_uso WHERE dia >= ? GROUP BY user_id ORDER BY s DESC LIMIT 300`).all(hace(13))
     .filter((r) => !ids.has(r.user_id)).map((r) => {
       const p = persona.get(r.user_id); const g = p && db.prepare('SELECT IFNULL(is_guest, 0) g, is_admin a FROM users WHERE id = ?').get(r.user_id);
       const inv = p && db.prepare('SELECT cuando FROM puente_invitados_tester WHERE user_id = ?').get(r.user_id);
-      return p && !g.g ? { id: p.id, nombre: p.nombre, avatar: p.avatar, min7: Math.round(r.s / 60), dias7: r.d, invitado: inv ? inv.cuando : null, apk: !!db.prepare("SELECT 1 FROM puente_app_uso WHERE user_id = ? AND app = 'apk' AND dia >= ? LIMIT 1").get(r.user_id, hace(13)) } : null;
-    }).filter(Boolean).slice(0, 25);
+      return p && !g.g ? { id: p.id, nombre: p.nombre, avatar: p.avatar, min7: Math.round(r.s / 60), dias7: r.d, invitado: inv ? inv.cuando : null, android: androidWeb.has(r.user_id), apk: !!db.prepare("SELECT 1 FROM puente_app_uso WHERE user_id = ? AND app = 'apk' AND dia >= ? LIMIT 1").get(r.user_id, hace(13)) } : null;
+    }).filter(Boolean);
+  const candAndroid = candidatos.filter((c) => c.android);
+  const candOtros = candidatos.filter((c) => !c.android).slice(0, 15);
 
   let opiniones = [];
   try {
@@ -143,7 +154,7 @@ function datos() {
       minHoy: minutos('play', hoy), min7: minutos('play', hace(6)), apk7: distintos('apk', hace(6)),
       nuevos7: testers.filter((t) => t.desde >= ahora - 7 * 864e5).length,
     },
-    serie, testers, candidatos, opiniones,
+    serie, testers, candidatos: candAndroid, otros: candOtros, opiniones,
     origenes: testers.reduce((m, t) => { const k = t.llego || 'sin-dato'; m[k] = (m[k] || 0) + 1; return m; }, {}),
   };
 }
@@ -163,8 +174,8 @@ async function handle(req, res, p, u, h) {
     if (!(id > 0) || !db.prepare('SELECT 1 FROM puente_testers_play WHERE user_id = ?').get(id)) return h.json(res, 400, { error: 'No es tester.' });
     const ya = db.prepare('SELECT cuando FROM puente_pedidos_opinion WHERE user_id = ?').get(id);
     if (ya && Date.now() - ya.cuando < 20 * 3600e3) return h.json(res, 429, { error: 'Ya se lo pediste hoy.' });
-    const titulo = 'CV Chat: ¿qué te parece la app? Contalo en Google Play';
-    const texto = 'Abrí la app en Google Play, bajá hasta "Comentarios privados para el desarrollador" (o "Enviar comentarios") y contanos qué te gusta y qué mejorarías. ¡Nos ayuda un montón a publicarla!';
+    const titulo = 'CV Chat: ¡necesitamos tu opinión de la app!';
+    const texto = 'Necesitamos opiniones de la app para que Google la apruebe en Play Store. Si podés, entrá un segundo y comentá algo de la app acá 🙏';
     try { require('./campana.js').registrar(id, { origen: 'chat', titulo, texto, url: URL_PLAY, clave: 'tester-op-' + id + '-' + diaAR(Date.now()) }); } catch (err) { warn('tester play: campanita:', err.message); }
     try { require('./avisos.js').avisarUsuario(id, { title: titulo, body: texto, url: URL_PLAY, tag: 'puente-tester-op' }); } catch (err) { warn('tester play: aviso:', err.message); }
     db.prepare('INSERT INTO puente_pedidos_opinion (user_id, cuando, por) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET cuando = excluded.cuando, por = excluded.por').run(id, Date.now(), user.id);
@@ -189,4 +200,4 @@ async function handle(req, res, p, u, h) {
   try { return h.json(res, 200, datos()); } catch (err) { warn('tester play: admin:', err.message); return h.json(res, 500, { error: 'No se pudo cargar.' }); }
 }
 
-module.exports = { setup, insignias, uso, handle, _test: { datos } };
+module.exports = { setup, insignias, uso, android, handle, _test: { datos } };

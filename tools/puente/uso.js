@@ -61,6 +61,8 @@ async function handle(req, res, p, u, h) {
       if (total || visitas) activo.run(dia, user.id);
       // (si es desde la app de Android, tambien aparte: la pestaña "App" del panel, tester-play.js)
       if (body.a === 'play' || body.a === 'apk') { try { require('./tester-play.js').uso(dia, user.id, body.a, filas, visitas); } catch (err) { warn('uso: app:', err.message); } }
+      // (desde el navegador de un celular Android: candidata a tester de la app)
+      else if (body.d === 'android-web' && total) { try { require('./tester-play.js').android(user.id, dia); } catch (err) { warn('uso: android:', err.message); } }
     })();
   } catch (err) { warn('uso:', err.message); }
   return h.json(res, 200, { ok: true });
