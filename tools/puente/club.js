@@ -136,7 +136,7 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
     if (a && a.gente > 0) {
       const q = db.prepare('SELECT COALESCE(display_name, username) n, avatar FROM users WHERE id = ?');
       const quienes = (a.ids || []).map((id) => q.get(id)).filter(Boolean).map((x) => ({ nombre: x.n, foto: x.avatar || null }));
-      hotel = { juego: 'hotel', nombre: 'CV Hotel', enlace: '/app?juegos=hotel', gente: a.gente, invitados: 0, quienes };
+      hotel = { juego: 'hotel', nombre: 'CV Hotel', enlace: '/app?juegos=cvhotel', gente: a.gente, invitados: 0, quienes };
     }
   } catch (err) { warn('club: hotel:', err.message); }
   return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity, hotel });

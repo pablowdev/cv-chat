@@ -3112,6 +3112,10 @@ html body .reactions-row .puente-mas-reaccion:active { background: #3f3e44; }
 
 /* ── Juegos: Truco (aviso.js, truco.js) ── */
 .puente-jg-btn { position: relative; }
+/* Juegos en segundo plano (web/aviso.js ocultar): la pantalla queda escondida con el juego andando, y el boton de
+   Juegos lleva un puntito verde abajo a la derecha */
+.puente-jg.jg-oculto { display: none !important; }
+.puente-jg-btn.jg-corriendo::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 10px; height: 10px; border-radius: 50%; background: #23a55a; box-shadow: 0 0 0 3px #1e1f22; pointer-events: none; z-index: 2; }
 /* Con el icono propio del servidor: la imagen redonda ocupa todo el boton */
 .puente-mk-btn.con-icono, .puente-jg-btn.con-icono, #server-bar .puente-mk-btn.con-icono, #server-bar .puente-jg-btn.con-icono, #puente-rail .con-icono.active { background: transparent !important; border-radius: 50% !important; padding: 0; }
 .con-icono .puente-ico-img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; -webkit-user-select: none; user-select: none; transition: filter 0.15s, box-shadow 0.15s; }

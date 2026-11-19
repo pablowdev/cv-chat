@@ -10527,7 +10527,7 @@ document.addEventListener('pointerdown', (ev) => {
   function frame() {
     if (page) return page;
     // Si estaba abierto Juegos (un enlace al Marketplace tocado desde ahi), se cierra
-    if (window.puenteJuegos && window.puenteJuegos.abierto()) { try { while (window.puenteJuegos.abierto()) window.puenteJuegos.atras(); } catch { /* sigue */ } }
+    if (window.puenteJuegos && window.puenteJuegos.abierto()) { try { if (window.puenteJuegos.ocultar) window.puenteJuegos.ocultar(); else while (window.puenteJuegos.abierto()) window.puenteJuegos.atras(); } catch { /* sigue */ } }
     page = el('div', 'puente-mk');
     page.id = 'puente-mercado';
     const bar = byId('server-bar');
@@ -11226,6 +11226,7 @@ document.addEventListener('pointerdown', (ev) => {
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
     enlace: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z',
+    biblio: 'M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z',
     campana: 'M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z',
   };
   const app = () => window.app;
@@ -11273,27 +11274,65 @@ document.addEventListener('pointerdown', (ev) => {
   }
 
   // ── La pantalla ──
-  let page = null, stack = [], tickT = null;
+  let page = null, stack = [], tickT = null, oculto = false;
   function close() {
     if (!page) return;
     soltarVentana();
-    page.remove(); page = null; stack = []; clearInterval(tickT);
+    page.remove(); page = null; stack = []; clearInterval(tickT); oculto = false;
     salirJuegos();
-    document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active', 'jg-corriendo'));
     refreshBadge();
   }
+  // En segundo plano, como otro programa abierto: ir al chat (un canal, los mensajes directos, el inicio, el
+  // Marketplace, el foro o tocar de nuevo Juegos) esconde la pantalla de Juegos en vez de cerrarla. El juego sigue
+  // funcionando (la sala de CV Hotel, la mesa, la partida) y al volver esta donde se dejo. Los juegos en ventana
+  // reciben { puente: 'segundo-plano', oculto } (por ejemplo, para ponerse inactivos). En la biblioteca, sin un juego
+  // abierto, no hay nada que dejar corriendo: se cierra como siempre
+  const hayJuego = () => { const t = stack[stack.length - 1]; return !!t && !(t[0] === 'inicio' && !t[1]); };
+  function avisarVentanas(o) {
+    for (const f of ventanas.values()) { try { if (f.isConnected) f.contentWindow.postMessage({ puente: 'segundo-plano', oculto: o }, location.origin); } catch { /* otro origen */ } }
+  }
+  function ocultar() {
+    if (!page || oculto) return;
+    if (!hayJuego()) { close(); return; }
+    oculto = true;
+    page.classList.add('jg-oculto');
+    document.querySelectorAll('.puente-jg-btn').forEach(b => { b.classList.remove('active'); b.classList.add('jg-corriendo'); });
+    avisarVentanas(true);
+    refreshBadge();
+  }
+  function mostrar() {
+    if (!page || !oculto) return false;
+    if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
+    oculto = false;
+    page.classList.remove('jg-oculto');
+    const bar = byId('server-bar');
+    if (!mobile() && bar) page.style.left = Math.round(bar.getBoundingClientRect().right) + 'px';
+    document.querySelectorAll('.puente-jg-btn').forEach(b => { b.classList.add('active'); b.classList.remove('jg-corriendo'); });
+    avisarVentanas(false);
+    refreshBadge();
+    return true;
+  }
+  // Atras: adentro de un juego (sus pantallas, como de la mesa a la sala) vuelve como siempre; desde el juego
+  // mismo, el chat, con el juego en segundo plano (la lista de juegos tiene su boton arriba, "Todos los juegos")
   function back() {
+    const abajo = stack[stack.length - 2];
+    if (hayJuego() && (!abajo || (abajo[0] === 'inicio' && !abajo[1]))) { ocultar(); return; }
     if (stack.length > 1) { stack.pop(); const [v, a] = stack[stack.length - 1]; show(v, a); refreshBadge(); }
     else close();
   }
+  // "Todos los juegos": a la biblioteca (cierra el juego que estaba abierto)
+  function biblio() { stack = [['inicio']]; show('inicio'); refreshBadge(); }
   // (juego: en cual se esta, para el tiempo de uso)
   const juegoActual = () => {
     const v = stack.length ? stack[stack.length - 1][0] : '', j = fichasYa.find((x) => x.vistas && x.vistas[v]);
     return !j ? 'juegos' : j.id === 'shoppa' ? usoWorgs() : j.id;
   };
-  window.puenteJuegos = { abierto: () => !!page, juego: juegoActual, atras: back, abrir: (id) => { stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, abrirJuego: (id) => { if (/^[a-z0-9-]{2,24}$/.test(String(id || ''))) go('inicio', id); }, /* (las mesas de juego de CV Hotel: Atrás vuelve al hotel) */ desafiar: (p, texto) => desafioDM(p, texto) };
+  // (el juego que esta en la pantalla: su sala, ['inicio', id], o una vista suya, segun su ficha)
+  const idActual = () => { const t = stack[stack.length - 1]; if (!t) return null; if (t[0] === 'inicio') return t[1] || null; const j = fichasYa.find((x) => x.vistas && x.vistas[t[0]]); return j ? j.id : null; };
+  window.puenteJuegos = { abierto: () => !!page && !oculto, enSegundoPlano: () => !!page && oculto, ocultar, mostrar, juego: juegoActual, atras: back, abrir: (id) => { if (!id && mostrar()) return; stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, abrirJuego: (id) => { if (!/^[a-z0-9-]{2,24}$/.test(String(id || ''))) return; if (oculto && idActual() === id && mostrar()) return; if (hayJuego()) stack = []; go('inicio', id); }, /* (las mesas de juego de CV Hotel: Atrás vuelve al hotel) */ desafiar: (p, texto) => desafioDM(p, texto) };
   function frame() {
-    if (page) return page;
+    if (page) { mostrar(); return page; }
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
     page = el('div', 'puente-jg');
     page.id = 'puente-juegos';
@@ -11445,10 +11484,20 @@ document.addEventListener('pointerdown', (ev) => {
     const h = el('div', 'jg-head');
     const b = el('button', 'jg-icono'); b.type = 'button';
     const root = stack.length <= 1;
+    // (desde un juego, la flecha lleva al chat y el juego sigue en segundo plano)
+    const abajo = stack[stack.length - 2], alChat = hayJuego() && (!abajo || (abajo[0] === 'inicio' && !abajo[1]));
     b.innerHTML = svg(root && !mobile() ? I.cerrar : I.atras, 24);
-    b.setAttribute('aria-label', root ? 'Cerrar' : 'Volver');
+    b.setAttribute('aria-label', alChat ? 'Volver al chat (el juego sigue abierto)' : root ? 'Cerrar' : 'Volver');
+    if (alChat) b.title = 'Volver al chat: el juego sigue abierto';
     b.addEventListener('click', back);
     h.append(b, el('div', 'jg-titulo', title));
+    if (hayJuego()) {
+      const t = el('button', 'jg-icono'); t.type = 'button';
+      t.title = 'Todos los juegos'; t.setAttribute('aria-label', t.title);
+      t.innerHTML = svg(I.biblio, 22);
+      t.addEventListener('click', biblio);
+      h.appendChild(t);
+    }
     if (right) h.appendChild(right);
     return h;
   }
@@ -11685,7 +11734,7 @@ document.addEventListener('pointerdown', (ev) => {
     a.socket.once('dm-opened', fill);
     setTimeout(() => { if (!done) a.socket.off('dm-opened', fill); }, 8000);
     toast('Mandale el mensaje para que entre a la mesa', 'success');
-    close();
+    ocultar();
     a.socket.emit('start-dm', { targetUserId: p.id });
   }
 
@@ -12048,7 +12097,7 @@ document.addEventListener('pointerdown', (ev) => {
       if (!js) return;
       const rs = await Promise.all(js.filter((j) => j.eventos && j.eventos.inicio && j.eventos.cambio).map((j) => emit(j.eventos.inicio)));
       // (sin contar la partida que esta abierta en la pantalla: ahi ya se esta jugando)
-      const abierta = page && stack.length ? String(stack[stack.length - 1][1] || '') : '';
+      const abierta = page && !oculto && stack.length ? String(stack[stack.length - 1][1] || '') : '';
       const cuenta = (r) => (r.error || !r.mias ? 0 : r.mias.filter(m => m.teToca && String(m.id) !== abierta).length);
       setBadge(rs.reduce((n, r) => n + cuenta(r), 0));
     }, 2000);
@@ -12060,7 +12109,7 @@ document.addEventListener('pointerdown', (ev) => {
       b.innerHTML = svg(I.cartas, 24);
       { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-juegos.webp?v=1'; }
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
-      b.addEventListener('click', (e) => { e.stopPropagation(); if (page) close(); else { stack = []; go('inicio'); } });
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (page && !oculto) ocultar(); else if (page) mostrar(); else { stack = []; go('inicio'); } });
       return b;
     };
     const after = (sel, fallback) => document.querySelector(sel) || document.querySelector(fallback);
@@ -12120,9 +12169,9 @@ document.addEventListener('pointerdown', (ev) => {
         }
       }).catch(() => { /* sin registro: no hay mesa que pedir */ });
     });
-    if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { close(); return sw.apply(this, x); }; }
+    if (typeof a.switchChannel === 'function') { const sw = a.switchChannel; a.switchChannel = function (...x) { ocultar(); return sw.apply(this, x); }; }
     document.addEventListener('click', (e) => {
-      if (page && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn')) close();
+      if (page && !oculto && e.target instanceof Element && e.target.closest('.puente-pc-dm, #home-server, #puente-rail .puente-rail-dm, #puente-rail .puente-rail-server, .puente-mk-btn')) ocultar();
     }, true);
     // Vista previa de los enlaces a los juegos en los mensajes (/app?juegos, /app?juegos=pool). Haven no arma la
     // de los enlaces a su misma direccion, asi que va aca la tarjeta de siempre (la de los demas enlaces), con
@@ -15253,7 +15302,7 @@ var puenteSinUbicacion = (function () {
     // (el boton del foro, con la web a la vista: el foro)
     else if (page && page.dataset.web) dir = FORO + '/';
     // Una sola pagina de las de la izquierda a la vez
-    try { if (window.puenteJuegos && window.puenteJuegos.abierto()) { let n = 0; while (window.puenteJuegos.abierto() && n++ < 20) window.puenteJuegos.atras(); } } catch { /* sigue */ }
+    try { if (window.puenteJuegos && window.puenteJuegos.abierto()) { if (window.puenteJuegos.ocultar) window.puenteJuegos.ocultar(); else { let n = 0; while (window.puenteJuegos.abierto() && n++ < 20) window.puenteJuegos.atras(); } } } catch { /* sigue */ }
     try { if (window.puenteMercado && window.puenteMercado.abierto()) { let n = 0; while (window.puenteMercado.abierto() && n++ < 20) window.puenteMercado.atras(); } } catch { /* sigue */ }
     if (!page) {
       page = el('div', 'puente-jg'); page.id = 'puente-foro-app';
@@ -16619,7 +16668,7 @@ var puenteSinUbicacion = (function () {
 
   // Cerrar lo que este abierto a la izquierda (juegos, Marketplace, foro) antes de ir a otro lado
   function cerrarPaginas() {
-    try { let k = 0; while (window.puenteJuegos && window.puenteJuegos.abierto() && k++ < 20) window.puenteJuegos.atras(); } catch { /* sigue */ }
+    try { if (window.puenteJuegos && window.puenteJuegos.abierto()) { if (window.puenteJuegos.ocultar) window.puenteJuegos.ocultar(); else { let k = 0; while (window.puenteJuegos.abierto() && k++ < 20) window.puenteJuegos.atras(); } } } catch { /* sigue */ }
     try { let k = 0; while (window.puenteMercado && window.puenteMercado.abierto() && k++ < 20) window.puenteMercado.atras(); } catch { /* sigue */ }
     try { if (window.puenteForo && window.puenteForo.abierto()) window.puenteForo.cerrar(); } catch { /* sigue */ }
   }
