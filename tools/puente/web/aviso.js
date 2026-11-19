@@ -3500,6 +3500,24 @@ function leido(sc) {
     n.append(a, b);
     return n;
   }
+  // "Invitar": CV Chat (no quien toca) le avisa en su campanita y al celular, con el enlace a /tester
+  function botonInvitar(x) {
+    const b = el('button', 'pa2-invitar'); b.type = 'button';
+    const marcar = (cuando) => { b.textContent = 'Invitado ' + haceApp(cuando); b.classList.add('hecho'); b.title = 'Ya le llegó el aviso de CV Chat; se puede volver a invitar mañana'; };
+    if (x.invitado) marcar(x.invitado); else b.textContent = 'Invitar';
+    b.addEventListener('click', async () => {
+      if (b.disabled) return;
+      b.disabled = true; const antes = b.textContent; b.textContent = 'Mandando…';
+      try {
+        const r = await fetch('/puente/api/admin/app/invitado', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.id }) });
+        const j = await r.json().catch(() => null);
+        if (!r.ok) throw new Error((j && j.error) || 'No se pudo.');
+        x.invitado = j.cuando; marcar(j.cuando);
+      } catch (err) { b.textContent = antes; if (window.app && window.app._showToast) window.app._showToast(err.message || 'No se pudo invitar.', 'error'); }
+      b.disabled = false;
+    });
+    return b;
+  }
   function pintarApp(box, d) {
     const sc = box.parentNode, scroll = sc ? sc.scrollTop : 0; // (la que se desplaza es la vista)
     box.textContent = '';
@@ -3545,11 +3563,11 @@ function leido(sc) {
 
     // 5. A quienes invitar
     const ci = el('div', 'pe-tabla');
-    const filaC = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(5rem, .8fr) minmax(8rem, 1.4fr)'; for (const c of celdas) { const x = el('span'); if (c instanceof Node) x.appendChild(c); else x.textContent = c; f.appendChild(x); } return f; };
-    ci.appendChild(filaC(['Persona', 'En CV Chat (7 días)', 'Días', 'Nota'], 'pe-tabla-cab'));
-    for (const x of d.candidatos) ci.appendChild(filaC([personaApp(x), duracion(x.min7), String(x.dias7), x.apk ? 'Usa la app del APK: que se pase a la de Play' : '']));
+    const filaC = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(4rem, .6fr) minmax(8rem, 1.3fr) minmax(7.5rem, 1fr)'; for (const c of celdas) { const x = el('span'); if (c instanceof Node) x.appendChild(c); else x.textContent = c; f.appendChild(x); } return f; };
+    ci.appendChild(filaC(['Persona', 'En CV Chat (7 días)', 'Días', 'Nota', ''], 'pe-tabla-cab'));
+    for (const x of d.candidatos) ci.appendChild(filaC([personaApp(x), duracion(x.min7), String(x.dias7), x.apk ? 'Usa la app del APK: que se pase a la de Play' : '', botonInvitar(x)]));
     const cc = el('div', 'pa2-scroll'); cc.appendChild(ci);
-    cc.appendChild(el('div', 'pe-nota', 'La gente que más usó CV Chat esta semana y todavía no abrió la app de Play. Mandales el enlace: https://circulovicioso.club/tester'));
+    cc.appendChild(el('div', 'pe-nota', 'La gente que más usó CV Chat esta semana y todavía no abrió la app de Play. "Invitar": CV Chat le manda un aviso a su campanita y al celular con el enlace a circulovicioso.club/tester (una vez por día como mucho).'));
     box.appendChild(tarjeta('A quiénes invitar', cc, 'pe-ancha'));
 
     // 6. Opiniones

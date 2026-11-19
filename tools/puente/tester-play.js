@@ -6,13 +6,16 @@
 //  - Uso en la app: el contador de uso (uso.js) dice si el tiempo es de la app ({ a: 'play' | 'apk' }); aca se
 //    guarda aparte, por dia, persona y seccion (puente_app_uso). Solo totales, como uso.js: nada de lo que se escribe.
 //
-//  GET /puente/api/admin/app   (solo administradores) -> todo lo de la pestaña "App"
+//  GET  /puente/api/admin/app            (solo administradores) -> todo lo de la pestaña "App"
+//  POST /puente/api/admin/app/invitado   { id } (solo administradores): CV Chat lo invita a ser tester (un aviso en su
+//                                        campanita y al celular, con el enlace a /tester) y queda anotado
 
 let db = null, warn = () => {};
 const HASTA = Date.parse(process.env.PUENTE_TESTER_HASTA || '2027-01-01T03:00:00Z');
 // La segunda vuelta de la prueba (Google pidio 14 dias mas desde el 18/11/2026, con 12 testers o mas)
 const PRUEBA = { desde: '2026-11-18', hasta: '2026-12-02', minimo: 12 };
 const AR = 3 * 3600e3;
+const URL_TESTER = 'https://circulovicioso.club/tester';
 const diaAR = (ms) => new Date(ms - AR).toISOString().slice(0, 10);
 
 function setup(ctx) {
@@ -23,6 +26,7 @@ function setup(ctx) {
       dia TEXT NOT NULL, user_id INTEGER NOT NULL, app TEXT NOT NULL, seccion TEXT NOT NULL, seg INTEGER NOT NULL DEFAULT 0, visitas INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (dia, user_id, app, seccion)
     ) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS puente_invitados_tester (user_id INTEGER PRIMARY KEY, cuando INTEGER NOT NULL, por INTEGER);
   `);
   ctx.io.on('connection', (socket) => {
     let hecho = false;
@@ -103,7 +107,8 @@ function datos() {
   const candidatos = db.prepare(`SELECT user_id, SUM(seg) s, COUNT(DISTINCT dia) d FROM puente_uso WHERE dia >= ? GROUP BY user_id ORDER BY s DESC LIMIT 80`).all(hace(6))
     .filter((r) => !ids.has(r.user_id)).map((r) => {
       const p = persona.get(r.user_id); const g = p && db.prepare('SELECT IFNULL(is_guest, 0) g, is_admin a FROM users WHERE id = ?').get(r.user_id);
-      return p && !g.g ? { id: p.id, nombre: p.nombre, avatar: p.avatar, min7: Math.round(r.s / 60), dias7: r.d, apk: !!db.prepare("SELECT 1 FROM puente_app_uso WHERE user_id = ? AND app = 'apk' AND dia >= ? LIMIT 1").get(r.user_id, hace(13)) } : null;
+      const inv = p && db.prepare('SELECT cuando FROM puente_invitados_tester WHERE user_id = ?').get(r.user_id);
+      return p && !g.g ? { id: p.id, nombre: p.nombre, avatar: p.avatar, min7: Math.round(r.s / 60), dias7: r.d, invitado: inv ? inv.cuando : null, apk: !!db.prepare("SELECT 1 FROM puente_app_uso WHERE user_id = ? AND app = 'apk' AND dia >= ? LIMIT 1").get(r.user_id, hace(13)) } : null;
     }).filter(Boolean).slice(0, 25);
 
   let opiniones = [];
@@ -126,12 +131,27 @@ function datos() {
 }
 
 async function handle(req, res, p, u, h) {
-  if (p !== '/puente/api/admin/app') return false;
-  if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
+  if (p !== '/puente/api/admin/app' && p !== '/puente/api/admin/app/invitado') return false;
   const user = h.sessionUser(req);
   if (!user) return h.json(res, 401, { error: 'sin sesion' });
   const a = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
   if (!a || !a.is_admin) return h.json(res, 403, { error: 'solo administradores' });
+  if (p === '/puente/api/admin/app/invitado') {
+    if (req.method !== 'POST') return h.json(res, 405, { error: 'metodo' });
+    const b = (await h.readJson(req, 2000).catch(() => null)) || {};
+    const id = Number(b.id);
+    if (!(id > 0) || !db.prepare('SELECT 1 FROM users WHERE id = ?').get(id)) return h.json(res, 400, { error: 'No existe esa cuenta.' });
+    const ya = db.prepare('SELECT cuando FROM puente_invitados_tester WHERE user_id = ?').get(id);
+    if (ya && Date.now() - ya.cuando < 20 * 3600e3) return h.json(res, 429, { error: 'Ya lo invitaste hoy.' });
+    // El aviso es de CV Chat, no de quien toca el boton: en la campanita y al celular (o el cartelito, con la app abierta)
+    const titulo = 'CV Chat: ¿tenés Android? Sé tester de la app';
+    const texto = 'Bajate la app de CV Chat en Google Play antes que nadie y llevate la medalla 📱 Tester de la app. Es un botón y seguís los pasos.';
+    try { require('./campana.js').registrar(id, { origen: 'chat', titulo, texto, url: URL_TESTER, clave: 'tester-inv-' + id + '-' + diaAR(Date.now()) }); } catch (err) { warn('tester play: campanita:', err.message); }
+    try { require('./avisos.js').avisarUsuario(id, { title: titulo, body: texto, url: URL_TESTER, tag: 'puente-tester-inv' }); } catch (err) { warn('tester play: aviso:', err.message); }
+    db.prepare('INSERT INTO puente_invitados_tester (user_id, cuando, por) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET cuando = excluded.cuando, por = excluded.por').run(id, Date.now(), user.id);
+    return h.json(res, 200, { ok: true, cuando: Date.now() });
+  }
+  if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
   try { return h.json(res, 200, datos()); } catch (err) { warn('tester play: admin:', err.message); return h.json(res, 500, { error: 'No se pudo cargar.' }); }
 }
 
