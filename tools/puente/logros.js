@@ -340,6 +340,8 @@ function medallas(havenId, pre) {
   } catch { /* sin el registro de juegos */ }
   // La que cruza juegos (perfil-juegos.js): Todoterreno
   try { for (const i of require('./perfil-juegos.js').insignias(havenId)) add(...i); } catch { /* sin juegos */ }
+  // Tester de la app de Android en Google Play (tester-play.js)
+  try { for (const i of require('./tester-play.js').insignias(havenId)) add(...i); } catch { /* sin tabla */ }
   // La mudanza (mudanza-plan.js): Fundador y Campeón de la Copa
   try { for (const m of require('./mudanza-plan.js').insignias(havenId)) add(...m); } catch { /* sin mudanza */ }
   if (inv >= 1) add('reclutador', '🤝', inv >= 25 ? 'Reclutador ×25' : inv >= 10 ? 'Reclutador ×10' : inv >= 3 ? 'Reclutador ×3' : 'Reclutador',

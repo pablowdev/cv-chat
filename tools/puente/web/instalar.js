@@ -38,13 +38,16 @@
   'use strict';
   const TITLE = '__PUENTE_TITULO__';
   if (!TITLE || TITLE.indexOf('__PUENTE') === 0) return;
-  const NEVER_KEY = 'puente_instalar_nunca';
+  let NEVER_KEY = 'puente_instalar_nunca'; // (en Android, el de la prueba de Play: mas abajo)
   const SESSION_KEY = 'puente_instalar_visto';
   const ICON = '/puente/icono-192.png';
 
   const store = (s, fn) => { try { return fn(s === 'l' ? localStorage : sessionStorage); } catch { return null; } };
   const installed = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches ||
-    navigator.standalone === true || /Electron/i.test(navigator.userAgent) || !!window.puenteApp || !!window.havenDesktop;
+    navigator.standalone === true || /Electron/i.test(navigator.userAgent) || !!window.puenteApp || !!window.havenDesktop ||
+    // (la app de Android, de Play o de la pagina: abre /app?app=play|android y Android la nombra en el referrer)
+    /[?&]app=(play|android)\b/.test(location.search) || /^android-app:\/\/club\.circulovicioso\.chat/.test(document.referrer || '') ||
+    !!store('s', s => s.getItem('puente_app_play') || s.getItem('puente_app_android'));
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isMacSafari = !isIOS && /Macintosh/i.test(ua) && /Safari/i.test(ua) && !/Chrome|Chromium|Edg|Firefox/i.test(ua);
@@ -78,8 +81,57 @@
 
   // En Android y Windows hay app para descargar (pagina /puente/descargar)
   const descarga = !isIOS && /Android/i.test(ua) ? 'Android' : /Windows/i.test(ua) ? 'Windows' : null;
+  // Android: mientras la app esta en prueba en Google Play, el cartel invita a sumarse a la prueba, con los 3 pasos
+  // a mano (cada uno su boton). Tiene su propio "No mostrar de nuevo": a quien habia cerrado el de antes le aparece
+  if (descarga === 'Android') NEVER_KEY = 'puente_play_nunca';
+  const GRUPO = 'https://groups.google.com/g/cv-chat-testers';
+  const PRUEBA = 'https://play.google.com/apps/testing/club.circulovicioso.chat';
+  const PLAY = 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat';
+
+  function buildPlay() {
+    overlay = el('div', 'modal-overlay');
+    overlay.id = 'puente-instalar-modal';
+    overlay.style.display = 'flex';
+    const card = el('div', 'modal android-beta-promo');
+    const icon = el('div', 'android-beta-promo-icon');
+    const img = el('img');
+    img.src = ICON; img.alt = ''; img.width = 80; img.height = 80;
+    img.style.cssText = 'width:100%;height:100%;border-radius:22%;display:block';
+    icon.style.background = 'none';
+    icon.appendChild(img);
+    const badge = el('span', 'android-beta-promo-badge', 'APP DE ANDROID · EN PRUEBA');
+    badge.style.background = 'var(--accent-bright,#5865f2)';
+    const title = el('h3', 'android-beta-promo-title', 'Probá la app de ' + TITLE + ' para Android');
+    const sub = el('p', 'android-beta-promo-subtitle', 'Está en prueba en Google Play y con vos nos ayudás a publicarla para todos. Son 3 pasos, con la misma cuenta de Google en los tres:');
+    const pasos = el('div', 'android-beta-form');
+    pasos.style.cssText = 'display:flex;flex-direction:column;gap:.5rem';
+    [['1. Unite al grupo de prueba', GRUPO], ['2. Activá la prueba', PRUEBA], ['3. Instalá ' + TITLE + ' desde Play', PLAY]].forEach(([t, url], i) => {
+      const a = el('a', 'btn ' + (i === 2 ? 'btn-accent ' : '') + 'android-beta-submit', t);
+      a.href = url; a.target = '_blank'; a.rel = 'noopener';
+      a.style.cssText = 'display:block;text-align:center;text-decoration:none';
+      if (i === 2) a.addEventListener('click', () => store('l', s => s.setItem(NEVER_KEY, '1')));
+      pasos.appendChild(a);
+    });
+    const nota = el('p', 'android-beta-promo-subtitle', 'Te llevás la medalla 📱 Tester de la app. Si tenés la app que se baja de la página, desinstalala antes: es la misma, pero Play no la deja instalar encima.');
+    nota.style.cssText = 'font-size:.8125rem;margin-top:.75rem';
+    const actions = el('div', 'android-beta-promo-actions');
+    const later = el('button', 'btn android-beta-promo-later', 'Más tarde');
+    later.type = 'button';
+    later.addEventListener('click', close);
+    actions.appendChild(later);
+    const label = el('label', 'android-beta-promo-dismiss-label');
+    const check = el('input');
+    check.type = 'checkbox';
+    check.addEventListener('change', () => store('l', s => check.checked ? s.setItem(NEVER_KEY, '1') : s.removeItem(NEVER_KEY)));
+    label.append(check, document.createTextNode(' No mostrar de nuevo'));
+    card.append(icon, badge, title, sub, pasos, nota, actions, label);
+    overlay.appendChild(card);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    return overlay;
+  }
 
   function build() {
+    if (descarga === 'Android') return buildPlay();
     const steps = deferred || descarga ? null : manualSteps();
     if (!deferred && !steps && !descarga) return null; // navegador sin forma de instalar (por ejemplo Firefox en Mac)
 

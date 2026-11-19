@@ -16929,6 +16929,8 @@ var puenteSinUbicacion = (function () {
     const u = usuario();
     if (!u) { if (++tries < 120) setTimeout(esperar, 500); return; }
     if (u.isGuest) return;
+    // la app de Google Play, durante la prueba: la medalla "Tester de la app" (tester-play.js), una vez por sesion
+    if (esApp() && ses('puente_app_play') && !ses('puente_tester_avisado')) { try { window.app.socket.emit('puente-tester-play'); ses('puente_tester_avisado', '1'); } catch { /* sin socket */ } }
     // /app?opinion=1 (desde un mail): se abre ya
     if (q.get('opinion') === '1') { setTimeout(abrir, 1500); return; }
     if (!esApp()) return;
