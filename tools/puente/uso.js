@@ -59,6 +59,8 @@ async function handle(req, res, p, u, h) {
       for (const [k, n] of filas) poner.run(dia, user.id, k, n, 0);
       if (visitas) poner.run(dia, user.id, filas.length ? filas[0][0] : 'otros', 0, visitas);
       if (total || visitas) activo.run(dia, user.id);
+      // (si es desde la app de Android, tambien aparte: la pestaña "App" del panel, tester-play.js)
+      if (body.a === 'play' || body.a === 'apk') { try { require('./tester-play.js').uso(dia, user.id, body.a, filas, visitas); } catch (err) { warn('uso: app:', err.message); } }
     })();
   } catch (err) { warn('uso:', err.message); }
   return h.json(res, 200, { ok: true });

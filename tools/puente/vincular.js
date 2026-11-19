@@ -1410,6 +1410,11 @@ async function handle(req, res) {
     return back(ajeno ? { ok: '1', historial: 'ajeno' } : { ok: '1', mensajes: String(moved) });
   }
 
+  // La pestaña "App" del panel: los testers de Google Play (tester-play.js)
+  if (p === '/puente/api/admin/app') {
+    const r = await require('./tester-play.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
   // "Mandar mi opinión" sobre la app (opiniones.js)
   if (p === '/puente/api/opinion') {
     const r = await require('./opiniones.js').handle(req, res, p, u, { sessionUser, json, readJson });

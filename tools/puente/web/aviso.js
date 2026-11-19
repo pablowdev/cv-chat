@@ -3446,6 +3446,9 @@ function leido(sc) {
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     const jg = page.querySelector('.pj-vista'); if (jg) jg.hidden = v !== 'juegos';
     if (v === 'juegos' && !page.querySelector('.pj-cuerpo').childNodes.length) cargarJuegosEst();
+    // La app de Android en Google Play (tester-play.js): en vivo mientras se mira
+    const ap = page.querySelector('.pa2-vista'); if (ap) ap.hidden = v !== 'app';
+    if (v === 'app') cargarApp(); else clearTimeout(appT);
     if (v === 'mudanza') cargarMudanza();
     // Propuestas de emojis y stickers (la arma el bloque de las propuestas, al final)
     const pp = page.querySelector('.ppz-vista'); if (pp) pp.hidden = v !== 'propuestas';
@@ -3462,6 +3465,107 @@ function leido(sc) {
     if (v === 'marketplace') cargarMarketplace();
     if (v === 'estadisticas' && !page.querySelector('.pe-cuerpo').childNodes.length) cargarEstadisticas();
   }
+  // Pestaña "App" (tester-play.js): la prueba de la app de Android en Google Play, en vivo. Cuantos testers hay y
+  // cuantos la usan cada dia (Google pide 12 o mas durante 14 dias), quienes son, cuanto la usan y en que, a quienes
+  // conviene invitar y lo que opinan. Se actualiza sola cada 30 segundos mientras se mira
+  let appT = null;
+  function armarVistaApp() {
+    const v = el('div', 'pe-vista pa2-vista'); v.hidden = true;
+    v.appendChild(el('div', 'pe-cuerpo pa2-cuerpo'));
+    return v;
+  }
+  function cargarApp(silencioso) {
+    const box = page && page.querySelector('.pa2-cuerpo');
+    if (!box) return;
+    if (!silencioso) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…')); }
+    fetch('/puente/api/admin/app', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarApp(box, d); })
+      .catch(() => { if (page && !silencioso) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar lo de la app.')); } });
+    clearTimeout(appT);
+    appT = setTimeout(() => { if (page && vista === 'app' && document.visibilityState === 'visible') cargarApp(true); }, 30000);
+  }
+  const haceApp = (ms) => {
+    if (!ms) return '—';
+    const m = Math.round((Date.now() - ms) / 60e3);
+    return m < 2 ? 'recién' : m < 60 ? `hace ${m} min` : m < 36 * 60 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} días`;
+  };
+  function personaApp(p) {
+    const n = el('span', 'pa2-persona');
+    const a = el('span', 'pa2-av');
+    if (p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.onerror = () => { i.remove(); a.textContent = (p.nombre || '?').charAt(0).toUpperCase(); }; a.appendChild(i); }
+    else a.textContent = (p.nombre || '?').charAt(0).toUpperCase();
+    const b = el('button', 'pa2-nombre', p.nombre); b.type = 'button'; b.title = 'Ver perfil';
+    b.addEventListener('click', () => abrirPerfil(p.id));
+    n.append(a, b);
+    return n;
+  }
+  function pintarApp(box, d) {
+    const sc = box.parentNode, scroll = sc ? sc.scrollTop : 0; // (la que se desplaza es la vista)
+    box.textContent = '';
+    const R = d.resumen, P = d.prueba;
+    // 1. En pocas palabras, y lo que pide Google
+    const ul = el('ul', 'pe-resumen');
+    ul.appendChild(frase([['b', fmt(R.testers)], R.testers === 1 ? ' persona abrió' : ' personas abrieron', ' la app de Google Play desde que se mide (tienen la medalla 📱 Tester de la app)', R.nuevos7 ? `; ${fmt(R.nuevos7)} en los últimos 7 días.` : '.']));
+    ul.appendChild(frase(['Hoy la usaron ', ['b', fmt(R.activosHoy)], R.activosHoy === 1 ? ' persona' : ' personas', R.minHoy ? ` (${duracion(R.minHoy)} en total)` : '', '; en los últimos 7 días, ', ['b', fmt(R.activos7)], R.min7 ? ` (${duracion(R.min7)})` : '', '.']));
+    const faltan = Math.max(0, 14 - P.transcurridos);
+    ul.appendChild(frase(['Google pide por lo menos ', ['b', String(P.minimo)], ' testers durante 14 días: van ', ['b', String(P.transcurridos)], ' de 14' + (faltan ? ` (se puede volver a pedir producción el ${P.hasta.slice(8, 10)}/${P.hasta.slice(5, 7)})` : ' (ya se puede volver a pedir producción)') + '.']));
+    if (R.apk7) ul.appendChild(frase(['Además, ', ['b', fmt(R.apk7)], R.apk7 === 1 ? ' persona usó' : ' personas usaron', ' la app que se baja de la página (no cuenta para Google).']));
+    box.appendChild(tarjeta('En pocas palabras', ul, 'pe-ancha pe-resumen-caja'));
+
+    // 2. Los totales
+    const tot = el('div', 'pe-totales');
+    const dato = (l, v, nota) => { const c = el('div', 'pe-total'); c.append(el('div', 'pe-total-l', l), el('div', 'pe-total-n', v)); if (nota) c.appendChild(el('div', 'pe-nota', nota)); tot.appendChild(c); };
+    dato('Testers', fmt(R.testers), 'Abrieron la app de Play');
+    dato('Hoy en la app', fmt(R.activosHoy), R.minHoy ? duracion(R.minHoy) : '');
+    dato('Últimos 7 días', fmt(R.activos7), R.min7 ? duracion(R.min7) : '');
+    dato('Últimos 14 días', fmt(R.activos14), 'Usaron la app de Play');
+    dato('Prueba de Google', P.transcurridos + ' / 14 días', `Mínimo ${P.minimo} testers`);
+    box.appendChild(tot);
+
+    // 3. Por dia
+    const g = el('div');
+    g.innerHTML = barritas(d.serie.play, d.serie.dias.map(x => x.slice(8, 10) + '/' + x.slice(5, 7)), '#23a55a');
+    g.appendChild(el('div', 'pe-nota', `Personas que usaron la app de Google Play cada día. La línea de Google: ${P.minimo} o más.`));
+    box.appendChild(tarjeta('Cada día, en la app', g, 'pe-ancha'));
+
+    // 4. Los testers
+    const t = el('div', 'pe-tabla');
+    const cab = ['Tester', 'Última vez', 'Días (de 14)', 'Tiempo (14 días)', 'Hoy', 'Lo que más usa', 'Opiniones'];
+    const fila = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) minmax(5.5rem, 1fr) minmax(4.5rem, .7fr) minmax(5.5rem, 1fr) minmax(4rem, .7fr) minmax(9rem, 2fr) minmax(4.5rem, .7fr)'; for (const c of celdas) { const x = el('span'); if (c instanceof Node) x.appendChild(c); else x.textContent = c; f.appendChild(x); } return f; };
+    t.appendChild(fila(cab, 'pe-tabla-cab'));
+    if (!d.testers.length) t.appendChild(el('div', 'pm-sin', 'Todavía nadie abrió la app de Google Play desde que se mide.'));
+    for (const x of d.testers) {
+      t.appendChild(fila([personaApp(x), haceApp(x.ultimo), x.dias14 + (x.dias14 >= 7 ? ' 🔥' : ''), x.min14 ? duracion(x.min14) : '—', x.minHoy ? duracion(x.minHoy) : '—',
+        x.top.length ? x.top.map(s => `${s.que} (${duracion(s.min)})`).join(' · ') : '—', x.opiniones ? String(x.opiniones) : '—'], x.ultimoDia === d.hoy ? 'pa2-hoy' : ''));
+    }
+    const ct = el('div', 'pa2-scroll'); ct.appendChild(t);
+    ct.appendChild(el('div', 'pe-nota', 'El tiempo es el que tuvieron la app a la vista y en uso. "Lo que más usa" son las secciones en las que más tiempo pasaron (canales, juegos, mensajes directos, foro). Tocá un nombre para ver su perfil y mandarle un mensaje.'));
+    box.appendChild(tarjeta('Los testers', ct, 'pe-ancha'));
+
+    // 5. A quienes invitar
+    const ci = el('div', 'pe-tabla');
+    const filaC = (celdas, cls) => { const f = el('div', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) minmax(6rem, 1fr) minmax(5rem, .8fr) minmax(8rem, 1.4fr)'; for (const c of celdas) { const x = el('span'); if (c instanceof Node) x.appendChild(c); else x.textContent = c; f.appendChild(x); } return f; };
+    ci.appendChild(filaC(['Persona', 'En CV Chat (7 días)', 'Días', 'Nota'], 'pe-tabla-cab'));
+    for (const x of d.candidatos) ci.appendChild(filaC([personaApp(x), duracion(x.min7), String(x.dias7), x.apk ? 'Usa la app del APK: que se pase a la de Play' : '']));
+    const cc = el('div', 'pa2-scroll'); cc.appendChild(ci);
+    cc.appendChild(el('div', 'pe-nota', 'La gente que más usó CV Chat esta semana y todavía no abrió la app de Play. Mandales el enlace: https://circulovicioso.club/tester'));
+    box.appendChild(tarjeta('A quiénes invitar', cc, 'pe-ancha'));
+
+    // 6. Opiniones
+    const op = el('div', 'pa2-opiniones');
+    if (!d.opiniones.length) op.appendChild(el('div', 'pm-sin', 'Todavía no llegó ninguna opinión.'));
+    for (const o of d.opiniones) {
+      const c = el('div', 'pa2-opinion');
+      const cab2 = el('div', 'pa2-op-cab');
+      cab2.append(personaApp({ id: o.user_id, nombre: o.nombre }), el('span', 'pa2-op-meta', [o.puntaje ? '★'.repeat(o.puntaje) + '☆'.repeat(5 - o.puntaje) : '', o.plataforma === 'android-app' ? 'app de Android' + (o.version ? ' ' + o.version : '') : (o.plataforma || 'web'), haceApp(o.cuando)].filter(Boolean).join(' · ')));
+      c.append(cab2, el('div', 'pa2-op-texto', o.texto));
+      op.appendChild(c);
+    }
+    box.appendChild(tarjeta('Lo que opinan', op, 'pe-ancha'));
+    box.appendChild(el('div', 'pe-nota pa2-al-dia', 'Se actualiza sola cada 30 segundos · ' + new Date(d.ahora).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })));
+    if (sc) sc.scrollTop = scroll;
+  }
   // Pestaña "Mudanza" (mudanza-plan.js): el cronograma que el servidor cumple solo, como va, y los
   // botones para pausar, posponer, hacer un paso ahora, cambiar un texto o deshacer lo de Discord
   function armarVistaMudanza() {
@@ -3978,7 +4082,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['app', 'App'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -4053,7 +4157,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
     verVista('miembros');
     // Las pestañas de los juegos que traen la suya (en su ficha, "admin": Admin → Hotel): una pagina del juego en un marco
@@ -15813,7 +15917,10 @@ var puenteSinUbicacion = (function () {
   function mandar() {
     const tk = token();
     if (!tk || (!Object.keys(suma).length && !visitas)) return;
-    const body = JSON.stringify({ s: suma, v: visitas });
+    // (desde la app de Android: cual, para la pestaña App del panel; tester-play.js)
+    let app;
+    try { if (window.__puentePlataforma === 'android-app') app = sessionStorage.getItem('puente_app_play') ? 'play' : 'apk'; } catch { /* sin almacenamiento */ }
+    const body = JSON.stringify({ s: suma, v: visitas, a: app });
     suma = {}; visitas = 0;
     try { fetch('/puente/api/uso', { method: 'POST', keepalive: true, headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body }).catch(() => {}); } catch { /* la proxima */ }
   }
