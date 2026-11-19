@@ -3551,6 +3551,8 @@ function leido(sc) {
       b.addEventListener('click', () => {
         w.textContent = '';
         const t = el('textarea', 'pa2-op-ta'); t.maxLength = 240; t.rows = 3; t.placeholder = 'Le llega como aviso, con tu nombre (hasta 240 letras)';
+        const lbl = el('label', 'pa2-op-play'); const chk = el('input'); chk.type = 'checkbox'; chk.checked = o.plataforma === 'android-app';
+        lbl.append(chk, document.createTextNode(' Que el aviso le abra su opinión lista para copiarla en Google Play'));
         const acc = el('div', 'pa2-op-acc');
         const cancelar = el('button', 'pa2-invitar hecho', 'Cancelar'); cancelar.type = 'button';
         const mandar = el('button', 'pa2-invitar', 'Mandar'); mandar.type = 'button';
@@ -3560,13 +3562,13 @@ function leido(sc) {
           if (texto.length < 2) return t.focus();
           mandar.disabled = true; mandar.textContent = 'Mandando…';
           try {
-            const r = await fetch('/puente/api/admin/opinion/responder', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: o.id, texto }) });
+            const r = await fetch('/puente/api/admin/opinion/responder', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: o.id, texto, play: chk.checked }) });
             const j = await r.json().catch(() => null);
             if (!r.ok) throw new Error((j && j.error) || 'No se pudo.');
             o.respuesta = texto; o.respondida = j.respondida; pintar();
           } catch (err) { mandar.disabled = false; mandar.textContent = 'Mandar'; if (window.app && window.app._showToast) window.app._showToast(err.message || 'No se pudo.', 'error'); }
         });
-        acc.append(cancelar, mandar); w.append(t, acc); t.focus();
+        acc.append(cancelar, mandar); w.append(t, lbl, acc); t.focus();
       });
       w.appendChild(b);
     };
@@ -17153,6 +17155,12 @@ var puenteSinUbicacion = (function () {
     if (u.isGuest) return;
     // la app de Google Play, durante la prueba: la medalla "Tester de la app" (tester-play.js), una vez por sesion
     if (esApp() && ses('puente_app_play') && !ses('puente_tester_avisado')) { try { const de = (document.cookie.match(/(?:^|; )cv_tester_de=([a-z0-9-]{1,20})/) || [])[1] || null; window.app.socket.emit('puente-tester-play', { de }); ses('puente_tester_avisado', '1'); } catch { /* sin socket */ } }
+    // /app?opinion-play=<id> (el aviso de una respuesta a su opinion): su opinion lista para copiarla en Google Play
+    if (/^[0-9]{1,9}$/.test(q.get('opinion-play') || '')) {
+      fetch('/puente/api/opinion/mia?id=' + q.get('opinion-play'), { headers: { Authorization: 'Bearer ' + ls('haven_token') } })
+        .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && d.texto) setTimeout(() => enPlay(d.texto), 1200); }).catch(() => {});
+      return;
+    }
     // /app?opinion=1 (desde un mail): se abre ya
     if (q.get('opinion') === '1') { setTimeout(abrir, 1500); return; }
     if (!esApp()) return;

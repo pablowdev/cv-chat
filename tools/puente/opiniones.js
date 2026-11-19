@@ -5,7 +5,9 @@
 //
 //  POST /puente/api/opinion   { texto, puntaje (1-5, opcional), plataforma, version }   (sesion, no invitados)
 //  POST /puente/api/admin/opinion/responder   { id, texto }   (solo administradores): la respuesta le llega a quien
-//       opino como aviso (campanita y celular), con el nombre de quien responde, y queda guardada con la opinion
+//       opino como aviso (campanita y celular), con el nombre de quien responde, y queda guardada con la opinion.
+//       Con { play: true }, tocar el aviso abre /app?opinion-play=<id>: su opinion lista para copiarla en Google Play
+//  GET  /puente/api/opinion/mia?id=   (sesion) el texto de una opinion propia (para copiarla en Google Play)
 
 let db = null, log = () => {}, warn = () => {};
 const POR_DIA = 5;
@@ -25,6 +27,13 @@ const limpio = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000
 
 async function handle(req, res, p, u, h) {
   if (p === '/puente/api/admin/opinion/responder') return responder(req, res, h);
+  if (p === '/puente/api/opinion/mia') {
+    if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
+    const user = h.sessionUser(req);
+    if (!user) return h.json(res, 401, { error: 'sin sesion' });
+    const o = db.prepare('SELECT texto FROM puente_opiniones WHERE id = ? AND user_id = ?').get(Number(u.searchParams.get('id')) || 0, user.id);
+    return o ? h.json(res, 200, { texto: o.texto }) : h.json(res, 404, { error: 'No está.' });
+  }
   if (p !== '/puente/api/opinion') return false;
   if (req.method !== 'POST') return h.json(res, 405, { error: 'metodo' });
   const user = h.sessionUser(req);
@@ -74,8 +83,9 @@ async function responder(req, res, h) {
   db.prepare('UPDATE puente_opiniones SET respuesta = ?, respondida = ?, respondio = ? WHERE id = ?').run(texto, Date.now(), yo.id, o.id);
   const nombre = yo.display_name || yo.username;
   const titulo = `${nombre} respondió tu opinión de CV Chat`;
-  try { require('./campana.js').registrar(o.user_id, { origen: 'chat', titulo, texto, url: '/app', clave: 'opinion-resp-' + o.id + '-' + Date.now() }); } catch (err) { warn('opiniones: campanita:', err.message); }
-  try { require('./avisos.js').avisarUsuario(o.user_id, { title: titulo, body: texto, url: '/app', tag: 'puente-opinion-resp-' + o.id }); } catch (err) { warn('opiniones: aviso:', err.message); }
+  const url = b.play ? '/app?opinion-play=' + o.id : '/app';
+  try { require('./campana.js').registrar(o.user_id, { origen: 'chat', titulo, texto, url, clave: 'opinion-resp-' + o.id + '-' + Date.now() }); } catch (err) { warn('opiniones: campanita:', err.message); }
+  try { require('./avisos.js').avisarUsuario(o.user_id, { title: titulo, body: texto, url, tag: 'puente-opinion-resp-' + o.id }); } catch (err) { warn('opiniones: aviso:', err.message); }
   log(`opiniones: respondida la #${o.id}`);
   return h.json(res, 200, { ok: true, respondida: Date.now() });
 }
