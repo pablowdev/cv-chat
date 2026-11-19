@@ -141,7 +141,7 @@ function datos() {
 
   let opiniones = [];
   try {
-    opiniones = db.prepare('SELECT o.id, o.texto, o.puntaje, o.plataforma, o.version, o.cuando, o.user_id FROM puente_opiniones o ORDER BY o.id DESC LIMIT 30').all()
+    opiniones = db.prepare('SELECT o.id, o.texto, o.puntaje, o.plataforma, o.version, o.cuando, o.user_id, o.respuesta, o.respondida FROM puente_opiniones o ORDER BY o.id DESC LIMIT 30').all()
       .map((o) => ({ ...o, nombre: (persona.get(o.user_id) || {}).nombre || '(cuenta borrada)', esTester: ids.has(o.user_id) }));
   } catch { /* sin opiniones */ }
 

@@ -4,6 +4,8 @@
 // para la prueba de Google Play: juntar lo que dicen los testers y arreglarlo en las versiones nuevas.
 //
 //  POST /puente/api/opinion   { texto, puntaje (1-5, opcional), plataforma, version }   (sesion, no invitados)
+//  POST /puente/api/admin/opinion/responder   { id, texto }   (solo administradores): la respuesta le llega a quien
+//       opino como aviso (campanita y celular), con el nombre de quien responde, y queda guardada con la opinion
 
 let db = null, log = () => {}, warn = () => {};
 const POR_DIA = 5;
@@ -13,11 +15,16 @@ function setup(ctx) {
   db.exec(`CREATE TABLE IF NOT EXISTS puente_opiniones (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, texto TEXT NOT NULL, puntaje INTEGER,
     plataforma TEXT, version TEXT, cuando INTEGER NOT NULL)`);
+  const cols = new Set(db.prepare('PRAGMA table_info(puente_opiniones)').all().map((c) => c.name));
+  if (!cols.has('respuesta')) db.exec('ALTER TABLE puente_opiniones ADD COLUMN respuesta TEXT');
+  if (!cols.has('respondida')) db.exec('ALTER TABLE puente_opiniones ADD COLUMN respondida INTEGER');
+  if (!cols.has('respondio')) db.exec('ALTER TABLE puente_opiniones ADD COLUMN respondio INTEGER');
 }
 
 const limpio = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, n);
 
 async function handle(req, res, p, u, h) {
+  if (p === '/puente/api/admin/opinion/responder') return responder(req, res, h);
   if (p !== '/puente/api/opinion') return false;
   if (req.method !== 'POST') return h.json(res, 405, { error: 'metodo' });
   const user = h.sessionUser(req);
@@ -50,6 +57,27 @@ async function handle(req, res, p, u, h) {
   } catch (err) { warn('opiniones: push:', err.message); }
   log(`opiniones: una de #${yo.id} desde ${plataforma || '?'}`);
   return h.json(res, 200, { ok: true });
+}
+
+// Responder una opinion: le llega a quien opino (campanita y celular) y queda guardada
+async function responder(req, res, h) {
+  if (req.method !== 'POST') return h.json(res, 405, { error: 'metodo' });
+  const user = h.sessionUser(req);
+  if (!user) return h.json(res, 401, { error: 'sin sesion' });
+  const yo = db.prepare('SELECT id, username, display_name, is_admin FROM users WHERE id = ?').get(user.id);
+  if (!yo || !yo.is_admin) return h.json(res, 403, { error: 'solo administradores' });
+  const b = (await h.readJson(req, 6000)) || {};
+  const o = db.prepare('SELECT id, user_id, texto FROM puente_opiniones WHERE id = ?').get(Number(b.id) || 0);
+  if (!o) return h.json(res, 404, { error: 'No existe esa opinión.' });
+  const texto = limpio(b.texto, 240); // (lo que entra entero en la campanita)
+  if (texto.length < 2) return h.json(res, 400, { error: 'Escribí la respuesta.' });
+  db.prepare('UPDATE puente_opiniones SET respuesta = ?, respondida = ?, respondio = ? WHERE id = ?').run(texto, Date.now(), yo.id, o.id);
+  const nombre = yo.display_name || yo.username;
+  const titulo = `${nombre} respondió tu opinión de CV Chat`;
+  try { require('./campana.js').registrar(o.user_id, { origen: 'chat', titulo, texto, url: '/app', clave: 'opinion-resp-' + o.id + '-' + Date.now() }); } catch (err) { warn('opiniones: campanita:', err.message); }
+  try { require('./avisos.js').avisarUsuario(o.user_id, { title: titulo, body: texto, url: '/app', tag: 'puente-opinion-resp-' + o.id }); } catch (err) { warn('opiniones: aviso:', err.message); }
+  log(`opiniones: respondida la #${o.id}`);
+  return h.json(res, 200, { ok: true, respondida: Date.now() });
 }
 
 module.exports = { setup, handle };

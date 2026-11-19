@@ -3480,7 +3480,7 @@ function leido(sc) {
     if (!silencioso) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Cargando…')); }
     fetch('/puente/api/admin/app', { headers: { Authorization: 'Bearer ' + token() } })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(d => { if (page) pintarApp(box, d); })
+      .then(d => { if (page && !(silencioso && box.querySelector('.pa2-op-ta'))) pintarApp(box, d); }) // (no se rearma mientras se escribe una respuesta)
       .catch(() => { if (page && !silencioso) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudo cargar lo de la app.')); } });
     clearTimeout(appT);
     appT = setTimeout(() => { if (page && vista === 'app' && document.visibilityState === 'visible') cargarApp(true); }, 30000);
@@ -3537,6 +3537,41 @@ function leido(sc) {
       b.disabled = false;
     });
     return b;
+  }
+  // Responder una opinion: le llega como aviso (campanita y celular) con el nombre de quien responde (opiniones.js)
+  function respuestaOpinion(o) {
+    const w = el('div', 'pa2-op-resp');
+    const pintar = () => {
+      w.textContent = '';
+      if (o.respuesta) {
+        w.append(el('div', 'pa2-op-resp-t', 'Tu respuesta · ' + haceApp(o.respondida)), el('div', 'pa2-op-texto', o.respuesta));
+        return;
+      }
+      const b = el('button', 'pa2-invitar', 'Responder'); b.type = 'button';
+      b.addEventListener('click', () => {
+        w.textContent = '';
+        const t = el('textarea', 'pa2-op-ta'); t.maxLength = 240; t.rows = 3; t.placeholder = 'Le llega como aviso, con tu nombre (hasta 240 letras)';
+        const acc = el('div', 'pa2-op-acc');
+        const cancelar = el('button', 'pa2-invitar hecho', 'Cancelar'); cancelar.type = 'button';
+        const mandar = el('button', 'pa2-invitar', 'Mandar'); mandar.type = 'button';
+        cancelar.addEventListener('click', pintar);
+        mandar.addEventListener('click', async () => {
+          const texto = t.value.trim();
+          if (texto.length < 2) return t.focus();
+          mandar.disabled = true; mandar.textContent = 'Mandando…';
+          try {
+            const r = await fetch('/puente/api/admin/opinion/responder', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: o.id, texto }) });
+            const j = await r.json().catch(() => null);
+            if (!r.ok) throw new Error((j && j.error) || 'No se pudo.');
+            o.respuesta = texto; o.respondida = j.respondida; pintar();
+          } catch (err) { mandar.disabled = false; mandar.textContent = 'Mandar'; if (window.app && window.app._showToast) window.app._showToast(err.message || 'No se pudo.', 'error'); }
+        });
+        acc.append(cancelar, mandar); w.append(t, acc); t.focus();
+      });
+      w.appendChild(b);
+    };
+    pintar();
+    return w;
   }
   function pintarApp(box, d) {
     const sc = box.parentNode, scroll = sc ? sc.scrollTop : 0; // (la que se desplaza es la vista)
@@ -3614,6 +3649,7 @@ function leido(sc) {
       const cab2 = el('div', 'pa2-op-cab');
       cab2.append(personaApp({ id: o.user_id, nombre: o.nombre }), el('span', 'pa2-op-meta', [o.puntaje ? '★'.repeat(o.puntaje) + '☆'.repeat(5 - o.puntaje) : '', o.plataforma === 'android-app' ? 'app de Android' + (o.version ? ' ' + o.version : '') : (o.plataforma || 'web'), haceApp(o.cuando)].filter(Boolean).join(' · ')));
       c.append(cab2, el('div', 'pa2-op-texto', o.texto));
+      c.appendChild(respuestaOpinion(o));
       op.appendChild(c);
     }
     box.appendChild(tarjeta('Lo que opinan', op, 'pe-ancha'));
@@ -17081,9 +17117,32 @@ var puenteSinUbicacion = (function () {
       fin();
       ls('puente_opinion_pedida', '1');
       toast('¡Gracias! Lo vamos a leer.', 'success');
+      // En la app de Google Play: que la misma opinion llegue tambien a Google (los comentarios privados de la prueba, que
+      // ve Google para aprobar la app). Se copia y se abre la pagina de la app en Play para pegarla
+      if (ses('puente_app_play')) setTimeout(() => enPlay(texto), 600);
     });
     document.body.appendChild(fondo);
     setTimeout(() => t.focus(), 50);
+  }
+  const PLAY = 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat';
+  function enPlay(texto) {
+    const fondo = el('div', 'pop-fondo');
+    const caja = el('div', 'pop-caja'); caja.setAttribute('role', 'dialog'); caja.setAttribute('aria-modal', 'true');
+    caja.append(el('div', 'pop-t', '¿Nos ayudás con Google?'),
+      el('div', 'pop-s', 'Google aprueba la app según las opiniones que los testers dejan en Google Play. Copiamos lo que escribiste: pegalo en la página de la app, en "Comentarios privados para el desarrollador".'));
+    const acc = el('div', 'pop-acc');
+    const no = el('button', 'pop-btn', 'Ahora no'); no.type = 'button';
+    const si = el('button', 'pop-btn pop-si', 'Pegarla en Google Play'); si.type = 'button';
+    acc.append(no, si); caja.appendChild(acc); fondo.appendChild(caja);
+    const fin = () => fondo.remove();
+    no.addEventListener('click', fin);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) fin(); });
+    si.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(texto); toast('Copiada: pegala en Google Play', 'success'); } catch { /* sin portapapeles: se abre igual */ }
+      fin();
+      window.open(PLAY, '_blank', 'noopener');
+    });
+    document.body.appendChild(fondo);
   }
   window.puenteOpinion = { abrir, esApp };
 
