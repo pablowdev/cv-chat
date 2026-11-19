@@ -11918,7 +11918,7 @@ document.addEventListener('pointerdown', (ev) => {
     ifr.title = j.nombre; ifr.allow = (c.permisos || []).join('; '); ifr.setAttribute('allowfullscreen', ''); ifr.loading = 'eager';
     let ultimo = 0;
     const marcar = () => { const t = Date.now(); if (t - ultimo < 2000) return; ultimo = t; try { window.__puenteUsoActivo && window.__puenteUsoActivo(); } catch { /* sin uso */ } };
-    ifr.addEventListener('load', () => { try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); if (c.foco) w.focus(); } catch { /* otro origen */ } });
+    ifr.addEventListener('load', () => { if (oculto) { try { ifr.contentWindow.postMessage({ puente: 'segundo-plano', oculto: true }, location.origin); } catch { /* otro origen */ } } /* (si se recarga estando en segundo plano, que lo sepa) */ try { const w = ifr.contentWindow; for (const ev of ['pointerdown', 'pointermove', 'keydown', 'touchstart']) w.addEventListener(ev, marcar, { passive: true, capture: true }); if (c.foco) w.focus(); } catch { /* otro origen */ } });
     marco.appendChild(ifr); b.appendChild(marco); page.appendChild(b);
   }
   async function inicio(which) {
