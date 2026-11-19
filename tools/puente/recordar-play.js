@@ -10,21 +10,22 @@ const Database = require(require.resolve('better-sqlite3', { paths: ['/app'] }))
 const email = require('/tools/puente/email.js');
 
 const PAUSA_MS = 1200;
-const DESCARGAR = 'https://circulovicioso.club/descargar#play';
-const OPINION = 'https://chat.circulovicioso.club/app?opinion=1';
+// (desde el 19/11: la pagina de un solo boton, con la marca de que viene del mail para la pestaña App del panel)
+const TESTER = 'https://circulovicioso.club/tester?de=mail';
+const PLAY = 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat';
 
-const ASUNTO = 'Una mano con la app de CV Chat para Android';
-const TITULO = 'Usá la app de Android estas dos semanas';
+const ASUNTO = 'Probá la app de CV Chat para Android antes que nadie';
+const TITULO = 'Sé tester de la app de Android';
 const parrafos = (nombre) => [
   `¡Hola ${nombre}! La app de CV Chat para Android ya está en Google Play, todavía en prueba.`,
-  'Antes de publicarla para todos, Google nos pidió dos semanas más de prueba, y lo que mira es que la gente la use de verdad. Si tenés Android, nos ayudás un montón usando la app en vez de la página hasta el 2 de diciembre, aunque sea un ratito por día.',
-  'Si todavía no la bajaste, son tres pasos (sumarte al grupo de prueba, activarla e instalarla desde Play):',
-  { texto: 'Cómo bajar la app de Android →', url: DESCARGAR },
-  'Y si algo anda mal o se te ocurre una mejora, contanos. En la app, mantené apretado el ícono y tocá "Opinar", o entrá acá:',
-  { texto: 'Mandar mi opinión →', url: OPINION },
-  'Lo leemos todo y lo vamos arreglando en las versiones nuevas. ¡Gracias por bancar al club!',
+  'Para publicarla para todos, Google pide que la gente la use estas semanas y deje su opinión. Si tenés Android, nos ayudás un montón usando la app en vez de la página, aunque sea un ratito por día.',
+  'Es un botón y seguís los pasos, y te llevás la medalla 📱 Tester de la app:',
+  { texto: 'Ser tester de la app →', url: TESTER },
+  'Y cuando ya la tengas, dejá un comentario en Google Play: es lo que más mira Google para aprobarla. Abrí la app en Play y escribí en "Comentarios privados para el desarrollador" qué te parece:',
+  { texto: 'Dejar mi comentario en Google Play →', url: PLAY },
+  'Si algo anda mal o se te ocurre una mejora, también podés mantener apretado el ícono de la app y tocar "Opinar". ¡Gracias por bancar al club!',
 ];
-const BOTON = ['Cómo bajar la app', DESCARGAR];
+const BOTON = ['Ser tester', TESTER];
 const PIE = 'Te llega porque tenés una cuenta en CV Chat con este email confirmado. Es un único mail.';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
