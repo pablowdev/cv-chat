@@ -1,18 +1,17 @@
-/* /tester: los 3 pasos para ser tester de la app de Android en Google Play, uno debajo del otro */
-.tester { display: flex; flex-direction: column; gap: 16px; max-width: 640px; margin: 24px auto 0; }
+/* /tester: un solo boton que guia los 3 pasos de la prueba de Google Play */
+.tester { display: flex; flex-direction: column; gap: 16px; max-width: 560px; margin: 24px auto 0; }
 .tester__intro h1 { margin: 8px 0 12px; }
-.tester__intro p:not(.rotulo), .tester__paso p:not(.tester__num), .tester__fin p { color: var(--fg-2); margin: 0; }
-.tester__intro p + p { margin-top: 10px; }
+.tester__intro p:not(.rotulo), .tester__fin p { color: var(--fg-2); margin: 0; }
 .tester__intro .rotulo { color: var(--accent); }
-.tester__aviso { padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; color: var(--fg) !important; }
-.tester__paso .caja__cuerpo { position: relative; padding-left: 72px; }
-.tester__num { position: absolute; left: 20px; top: 20px; width: 36px; height: 36px; margin: 0; border-radius: 50%; background: var(--accent); color: #fff; font: 700 18px/36px var(--display); text-align: center; }
-.tester__paso h2 { margin: 4px 0 12px; }
-.tester__paso .btn { display: block; text-align: center; margin-bottom: 10px; }
-.tester__fin p + p { margin-top: 10px; }
+.tester__aviso { margin-top: 12px !important; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px; color: var(--fg) !important; }
+.tester__guia { margin-top: 22px; }
+.tester__barra { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; margin-bottom: 14px; }
+.tester__barra span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
+.tester__boton { display: block; text-align: center; padding-top: 16px; padding-bottom: 16px; font-size: 17px; }
+.tester__que { margin-top: 12px !important; text-align: center; }
+.tester__otra { margin-top: 14px !important; text-align: center; }
+.tester__otra a + a { margin-left: 14px; }
 @media (max-width: 720px) {
   .tester { gap: 12px; margin-top: 12px; }
   .tester .caja__cuerpo { padding: 18px; }
-  .tester__paso .caja__cuerpo { padding-left: 64px; }
-  .tester__num { left: 16px; top: 18px; }
 }

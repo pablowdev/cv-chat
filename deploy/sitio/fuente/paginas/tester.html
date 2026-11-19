@@ -3,46 +3,53 @@
     <div class="caja__cuerpo">
       <p class="rotulo">app de android · en prueba</p>
       <h1 class="titulo">Sé tester de CV Chat</h1>
-      <p>La app de CV Chat para Android está en prueba en Google Play. Con vos la publicamos para todos, y te llevás la medalla <b>📱 Tester de la app</b> en tu perfil, para siempre.</p>
+      <p>Bajate la app de CV Chat para Android antes que nadie y llevate la medalla <b>📱 Tester de la app</b>. Tocá el botón y seguilo hasta el final.</p>
       <p class="tester__aviso" id="no-android" hidden>Hacelo desde el celular Android donde vas a usar la app.</p>
-    </div>
-  </section>
 
-  <section class="caja tester__paso">
-    <div class="caja__cuerpo">
-      <p class="tester__num">1</p>
-      <h2 class="titulo-2">Unite al grupo de prueba</h2>
-      <a class="btn btn--rosa" href="https://groups.google.com/g/cv-chat-testers/about" target="_blank" rel="noopener">Unirme al grupo</a>
-      <p>Tocá <b>Unirse al grupo</b>, con la cuenta de Google de tu celular.</p>
-    </div>
-  </section>
-
-  <section class="caja tester__paso">
-    <div class="caja__cuerpo">
-      <p class="tester__num">2</p>
-      <h2 class="titulo-2">Activá la prueba</h2>
-      <a class="btn btn--rosa" href="https://play.google.com/apps/testing/club.circulovicioso.chat" target="_blank" rel="noopener">Activar la prueba</a>
-      <p>Tocá <b>Convertirse en verificador</b>. Usá la misma cuenta de Google que en el paso 1.</p>
-    </div>
-  </section>
-
-  <section class="caja tester__paso">
-    <div class="caja__cuerpo">
-      <p class="tester__num">3</p>
-      <h2 class="titulo-2">Instalá la app</h2>
-      <a class="btn btn--rosa" href="https://play.google.com/store/apps/details?id=club.circulovicioso.chat" target="_blank" rel="noopener">Instalar desde Google Play</a>
-      <p>Tocá <b>Instalar</b>, abrila y entrá con tu cuenta de CV Chat. ¡Listo, ya sos tester!</p>
+      <div class="tester__guia">
+        <div class="tester__barra" aria-hidden="true"><span id="t-barra"></span></div>
+        <a class="btn btn--rosa tester__boton" id="t-boton" target="_blank" rel="noopener" href="https://groups.google.com/g/cv-chat-testers/about">Paso 1 de 3: Unirme al grupo</a>
+        <p class="tester__que" id="t-que">En la página de Google tocá <b>Unirse al grupo</b>. Después volvé acá.</p>
+        <p class="chico tester__otra"><a href="#" id="t-atras" hidden>← Paso anterior</a> <a href="#" id="t-reiniciar" hidden>Empezar de nuevo</a></p>
+      </div>
     </div>
   </section>
 
   <section class="caja tester__fin">
     <div class="caja__cuerpo">
-      <p>Usala estas semanas como siempre. Si algo anda mal o se te ocurre una mejora, mantené apretado el ícono de la app y tocá <b>Opinar</b>.</p>
-      <p class="chico">¿Tenías la app que se bajaba de la página? Desinstalala antes del paso 3: es la misma, pero Play no deja instalarla encima. ¿Play dice que la app no está disponible? Esperá unos minutos después del paso 2 y volvé a tocar el botón.</p>
+      <p class="chico">Usá la misma cuenta de Google en los 3 pasos (la de tu celular). ¿Tenías la app que se bajaba de la página? Desinstalala antes del paso 3. ¿Play dice que la app no está disponible? Esperá unos minutos después del paso 2 y volvé a tocar el botón. Si algo anda mal en la app, mantené apretado su ícono y tocá <b>Opinar</b>.</p>
     </div>
   </section>
 </div>
 <script>
-// En la PC o el iPhone: avisar que es desde el celular Android
-(function () { if (!/Android/i.test(navigator.userAgent)) { var n = document.getElementById('no-android'); if (n) n.hidden = false; } })();
+// Un solo boton que va guiando: cada toque abre la pagina de Google de ese paso (en otra pestaña) y, al volver,
+// el boton ya es el del paso siguiente. El paso se recuerda en este navegador.
+(function () {
+  if (!/Android/i.test(navigator.userAgent)) { var n = document.getElementById('no-android'); if (n) n.hidden = false; }
+  var PASOS = [
+    { t: 'Paso 1 de 3: Unirme al grupo', url: 'https://groups.google.com/g/cv-chat-testers/about', que: 'En la página de Google tocá <b>Unirse al grupo</b>. Después volvé acá.' },
+    { t: 'Paso 2 de 3: Activar la prueba', url: 'https://play.google.com/apps/testing/club.circulovicioso.chat', que: 'Tocá <b>Convertirse en verificador</b> (o <b>Become a tester</b>). Después volvé acá.' },
+    { t: 'Paso 3 de 3: Instalar la app', url: 'https://play.google.com/store/apps/details?id=club.circulovicioso.chat', que: 'Se abre Google Play: tocá <b>Instalar</b>, abrí la app y entrá con tu cuenta de CV Chat.' },
+    { t: '¡Listo! Abrir CV Chat', url: 'https://chat.circulovicioso.club/app', que: 'Ya sos tester 🎉 La medalla aparece en tu perfil la primera vez que entrás desde la app.' },
+  ];
+  var K = 'cv_tester_paso';
+  var leer = function () { try { return Math.min(3, Math.max(0, parseInt(localStorage.getItem(K), 10) || 0)); } catch (e) { return 0; } };
+  var guardar = function (i) { try { localStorage.setItem(K, String(i)); } catch (e) { /* sin almacenamiento */ } };
+  var paso = leer();
+  var b = document.getElementById('t-boton'), que = document.getElementById('t-que'), barra = document.getElementById('t-barra');
+  var atras = document.getElementById('t-atras'), reiniciar = document.getElementById('t-reiniciar');
+  function pintar() {
+    var p = PASOS[paso];
+    b.textContent = p.t; b.href = p.url; que.innerHTML = p.que;
+    b.target = paso === 3 ? '_self' : '_blank';
+    barra.style.width = (paso / 3 * 100) + '%';
+    atras.hidden = paso === 0; reiniciar.hidden = paso === 0;
+  }
+  b.addEventListener('click', function () {
+    if (paso < 3) { var sig = paso + 1; setTimeout(function () { paso = sig; guardar(paso); pintar(); }, 400); }
+  });
+  atras.addEventListener('click', function (e) { e.preventDefault(); if (paso > 0) { paso--; guardar(paso); pintar(); } });
+  reiniciar.addEventListener('click', function (e) { e.preventDefault(); paso = 0; guardar(0); pintar(); });
+  pintar();
+})();
 </script>

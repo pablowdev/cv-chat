@@ -102,16 +102,28 @@
     const badge = el('span', 'android-beta-promo-badge', 'APP DE ANDROID · EN PRUEBA');
     badge.style.background = 'var(--accent-bright,#5865f2)';
     const title = el('h3', 'android-beta-promo-title', 'Probá la app de ' + TITLE + ' para Android');
-    const sub = el('p', 'android-beta-promo-subtitle', 'Está en prueba en Google Play y con vos nos ayudás a publicarla para todos. Son 3 pasos, con la misma cuenta de Google en los tres:');
+    const sub = el('p', 'android-beta-promo-subtitle', 'Está en prueba en Google Play: bajatela antes que nadie. Tocá el botón y seguilo hasta el final (con la cuenta de Google de tu celular).');
+    // Un solo boton que va guiando: cada toque abre la pagina de Google de ese paso y, al volver, ya es el siguiente
+    // (el paso se recuerda: cerrar el cartel y volver sigue donde iba)
+    const PASOS = [['Paso 1 de 3: Unirme al grupo', GRUPO, 'En la página de Google tocá "Unirse al grupo" y volvé acá.'],
+      ['Paso 2 de 3: Activar la prueba', PRUEBA, 'Tocá "Convertirse en verificador" y volvé acá.'],
+      ['Paso 3 de 3: Instalar la app', PLAY, 'Se abre Google Play: tocá "Instalar" y entrá con tu cuenta.']];
+    const K = 'puente_play_paso';
+    let paso = Math.min(2, Math.max(0, parseInt(store('l', s => s.getItem(K)), 10) || 0));
     const pasos = el('div', 'android-beta-form');
-    pasos.style.cssText = 'display:flex;flex-direction:column;gap:.5rem';
-    [['1. Unite al grupo de prueba', GRUPO], ['2. Activá la prueba', PRUEBA], ['3. Instalá ' + TITLE + ' desde Play', PLAY]].forEach(([t, url], i) => {
-      const a = el('a', 'btn ' + (i === 2 ? 'btn-accent ' : '') + 'android-beta-submit', t);
-      a.href = url; a.target = '_blank'; a.rel = 'noopener';
-      a.style.cssText = 'display:block;text-align:center;text-decoration:none';
-      if (i === 2) a.addEventListener('click', () => store('l', s => s.setItem(NEVER_KEY, '1')));
-      pasos.appendChild(a);
+    const a = el('a', 'btn btn-accent android-beta-submit');
+    a.target = '_blank'; a.rel = 'noopener';
+    a.style.cssText = 'display:block;text-align:center;text-decoration:none';
+    const que = el('p', 'android-beta-promo-subtitle');
+    que.style.cssText = 'font-size:.875rem;margin:.5rem 0 0';
+    const pintar = () => { a.textContent = PASOS[paso][0]; a.href = PASOS[paso][1]; que.textContent = PASOS[paso][2]; };
+    a.addEventListener('click', () => {
+      if (paso === 2) { store('l', s => { s.setItem(NEVER_KEY, '1'); s.removeItem(K); }); setTimeout(close, 400); return; }
+      const sig = paso + 1;
+      setTimeout(() => { paso = sig; store('l', s => s.setItem(K, String(paso))); pintar(); }, 400);
     });
+    pintar();
+    pasos.append(a, que);
     const nota = el('p', 'android-beta-promo-subtitle', 'Te llevás la medalla 📱 Tester de la app. Si tenés la app que se baja de la página, desinstalala antes: es la misma, pero Play no la deja instalar encima.');
     nota.style.cssText = 'font-size:.8125rem;margin-top:.75rem';
     const actions = el('div', 'android-beta-promo-actions');
