@@ -26,6 +26,24 @@
 // el boton ya es el del paso siguiente. El paso se recuerda en este navegador.
 (function () {
   if (!/Android/i.test(navigator.userAgent)) { var n = document.getElementById('no-android'); if (n) n.hidden = false; }
+  // Por donde llego (para la pestaña App del panel): ?de=... o, si no, el sitio de donde vino. Se guarda en una
+  // cookie de todo circulovicioso.club (la app de Android la lee: comparte las cookies de Chrome). La primera vale
+  try {
+    if (!/(?:^|; )cv_tester_de=/.test(document.cookie)) {
+      var q = new URLSearchParams(location.search).get('de'), r = '';
+      try { r = document.referrer ? new URL(document.referrer).hostname : ''; } catch (e) { r = ''; }
+      var de = q && /^[a-z0-9-]{1,20}$/i.test(q) ? q.toLowerCase()
+        : /(^|\.)(t\.co|x\.com|twitter\.com)$/.test(r) ? 'x'
+        : /discord/.test(r) ? 'discord'
+        : /^chat\.circulovicioso\.club$/.test(r) ? 'chat'
+        : /(^|\.)circulovicioso\.club$/.test(r) ? 'web'
+        : /instagram/.test(r) ? 'instagram'
+        : /whatsapp/.test(r) ? 'whatsapp'
+        : /google\./.test(r) ? 'google'
+        : r ? 'otro' : 'pagina';
+      document.cookie = 'cv_tester_de=' + de + '; domain=.circulovicioso.club; path=/; max-age=' + 60 * 60 * 24 * 60 + '; samesite=lax; secure';
+    }
+  } catch (e) { /* sin cookies */ }
   var PASOS = [
     { t: 'Paso 1 de 3: Unirme al grupo', url: 'https://groups.google.com/g/cv-chat-testers/about', que: 'En la página de Google tocá <b>Unirse al grupo</b>. Después volvé acá.' },
     { t: 'Paso 2 de 3: Activar la prueba', url: 'https://play.google.com/apps/testing/club.circulovicioso.chat', que: 'Tocá <b>Convertirse en verificador</b> (o <b>Become a tester</b>). Después volvé acá.' },

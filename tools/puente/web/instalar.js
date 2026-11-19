@@ -118,6 +118,8 @@
     que.style.cssText = 'font-size:.875rem;margin:.5rem 0 0';
     const pintar = () => { a.textContent = PASOS[paso][0]; a.href = PASOS[paso][1]; que.textContent = PASOS[paso][2]; };
     a.addEventListener('click', () => {
+      // (por donde llego, para la pestaña App del panel: el cartel del chat, si no habia otra antes)
+      try { if (!/(?:^|; )cv_tester_de=/.test(document.cookie)) document.cookie = 'cv_tester_de=cartel; domain=.circulovicioso.club; path=/; max-age=' + 60 * 60 * 24 * 60 + '; samesite=lax; secure'; } catch { /* sin cookies */ }
       if (paso === 2) { store('l', s => { s.setItem(NEVER_KEY, '1'); s.removeItem(K); }); setTimeout(close, 400); return; }
       const sig = paso + 1;
       setTimeout(() => { paso = sig; store('l', s => s.setItem(K, String(paso))); pintar(); }, 400);

@@ -1411,7 +1411,7 @@ async function handle(req, res) {
   }
 
   // La pestaña "App" del panel: los testers de Google Play (tester-play.js)
-  if (p === '/puente/api/admin/app' || p === '/puente/api/admin/app/invitado') {
+  if (p === '/puente/api/admin/app' || p === '/puente/api/admin/app/invitado' || p === '/puente/api/admin/app/opinar') {
     const r = await require('./tester-play.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
