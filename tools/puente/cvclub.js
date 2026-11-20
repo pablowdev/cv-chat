@@ -67,8 +67,8 @@ function apagar(uid) {
 }
 
 function avisar(uid, titulo, texto) {
-  try { require('./campana.js').registrar(Number(uid), { origen: 'chat', titulo, texto, url: '/app', clave: 'cvclub-' + uid + '-' + Date.now() }); } catch (err) { warn('cvclub: campanita:', err.message); }
-  try { require('./avisos.js').avisarUsuario(Number(uid), { title: titulo, body: texto, url: '/app', tag: 'puente-cvclub' }); } catch { /* sin push */ }
+  try { require('./campana.js').registrar(Number(uid), { origen: 'chat', titulo, texto, url: '/app?monedas=1', clave: 'cvclub-' + uid + '-' + Date.now() }); } catch (err) { warn('cvclub: campanita:', err.message); }
+  try { require('./avisos.js').avisarUsuario(Number(uid), { title: titulo, body: texto, url: '/app?monedas=1', tag: 'puente-cvclub' }); } catch { /* sin push */ }
 }
 
 // Cobrar 30 dias (desde hoy o desde que se vence, si todavia lo tiene)

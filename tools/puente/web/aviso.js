@@ -2687,6 +2687,10 @@ function leido(sc) {
     const foro = /^https?:\/\/foro\./.test(url);
     if (foro && window.puenteForo) { try { const u = new URL(url); window.puenteForo.abrir(u.pathname + u.search + u.hash); return; } catch { /* abajo */ } }
     if (!foro && window.puenteEnlaces && window.puenteEnlaces.abrir(url)) return;
+    // las monedas (CV Club, lo que se gano): se abre su panel, sin recargar
+    if (/^\/app\?monedas(=1)?$/.test(url) && window.puenteMonedas) { window.puenteMonedas.abrir(); return; }
+    // ya esta en la app: "/app" solo no lleva a ningun lado (recargar reiniciaba todo)
+    if (/^\/app\/?$/.test(url)) return;
     if (url) location.href = url;
   }
   function abrir() {
@@ -17331,12 +17335,16 @@ var puenteSinUbicacion = (function () {
     pintar();
     return true;
   }
+  // (la campanita abre este panel: los avisos de CV Club y de lo ganado)
+  window.puenteMonedas = { abrir: () => { if (datos && btn && !panel) abrir(); } };
   let intentos = 0;
   (function esperar() {
     if (!tok() || !document.getElementById('puente-campana-btn')) { if (++intentos < 120) setTimeout(esperar, 1000); return; }
     pedir().then((d) => {
       if (!d || !d.visible) return; // (no le toca verla: no se pone nada)
       datos = d; poner();
+      // (?monedas=1 en la direccion, como lo abre una notificacion del celular: el panel)
+      try { const q = new URLSearchParams(location.search); if (q.has('monedas')) { q.delete('monedas'); history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); setTimeout(() => { if (!panel) abrir(); }, 400); } } catch { /* sin historial */ }
       setInterval(() => { if (!document.getElementById('puente-monedas-btn')) poner(); }, 3000);
       setInterval(() => { if (document.visibilityState === 'visible') pedir().then((x) => { if (x && x.visible) { datos = x; pintar(); } }); }, 60000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) pedir().then((x) => { if (x && x.visible) { datos = x; pintar(); } }); });
