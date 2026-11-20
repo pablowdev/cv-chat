@@ -185,6 +185,8 @@ function start(deps) {
   try { require('./monedas.js').setup({ db, log, warn }); } catch (err) { warn('monedas:', err.message); }
   // ...y de donde salen (paso 2: la bienvenida, los primeros pasos, las partidas, el chat y las invitaciones)
   try { require('./monedas-fuentes.js').setup({ db, log, warn }); } catch (err) { warn('monedas fuentes:', err.message); }
+  // CV Club: la suscripcion con monedas (el estilo del nombre y del perfil, el banner, la forma del avatar)
+  try { require('./cvclub.js').setup({ db, io, log, warn }); } catch (err) { warn('cvclub:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.

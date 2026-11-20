@@ -55,10 +55,14 @@ function all() {
     if (r.fuente) v.f = r.fuente;
     if (r.tema1 && r.tema2) { v.t1 = r.tema1; v.t2 = r.tema2; }
     if (r.banner) v.b = r.banner;
-    if (Object.keys(v).length) out[r.id] = v;
+    // (desde el 20/11/2026 es de CV Club: el de quien no lo tiene queda guardado pero no se ve)
+    if (Object.keys(v).length && club(r.id)) out[r.id] = v;
   }
   return out;
 }
+function club(id) { try { return require('./cvclub.js').activo(id); } catch { return true; } }
+// el estilo de alguien (cvclub.js, al prender: { c, c2, f, t1, t2, b } o {})
+function estiloDe(id) { return all()[Number(id)] || {}; }
 
 function save(userId, fields) {
   const cur = db.prepare('SELECT color, color2, fuente, tema1, tema2, banner FROM puente_perfil WHERE haven_user_id = ?').get(userId) || {};
@@ -117,6 +121,8 @@ async function handle(req, res, p, u, h) {
     const body = (await h.readJson(req)) || {};
     const c = cleanStyle(p.endsWith('/color') ? { color: body.color } : body);
     if (c.error) return h.json(res, 400, { error: c.error });
+    // (sacarlo todo se puede siempre; elegir algo, solo con CV Club)
+    if (Object.values(c.fields).some((x) => x) && !club(user.id)) return h.json(res, 403, { error: 'El estilo del nombre y del perfil es de CV Club.', cvclub: true });
     const v = save(user.id, c.fields);
     log(`perfil: ${user.username} cambio su estilo`);
     return h.json(res, 200, { ok: true, perfil: v });
@@ -131,6 +137,7 @@ async function handle(req, res, p, u, h) {
       save(user.id, { banner: null });
       return h.json(res, 200, { ok: true, banner: null });
     }
+    if (!club(user.id)) return h.json(res, 403, { error: 'El banner es de CV Club.', cvclub: true });
     if (!sharp) return h.json(res, 503, { error: 'Todavía no se pueden subir banners en este servidor.' });
     const m = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.imagen || ''));
     if (!m) return h.json(res, 400, { error: 'La imagen tiene que ser PNG, JPG, WebP o GIF.' });
@@ -155,4 +162,4 @@ async function handle(req, res, p, u, h) {
   return false;
 }
 
-module.exports = { setup, handle, all, FONTS };
+module.exports = { setup, handle, all, FONTS, estiloDe };

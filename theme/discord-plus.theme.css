@@ -2408,6 +2408,10 @@ html.puente-invitado #puente-monedas-btn { display: none !important; }
 .pmo-ganar summary::after { content: ' ▾'; color: #949ba4; }
 .pmo-ganar[open] summary::after { content: ' ▴'; }
 .pmo-ganar-p { margin: 0.25rem 0; color: #c9ccd1; font-size: 0.8125rem; line-height: 1.4; }
+.pmo-club { background: linear-gradient(135deg, rgba(224, 168, 58, 0.10), rgba(120, 80, 220, 0.10)); }
+.pmo-club-btn { margin-top: 0.375rem; border: 0; border-radius: 0.5rem; padding: 0.4375rem 0.75rem; background: #e0a83a; color: #2a1d05; font: inherit; font-size: 0.8125rem; font-weight: 700; cursor: pointer; }
+.pmo-club-btn:disabled { background: #3a3940; color: #949ba4; cursor: default; }
+.pmo-club-auto { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.375rem; color: #c9ccd1; font-size: 0.8125rem; cursor: pointer; }
 /* En el celular ocupa toda la pantalla, por encima del panel de canales (z-index 100000) */
 .puente-campana-panel.pc-celular { z-index: 100008; inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top, 0px); }
 .pc-cab { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid #29292d; }

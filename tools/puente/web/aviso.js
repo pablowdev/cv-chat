@@ -13211,6 +13211,27 @@ document.addEventListener('pointerdown', (ev) => {
     st = { color: v.c || null, color2: v.c2 || null, mode: v.c && v.c2 ? 'degrade' : v.c ? 'solido' : 'sin', fuente: v.f || null, tema1: v.t1 || null, tema2: v.t2 || null, banner: v.b || null };
     preview();
     const box = modal.querySelector('.pep-opciones'); if (box) box.scrollTop = 0;
+    // CV Club (cvclub.js): sin la suscripcion se puede mirar todo, pero guardar un estilo, el banner o la forma no
+    if (box) {
+      const viejo = box.querySelector('.pep-club'); if (viejo) viejo.remove();
+      fetch('/puente/api/cvclub', { headers: { Authorization: 'Bearer ' + token() } }).then((r) => (r.ok ? r.json() : null)).then((c) => {
+        if (!c || c.activo || box.querySelector('.pep-club')) return;
+        const a = el('div', 'pep-club');
+        a.appendChild(el('b', '', '✨ Esto es de CV Club'));
+        a.appendChild(el('p', '', `El color, degradé y fuente del nombre, el tema, el banner y la forma del avatar son de CV Club: ${c.precio} monedas por mes. Podés probar cómo queda; para que lo vean todos, sumate.`));
+        const b = el('button', 'pep-club-btn', c.saldo >= c.precio ? `Sumarme a CV Club (${c.precio} monedas)` : `Te faltan ${c.precio - c.saldo} monedas`);
+        b.type = 'button'; b.disabled = c.saldo < c.precio;
+        b.addEventListener('click', () => {
+          b.disabled = true;
+          fetch('/puente/api/cvclub/pagar', { method: 'POST', headers: { Authorization: 'Bearer ' + token() } }).then((r) => r.json()).then((d) => {
+            if (d && d.ok) { a.textContent = ''; a.appendChild(el('b', '', '✨ ¡Ya sos de CV Club! Guardá tu estilo.')); }
+            else { b.textContent = (d && d.error) || 'No se pudo.'; }
+          }).catch(() => { b.disabled = false; });
+        });
+        a.appendChild(b);
+        box.insertBefore(a, box.firstChild);
+      }).catch(() => {});
+    }
   }
   window.puentePerfil = { open: () => { const app = window.app; if (app && app._openRenameModal) app._openRenameModal(); }, paintPopup };
 
@@ -13227,6 +13248,10 @@ document.addEventListener('pointerdown', (ev) => {
     html body #profile-popup.puente-tema.puente-tema .profile-popup-avatar { border-color: transparent !important; }
     html body #profile-popup.puente-tema.puente-tema .profile-popup-status-dot { border-color: transparent !important; }
 
+    #rename-modal .pep-club { margin: 1rem 0 .25rem; padding: .875rem 1rem; border-radius: .75rem; background: linear-gradient(135deg, rgba(224, 168, 58, .16), rgba(120, 80, 220, .14)); border: 1px solid rgba(224, 168, 58, .35); color: #f2f3f5; }
+    #rename-modal .pep-club p { margin: .375rem 0 .625rem; font-size: .8125rem; color: #c9ccd1; line-height: 1.4; }
+    #rename-modal .pep-club-btn { border: 0; border-radius: .5rem; padding: .5rem .875rem; background: #e0a83a; color: #2a1d05; font: inherit; font-weight: 700; cursor: pointer; }
+    #rename-modal .pep-club-btn:disabled { background: #3a3940; color: #949ba4; cursor: default; }
     #rename-modal.pep-overlay { align-items: center; justify-content: center; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(0, 0, 0, .78) !important; }
     #rename-modal .pep-modal { contain: layout paint; }
     #rename-modal .pep-opciones, #rename-modal .pep-beneficios, #rename-modal .pep-medio { overscroll-behavior: contain; }
@@ -17195,7 +17220,8 @@ var puenteSinUbicacion = (function () {
   const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
   const num = (n) => (Number(n) || 0).toLocaleString('es-AR');
   const MONEDA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#e0a83a"/><circle cx="12" cy="12" r="6.2" fill="none" stroke="#fff3c4" stroke-width="1.6" opacity=".8"/><path d="M10 9.2h3.2a1.6 1.6 0 0 1 0 3.2H10m0 0h3.6a1.6 1.6 0 0 1 0 3.2H10V9.2" fill="none" stroke="#5a3d06" stroke-width="1.5" stroke-linejoin="round"/></svg>';
-  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada', 'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel', 'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball' };
+  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada', 'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel', 'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Tus monedas del hotel', 'conversion-capa2': 'Tu plata de Capa 2' };
+  const tipoDe = (t) => TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2' : /^hotel-/.test(t) ? 'CV Hotel' : t);
   const JUEGOS = { truco: 'Truco', pool: 'Pool', ajedrez: 'Ajedrez', funball: 'Funball', curveball: 'Curveball', globalsiege: 'GlobalSiege' };
   let btn = null, panel = null, datos = null;
   const pedir = () => fetch('/puente/api/monedas/mias', { headers: { Authorization: 'Bearer ' + tok() }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -17222,6 +17248,36 @@ var puenteSinUbicacion = (function () {
     cab.appendChild(el('p', 'pmo-nota', `Ganaste ${num(datos.ganado)} · gastaste ${num(datos.gastado)}`));
     panel.appendChild(cab);
     const lista = el('div', 'pmo-lista');
+    // CV Club (cvclub.js): la suscripcion con monedas
+    const club = el('div', 'pmo-bloque pmo-club');
+    lista.appendChild(club);
+    const pintarClub = (c) => {
+      club.textContent = '';
+      if (!c) { club.remove(); return; }
+      club.appendChild(el('div', 'pmo-bloque-t', '✨ CV Club'));
+      if (c.activo) {
+        const d = new Date(c.hasta);
+        club.appendChild(el('p', 'pmo-ganar-p', `Lo tenés hasta el ${d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' })}${c.gratis ? ' (mes de regalo)' : ''}: tu estilo de nombre, banner, tema y forma del avatar se ven para todos.`));
+        const l = el('label', 'pmo-club-auto'), x = document.createElement('input');
+        x.type = 'checkbox'; x.checked = !!c.auto;
+        x.addEventListener('change', () => fetch('/puente/api/cvclub/auto', { method: 'POST', headers: { Authorization: 'Bearer ' + tok(), 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: x.checked }) }).then((r) => r.json()).then(pintarClub).catch(() => {}));
+        l.append(x, el('span', null, `Renovar solo (${c.precio} monedas cada 30 días)`));
+        club.appendChild(l);
+      } else {
+        club.appendChild(el('p', 'pmo-ganar-p', `Color, degradé y fuente del nombre, tema y banner del perfil, forma del avatar y la insignia ✨. ${c.precio} monedas por 30 días.`));
+        const b = el('button', 'pmo-club-btn', c.saldo >= c.precio ? `Sumarme (${c.precio} monedas)` : `Te faltan ${c.precio - c.saldo} monedas`);
+        b.type = 'button'; b.disabled = c.saldo < c.precio;
+        b.addEventListener('click', () => {
+          b.disabled = true;
+          fetch('/puente/api/cvclub/pagar', { method: 'POST', headers: { Authorization: 'Bearer ' + tok() } }).then((r) => r.json()).then((d) => {
+            if (d && d.ok) { pintarClub(d); pedir().then((x) => { if (x && x.visible) { datos = x; pintar(); const sb = panel && panel.querySelector('.pmo-saldo b'); if (sb) sb.textContent = num(x.saldo); } }); }
+            else b.textContent = (d && d.error) || 'No se pudo.';
+          }).catch(() => { b.disabled = false; });
+        });
+        club.appendChild(b);
+      }
+    };
+    fetch('/puente/api/cvclub', { headers: { Authorization: 'Bearer ' + tok() }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then(pintarClub).catch(() => club.remove());
     // los primeros pasos (mientras falte alguno) y como se gana mas
     const pasos = Array.isArray(datos.pasos) ? datos.pasos : [];
     if (pasos.some((p) => !p.hecho)) {
@@ -17247,7 +17303,7 @@ var puenteSinUbicacion = (function () {
     if (!datos.movimientos || !datos.movimientos.length) lista.appendChild(el('div', 'pmo-vacio', 'Todavía no hay movimientos.'));
     for (const m of datos.movimientos || []) {
       const f = el('div', 'pmo-fila'), izq = el('div', 'pmo-que');
-      izq.appendChild(el('div', 'pmo-tipo', TIPOS[m.tipo] || m.tipo));
+      izq.appendChild(el('div', 'pmo-tipo', tipoDe(m.tipo)));
       const det = m.detalle ? (JUEGOS[m.detalle] || m.detalle) : '';
       const d = new Date(m.t);
       izq.appendChild(el('div', 'pmo-det', (det ? det + ' · ' : '') + d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })));

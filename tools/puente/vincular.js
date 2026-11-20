@@ -1415,6 +1415,11 @@ async function handle(req, res) {
     const r = await require('./tester-play.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  // CV Club: la suscripcion con monedas (cvclub.js)
+  if (p.startsWith('/puente/api/cvclub')) {
+    const r = await require('./cvclub.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   // Las monedas del club: el resumen para los administradores (monedas.js)
   if (p === '/puente/api/admin/monedas' || p === '/puente/api/monedas/mias') {
     const r = await require('./monedas.js').handle(req, res, p, u, { sessionUser, json, readJson });

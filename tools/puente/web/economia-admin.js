@@ -21,10 +21,10 @@
     'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida (jugar)', 'partida-ganada': 'Partida ganada',
     'compu': 'Contra la compu', 'compu-ganada': 'Le ganó a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel',
     'dia-activo': 'Día activo', 'racha': 'Racha de 7 días', 'semanal': 'Días charlando (semana)', 'reacciones': 'Reacciones (semana)',
-    'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball'
+    'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Conversión del hotel', 'conversion-capa2': 'Conversión de Capa 2'
   };
   var ORIGENES = { chat: 'Chat', juegos: 'Juegos', hotel: 'CV Hotel', capa2: 'Capa 2', admin: 'Admin', sistema: 'Sistema' };
-  function tipoLindo(t) { return TIPOS[t] || t; }
+  function tipoLindo(t) { return TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2: ' + t.slice(6) : /^hotel-/.test(t) ? 'CV Hotel: ' + t.slice(6) : t); }
 
   function tile(l, v, s) { var t = el('div', 'c2-tile'); t.append(el('div', 'c2-tile-l', l), el('div', 'c2-tile-v', v)); if (s) t.appendChild(el('div', 'c2-tile-s', s)); return t; }
   function seccion(titulo, sub) {
