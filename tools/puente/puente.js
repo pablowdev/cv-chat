@@ -181,6 +181,8 @@ function start(deps) {
   try { require('./opiniones.js').setup({ db, log, warn }); } catch (err) { warn('opiniones:', err.message); }
   // La medalla "Tester de la app" (quien usa la app de Google Play durante la prueba)
   try { require('./tester-play.js').setup({ db, io, warn }); } catch (err) { warn('tester play:', err.message); }
+  // Las monedas del club (la economia, paso 1: el nucleo; en modo sombra hasta el lanzamiento)
+  try { require('./monedas.js').setup({ db, log, warn }); } catch (err) { warn('monedas:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.
