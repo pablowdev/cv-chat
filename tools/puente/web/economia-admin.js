@@ -326,9 +326,10 @@
       g.appendChild(sv('line', { x1: m.i, x2: W - m.d, y1: yy, y2: yy, stroke: 'var(--grilla)', 'stroke-width': 1 }));
       var tx = sv('text', { x: m.i - 6, y: yy + 4, 'text-anchor': 'end', fill: 'var(--apagado)', 'font-size': 11 }); tx.textContent = num(y); g.appendChild(tx);
     }
-    var n = Math.max(dias.length, 1), bw = Math.max(2, ancho / n - 3);
+    // (con pocos dias, barras finas en el medio de su lugar: no una sola barra que ocupa todo el ancho)
+    var n = Math.max(dias.length, 1), lugarB = ancho / n, bw = Math.max(2, Math.min(28, lugarB - 3));
     dias.forEach(function (d, i) {
-      var h = (d.entra / tope) * alto, x = m.i + i * (ancho / n) + 1.5;
+      var h = (d.entra / tope) * alto, x = m.i + i * lugarB + (lugarB - bw) / 2;
       var r = sv('rect', { x: x, y: m.a + alto - h, width: bw, height: Math.max(0, h), rx: 2, fill: 'var(--serie)' });
       var ti = sv('title'); ti.textContent = d.dia.slice(8, 10) + '/' + d.dia.slice(5, 7) + ': ' + num(d.entra) + ' monedas, ' + d.gente + ' personas'; r.appendChild(ti);
       g.appendChild(r);
