@@ -17205,7 +17205,15 @@ var puenteSinUbicacion = (function () {
   function tecla(e) { if (e.key === 'Escape') cerrar(); }
   function abrir() {
     if (panel) { cerrar(); return; }
-    panel = el('div', 'puente-monedas-panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Tus monedas');
+    // (en el celular, a pantalla completa y por encima de todo, como la campanita: si no, queda abajo de los canales)
+    const enCelular = matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+    panel = el('div', 'puente-monedas-panel' + (enCelular ? ' pmo-celular' : '')); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Tus monedas');
+    const barra = el('div', 'pc-cab');
+    barra.appendChild(el('span', 'pc-titulo', 'Tus monedas'));
+    const x = el('button', 'pc-cerrar'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.textContent = '✕';
+    x.addEventListener('click', cerrar);
+    barra.appendChild(x);
+    panel.appendChild(barra);
     const cab = el('div', 'pmo-cab');
     const s = el('div', 'pmo-saldo'); s.innerHTML = MONEDA; s.appendChild(el('b', null, num(datos.saldo))); s.appendChild(el('span', null, 'monedas'));
     cab.appendChild(s);
@@ -17225,9 +17233,11 @@ var puenteSinUbicacion = (function () {
     }
     panel.appendChild(lista);
     document.body.appendChild(panel);
-    const r = btn.getBoundingClientRect();
-    panel.style.top = Math.round(r.bottom + 6) + 'px';
-    panel.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8))) + 'px';
+    if (!enCelular) {
+      const r = btn.getBoundingClientRect();
+      panel.style.top = Math.round(r.bottom + 6) + 'px';
+      panel.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8))) + 'px';
+    }
     setTimeout(() => { document.addEventListener('click', fuera, true); document.addEventListener('keydown', tecla, true); }, 0);
     pedir().then((d) => { if (d && d.visible) { datos = d; pintar(); } });
   }
