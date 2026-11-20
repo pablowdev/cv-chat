@@ -1422,7 +1422,7 @@ async function handle(req, res) {
     if (r !== false) return;
   }
   // Las monedas del club: el resumen para los administradores (monedas.js)
-  if (p === '/puente/api/admin/monedas' || p === '/puente/api/monedas/mias') {
+  if (p === '/puente/api/admin/monedas' || p.startsWith('/puente/api/admin/monedas/') || p === '/puente/api/monedas/mias') {
     const r = await require('./monedas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
