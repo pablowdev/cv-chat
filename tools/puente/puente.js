@@ -183,6 +183,8 @@ function start(deps) {
   try { require('./tester-play.js').setup({ db, io, warn }); } catch (err) { warn('tester play:', err.message); }
   // Las monedas del club (la economia, paso 1: el nucleo; en modo sombra hasta el lanzamiento)
   try { require('./monedas.js').setup({ db, log, warn }); } catch (err) { warn('monedas:', err.message); }
+  // ...y de donde salen (paso 2: la bienvenida, los primeros pasos, las partidas, el chat y las invitaciones)
+  try { require('./monedas-fuentes.js').setup({ db, log, warn }); } catch (err) { warn('monedas fuentes:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.
