@@ -16,6 +16,8 @@
 //  - Dia activo (3 mensajes validos, una partida o 10 minutos en el hotel o en Capa 2): 5; cada 7 dias seguidos, 30.
 //  - Por semana: dias con 3 mensajes validos (2: 20, 3: 50, 5: 80, 7: 120); reacciones de personas distintas a tus
 //    mensajes (5 cada una, hasta 10 personas; solo cuentas de 7 dias o mas); el podio de la semana 150, 100 y 50.
+//  - Curveball: quien sale primero en el ranking de puntajes (supera el record del primero) cobra 100, como mucho una
+//    vez por mes (pedido del dueño, 20/11/2026: es bastante dificil).
 //  - Invitaciones: 50 cuando la persona invitada confirma su cuenta, 150 cuando usa CV Chat 3 dias en sus primeras 2
 //    semanas y 100 si sigue (2 dias entre la semana 3 y la 5).
 // Un mensaje vale si tiene 8 letras o 2 palabras (o un link o una imagen), no repite uno de los ultimos 5 de esa
@@ -42,6 +44,7 @@ const REG = {
   reaccion: 5, reaccionTope: 10, reaccionEdad: 7 * DIA,
   podio: [150, 100, 50], podioMinimo: 30,
   inv1: 50, inv2: 150, inv3: 100,
+  curveballPrimero: 100,
 };
 const JUEGOS_DESAFIO = ['truco', 'pool', 'curveball', 'ajedrez', 'globalsiege', 'funball'];
 const TABLAS = [
@@ -270,6 +273,15 @@ function liquidarInvitaciones() {
   }
 }
 
+// ── Primero en el ranking de Curveball ──
+function liquidarCurveball(ahora) {
+  let top = null;
+  try { top = db.prepare('SELECT user_id u, puntaje FROM puente_curveball_puntajes ORDER BY puntaje DESC, actualizado ASC LIMIT 1').get(); } catch { return; } // (sin Curveball)
+  if (!top || !(top.puntaje > Number(leer('curveball_record', 0)))) return;
+  poner('curveball_record', top.puntaje);
+  pagar(top.u, REG.curveballPrimero, 'ranking-primero', 'juegos', `curveball-primero:${top.u}:${diaAR(ahora).slice(0, 7)}`, 'Primero en el ranking de Curveball');
+}
+
 // ── El ciclo ──
 let corriendo = false;
 function ciclo(ahora = Date.now()) {
@@ -285,6 +297,7 @@ function ciclo(ahora = Date.now()) {
     let sem = leer('semana', lunesDe(ahora));
     while (sem < lunesDe(ahora)) { const s = sem; paso('semana ' + s, () => liquidarSemana(s)); sem = sumarDias(sem, 7); poner('semana', sem); }
     paso('invitaciones', liquidarInvitaciones);
+    paso('curveball', () => liquidarCurveball(ahora));
   } finally { corriendo = false; }
 }
 

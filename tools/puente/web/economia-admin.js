@@ -21,7 +21,7 @@
     'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida (jugar)', 'partida-ganada': 'Partida ganada',
     'compu': 'Contra la compu', 'compu-ganada': 'Le ganó a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel',
     'dia-activo': 'Día activo', 'racha': 'Racha de 7 días', 'semanal': 'Días charlando (semana)', 'reacciones': 'Reacciones (semana)',
-    'podio': 'Podio de la semana', 'invitacion': 'Invitaciones'
+    'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball'
   };
   var ORIGENES = { chat: 'Chat', juegos: 'Juegos', hotel: 'CV Hotel', capa2: 'Capa 2', admin: 'Admin', sistema: 'Sistema' };
   function tipoLindo(t) { return TIPOS[t] || t; }
