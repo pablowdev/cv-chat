@@ -669,8 +669,8 @@ async function handle(req, res) {
     if (r !== false) return;
   }
 
-  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css' || p === '/puente/capa2-admin' || p === '/puente/capa2-admin.js' || p === '/puente/capa2-admin.css')) {
-    const file = p === '/puente/juegos' ? 'juegos.html' : p === '/puente/capa2-admin' ? 'capa2-admin.html' : p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
+  if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css' || p === '/puente/capa2-admin' || p === '/puente/capa2-admin.js' || p === '/puente/capa2-admin.css' || p === '/puente/economia-admin' || p === '/puente/economia-admin.js' || p === '/puente/economia-admin.css')) {
+    const file = p === '/puente/juegos' ? 'juegos.html' : p === '/puente/capa2-admin' ? 'capa2-admin.html' : p === '/puente/economia-admin' ? 'economia-admin.html' : p === '/puente/descargar' ? 'descargar.html' : p === '/puente/vincular' ? 'vincular.html' : p === '/puente/olvide' ? 'olvide.html' : p === '/puente/entrar' ? 'entrar.html' : p === '/puente/historia' ? 'historia.html' : p.slice('/puente/'.length);
     const type = file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'application/javascript';
     // Los .js y .css se guardan ya armados (aviso.js pesa 1 MB) y van con una huella (ETag): el
     // navegador pregunta siempre (no-cache, asi nunca usa uno viejo) y si no cambio recibe un 304
@@ -1416,7 +1416,7 @@ async function handle(req, res) {
     if (r !== false) return;
   }
   // Las monedas del club: el resumen para los administradores (monedas.js)
-  if (p === '/puente/api/admin/monedas') {
+  if (p === '/puente/api/admin/monedas' || p === '/puente/api/monedas/mias') {
     const r = await require('./monedas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }

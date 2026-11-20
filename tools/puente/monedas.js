@@ -15,6 +15,7 @@
 //  cobrar(uid, n, { tipo, origen, detalle, clave })  -> { ok, saldo, repetido } | { ok: false, error, falta }
 //  saldo(uid) -> numero;  movimientos(uid, n) -> [...];  revisar() -> [{ uid, saldo, suma }] (las que no cierran)
 //  modo() -> 'sombra' | 'activo'
+//  GET /puente/api/monedas/mias     (sesion) el saldo y los ultimos movimientos propios; por ahora solo para administradores
 //  GET /puente/api/admin/monedas   (solo administradores) el resumen: cuantas cuentas, cuanto hay, de donde sale, los
 //                                   que mas tienen y los ultimos movimientos
 
@@ -108,10 +109,40 @@ function resumen() {
   const nombre = 'COALESCE(u.display_name, u.username)';
   const top = db.prepare(`SELECT ${nombre} nombre, m.saldo, m.ganado, m.gastado FROM puente_monedas m JOIN users u ON u.id = m.user_id ORDER BY m.saldo DESC LIMIT 20`).all();
   const ultimos = db.prepare(`SELECT ${nombre} nombre, v.delta, v.saldo, v.tipo, v.origen, v.detalle, v.t FROM puente_monedas_mov v JOIN users u ON u.id = v.user_id ORDER BY v.id DESC LIMIT 40`).all();
-  return { modo: modo(), ...tot, porOrigen, top, ultimos, descuadres: revisar().length };
+  // por dia (fecha de Argentina), los ultimos 30: lo que entro y lo que salio; sin la bienvenida, que es de una vez
+  const AR = 3 * 3600e3;
+  const dias = db.prepare(`SELECT date((t - ${AR}) / 1000, 'unixepoch') dia,
+      SUM(CASE WHEN delta > 0 AND tipo != 'bienvenida' THEN delta ELSE 0 END) entra, SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END) sale,
+      SUM(CASE WHEN tipo = 'bienvenida' THEN delta ELSE 0 END) bienvenida, COUNT(DISTINCT user_id) gente
+    FROM puente_monedas_mov WHERE t >= ? GROUP BY dia ORDER BY dia`).all(Date.now() - 30 * 864e5);
+  // lo que gano cada uno en los ultimos 7 dias (sin bienvenida ni primeros pasos): como se reparte
+  const sem = db.prepare(`SELECT ${nombre} nombre, SUM(v.delta) n FROM puente_monedas_mov v JOIN users u ON u.id = v.user_id
+    WHERE v.t >= ? AND v.delta > 0 AND v.tipo NOT IN ('bienvenida', 'primer-paso') GROUP BY v.user_id ORDER BY n DESC`).all(semana);
+  const valores = sem.map((x) => x.n).sort((a, b) => a - b), pct = (q) => (valores.length ? valores[Math.min(valores.length - 1, Math.floor(q * valores.length))] : 0);
+  const sumaSem = valores.reduce((a, b) => a + b, 0), top10 = valores.slice(Math.floor(valores.length * 0.9)).reduce((a, b) => a + b, 0);
+  const reparto = { gente: valores.length, p50: pct(0.5), p75: pct(0.75), p90: pct(0.9), max: valores[valores.length - 1] || 0, total: sumaSem, top10pct: sumaSem ? Math.round((top10 / sumaSem) * 100) : 0, quienes: sem.slice(0, 10) };
+  return { modo: modo(), ...tot, porOrigen, top, ultimos, dias, reparto, descuadres: revisar().length };
+}
+
+// el saldo de quien lo pide (la pastilla al lado de la campanita): por ahora solo lo ven los administradores; para
+// todos cuando la economia este activa
+function mias(uid) {
+  const yo = db.prepare('SELECT is_admin, IFNULL(is_guest, 0) g FROM users WHERE id = ?').get(Number(uid));
+  if (!yo || yo.g) return { visible: false };
+  const visible = !!yo.is_admin || modo() === 'activo';
+  if (!visible) return { visible: false };
+  const c = db.prepare('SELECT saldo, ganado, gastado FROM puente_monedas WHERE user_id = ?').get(Number(uid)) || { saldo: 0, ganado: 0, gastado: 0 };
+  return { visible: true, modo: modo(), ...c, movimientos: movimientos(uid, 50) };
 }
 
 async function handle(req, res, p, u, h) {
+  if (p === '/puente/api/monedas/mias') {
+    if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
+    const user = h.sessionUser(req);
+    if (!user) return h.json(res, 401, { error: 'sin sesion' });
+    res.setHeader('Cache-Control', 'no-store');
+    return h.json(res, 200, mias(user.id));
+  }
   if (p !== '/puente/api/admin/monedas') return false;
   if (req.method !== 'GET') return h.json(res, 405, { error: 'metodo' });
   const user = h.sessionUser(req);
@@ -122,4 +153,4 @@ async function handle(req, res, p, u, h) {
   return h.json(res, 200, resumen());
 }
 
-module.exports = { setup, handle, dar, cobrar, saldo, movimientos, revisar, resumen, modo };
+module.exports = { setup, handle, dar, cobrar, saldo, movimientos, revisar, resumen, modo, mias };

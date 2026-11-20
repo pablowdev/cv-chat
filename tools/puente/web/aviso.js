@@ -4251,6 +4251,16 @@ function leido(sc) {
     card.append(bar, stats, filtros, table);
     page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
+    // Economía (monedas.js): las monedas del club, en un marco como las pestañas de los juegos (economia-admin.html)
+    {
+      const t = el('button', 'pm-pestana', 'Economía'); t.type = 'button'; t.dataset.v = 'economia';
+      t.addEventListener('click', () => verVista('economia'));
+      tabs.appendChild(t);
+      const box = el('div', 'pja-vista'); box.hidden = true;
+      box.dataset.v = 'economia'; box.dataset.url = '/puente/economia-admin'; box.dataset.nombre = 'Economía';
+      box.style.cssText = 'flex: 1 1 auto; min-height: 0; position: relative;';
+      page.appendChild(box);
+    }
     verVista('miembros');
     // Las pestañas de los juegos que traen la suya (en su ficha, "admin": Admin → Hotel): una pagina del juego en un marco
     fetch('/puente/api/juegos/registro').then(r => (r.ok ? r.json() : null)).then(d => {
@@ -17173,5 +17183,74 @@ var puenteSinUbicacion = (function () {
         ls('puente_opinion_pedida', '1'); abrir();
       }, 25000);
     }
+  })();
+})();
+
+// Las monedas del club (monedas.js): la pastilla al lado de la campanita con el saldo, que abre los ultimos
+// movimientos. Por ahora la ven solo los administradores (el servidor dice si se ve: "visible"); para todos cuando
+// la economia este activa. Los textos van siempre con textContent.
+(function () {
+  'use strict';
+  const tok = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
+  const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+  const num = (n) => (Number(n) || 0).toLocaleString('es-AR');
+  const MONEDA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#e0a83a"/><circle cx="12" cy="12" r="6.2" fill="none" stroke="#fff3c4" stroke-width="1.6" opacity=".8"/><path d="M10 9.2h3.2a1.6 1.6 0 0 1 0 3.2H10m0 0h3.6a1.6 1.6 0 0 1 0 3.2H10V9.2" fill="none" stroke="#5a3d06" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada', 'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel', 'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana', 'invitacion': 'Invitaciones' };
+  const JUEGOS = { truco: 'Truco', pool: 'Pool', ajedrez: 'Ajedrez', funball: 'Funball', curveball: 'Curveball', globalsiege: 'GlobalSiege' };
+  let btn = null, panel = null, datos = null;
+  const pedir = () => fetch('/puente/api/monedas/mias', { headers: { Authorization: 'Bearer ' + tok() }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  function pintar() { if (btn && datos) btn.querySelector('.puente-monedas-n').textContent = num(datos.saldo); }
+  function cerrar() { if (panel) { panel.remove(); panel = null; document.removeEventListener('click', fuera, true); document.removeEventListener('keydown', tecla, true); } }
+  function fuera(e) { if (panel && !panel.contains(e.target) && !btn.contains(e.target)) cerrar(); }
+  function tecla(e) { if (e.key === 'Escape') cerrar(); }
+  function abrir() {
+    if (panel) { cerrar(); return; }
+    panel = el('div', 'puente-monedas-panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Tus monedas');
+    const cab = el('div', 'pmo-cab');
+    const s = el('div', 'pmo-saldo'); s.innerHTML = MONEDA; s.appendChild(el('b', null, num(datos.saldo))); s.appendChild(el('span', null, 'monedas'));
+    cab.appendChild(s);
+    if (datos.modo !== 'activo') cab.appendChild(el('p', 'pmo-nota', 'Modo sombra: solo lo ven los administradores. Se anota todo lo que ganás y queda para cuando se lance.'));
+    cab.appendChild(el('p', 'pmo-nota', `Ganaste ${num(datos.ganado)} · gastaste ${num(datos.gastado)}`));
+    panel.appendChild(cab);
+    const lista = el('div', 'pmo-lista');
+    if (!datos.movimientos || !datos.movimientos.length) lista.appendChild(el('div', 'pmo-vacio', 'Todavía no hay movimientos.'));
+    for (const m of datos.movimientos || []) {
+      const f = el('div', 'pmo-fila'), izq = el('div', 'pmo-que');
+      izq.appendChild(el('div', 'pmo-tipo', TIPOS[m.tipo] || m.tipo));
+      const det = m.detalle ? (JUEGOS[m.detalle] || m.detalle) : '';
+      const d = new Date(m.t);
+      izq.appendChild(el('div', 'pmo-det', (det ? det + ' · ' : '') + d.toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })));
+      f.append(izq, el('div', 'pmo-delta ' + (m.delta >= 0 ? 'mas' : 'menos'), (m.delta >= 0 ? '+' : '−') + num(Math.abs(m.delta))));
+      lista.appendChild(f);
+    }
+    panel.appendChild(lista);
+    document.body.appendChild(panel);
+    const r = btn.getBoundingClientRect();
+    panel.style.top = Math.round(r.bottom + 6) + 'px';
+    panel.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8))) + 'px';
+    setTimeout(() => { document.addEventListener('click', fuera, true); document.addEventListener('keydown', tecla, true); }, 0);
+    pedir().then((d) => { if (d && d.visible) { datos = d; pintar(); } });
+  }
+  function poner() {
+    const campana = document.getElementById('puente-campana-btn');
+    if (!campana) return false;
+    if (document.getElementById('puente-monedas-btn')) return true;
+    btn = el('button', 'puente-monedas-btn'); btn.id = 'puente-monedas-btn'; btn.type = 'button'; btn.title = 'Tus monedas';
+    btn.innerHTML = MONEDA; btn.appendChild(el('span', 'puente-monedas-n', ''));
+    btn.addEventListener('click', (e) => { e.stopPropagation(); abrir(); });
+    campana.parentNode.insertBefore(btn, campana);
+    pintar();
+    return true;
+  }
+  let intentos = 0;
+  (function esperar() {
+    if (!tok() || !document.getElementById('puente-campana-btn')) { if (++intentos < 120) setTimeout(esperar, 1000); return; }
+    pedir().then((d) => {
+      if (!d || !d.visible) return; // (no le toca verla: no se pone nada)
+      datos = d; poner();
+      setInterval(() => { if (!document.getElementById('puente-monedas-btn')) poner(); }, 3000);
+      setInterval(() => { if (document.visibilityState === 'visible') pedir().then((x) => { if (x && x.visible) { datos = x; pintar(); } }); }, 60000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) pedir().then((x) => { if (x && x.visible) { datos = x; pintar(); } }); });
+    });
   })();
 })();
