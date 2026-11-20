@@ -181,7 +181,7 @@ button{display:block;width:100%;border:0;border-radius:8px;padding:12px;font:600
 <button class="no" type="submit" name="ok" value="0">No, volver</button>
 </form></body></html>`;
   return h.send(res, 200, 'text/html; charset=utf-8', html, {
-    'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
+    'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https:; frame-ancestors 'none'; base-uri 'none'",
   });
 }
@@ -201,7 +201,8 @@ async function autorizar(req, res, u) {
     return paginaAutorizar(res, app, user, nonce);
   }
   if (req.method !== 'POST') return json(res, 405, { error: 'metodo' });
-  // Solo el boton de la pagina del chat (otra pagina, aunque sea del mismo dominio, no lo puede mandar)
+  // Solo el boton de la pagina del chat (otra pagina, aunque sea del mismo dominio, no lo puede mandar). La pagina va con
+  // Referrer-Policy same-origin: con no-referrer el navegador manda Origin: null y no pasaria
   if (req.headers.origin !== new URL(publicUrl).origin) return json(res, 403, { error: 'no' });
   const f = await leerForm(req);
   const n = String(f.get('n') || '');
