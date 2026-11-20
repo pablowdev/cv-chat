@@ -243,7 +243,8 @@ async function ejecutar(clave) {
 }
 
 // ── Numeros ─────────────────────────────────────────────────────────────────
-function cuentas() { return db.prepare('SELECT COUNT(*) n FROM users').get().n - 1; }
+// (las cuentas de verdad: sin los invitados, que entran a jugar sin cuenta y se borran al irse, ni el historial de Discord)
+function cuentas() { return db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial' AND IFNULL(is_guest, 0) = 0").get().n; }
 function copa(limite = 5) {
   const desde = INICIO_COPA, hasta = Math.min(Date.now(), corteMs());
   const pts = new Map();

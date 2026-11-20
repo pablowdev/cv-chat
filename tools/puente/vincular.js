@@ -1152,7 +1152,8 @@ async function handle(req, res) {
         avatar: link.discord_avatar ? `https://cdn.discordapp.com/avatars/${link.discord_user_id}/${link.discord_avatar}.png?size=128` : null } : null,
       disponible: !!(clientId && clientSecret),
       // Para el menu lateral del celular (como Discord): miembros y avatar propio
-      miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial'").get().n,
+      // (sin los invitados: entran a jugar sin cuenta y se borran al irse; contarlos hacia subir y bajar el numero)
+      miembros: db.prepare("SELECT COUNT(*) n FROM users WHERE username != 'discord-historial' AND IFNULL(is_guest, 0) = 0").get().n,
       // y los de Discord (club.js: el numero del canal contador de alla), para "4.342 en Discord · 288 en CV Chat"
       enDiscord: (() => { try { return require('./club.js').enDiscord(db); } catch { return null; } })(),
       avatar: (db.prepare('SELECT avatar FROM users WHERE id = ?').get(user.id) || {}).avatar || null,
