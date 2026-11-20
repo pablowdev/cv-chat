@@ -18,8 +18,8 @@
 //  POST /puente/api/cuenta/conectar { con: 'discord' | 'foro', volver } -> { url } (y despues vuelve a "volver")
 //  POST /puente/api/cuenta/desconectar { con }
 //  GET  /puente/api/cuenta/avisos   la campanita (campana.js); POST .../avisos/leer las marca vistas
-//  GET  /puente/cuenta/autorizar?app=hotel&volver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel en
-//       hotel.<dominio>): en el chat, "¿Entrar a CV Hotel como X?". Con "Sí, entrar" (POST, solo desde el chat) vuelve
+//  GET  /puente/cuenta/autorizar?app=hotel|capa2//  GET  /puente/cuenta/autorizar?app=hotel&volver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel envolver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel en
+//       hotel.<dominio>, Capa 2 en capa2.<dominio>): en el chat, "¿Entrar a CV Hotel como X?". Con "Sí, entrar" (POST, solo desde el chat) vuelve
 //       a esa pagina con #cvcodigo=<codigo> (sirve una vez, un minuto); sin la sesion de la cuenta, vuelve con #cvsin=1
 //  POST /puente/api/cuenta/canje { codigo }   (solo desde la pagina de ese codigo) -> la sesion del chat { token, user }
 
@@ -150,7 +150,7 @@ const absolute = p => (!p ? null : /^https?:\/\//.test(p) ? p : `${publicUrl}${p
 // La sesion del chat no sale sola a otras paginas (/token es solo del chat): la persona lo confirma en una pagina del
 // chat (que no se puede meter adentro de otra: frame-ancestors 'none'), y la otra pagina recibe un codigo de un solo uso
 // que cambia por la sesion (canje), solo desde su propio origen.
-const APPS = { hotel: { nombre: 'CV Hotel', sub: 'hotel' } };
+const APPS = { hotel: { nombre: 'CV Hotel', sub: 'hotel' }, capa2: { nombre: 'Capa 2', sub: 'capa2' } };
 const origenApp = (a) => `https://${APPS[a].sub}.${dominio}`;
 const permisos = new Map(), codigos = new Map(); // nonce del boton -> { uid, app, volver, vence }; codigo -> { uid, app, vence }
 function podar(m) { const t = Date.now(); for (const [k, v] of m) if (v.vence < t) m.delete(k); while (m.size > 5000) m.delete(m.keys().next().value); }
