@@ -17351,3 +17351,35 @@ var puenteSinUbicacion = (function () {
     });
   })();
 })();
+
+// Las listas de sugerencias del cuadro de texto (menciones @, canales #, emojis :, comandos /, personas y Ferry, de
+// Haven) se quedaban abiertas al mover el cursor sin escribir (con un clic, un toque o las flechas): Haven recordaba
+// donde estaba la @ y, al apretar Enter o Shift+Enter, "elegia" la sugerencia y reemplazaba todo el texto entre esa @ y
+// el cursor (se borraba medio mensaje). Arreglo, sin tocar Haven (va antes que sus teclas):
+//  - Shift+Enter es siempre un salto de linea: cierra las listas antes.
+//  - Mover el cursor sin escribir las cierra (se vuelven a abrir al escribir).
+//  - Enter o Tab solo eligen si lo que esta justo antes del cursor sigue siendo lo que se estaba buscando.
+(function () {
+  'use strict';
+  const LISTAS = ['mention-dropdown', 'channel-dropdown', 'emoji-dropdown', 'slash-dropdown', 'persona-dropdown', 'ferry-dropdown'];
+  // lo que tiene que haber justo antes del cursor para que cada lista tenga sentido (las de Haven: app-autocomplete.js)
+  const ANTES = { 'mention-dropdown': /@([^@\n]{0,30})$/, 'channel-dropdown': /#([^#\s]{0,40})$/, 'emoji-dropdown': /:([\w+-]{1,40})$/, 'slash-dropdown': /^\/\S*$/ };
+  const abiertas = () => LISTAS.map((id) => document.getElementById(id)).filter((d) => d && d.style.display !== 'none');
+  const cerrar = (ds) => { for (const d of ds) d.style.display = 'none'; };
+  const esCuadro = (t) => t && t.tagName === 'TEXTAREA' && document.getElementById('mention-dropdown');
+  document.addEventListener('keydown', (e) => {
+    if (!esCuadro(e.target)) return;
+    const ds = abiertas();
+    if (!ds.length) return;
+    if (e.key === 'Enter' && e.shiftKey) { cerrar(ds); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const antes = e.target.value.slice(0, e.target.selectionStart);
+      cerrar(ds.filter((d) => (ANTES[d.id] ? !ANTES[d.id].test(antes) : e.target.selectionStart !== e.target.selectionEnd)));
+      return;
+    }
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) cerrar(ds);
+  }, true);
+  const alMover = (e) => { if (esCuadro(e.target)) { const ds = abiertas(); if (ds.length) cerrar(ds); } };
+  document.addEventListener('mouseup', alMover, true);
+  document.addEventListener('touchend', alMover, true);
+})();
