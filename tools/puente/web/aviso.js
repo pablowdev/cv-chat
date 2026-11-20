@@ -17218,9 +17218,31 @@ var puenteSinUbicacion = (function () {
     const s = el('div', 'pmo-saldo'); s.innerHTML = MONEDA; s.appendChild(el('b', null, num(datos.saldo))); s.appendChild(el('span', null, 'monedas'));
     cab.appendChild(s);
     if (datos.modo !== 'activo') cab.appendChild(el('p', 'pmo-nota', 'Modo sombra: solo lo ven los administradores. Se anota todo lo que ganás y queda para cuando se lance.'));
+    else cab.appendChild(el('p', 'pmo-nota', 'Las monedas del club: las mismas en el chat, en CV Hotel y en Capa 2.'));
     cab.appendChild(el('p', 'pmo-nota', `Ganaste ${num(datos.ganado)} · gastaste ${num(datos.gastado)}`));
     panel.appendChild(cab);
     const lista = el('div', 'pmo-lista');
+    // los primeros pasos (mientras falte alguno) y como se gana mas
+    const pasos = Array.isArray(datos.pasos) ? datos.pasos : [];
+    if (pasos.some((p) => !p.hecho)) {
+      const b = el('div', 'pmo-bloque');
+      b.appendChild(el('div', 'pmo-bloque-t', 'Primeros pasos'));
+      for (const p of pasos) {
+        const f = el('div', 'pmo-paso' + (p.hecho ? ' hecho' : ''));
+        f.append(el('span', 'pmo-paso-c', p.hecho ? '✓' : '○'), el('span', 'pmo-paso-t', p.texto), el('span', 'pmo-paso-n', '+' + num(p.monedas)));
+        b.appendChild(f);
+      }
+      lista.appendChild(b);
+    }
+    const g = el('details', 'pmo-bloque pmo-ganar');
+    g.appendChild(el('summary', 'pmo-bloque-t', '¿Cómo gano más?'));
+    for (const t of ['🎮 Jugando partidas contra otras personas: Truco, Pool, Ajedrez, Funball, Curveball y GlobalSiege (contra la compu, un poco).',
+      '💬 Charlando en los canales y entrando seguido: cada día activo suma, y cada 7 días seguidos, más.',
+      '🏨 Estando en CV Hotel, y 🌆 trabajando en Capa 2 (taxi, delivery, colectivo, carreras).',
+      '📨 Invitando amigos: 50 cuando confirman su cuenta, y más si se quedan.',
+      '🛋️ Se gastan en muebles de CV Hotel y en todo lo de Capa 2.']) g.appendChild(el('p', 'pmo-ganar-p', t));
+    lista.appendChild(g);
+    if (datos.movimientos && datos.movimientos.length) lista.appendChild(el('div', 'pmo-bloque-t pmo-movs-t', 'Movimientos'));
     if (!datos.movimientos || !datos.movimientos.length) lista.appendChild(el('div', 'pmo-vacio', 'Todavía no hay movimientos.'));
     for (const m of datos.movimientos || []) {
       const f = el('div', 'pmo-fila'), izq = el('div', 'pmo-que');

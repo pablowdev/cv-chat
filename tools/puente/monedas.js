@@ -132,8 +132,22 @@ function mias(uid) {
   const visible = !!yo.is_admin || modo() === 'activo';
   if (!visible) return { visible: false };
   const c = db.prepare('SELECT saldo, ganado, gastado FROM puente_monedas WHERE user_id = ?').get(Number(uid)) || { saldo: 0, ganado: 0, gastado: 0 };
-  return { visible: true, modo: modo(), ...c, movimientos: movimientos(uid, 50) };
+  // los primeros pasos (los paga monedas-fuentes.js, una vez cada uno): cuales ya hizo
+  const hechos = new Set(db.prepare("SELECT clave FROM puente_monedas_mov WHERE user_id = ? AND clave LIKE 'paso:%'").all(Number(uid)).map((r) => String(r.clave).split(':')[1]));
+  const confirmado = !!db.prepare("SELECT 1 FROM puente_monedas_mov WHERE clave = ?").get('bienvenida:' + Number(uid));
+  const pasos = [
+    { id: 'bienvenida', texto: 'Confirmá tu email', monedas: 100, hecho: confirmado },
+    ...PASOS.map((p) => ({ ...p, hecho: hechos.has(p.id) })),
+  ];
+  return { visible: true, modo: modo(), ...c, pasos, movimientos: movimientos(uid, 50) };
 }
+// (los mismos que paga monedas-fuentes.js: REG.pasos)
+const PASOS = [
+  { id: 'muneco', texto: 'Armá tu muñeco en CV Hotel', monedas: 15 },
+  { id: 'mensaje', texto: 'Escribí tu primer mensaje en un canal (llega al otro día)', monedas: 15 },
+  { id: 'partida', texto: 'Jugá una partida contra otra persona', monedas: 20 },
+  { id: 'sala', texto: 'Poné 3 muebles en una sala de CV Hotel', monedas: 20 },
+];
 
 async function handle(req, res, p, u, h) {
   if (p === '/puente/api/monedas/mias') {

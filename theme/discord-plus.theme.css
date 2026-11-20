@@ -2394,6 +2394,20 @@ html.puente-invitado #puente-monedas-btn { display: none !important; }
 .pmo-delta { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pmo-delta.mas { color: #7ee2a8; } .pmo-delta.menos { color: #f0a0a0; }
 .pmo-vacio { padding: 1rem; color: #949ba4; text-align: center; }
+.pmo-bloque { padding: 0.5rem 1rem 0.625rem; border-bottom: 1px solid #232327; }
+.pmo-bloque-t { color: #f2f3f5; font-size: 0.8125rem; font-weight: 700; padding: 0.25rem 0; }
+.pmo-movs-t { padding: 0.625rem 1rem 0.125rem; color: #b5bac1; }
+.pmo-paso { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.8125rem; color: #dbdee1; }
+.pmo-paso-c { flex: 0 0 1rem; color: #949ba4; }
+.pmo-paso-t { flex: 1 1 auto; }
+.pmo-paso-n { color: #f0c96a; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pmo-paso.hecho .pmo-paso-c { color: #7ee2a8; }
+.pmo-paso.hecho .pmo-paso-t { color: #949ba4; text-decoration: line-through; }
+.pmo-ganar summary { cursor: pointer; list-style: none; }
+.pmo-ganar summary::-webkit-details-marker { display: none; }
+.pmo-ganar summary::after { content: ' ▾'; color: #949ba4; }
+.pmo-ganar[open] summary::after { content: ' ▴'; }
+.pmo-ganar-p { margin: 0.25rem 0; color: #c9ccd1; font-size: 0.8125rem; line-height: 1.4; }
 /* En el celular ocupa toda la pantalla, por encima del panel de canales (z-index 100000) */
 .puente-campana-panel.pc-celular { z-index: 100008; inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top, 0px); }
 .pc-cab { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid #29292d; }
