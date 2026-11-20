@@ -18,6 +18,10 @@
 //  POST /puente/api/cuenta/conectar { con: 'discord' | 'foro', volver } -> { url } (y despues vuelve a "volver")
 //  POST /puente/api/cuenta/desconectar { con }
 //  GET  /puente/api/cuenta/avisos   la campanita (campana.js); POST .../avisos/leer las marca vistas
+//  GET  /puente/cuenta/autorizar?app=hotel&volver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel en
+//       hotel.<dominio>): en el chat, "¿Entrar a CV Hotel como X?". Con "Sí, entrar" (POST, solo desde el chat) vuelve
+//       a esa pagina con #cvcodigo=<codigo> (sirve una vez, un minuto); sin la sesion de la cuenta, vuelve con #cvsin=1
+//  POST /puente/api/cuenta/canje { codigo }   (solo desde la pagina de ese codigo) -> la sesion del chat { token, user }
 
 const crypto = require('crypto');
 
@@ -142,8 +146,98 @@ function wikiPendientes() {
 }
 const absolute = p => (!p ? null : /^https?:\/\//.test(p) ? p : `${publicUrl}${p.startsWith('/') ? '' : '/'}${p}`);
 
+// ── "Entrar con CV Chat" desde otra pagina propia ──
+// La sesion del chat no sale sola a otras paginas (/token es solo del chat): la persona lo confirma en una pagina del
+// chat (que no se puede meter adentro de otra: frame-ancestors 'none'), y la otra pagina recibe un codigo de un solo uso
+// que cambia por la sesion (canje), solo desde su propio origen.
+const APPS = { hotel: { nombre: 'CV Hotel', sub: 'hotel' } };
+const origenApp = (a) => `https://${APPS[a].sub}.${dominio}`;
+const permisos = new Map(), codigos = new Map(); // nonce del boton -> { uid, app, volver, vence }; codigo -> { uid, app, vence }
+function podar(m) { const t = Date.now(); for (const [k, v] of m) if (v.vence < t) m.delete(k); while (m.size > 5000) m.delete(m.keys().next().value); }
+const volverLimpio = (v) => { v = String(v || '/'); return /^\/(?!\/)[A-Za-z0-9\-._~/?=&%]{0,200}$/.test(v) ? v : '/'; };
+const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function leerForm(req) {
+  return new Promise((ok) => {
+    let b = '';
+    req.on('data', (c) => { b += c; if (b.length > 4000) { b = ''; req.destroy(); } });
+    req.on('end', () => ok(new URLSearchParams(b)));
+    req.on('error', () => ok(new URLSearchParams()));
+  });
+}
+function paginaAutorizar(res, app, user, nonce) {
+  const a = APPS[app];
+  const nombre = escHtml(user.display_name || user.username);
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Entrar a ${a.nombre} · CV Chat</title><style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1f22;color:#dbdee1;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;box-sizing:border-box}
+.c{background:#2b2d31;border-radius:12px;padding:28px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+h1{font-size:20px;margin:0 0 8px;color:#fff}p{margin:0 0 20px;color:#b5bac1}b{color:#fff}
+button{display:block;width:100%;border:0;border-radius:8px;padding:12px;font:600 15px system-ui,sans-serif;cursor:pointer;margin-top:10px}
+.si{background:#5865f2;color:#fff}.si:hover{background:#4752c4}.no{background:transparent;color:#b5bac1}.no:hover{text-decoration:underline}
+</style></head><body><form class="c" method="post" action="/puente/cuenta/autorizar">
+<h1>Entrar a ${a.nombre}</h1><p>Vas a entrar a ${a.nombre} con tu cuenta de CV Chat: <b>${nombre}</b>.</p>
+<input type="hidden" name="n" value="${nonce}">
+<button class="si" type="submit" name="ok" value="1">Sí, entrar</button>
+<button class="no" type="submit" name="ok" value="0">No, volver</button>
+</form></body></html>`;
+  return h.send(res, 200, 'text/html; charset=utf-8', html, {
+    'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https:; frame-ancestors 'none'; base-uri 'none'",
+  });
+}
+async function autorizar(req, res, u) {
+  const { json, send } = h;
+  if (!on()) return json(res, 404, { error: 'no' });
+  if (req.method === 'GET') {
+    const app = u.searchParams.get('app');
+    if (!Object.prototype.hasOwnProperty.call(APPS, app)) return send(res, 404, 'text/plain; charset=utf-8', 'No está.');
+    const volver = volverLimpio(u.searchParams.get('volver'));
+    const user = userFromCookie(req);
+    // sin la sesion de la cuenta en este navegador: vuelve y entra con su usuario
+    if (!user) return send(res, 302, 'text/plain', '', { Location: origenApp(app) + volver + '#cvsin=1', 'Cache-Control': 'no-store' });
+    podar(permisos);
+    const nonce = crypto.randomBytes(24).toString('base64url');
+    permisos.set(nonce, { uid: user.id, app, volver, vence: Date.now() + 10 * 60e3 });
+    return paginaAutorizar(res, app, user, nonce);
+  }
+  if (req.method !== 'POST') return json(res, 405, { error: 'metodo' });
+  // Solo el boton de la pagina del chat (otra pagina, aunque sea del mismo dominio, no lo puede mandar)
+  if (req.headers.origin !== new URL(publicUrl).origin) return json(res, 403, { error: 'no' });
+  const f = await leerForm(req);
+  const n = String(f.get('n') || '');
+  const p = permisos.get(n);
+  if (p) permisos.delete(n);
+  const user = userFromCookie(req);
+  if (!p || p.vence < Date.now() || !user || user.id !== p.uid) return send(res, 400, 'text/plain; charset=utf-8', 'Se venció: volvé a la página y tocá "Entrar con CV Chat" de nuevo.', { 'Cache-Control': 'no-store' });
+  if (f.get('ok') !== '1') return send(res, 303, 'text/plain', '', { Location: origenApp(p.app) + p.volver, 'Cache-Control': 'no-store' });
+  podar(codigos);
+  const codigo = crypto.randomBytes(32).toString('base64url');
+  codigos.set(codigo, { uid: user.id, app: p.app, vence: Date.now() + 60e3 });
+  log(`entrar con CV Chat: ${user.username} (Haven #${user.id}) a ${p.app}`);
+  return send(res, 303, 'text/plain', '', { Location: origenApp(p.app) + p.volver + '#cvcodigo=' + codigo, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+}
+async function canje(req, res) {
+  const { json, readJson } = h;
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return json(res, 405, { error: 'metodo' });
+  if (!/^application\/json/.test(String(req.headers['content-type'] || ''))) return json(res, 403, { error: 'no' });
+  const b = (await readJson(req, 1000)) || {};
+  const k = String(b.codigo || '');
+  const c = codigos.get(k);
+  const vencido = { error: 'Se venció: tocá "Entrar con CV Chat" de nuevo.' };
+  if (!c) return json(res, 404, vencido);
+  // solo la pagina para la que se dio
+  if (req.headers.origin !== origenApp(c.app)) return json(res, 403, { error: 'no' });
+  codigos.delete(k);
+  if (c.vence < Date.now() || banned(c.uid)) return json(res, 404, vencido);
+  return json(res, 200, h.sessionFor(c.uid));
+}
+
 async function handle(req, res, p, u) {
   const { json, send, sessionUser } = h;
+
+  if (p === '/puente/cuenta/autorizar') return autorizar(req, res, u);
+  if (p === '/puente/api/cuenta/canje') return canje(req, res);
 
   if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar', '/puente/api/cuenta/avisos', '/puente/api/cuenta/avisos/leer'].includes(p)) {
     cors(req, res);

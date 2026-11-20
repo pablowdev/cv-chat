@@ -1519,7 +1519,7 @@ async function handle(req, res) {
     const r = await require('./invitaciones.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
-  if (p.startsWith('/puente/api/cuenta/') || p === '/puente/cuenta/salir') {
+  if (p.startsWith('/puente/api/cuenta/') || p === '/puente/cuenta/salir' || p === '/puente/cuenta/autorizar') {
     const r = await cuenta.handle(req, res, p, u);
     if (r !== false) return;
   }
