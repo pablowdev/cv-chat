@@ -1586,6 +1586,14 @@ function shareTags(html, url) {
     const resto = [...extra].filter(([k, x]) => k !== 'juegos' && /^[a-z_]{1,20}$/.test(k) && /^[a-z0-9_-]{0,20}$/i.test(x));
     if (resto.length) enlace += '&' + resto.map(([k, x]) => x ? `${k}=${x}` : k).join('&');
   }
+  // Una sala de CV Hotel (/app?juegos=cvhotel&sala=<sala>, el boton 🔗 de cada sala): su nombre, su texto y su foto
+  // (hotel.js: enlaceSala; null si no se puede mostrar afuera: queda la tarjeta del hotel; sin foto todavia, la tapa)
+  if (juego && fj && fj.id === 'hotel') {
+    const sala = new URL(String(url), 'http://x').searchParams.get('sala');
+    let s = null;
+    try { s = sala && /^[a-z0-9-]{2,20}$/.test(sala) ? require('./hotel.js').enlaceSala(sala) : null; } catch (err) { warn('hotel: enlace de sala:', err.message); }
+    if (s) { title = `${s.title} · ${appName()}`; desc = s.desc; if (s.image) image = s.image; }
+  }
   // Una mesa (/app?truco=<id>, ?pool=<id>...: el id del juego): la tapa de ese juego, "Te invitaron a jugar..."
   const mq = !juego && /^\/app\/?\?/.test(String(url || '')) ? new URL(String(url), 'http://x').searchParams : null;
   const jm = mq && registro().lista().find((j) => j.mesa && registro().tapaDe(j) && /^[a-z0-9_-]{1,40}$/i.test(mq.get(j.id) || ''));
