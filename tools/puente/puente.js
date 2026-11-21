@@ -187,6 +187,8 @@ function start(deps) {
   try { require('./monedas-fuentes.js').setup({ db, log, warn }); } catch (err) { warn('monedas fuentes:', err.message); }
   // CV Club: la suscripcion con monedas (el estilo del nombre y del perfil, el banner, la forma del avatar)
   try { require('./cvclub.js').setup({ db, io, log, warn }); } catch (err) { warn('cvclub:', err.message); }
+  // Las tarjetas de acciones, cripto, monedas y dolar en los mensajes ($UMAC, $BTC, $BLUE, $DÓLAR)
+  try { require('./cotiza.js').setup({ db, log, warn }); } catch (err) { warn('cotiza:', err.message); }
   // Los juegos: cada uno deja su ficha al instalarse (juegos-registro.js) con sus modulos de servidor, y aca se
   // prenden los que tienen setup (truco.js, misionrisk.js, shoppa.js, bacity.js...; los motores no tienen). Uno que
   // falla no tira a los demas.

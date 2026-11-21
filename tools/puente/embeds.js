@@ -187,8 +187,10 @@ async function forUser(user, ids) {
 // Para el historial que se le manda a alguien (ya puede ver esos mensajes): los embeds guardados, y
 // los mensajes con enlaces que no van a tener (no estan en Discord). Los que faltan pedirle a Discord
 // se piden ya; llegan por el socket ("puente-embeds")
+// (los que tienen una cotizacion, $UMAC o $BLUE, tambien: si les quitaron la vista previa, la tarjeta no va)
+const COTIZA = /(^|[^\w$])\$[A-Za-zÁÉÍÓÚÑáéíóúñ]/;
 function paraHistorial(messages) {
-  const ids = messages.filter(m => m && Number.isInteger(m.id) && typeof m.content === 'string' && /https?:\/\//i.test(m.content)).map(m => m.id).slice(0, 200);
+  const ids = messages.filter(m => m && Number.isInteger(m.id) && typeof m.content === 'string' && (/https?:\/\//i.test(m.content) || COTIZA.test(m.content))).map(m => m.id).slice(0, 200);
   if (!ids.length) return null;
   const rows = db.prepare(`SELECT m.id, m.content, m.thread_id, m.discord_message_id, c.is_dm, c.discord_channel_id dch, pe.embeds, sv.haven_message_id sv
                            FROM messages m JOIN channels c ON c.id = m.channel_id
@@ -198,6 +200,7 @@ function paraHistorial(messages) {
   const embeds = {}, sin = [];
   for (const r of rows) {
     if (r.sv) { embeds[r.id] = []; continue; }
+    if (!/https?:\/\//i.test(r.content || '')) continue; // (solo cotizaciones: nada mas que hacer)
     if (r.embeds != null) {
       try {
         const l = JSON.parse(r.embeds);

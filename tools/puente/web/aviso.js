@@ -670,7 +670,7 @@ function sheetDrag(sheet, opts) {
   if (!matchMedia('(pointer: coarse)').matches) return;
   const GROUPS = [
     ['reply', 'thread', 'quote'],
-    ['edit', 'copy-text', 'copy-link', 'puente-guardar', 'pin', 'unpin'],
+    ['edit', 'copy-text', 'copy-link', 'puente-guardar', 'pin', 'unpin', 'puente-quitar-vista'],
     [], // el resto (proteger, mensaje oficial, etiquetas...)
     ['puente-denunciar', 'delete'],
   ];
@@ -805,6 +805,17 @@ function sheetDrag(sheet, opts) {
       g.append(el('span', 'puente-sheet-icon', '🔖'), el('span', '', window.puenteGuardados.es(msgId) ? 'Quitar de guardados' : 'Guardar mensaje'));
       g.addEventListener('click', (ev) => { ev.stopPropagation(); hide(app); window.puenteGuardados.alternar(msgId); });
       buttons.push(g);
+    }
+
+    // Quitar la vista previa (la de un enlace o la tarjeta de una cotizacion), como la ✕ de la PC: quien
+    // escribio el mensaje o un admin; pregunta antes y queda solo el texto, para todos
+    if (window.puenteQuitarVista && window.puenteQuitarVista.puede(app, msgEl)) {
+      const qv = el('button', 'channel-ctx-item');
+      qv.type = 'button';
+      qv.dataset.puenteAction = 'puente-quitar-vista';
+      qv.append(el('span', 'puente-sheet-icon', '🧹'), el('span', '', 'Quitar la vista previa'));
+      qv.addEventListener('click', (ev) => { ev.stopPropagation(); hide(app); window.puenteQuitarVista.pedir(msgEl); });
+      buttons.push(qv);
     }
 
     const actionOf = (b) => b.dataset.action || b.dataset.puenteAction;
@@ -16023,7 +16034,7 @@ var puenteSinUbicacion = (function () {
     document.getElementById('puente-quitar-vista')?.remove();
     const fondo = el('div', 'modal-overlay'); fondo.id = 'puente-quitar-vista'; fondo.style.display = 'flex';
     const box = el('div', 'modal');
-    box.append(el('h3', null, '¿Quitar la vista previa?'), el('p', 'puente-qv-texto', 'Va a quedar solo el enlace, para todos. (Con Shift + clic en la ✕ no se pregunta.)'));
+    box.append(el('h3', null, '¿Quitar la vista previa?'), el('p', 'puente-qv-texto', 'Va a quedar solo el texto del mensaje, para todos.' + (matchMedia('(pointer: coarse)').matches ? '' : ' (Con Shift + clic en la ✕ no se pregunta.)')));
     const acc = el('div', 'modal-actions');
     const no = el('button', 'btn-sm', 'Cancelar'); no.type = 'button'; no.addEventListener('click', () => fondo.remove());
     const si = el('button', 'btn-sm btn-danger', 'Quitar'); si.type = 'button'; si.addEventListener('click', () => { fondo.remove(); fn(); });
@@ -16040,9 +16051,16 @@ var puenteSinUbicacion = (function () {
       .then(({ ok, d }) => { if (!ok) toast(d.error || 'No se pudo quitar.', 'error'); })
       .catch(() => toast('No hay conexión.', 'error'));
   }
+  // (las vistas previas de un mensaje: las de los enlaces y las tarjetas de cotizaciones, $UMAC o $BLUE)
+  const VISTAS = '.puente-embeds > *, .message-content .link-preview, .thread-msg-content .link-preview, .puente-cotizas > .puente-cotiza';
+  // Para el menu del celular (mantener apretado el mensaje): si se puede quitar y quitarla, preguntando antes
+  window.puenteQuitarVista = {
+    puede: (app, msgEl) => !!msgEl && !!app && puedeQuitar(app, msgEl) && !!msgEl.querySelector(VISTAS),
+    pedir: (msgEl) => confirmar(() => quitar(msgEl)),
+  };
   function ponerX(app, msgEl) {
     if (!puedeQuitar(app, msgEl)) return;
-    for (const v of msgEl.querySelectorAll('.puente-embeds > *, .message-content .link-preview, .thread-msg-content .link-preview')) {
+    for (const v of msgEl.querySelectorAll(VISTAS)) {
       if (v.querySelector(':scope > .puente-qv-x')) continue;
       const x = el('button', 'puente-qv-x'); x.type = 'button'; x.title = 'Quitar la vista previa'; x.setAttribute('aria-label', x.title);
       x.innerHTML = svg(I.cerrar, 16);
@@ -16065,7 +16083,7 @@ var puenteSinUbicacion = (function () {
     if (!matchMedia('(pointer: coarse)').matches) {
       document.addEventListener('mouseover', (e) => {
         const m = e.target instanceof Element && e.target.closest('#messages [data-msg-id], #thread-messages [data-msg-id]');
-        if (m && m.querySelector('.puente-embeds, .link-preview')) ponerX(app, m);
+        if (m && m.querySelector('.puente-embeds, .link-preview, .puente-cotiza')) ponerX(app, m);
       });
     }
   })();
@@ -17451,4 +17469,286 @@ var puenteSinUbicacion = (function () {
   const alMover = (e) => { if (esCuadro(e.target)) { const ds = abiertas(); if (ds.length) cerrar(ds); } };
   document.addEventListener('mouseup', alMover, true);
   document.addEventListener('touchend', alMover, true);
+})();
+
+// Las tarjetas de cotizaciones en los mensajes: quien escribe $UMAC, $BTC, $BLUE o $DÓLAR ve debajo del mensaje el
+// precio de ese momento (el mismo para todos, aunque lo lean dias despues) y un graficito; los datos los da cotiza.js.
+// Hasta 3 por mensaje, al final, como las vistas previas: se quitan igual (la ✕ en la PC, o mantener apretado el
+// mensaje en el celular) y no vuelven. Los botones del periodo (1D, 1S, 1M, 1A; el dolar 1S, 1M, 6M, 1A) cambian el
+// grafico solo para quien los toca. Cuentan los simbolos en mayusculas ($hola no es nada), fuera de los enlaces, el
+// codigo y las citas; las palabras del dolar y las monedas, como se escriban ($blue, $Dólar). (puente-cotizas)
+(function () {
+  'use strict';
+  const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
+  const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
+  const AR = 'America/Argentina/Buenos_Aires';
+  const LISTAS = '#messages, #thread-messages, #dm-pip-messages';
+  const PALABRAS = new Set(['BLUE', 'MEP', 'CCL', 'OFICIAL', 'MAYORISTA', 'TARJETA', 'CRIPTO', 'DOLAR', 'DOLARES', 'USDARS', 'ARSUSD', 'EUR', 'BRL']);
+  const RE = /(^|[\s([{¿¡"'“‘«,;:])\$([A-Za-zÑñÁÉÍÓÚÜáéíóúü][A-Za-z0-9ÑñÁÉÍÓÚÜáéíóúü]{0,9}(?:[.\-=][A-Za-z]{1,4})?)(?=$|[\s)\]}?!.,;:"'”’»…])/g;
+  const FUERA = 'a, code, pre, blockquote, .puente-cotizas, .puente-embeds, .link-preview, .edited-tag, .mention, .spoiler, .spoiler-text, .reply-banner';
+  const sinTildes = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const MONEDA = { USD: 'US$ ', ARS: '$ ', EUR: '€ ', BRL: 'R$ ', GBP: '£ ' };
+  const nf = (n, d) => Math.abs(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const dec = (n) => { n = Math.abs(n); return n >= 1000 ? 0 : n >= 1 ? 2 : n >= 0.01 ? 4 : 6; };
+  // (el cambio, con sus propios decimales: MELI a US$ 1.355 que se movio US$ 0,45 no es "+0")
+  const decCambio = (n, precio) => { n = Math.abs(n); return n === 0 ? 2 : n >= 100 || (Math.abs(precio) >= 1000 && n >= 10) ? 0 : n >= 0.1 ? 2 : n >= 0.0001 ? 4 : 6; };
+  // (las monedas cerca de 1, como el euro en dolares, con 4 decimales)
+  const plata = (c, v) => (MONEDA[c.moneda] || (c.moneda ? c.moneda + ' ' : '')) + nf(v, c.tipo === 'moneda' && Math.abs(v) < 10 ? 4 : dec(v));
+  const fecha = (t) => new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', timeZone: AR });
+  const hora = (t) => new Date(t).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: AR });
+  const fechaAnio = (t) => new Date(t).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: AR });
+
+  // ── Los simbolos de un mensaje (hasta 3, sin repetir) ──
+  function simbolos(cont) {
+    if (!cont.textContent.includes('$')) return [];
+    const out = [], vistos = new Set();
+    const w = document.createTreeWalker(cont, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => { const f = n.parentElement && n.parentElement.closest(FUERA); return f && cont.contains(f) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; },
+    });
+    for (let n = w.nextNode(); n && out.length < 3; n = w.nextNode()) {
+      RE.lastIndex = 0;
+      let m;
+      while ((m = RE.exec(n.nodeValue)) && out.length < 3) {
+        const crudo = m[2], norm = sinTildes(crudo).toUpperCase();
+        if (crudo !== crudo.toUpperCase() && !PALABRAS.has(norm)) continue; // (en minusculas, solo el dolar y las monedas)
+        if (norm === 'USD' || norm === 'ARS' || vistos.has(norm)) continue;
+        vistos.add(norm);
+        out.push(crudo);
+      }
+    }
+    return out;
+  }
+  // la hora del mensaje (como la guarda Haven: UTC, con o sin la Z), en milisegundos y sin las fracciones
+  function horaDe(msgEl) {
+    const s = String(msgEl.dataset.time || '').trim();
+    const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(s);
+    if (m) return Date.parse(m[1] + 'T' + m[2] + (m[3] || 'Z'));
+    const t = Date.parse(s);
+    return isNaN(t) ? Date.now() : Math.floor(t / 1000) * 1000;
+  }
+  // el texto del mensaje (no el de otro adentro)
+  function contenido(msgEl) {
+    for (const c of msgEl.querySelectorAll('.message-content, .thread-msg-content')) if (c.closest('[data-msg-id]') === msgEl) return c;
+    return null;
+  }
+  // (le quitaron la vista previa: lo sabe el historial, o lo contesta cotiza.js si el historial llego antes de tiempo)
+  const quitadas = new Set();
+  const quitada = (msgEl) => msgEl.dataset.sinVista === '1' || quitadas.has(String(msgEl.dataset.msgId)) || !!(window.puenteVistaQuitada && window.puenteVistaQuitada(msgEl.dataset.msgId));
+
+  // ── Los datos (cotiza.js): de a pocos a la vez, y lo que ya vino no se vuelve a pedir ──
+  const cache = new Map(); // simbolo|t|periodo -> promesa de la tarjeta (o null)
+  let activos = 0; const cola = [];
+  function enCola(fn) {
+    return new Promise((ok) => {
+      const correr = () => { activos++; fn().then(ok, () => ok(null)).finally(() => { activos--; const sig = cola.shift(); if (sig) sig(); }); };
+      if (activos < 3) correr(); else cola.push(correr);
+    });
+  }
+  function pedir(sims, t, p, id) {
+    const clave = (s) => s + '|' + t + '|' + (p || '');
+    const faltan = sims.filter((s) => !cache.has(clave(s)));
+    if (faltan.length) {
+      if (cache.size > 400) cache.clear();
+      const resp = enCola(() => fetch('/puente/api/cotiza?s=' + encodeURIComponent(faltan.join(',')) + '&t=' + t + (p ? '&p=' + encodeURIComponent(p) : '') + (id ? '&m=' + encodeURIComponent(id) : ''), { headers: { Authorization: 'Bearer ' + token() } })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null));
+      for (const s of faltan) {
+        cache.set(clave(s), resp.then((d) => {
+          if (d && d.quitada) { if (id) quitadas.add(String(id)); cache.delete(clave(s)); return null; }
+          const c = d && d.cartas ? d.cartas[s] : undefined;
+          if (c === undefined || (c && c.falla)) { cache.delete(clave(s)); return null; } // (no contesto: la proxima vez se pide de nuevo)
+          return c;
+        }));
+      }
+    }
+    return Promise.all(sims.map((s) => cache.get(clave(s))));
+  }
+
+  // ── Dibujar ──
+  // el grafico: la linea fina, el area apenas pintada y la referencia punteada en gris, con su valor del lado
+  // contrario a la linea; queda 14 px libres arriba y abajo para ese texto
+  function dibujar(box) {
+    const c = box._carta, w = Math.round(box.clientWidth), h = Math.round(box.clientHeight);
+    if (!c || w < 40 || h < 30) return;
+    const s = c.serie, t0 = s[0][0], t1 = s[s.length - 1][0] || t0 + 1, sube = c.precio >= c.ref, color = sube ? '#2dc770' : '#f23f43';
+    const vals = s.map((q) => q[1]).concat([c.ref, c.precio]);
+    let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    if (hi === lo) { hi += 1; lo -= 1; }
+    const X = (t) => ((t - t0) / (t1 - t0 || 1)) * (w - 6) + 1, Y = (v) => (1 - (v - lo) / (hi - lo)) * (h - 28) + 14;
+    const pts = s.map((q) => [X(q[0]), Y(q[1])]);
+    const linea = pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+    const fin = pts[pts.length - 1], area = linea + ' L ' + fin[0].toFixed(1) + ' ' + h + ' L ' + pts[0][0].toFixed(1) + ' ' + h + ' Z';
+    const yr = Y(c.ref), cola2 = pts.slice(Math.floor(pts.length * 0.7));
+    const lineaAbajo = cola2.reduce((a, q) => a + q[1], 0) / cola2.length > yr;
+    const id = 'pcg' + Math.random().toString(36).slice(2, 8);
+    const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Gráfico de ' + c.nombre + ': de ' + plata(c, s[0][1]) + ' a ' + plata(c, c.precio));
+    svg.innerHTML = '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + color + '" stop-opacity=".26"/><stop offset="1" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>'
+      + '<line x1="0" x2="' + w + '" y1="' + yr.toFixed(1) + '" y2="' + yr.toFixed(1) + '" stroke="#55565e" stroke-width="1" stroke-dasharray="3 3"/>'
+      + '<path d="' + area + '" fill="url(#' + id + ')"/>'
+      + '<path d="' + linea + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+      + '<circle cx="' + fin[0].toFixed(1) + '" cy="' + fin[1].toFixed(1) + '" r="3.5" fill="' + color + '" stroke="#222126" stroke-width="2"/>';
+    const tx = document.createElementNS(ns, 'text');
+    tx.setAttribute('x', String(w - 2)); tx.setAttribute('y', (lineaAbajo ? yr - 4 : yr + 11).toFixed(1));
+    tx.setAttribute('text-anchor', 'end'); tx.setAttribute('class', 'pc-ref');
+    tx.textContent = c.refTxt + ' ' + nf(c.ref, dec(c.ref));
+    svg.appendChild(tx);
+    box.textContent = '';
+    box.appendChild(svg);
+  }
+  // (se redibuja si cambia el ancho: girar el celular, abrir un hilo; la que ya no esta se suelta)
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => {
+    for (const e of es) { if (!e.target.isConnected) { ro.unobserve(e.target); continue; } try { dibujar(e.target); } catch { /* sigue */ } }
+  }) : null;
+  function eje(c) {
+    const a = c.serie[0][0], b = c.serie[c.serie.length - 1][0];
+    if (c.periodo === '1D') return fecha(a) === fecha(b) ? [hora(a), hora(b)] : [fecha(a) + ' ' + hora(a), fecha(b) + ' ' + hora(b)];
+    if (c.periodo === '6M' || c.periodo === '1A') return [fechaAnio(a), fechaAnio(b)];
+    return [fecha(a), fecha(b)];
+  }
+  // una tarjeta: ctx = { id (del mensaje), sim (como se escribio), t (hora del mensaje) }
+  function tarjeta(c, ctx) {
+    if (c.tipo === 'tabla') return tabla(c, ctx);
+    const sube = c.precio >= c.ref;
+    const k = el('div', 'puente-cotiza ' + (sube ? 'sube' : 'baja'));
+    k.dataset.sim = ctx.sim;
+    k.appendChild(el('div', 'pc-sitio', c.sitio));
+    const tt = el(c.url ? 'a' : 'div', 'pc-titulo');
+    if (c.url) { tt.href = c.url; tt.target = '_blank'; tt.rel = 'noopener noreferrer nofollow'; }
+    tt.append(el('b', null, '$' + ctx.sim.toUpperCase()), el('span', null, ' · ' + c.nombre));
+    k.appendChild(tt);
+    const cambio = c.precio - c.ref, pct = c.ref ? (cambio / c.ref) * 100 : 0;
+    const p = el('div', 'pc-precio');
+    p.appendChild(el('span', 'pc-valor', plata(c, c.precio)));
+    const v = el('span', 'pc-var', (sube ? '▲ +' : '▼ −') + nf(cambio, decCambio(cambio, c.precio)) + ' (' + (sube ? '+' : '−') + nf(pct, 2) + '%)');
+    v.appendChild(el('small', null, c.etiqueta));
+    p.appendChild(v);
+    k.appendChild(p);
+    if (c.tipo === 'dolar') k.appendChild(el('div', 'pc-extra', (c.compra != null ? 'Compra ' + plata(c, c.compra) + ' · ' : '') + 'Venta ' + plata(c, c.precio)));
+    const g = el('div', 'pc-graf'); g._carta = c;
+    k.appendChild(g);
+    const [a, b] = eje(c), e = el('div', 'pc-eje');
+    e.append(el('span', null, a), el('span', null, b));
+    k.appendChild(e);
+    // el pie: los periodos y la fuente, en una sola linea
+    const pie = el('div', 'pc-pie'), per = el('div', 'pc-periodos');
+    per.setAttribute('role', 'group'); per.setAttribute('aria-label', 'Período del gráfico');
+    for (const x of c.periodos || []) {
+      const bt = el('button', x === c.periodo ? 'activo' : null, x); bt.type = 'button';
+      bt.title = { '1D': 'Un día', '1S': 'Una semana', '1M': 'Un mes', '6M': 'Seis meses', '1A': 'Un año' }[x] || x;
+      bt.setAttribute('aria-pressed', String(x === c.periodo));
+      bt.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); if (x !== c.periodo) cambiar(k, ctx, x); });
+      per.appendChild(bt);
+    }
+    pie.append(per, el('span', 'pc-fuente', c.fuente));
+    k.appendChild(pie);
+    setTimeout(() => { try { dibujar(g); } catch { /* sigue */ } if (ro) ro.observe(g); }, 0);
+    return k;
+  }
+  // $DÓLAR: todos en una tabla (compra, venta y lo que cambio en el dia)
+  function tabla(c, ctx) {
+    const k = el('div', 'puente-cotiza pc-tabla');
+    k.dataset.sim = ctx.sim;
+    k.appendChild(el('div', 'pc-sitio', c.sitio));
+    const tt = el('div', 'pc-titulo');
+    tt.append(el('b', null, '$' + ctx.sim.toUpperCase()), el('span', null, ' · ' + c.nombre));
+    k.appendChild(tt);
+    const tb = el('table', 'pc-dolares'), cab = el('tr');
+    for (const x of ['', 'Compra', 'Venta', 'Día']) cab.appendChild(el('th', null, x));
+    tb.appendChild(cab);
+    for (const f of c.filas) {
+      const tr = el('tr'), sube = f.varDia == null || f.varDia >= 0;
+      tr.append(el('td', null, f.nombre), el('td', null, f.compra == null ? '—' : nf(f.compra, 0)), el('td', null, nf(f.venta, 0)),
+        el('td', f.varDia == null ? null : sube ? 'sube' : 'baja', f.varDia == null ? '—' : (sube ? '▲ ' : '▼ ') + nf(f.varDia, 1) + '%'));
+      tb.appendChild(tr);
+    }
+    k.appendChild(tb);
+    const pie = el('div', 'pc-pie');
+    pie.appendChild(el('span', 'pc-fuente', 'En pesos · ' + c.fuente + ' · ' + fecha(c.cuando) + ' ' + hora(c.cuando)));
+    k.appendChild(pie);
+    return k;
+  }
+  // otro periodo (solo para quien lo toca): se pide y se cambia la tarjeta; queda elegido para ese mensaje
+  const elegido = new Map(); // id|simbolo -> periodo
+  function cambiar(k, ctx, p) {
+    elegido.set(ctx.id + '|' + ctx.sim, p);
+    if (elegido.size > 300) elegido.delete(elegido.keys().next().value);
+    k.classList.add('pc-cargando');
+    pedir([ctx.sim], ctx.t, p, ctx.id).then(([c]) => {
+      if (!k.isConnected) return;
+      k.classList.remove('pc-cargando');
+      if (!c || c.sinDatos) { try { window.app && window.app._showToast && window.app._showToast('No hay datos para ese período.', 'info'); } catch { /* sin aviso */ } return; }
+      k.replaceWith(tarjeta(c, ctx));
+    });
+  }
+
+  // ── Cada mensaje: sus tarjetas al final, una vez (y de nuevo si cambia el texto) ──
+  function procesar(msgEl) {
+    if (!msgEl.isConnected || !msgEl.dataset.msgId) return;
+    const cont = contenido(msgEl);
+    if (!cont) return;
+    const viejo = cont.querySelector(':scope > .puente-cotizas');
+    const sims = quitada(msgEl) ? [] : simbolos(cont), clave = sims.join(',');
+    if (!sims.length) { if (viejo) viejo.remove(); return; }
+    if (viejo && viejo.dataset.sims === clave) return; // (ya estan)
+    const id = msgEl.dataset.msgId, t = horaDe(msgEl);
+    // (la caja queda aunque ningun simbolo tenga datos, vacia y sin verse: asi no se vuelve a pedir en cada cambio)
+    const box = el('div', 'puente-cotizas'); box.dataset.sims = clave;
+    if (viejo) viejo.replaceWith(box); else cont.appendChild(box);
+    pedir(sims, t, '', id).then((cartas) => {
+      if (!box.isConnected || quitada(msgEl)) return;
+      cartas.forEach((c, i) => {
+        if (!c || c.sinDatos) return;
+        const ctx = { id, sim: sims[i], t }, k = tarjeta(c, ctx);
+        box.appendChild(k);
+        const p = elegido.get(id + '|' + sims[i]);
+        if (p && p !== c.periodo) cambiar(k, ctx, p);
+      });
+    });
+  }
+  // lo que cambia en las listas de mensajes (mensajes nuevos, los que se cargan, los editados): se mira despues
+  const pendientes = new Set();
+  let programado = false;
+  function anotar(m) {
+    if (!m || !m.dataset || !m.dataset.msgId) return;
+    pendientes.add(m);
+    if (programado) return;
+    programado = true;
+    // (un temporizador y no requestAnimationFrame: con la pestaña en segundo plano tambien se arman)
+    setTimeout(() => {
+      programado = false;
+      const l = [...pendientes]; pendientes.clear();
+      for (const x of l) { try { procesar(x); } catch (err) { console.warn('[puente] cotizaciones:', err); } }
+    }, 30);
+  }
+  const obs = new MutationObserver((muts) => {
+    for (const mu of muts) {
+      const tg = mu.target.nodeType === 1 ? mu.target : mu.target.parentElement;
+      if (!tg || !tg.closest(LISTAS) || tg.closest('.puente-cotizas')) continue;
+      if (mu.type === 'childList') {
+        let propios = mu.addedNodes.length > 0;
+        for (const n of mu.addedNodes) {
+          if (n.nodeType !== 1) { propios = false; continue; }
+          if (n.classList.contains('puente-cotizas')) continue;
+          propios = false;
+          if (n.matches('[data-msg-id]')) anotar(n);
+          else for (const m of n.querySelectorAll('[data-msg-id]')) anotar(m);
+        }
+        if (propios) continue;
+      }
+      anotar(tg.closest('[data-msg-id]'));
+    }
+  });
+  obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+  setTimeout(() => { for (const m of document.querySelectorAll('#messages [data-msg-id], #thread-messages [data-msg-id], #dm-pip-messages [data-msg-id]')) anotar(m); }, 1500);
+  // Le quitaron la vista previa a un mensaje (la ✕): las tarjetas tambien se van, para todos
+  (function esperar(n) {
+    const app = window.app;
+    if (!app || !app.socket) { if (n < 120) setTimeout(() => esperar(n + 1), 1000); return; }
+    app.socket.on('puente-embeds', (d) => {
+      if (!d || !d.messageId || !Array.isArray(d.embeds) || d.embeds.length || d.haven) return;
+      quitadas.add(String(d.messageId));
+      document.querySelectorAll('[data-msg-id="' + String(d.messageId).replace(/[^\w-]/g, '') + '"] .puente-cotizas').forEach((b) => b.remove());
+    });
+  })(0);
 })();

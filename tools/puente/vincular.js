@@ -1426,6 +1426,11 @@ async function handle(req, res) {
     const r = await require('./monedas.js').handle(req, res, p, u, { sessionUser, json, readJson });
     if (r !== false) return;
   }
+  // Las tarjetas de acciones, cripto, monedas y dolar en los mensajes: los datos al momento del mensaje (cotiza.js)
+  if (p === '/puente/api/cotiza') {
+    const r = await require('./cotiza.js').handle(req, res, p, u, { sessionUser, json, readJson });
+    if (r !== false) return;
+  }
   // "Mandar mi opinión" sobre la app (opiniones.js)
   if (p === '/puente/api/opinion' || p === '/puente/api/opinion/mia' || p === '/puente/api/admin/opinion/responder') {
     const r = await require('./opiniones.js').handle(req, res, p, u, { sessionUser, json, readJson });
