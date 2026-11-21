@@ -68,6 +68,10 @@ if (!admin) { log(`No encuentro al usuario admin "${adminName}" en Haven.`); pro
 // Los mensajes de Discord van a nombre de un usuario tecnico sin permisos (no del admin):
 // asi no salen con la etiqueta ADMIN y no rompen el conteo de no leidos del admin.
 const ghost = db.prepare("SELECT id FROM users WHERE username = 'discord-historial'").get() || admin;
+// El bot del puente (es el mismo token): lo que publica el en Discord (los avisos de la mudanza en cada
+// canal, los del vigia...) es solo de Discord, como en el puente en vivo. Lo que si va a CV Chat (los
+// anuncios, el resumen de logros) ya lo puso el puente al publicarlo.
+let botId = null;
 
 let estado = {};
 try { estado = JSON.parse(fs.readFileSync(ESTADO_PATH, 'utf8')); } catch { /* primera vez */ }
@@ -218,6 +222,7 @@ const insertPage = db.transaction((msgs, channelId, threadRoot, attByMsg) => {
   let n = 0;
   for (const msg of msgs) {
     if (msg.type !== 0 && msg.type !== 19) continue; // normales y respuestas, como el importador
+    if (botId && !msg.webhook_id && msg.author && msg.author.id === botId) continue; // del bot del puente: solo de Discord
     const content = buildContent(msg, attByMsg && attByMsg.get(msg.id));
     if (!content) continue;
     // --rehacer solo corrige mensajes que ya estan: uno viejo agregado ahora se
@@ -346,6 +351,8 @@ async function findGuildId() {
 async function main() {
   const started = Date.now();
   const guildId = await findGuildId();
+  const yo = await api('/users/@me');
+  botId = yo && !yo.__error && yo.id ? yo.id : null;
   const firstRun = !estado.ultimaSincronizacion;
 
   if (firstRun) {
