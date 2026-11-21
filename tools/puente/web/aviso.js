@@ -17968,3 +17968,66 @@ var puenteSinUbicacion = (function () {
   // al abrir, los que ya existen (con texto guardado, por ejemplo)
   setTimeout(() => { for (const ta of document.querySelectorAll(CAJAS)) { if (!(ta instanceof HTMLTextAreaElement)) continue; enganchar(ta); programar(ta); } }, 2000);
 })();
+
+// iPhone y iPad (la app web y Safari): con el teclado abierto, el cuadro de escribir quedaba tapado por el teclado y
+// aparecia y desaparecia mientras se escribia. La app seguia del alto de la pantalla entera: el arreglo de Haven
+// (_setupIOSKeyboard) la achica solo si window.innerHeight no cambia con el teclado, y en los iOS nuevos tambien
+// cambia; iOS corria la pagina para mostrar el cuadro y despues la volvia a su lugar. Ahora, mientras el teclado esta
+// abierto, la app queda exactamente del tamaño y en el lugar del area que se ve (visualViewport): arriba el
+// encabezado, abajo el cuadro, justo encima del teclado. Si Haven le cambia el alto en el medio, se vuelve a poner
+// antes de que se vea. Al cerrar el teclado, todo vuelve a como estaba.
+// (puente-teclado-iphone)
+(function () {
+  'use strict';
+  const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const vv = window.visualViewport;
+  if (!IOS || !vv) return;
+  let alto = vv.height, ancho = vv.width; // el area visible sin teclado
+  let fijo = null; // { top, height } mientras la app esta pegada al area visible
+  let vigia = null;
+  const escribiendo = () => {
+    const a = document.activeElement;
+    if (!a || a === document.body) return false;
+    if (a.isContentEditable || a.tagName === 'TEXTAREA') return true;
+    return a.tagName === 'INPUT' && !/^(button|checkbox|radio|range|color|file|submit|reset|image|hidden)$/i.test(a.type || '');
+  };
+  // la lista que se esta viendo: si estaba abajo del todo, queda abajo (se ven los ultimos mensajes al escribir)
+  const lista = () => (document.activeElement && document.activeElement.id === 'thread-input' ? document.getElementById('thread-messages') : document.getElementById('messages'));
+  const abajo = (m) => !!m && m.scrollHeight - m.scrollTop - m.clientHeight < 80;
+  function aplicar(app) {
+    if (!fijo) return;
+    const s = app.style;
+    for (const [p, v] of [['position', 'fixed'], ['left', '0px'], ['right', '0px'], ['top', fijo.top], ['height', fijo.height]]) {
+      if (s.getPropertyValue(p) !== v || s.getPropertyPriority(p) !== 'important') s.setProperty(p, v, 'important');
+    }
+    if (!document.body.classList.contains('ios-keyboard-open')) document.body.classList.add('ios-keyboard-open'); // (Haven: sin el margen de abajo)
+  }
+  function acomodar() {
+    const app = document.getElementById('app');
+    if (!app) return;
+    if (Math.abs(vv.width - ancho) > 40) { ancho = vv.width; if (!escribiendo()) alto = vv.height; } // se giro el telefono
+    if (!escribiendo()) alto = Math.max(alto, vv.height);
+    if (escribiendo() && vv.height < alto - 100) {
+      const m = lista(), seguir = abajo(m);
+      fijo = { top: Math.round(vv.offsetTop) + 'px', height: Math.round(vv.height) + 'px' };
+      aplicar(app);
+      if (seguir && m) m.scrollTop = m.scrollHeight;
+      if (!vigia) {
+        // (Haven le cambia el alto a la app con cada movimiento del teclado: se corrige antes de que se vea)
+        vigia = new MutationObserver(() => { const a = document.getElementById('app'); if (fijo && a) aplicar(a); });
+        vigia.observe(app, { attributes: true, attributeFilter: ['style'] });
+      }
+    } else if (fijo) {
+      fijo = null;
+      for (const p of ['position', 'top', 'left', 'right', 'height']) app.style.removeProperty(p);
+      document.body.classList.remove('ios-keyboard-open');
+      // (a veces iOS deja la pagina corrida al cerrar el teclado)
+      if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0);
+    }
+  }
+  vv.addEventListener('resize', acomodar);
+  vv.addEventListener('scroll', acomodar);
+  window.addEventListener('resize', acomodar);
+  document.addEventListener('focusin', acomodar, true);
+  document.addEventListener('focusout', () => setTimeout(acomodar, 120), true);
+})();
