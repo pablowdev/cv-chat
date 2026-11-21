@@ -485,9 +485,13 @@ async function soloLectura(soloCanal) {
   for (const c of canales) {
     guardarOriginal(c);
     let fallo = false;
-    // El bot sigue pudiendo escribir (para los avisos); los webhooks del puente no dependen de esto
-    const r0 = await discord('PUT', `/channels/${c.id}/permissions/${yo}`, { type: 1, allow: String(P.VIEW | P.SEND | P.HISTORY), deny: '0', __reason: 'Mudanza a CV Chat' });
-    if (r0 && r0.__error) fallo = true;
+    // El bot sigue pudiendo todo lo que se les saca a los demas: escribir (los avisos), reaccionar (las reacciones
+    // que se ponen en CV Chat) y abrir hilos (los que se abren en CV Chat); se suma a lo que ya tuviera en el canal.
+    // Los webhooks del puente no dependen de esto. Si no se puede, el canal no se cierra: el bot quedaria afuera
+    const suyo = P.VIEW | P.SEND | P.HISTORY | negar;
+    const mio = (c.permission_overwrites || []).find(o => o.id === yo) || { allow: '0', deny: '0' };
+    const r0 = await discord('PUT', `/channels/${c.id}/permissions/${yo}`, { type: 1, allow: String(BigInt(mio.allow) | suyo), deny: String(BigInt(mio.deny) & ~suyo), __reason: 'Mudanza a CV Chat' });
+    if (r0 && r0.__error) { fallas.push(c.name + ' (' + r0.__error + ')'); await sleep(ENSAYO ? 0 : 700); continue; }
     // @everyone: no escribir ni reaccionar
     const todos = (c.permission_overwrites || []).find(o => o.id === g) || { allow: '0', deny: '0' };
     const r1 = await discord('PUT', `/channels/${c.id}/permissions/${g}`, { type: 0, allow: String(BigInt(todos.allow) & ~negar), deny: String(BigInt(todos.deny) | negar), __reason: 'Mudanza a CV Chat: solo lectura' });
@@ -502,7 +506,12 @@ async function soloLectura(soloCanal) {
     // Un aviso fijado en los canales de texto (solo en Discord: los mensajes del bot no entran a CV Chat)
     if (!fallo && (c.type === 0 || c.type === 5)) {
       const m = await discord('POST', `/channels/${c.id}/messages`, { content: completar(T.canal), allowed_mentions: { parse: [] }, flags: 1 << 2 });
-      if (m && m.id && !m.ensayo && !m.__error) { await api('PUT', `/channels/${c.id}/pins/${m.id}`); cfg('aviso_' + c.id, m.id); }
+      if (m && m.id && !m.ensayo && !m.__error) {
+        cfg('aviso_' + c.id, m.id);
+        // (desde 2025 fijar es un permiso aparte en Discord, "Fijar mensajes": sin el, el aviso queda sin fijar)
+        const pin = await api('PUT', `/channels/${c.id}/pins/${m.id}`);
+        if (pin && pin.__error) warn(`mudanza: no pude fijar el aviso en #${c.name}:`, pin.__error, pin.__error === 403 ? '(al rol del bot le falta "Fijar mensajes")' : '');
+      }
     }
     await sleep(ENSAYO ? 0 : 700);
   }
