@@ -8372,8 +8372,21 @@ document.addEventListener('pointerdown', (ev) => {
     knownCache = { users, chans };
     return knownCache;
   }
+  // Los simbolos que van a tener tarjeta ($UMAC, $BTC, $BLUE), en azul como en X: los elige (puente-cotizas)
+  // sobre todo el texto (posiciones desde el principio) y aca se marcan donde caen. Solo cambia el color: el texto
+  // es el mismo, letra por letra
+  let tics = [];
+  function tick(t, o) {
+    let out = '', last = 0;
+    for (const [a, b] of tics) {
+      if (a < o + last || b > o + t.length) continue;
+      out += leaf(t.slice(last, a - o)) + '<span class="ped-tic">' + esc(t.slice(a - o, b - o)) + '</span>';
+      last = b - o;
+    }
+    return out + leaf(t.slice(last));
+  }
   let names = null;
-  function mentions(t) {
+  function mentions(t, o) {
     if (!names) names = known();
     let out = '', last = 0;
     t.replace(/(^|[^\w@#&])([@#])([\p{L}\p{N}_.-]{1,50})/gu, (full, pre, sym, name, at) => {
@@ -8381,26 +8394,29 @@ document.addEventListener('pointerdown', (ev) => {
       const ok = sym === '@' ? (low === 'everyone' || low === 'here' || names.users.has(low)) : names.chans.has(low);
       if (!ok) return full;
       const start = at + pre.length;
-      out += leaf(t.slice(last, start)) + '<span class="ped-mention">' + leaf(sym + name) + '</span>';
+      out += tick(t.slice(last, start), o + last) + '<span class="ped-mention">' + leaf(sym + name) + '</span>';
       last = start + 1 + name.length;
       return full;
     });
-    return out + leaf(t.slice(last));
+    return out + tick(t.slice(last), o + last);
   }
-  function fmt(t) {
+  function fmt(t, o) {
     let best = null;
     for (const r of RULES) { const x = r.re.exec(t); if (x && (!best || x.index < best.x.index)) best = { r, x }; }
-    if (!best) return mentions(t);
+    if (!best) return mentions(t, o);
     const { r, x } = best;
     const mk = '<span class="ped-mk">' + esc(r.m) + '</span>';
-    const inner = r.cls === 'code' ? esc(x[1]) : fmt(x[1]);
-    return mentions(t.slice(0, x.index)) + '<span class="ped-' + r.cls + '">' + mk + '<span class="ped-in">' + inner + '</span>' + mk + '</span>' + fmt(t.slice(x.index + x[0].length));
+    const inner = r.cls === 'code' ? esc(x[1]) : fmt(x[1], o + x.index + r.m.length);
+    return mentions(t.slice(0, x.index), o) + '<span class="ped-' + r.cls + '">' + mk + '<span class="ped-in">' + inner + '</span>' + mk + '</span>' + fmt(t.slice(x.index + x[0].length), o + x.index + x[0].length);
   }
   function markup(value) {
     names = null;
+    try { tics = typeof window.puenteCotizasTexto === 'function' ? window.puenteCotizasTexto(value) : []; } catch { tics = []; }
+    let o = 0;
     const html = value.split('\n').map(line => {
+      const lo = o; o += line.length + 1;
       const q = /^> /.exec(line);
-      return q ? '<span class="ped-quote"><span class="ped-mk">&gt; </span>' + fmt(line.slice(2)) + '</span>' : fmt(line);
+      return q ? '<span class="ped-quote"><span class="ped-mk">&gt; </span>' + fmt(line.slice(2), lo + 2) + '</span>' : fmt(line, lo);
     }).join('<br>');
     return value.endsWith('\n') ? html + '<br data-fin="1">' : html;
   }
@@ -8621,6 +8637,9 @@ document.addEventListener('pointerdown', (ev) => {
   function copyStyles() {
     const hidden = ta.classList.contains('puente-ta-oculto');
     if (hidden) ta.classList.remove('puente-ta-oculto');
+    // (sin el azul de los simbolos de antes de arrancar (puente-tickers-al-escribir), que vuelve transparente su letra)
+    const tic = ta.classList.contains('pc-tic-on');
+    if (tic) ta.classList.remove('pc-tic-on');
     const prevH = ta.style.height; ta.style.height = 'auto';
     const cs = getComputedStyle(ta);
     for (const p of STYLE_PROPS) ed.style[p] = cs[p];
@@ -8629,6 +8648,7 @@ document.addEventListener('pointerdown', (ev) => {
     const oneLine = lh + (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
     ed.style.minHeight = Math.max(parseFloat(cs.minHeight) || 0, oneLine) + 'px';
     ta.style.height = prevH;
+    if (tic) ta.classList.add('pc-tic-on');
     if (hidden) ta.classList.add('puente-ta-oculto');
     ed.style.setProperty('--puente-ed-ph', getComputedStyle(ta, '::placeholder').color || '#80848e');
     // Como Discord: en la PC el cuadro crece hasta la mitad de la ventana antes de desplazarse
@@ -17518,6 +17538,31 @@ var puenteSinUbicacion = (function () {
     }
     return out;
   }
+  // Lo mismo sobre el texto crudo, mientras se escribe: donde estan los simbolos que van a tener tarjeta (los 3
+  // primeros distintos, cada vez que aparecen), sin contar el codigo, las citas, los spoilers ni los enlaces, que en
+  // el mensaje no cuentan. Devuelve [[desde, hasta]] (desde el $). Lo usa el cuadro de texto (puente-tickers-al-escribir)
+  function rangosEnTexto(txt) {
+    let s = String(txt || '');
+    if (!s.includes('$')) return [];
+    const tapar = (re) => { s = s.replace(re, (m) => ' '.repeat(m.length)); };
+    tapar(/```[\s\S]*?```/g); tapar(/`[^`\n]+`/g); tapar(/\|\|.+?\|\|/g); tapar(/^>.*$/gm); tapar(/https?:\/\/\S+/g);
+    // (las marcas de formato, como las aplica Haven, tampoco: en el mensaje **$MELI** queda $MELI en negrita, con tarjeta)
+    const marcas = (re, n) => { s = s.replace(re, (m) => ' '.repeat(n) + m.slice(n, m.length - n) + ' '.repeat(n)); };
+    marcas(/__(.+?)__/g, 2); marcas(/\*\*(.+?)\*\*/g, 2); marcas(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, 1); marcas(/~~(.+?)~~/g, 2);
+    const hallados = [], elegidos = [];
+    RE.lastIndex = 0;
+    let m;
+    while ((m = RE.exec(s))) {
+      const crudo = m[2], norm = sinTildes(crudo).toUpperCase();
+      if (crudo !== crudo.toUpperCase() && !PALABRAS.has(norm)) continue;
+      if (norm === 'USD' || norm === 'ARS') continue;
+      if (!elegidos.includes(norm)) { if (elegidos.length >= 3) continue; elegidos.push(norm); }
+      const ini = m.index + m[1].length;
+      hallados.push([ini, ini + 1 + crudo.length]);
+    }
+    return hallados;
+  }
+  window.puenteCotizasTexto = rangosEnTexto;
   // la hora del mensaje (como la guarda Haven: UTC, con o sin la Z), en milisegundos y sin las fracciones
   function horaDe(msgEl) {
     const s = String(msgEl.dataset.time || '').trim();
@@ -17751,4 +17796,175 @@ var puenteSinUbicacion = (function () {
       document.querySelectorAll('[data-msg-id="' + String(d.messageId).replace(/[^\w-]/g, '') + '"] .puente-cotizas').forEach((b) => b.remove());
     });
   })(0);
+})();
+
+// Mientras se escribe, los simbolos que van a tener tarjeta ($UMAC, $BTC, $BLUE) se ven en azul, como en X: asi se
+// sabe que se detectaron. En la PC el cuadro principal es el de los emojis dibujados, que los marca el mismo (ped-tic).
+// Los demas (el del celular, el de los hilos y el de la ventanita de mensajes directos) son cuadros de texto, que no
+// pueden pintar una parte de su texto: encima va una copia exacta (misma letra, tamaño, margenes, ancho y
+// desplazamiento; no se puede tocar ni seleccionar) con los simbolos en azul, y el texto propio del cuadro se vuelve
+// transparente (el cursor y la seleccion siguen siendo los suyos). Solo mientras hay alguno: sin simbolos, el cuadro
+// queda como siempre. Si algo falla, vuelve a lo normal.
+// (puente-tickers-al-escribir)
+(function () {
+  'use strict';
+  const CAJAS = '#message-input, #thread-input, #dm-pip-input';
+  const COPIAR = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'fontStretch', 'fontFeatureSettings', 'fontKerning',
+    'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent', 'textTransform', 'textAlign', 'tabSize', 'direction',
+    'wordBreak', 'overflowWrap', 'hyphens', 'textRendering', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderTopLeftRadius', 'borderTopRightRadius',
+    'borderBottomLeftRadius', 'borderBottomRightRadius'];
+  // (en el iPhone el cuadro tiene 3 px de margen de mas a los costados, que no figuran en su estilo)
+  const IOS = /iP(hone|ad|od)/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ZW = String.fromCharCode(0x200b);
+  const st = document.createElement('style');
+  st.textContent = 'textarea.pc-tic-on{color:transparent!important;-webkit-text-fill-color:transparent!important}'
+    + 'textarea.pc-tic-on::selection{color:transparent;-webkit-text-fill-color:transparent;background:rgba(88,101,242,.45)}'
+    + '.pc-tic-espejo{position:absolute;display:none;box-sizing:border-box;margin:0;overflow:hidden;pointer-events:none;user-select:none;'
+    + '-webkit-user-select:none;background:transparent!important;border-style:solid!important;border-color:transparent!important;box-shadow:none!important;z-index:1}'
+    + '.pc-tic-espejo.on{display:block}.pc-tic-espejo .pc-tic,.puente-editor .ped-tic{color:#00a8fc}';
+  document.head.appendChild(st);
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const datos = new WeakMap(); // cuadro -> { espejo, on, color, caret, txt, pos }
+  const valorNativo = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  // (el de la PC, escondido debajo del de los emojis: ese no se toca, y menos su color, que el otro copia)
+  const escondido = (ta) => ta.classList.contains('puente-ta-oculto');
+
+  // Como muestra el cuadro los espacios y los saltos de linea: Chrome los respeta aunque su estilo diga "normal" (en
+  // el celular lo dice) y otro navegador podria juntarlos. Se prueba una vez, con un cuadro invisible
+  const modos = new Map();
+  function modoEspejo(ws) {
+    if (ws !== 'normal' && ws !== 'pre-line') return ws;
+    if (!modos.has(ws)) {
+      let r = 'pre-wrap';
+      const p = document.createElement('textarea');
+      try {
+        p.setAttribute('aria-hidden', 'true'); p.tabIndex = -1;
+        p.style.cssText = ['position:absolute', 'left:-9999px', 'top:0', 'visibility:hidden', 'width:120px', 'height:0', 'min-height:0',
+          'margin:0', 'padding:0', 'border:0', 'font:16px/20px monospace', 'overflow:hidden', 'resize:none', 'white-space:' + ws].join('!important;') + '!important';
+        document.body.appendChild(p);
+        const alto = (v) => { valorNativo.set.call(p, v); return p.scrollHeight; };
+        const una = alto('x x');
+        r = alto('x' + ' '.repeat(40) + 'x') > una ? 'pre-wrap' : alto('x\nx') > una ? 'pre-line' : 'normal';
+      } catch { /* queda pre-wrap, como en Chrome */ } finally { p.remove(); }
+      modos.set(ws, r);
+    }
+    return modos.get(ws);
+  }
+
+  const activos = new Set(); // los cuadros con la copia encima
+  function apagar(ta) {
+    const d = datos.get(ta);
+    ta.classList.remove('pc-tic-on');
+    activos.delete(ta);
+    if (!d) return;
+    d.espejo.classList.remove('on'); d.espejo.textContent = '';
+    if (d.on) { if (d.caret) ta.style.setProperty('caret-color', d.caret); else ta.style.removeProperty('caret-color'); }
+    d.on = false; d.txt = null; d.pos = '';
+  }
+  // la copia, del mismo tamaño y en el mismo lugar que el cuadro (sin la barra de desplazamiento, si tiene)
+  function medir(ta, d) {
+    const cs = getComputedStyle(ta), e = d.espejo;
+    for (const p of COPIAR) e.style[p] = cs[p];
+    e.style.whiteSpace = modoEspejo(cs.whiteSpace);
+    const bl = parseFloat(cs.borderLeftWidth) || 0, br = parseFloat(cs.borderRightWidth) || 0, bt = parseFloat(cs.borderTopWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+    e.style.width = (ta.clientWidth + bl + br) + 'px';
+    e.style.height = (ta.clientHeight + bt + bb) + 'px';
+    e.style.left = ta.offsetLeft + 'px';
+    e.style.top = ta.offsetTop + 'px';
+    // (una capa arriba del cuadro, que tiene la suya y en el celular un fondo propio; las listas de menciones y
+    // emojis siguen arriba de todo)
+    const z = parseInt(cs.zIndex, 10);
+    e.style.zIndex = String(Number.isFinite(z) ? z + 1 : 1);
+    if (IOS) { e.style.paddingLeft = (parseFloat(cs.paddingLeft) + 3) + 'px'; e.style.paddingRight = (parseFloat(cs.paddingRight) + 3) + 'px'; }
+    // (por si la copia no se ubica respecto de lo mismo que el cuadro: se corrige con lo que se ve)
+    const r1 = ta.getBoundingClientRect(), r2 = e.getBoundingClientRect();
+    if (Math.abs(r1.left - r2.left) > 0.05) e.style.left = (ta.offsetLeft + r1.left - r2.left) + 'px';
+    if (Math.abs(r1.top - r2.top) > 0.05) e.style.top = (ta.offsetTop + r1.top - r2.top) + 'px';
+    d.pos = ta.offsetLeft + ',' + ta.offsetTop + ',' + ta.clientWidth + ',' + ta.clientHeight;
+  }
+  function pintar(ta) {
+    if (!ta.isConnected || escondido(ta) || typeof window.puenteCotizasTexto !== 'function') return apagar(ta);
+    const txt = valorNativo.get.call(ta), rs = window.puenteCotizasTexto(txt);
+    if (!rs.length || !ta.offsetParent) return apagar(ta);
+    let d = datos.get(ta);
+    if (!d || !d.espejo.isConnected) {
+      const e = document.createElement('div');
+      e.className = 'pc-tic-espejo'; e.setAttribute('aria-hidden', 'true');
+      d = { espejo: e, on: false, color: '', caret: '', txt: null, pos: '' };
+      datos.set(ta, d);
+    }
+    if (d.espejo.nextSibling !== ta) ta.before(d.espejo);
+    // el color del texto, antes de volverlo transparente (para la copia y el cursor)
+    if (!d.on) {
+      d.color = getComputedStyle(ta).color;
+      d.caret = ta.style.getPropertyValue('caret-color');
+      ta.style.setProperty('caret-color', d.color);
+    }
+    let html = '', i = 0;
+    for (const [a, b] of rs) { html += esc(txt.slice(i, a)) + '<span class="pc-tic">' + esc(txt.slice(a, b)) + '</span>'; i = b; }
+    html += esc(txt.slice(i)) + (txt.endsWith('\n') ? ZW : '');
+    d.espejo.style.color = d.color;
+    d.espejo.innerHTML = html;
+    d.espejo.classList.add('on');
+    medir(ta, d);
+    ta.classList.add('pc-tic-on');
+    d.on = true; d.txt = txt;
+    d.espejo.scrollTop = ta.scrollTop; d.espejo.scrollLeft = ta.scrollLeft;
+    activos.add(ta); vigilar();
+  }
+  const pendientes = new Set();
+  let programado = false;
+  function programar(ta) {
+    pendientes.add(ta);
+    if (programado) return;
+    programado = true;
+    Promise.resolve().then(() => {
+      programado = false;
+      for (const x of [...pendientes]) { pendientes.delete(x); try { pintar(x); } catch (err) { try { apagar(x); } catch { /* sigue */ } console.warn('[puente] tickers al escribir:', err); } }
+    });
+  }
+  // Mientras hay una copia encima, cada tanto se mira que siga igual que el cuadro: si el texto cambio sin avisar,
+  // si el cuadro se movio, se escondio o lo sacaron, se arregla (o se saca la copia)
+  let reloj = 0;
+  function vigilar() {
+    if (reloj) return;
+    reloj = setInterval(() => {
+      for (const ta of [...activos]) {
+        const d = datos.get(ta);
+        if (!d || !d.on) { activos.delete(ta); continue; }
+        if (!ta.isConnected) { apagar(ta); d.espejo.remove(); continue; }
+        if (escondido(ta) || !ta.offsetParent || valorNativo.get.call(ta) !== d.txt
+          || ta.offsetLeft + ',' + ta.offsetTop + ',' + ta.clientWidth + ',' + ta.clientHeight !== d.pos) programar(ta);
+      }
+      if (!activos.size) { clearInterval(reloj); reloj = 0; }
+    }, 400);
+  }
+  // Cada cuadro, la primera vez: tambien cuando el chat le cambia el texto por su cuenta (al mandar lo vacia, al
+  // editar o citar lo llena), cuando cambia de tamaño y cuando se desplaza. Si otro ya escuchaba ese cambio, se
+  // engancha encima de el y lo sigue llamando
+  function enganchar(ta) {
+    if (escondido(ta)) return;
+    const actual = Object.getOwnPropertyDescriptor(ta, 'value');
+    if (!actual || actual.set !== ta.__pcTicSet) {
+      const base = actual && actual.get && actual.set ? actual : valorNativo;
+      const set = function (v) { base.set.call(this, v); programar(this); };
+      try {
+        Object.defineProperty(ta, 'value', { configurable: true, enumerable: true, get() { return base.get.call(this); }, set });
+        ta.__pcTicSet = set;
+      } catch { /* sin eso: igual se repinta con cada tecla, y el reloj lo revisa */ }
+    }
+    if (ta.__pcTicObs) return;
+    ta.__pcTicObs = true;
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => { const d = datos.get(ta); if (d && d.on) programar(ta); }).observe(ta);
+    ta.addEventListener('scroll', () => { const d = datos.get(ta); if (d && d.on) { d.espejo.scrollTop = ta.scrollTop; d.espejo.scrollLeft = ta.scrollLeft; } }, { passive: true });
+  }
+  const esCaja = (t) => t instanceof HTMLTextAreaElement && t.matches(CAJAS);
+  for (const ev of ['input', 'focusin', 'keyup', 'cut', 'paste', 'compositionend']) {
+    document.addEventListener(ev, (e) => { if (esCaja(e.target)) { enganchar(e.target); programar(e.target); } }, true);
+  }
+  // (si la ventana cambia de tamaño, la caja tambien: se vuelve a medir)
+  window.addEventListener('resize', () => { for (const ta of activos) programar(ta); }, { passive: true });
+  // al abrir, los que ya existen (con texto guardado, por ejemplo)
+  setTimeout(() => { for (const ta of document.querySelectorAll(CAJAS)) { if (!(ta instanceof HTMLTextAreaElement)) continue; enganchar(ta); programar(ta); } }, 2000);
 })();
