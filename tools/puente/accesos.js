@@ -195,6 +195,21 @@ function onRole(event, d) {
   scheduleAll();
 }
 
+// La mudanza (mudanza-plan.js) deja Discord en solo lectura: en CV Chat se sigue escribiendo, con los permisos
+// que tenia cada canal en Discord antes del cierre (guardados en puente_mudanza_permisos para poder deshacerlo)
+let mudanza = { at: 0, ows: null };
+function overwritesDe(ch) {
+  if (Date.now() - mudanza.at > 30e3) {
+    let ows = null;
+    try {
+      const sl = db.prepare("SELECT valor FROM puente_mudanza_config WHERE clave = 'solo_lectura'").get();
+      if (sl && sl.valor === '1') ows = new Map(db.prepare('SELECT canal_id, overwrites FROM puente_mudanza_permisos').all().map(r => [r.canal_id, JSON.parse(r.overwrites || '[]')]));
+    } catch { /* sin mudanza */ }
+    mudanza = { at: Date.now(), ows };
+  }
+  return (mudanza.ows && mudanza.ows.get(ch.id)) || ch.permission_overwrites || [];
+}
+
 // Permisos efectivos de un miembro en un canal (algoritmo oficial de Discord).
 function permissions(member, ch) {
   const guildId = getGuildId();
@@ -203,7 +218,7 @@ function permissions(member, ch) {
   for (const rid of member.roles || []) base |= roles.get(rid) || 0n;
   if (base & ADMINISTRATOR) return ~0n;
   let p = base;
-  const ows = ch.permission_overwrites || [];
+  const ows = overwritesDe(ch);
   const everyone = ows.find(o => o.id === guildId);
   if (everyone) { p &= ~BigInt(everyone.deny); p |= BigInt(everyone.allow); }
   let allow = 0n, deny = 0n;
