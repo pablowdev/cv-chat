@@ -195,10 +195,12 @@ function onRole(event, d) {
   scheduleAll();
 }
 
-// La mudanza (mudanza-plan.js) deja Discord en solo lectura: en CV Chat se sigue escribiendo, con los permisos
-// que tenia cada canal en Discord antes del cierre (guardados en puente_mudanza_permisos para poder deshacerlo)
+// La mudanza (mudanza-plan.js) deja Discord en solo lectura: en CV Chat se sigue escribiendo, con los permisos de
+// escribir, reaccionar y abrir hilos que tenia cada canal antes del cierre (guardados en puente_mudanza_permisos
+// para poder deshacerlo). Todo lo demas, y sobre todo quien VE cada canal, sigue a Discord como esta ahora.
+const ESCRIBIR_MUDANZA = (1n << 11n) | (1n << 38n) | (1n << 35n) | (1n << 36n) | (1n << 6n);
 let mudanza = { at: 0, ows: null };
-function overwritesDe(ch) {
+function overwritesAntes(ch) {
   if (Date.now() - mudanza.at > 30e3) {
     let ows = null;
     try {
@@ -207,18 +209,22 @@ function overwritesDe(ch) {
     } catch { /* sin mudanza */ }
     mudanza = { at: Date.now(), ows };
   }
-  return (mudanza.ows && mudanza.ows.get(ch.id)) || ch.permission_overwrites || [];
+  return (mudanza.ows && mudanza.ows.get(ch.id)) || null;
 }
 
 // Permisos efectivos de un miembro en un canal (algoritmo oficial de Discord).
 function permissions(member, ch) {
+  const ahora = permisosCon(member, ch.permission_overwrites || []);
+  const antes = overwritesAntes(ch);
+  return antes ? (ahora & ~ESCRIBIR_MUDANZA) | (permisosCon(member, antes) & ESCRIBIR_MUDANZA) : ahora;
+}
+function permisosCon(member, ows) {
   const guildId = getGuildId();
   if (member.user.id === ownerId) return ~0n;
   let base = roles.get(guildId) || 0n;
   for (const rid of member.roles || []) base |= roles.get(rid) || 0n;
   if (base & ADMINISTRATOR) return ~0n;
   let p = base;
-  const ows = overwritesDe(ch);
   const everyone = ows.find(o => o.id === guildId);
   if (everyone) { p &= ~BigInt(everyone.deny); p |= BigInt(everyone.allow); }
   let allow = 0n, deny = 0n;
