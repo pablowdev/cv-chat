@@ -11491,6 +11491,8 @@ document.addEventListener('pointerdown', (ev) => {
     page.remove(); page = null; stack = []; clearInterval(tickT); oculto = false;
     salirJuegos();
     document.querySelectorAll('.puente-jg-btn').forEach(b => b.classList.remove('active', 'jg-corriendo'));
+    document.querySelector('.jg-menu-rapido')?.remove();
+    tituloBoton();
     refreshBadge();
   }
   // En segundo plano, como otro programa abierto: ir al chat (un canal, los mensajes directos, el inicio, el
@@ -11508,6 +11510,7 @@ document.addEventListener('pointerdown', (ev) => {
     oculto = true;
     page.classList.add('jg-oculto');
     document.querySelectorAll('.puente-jg-btn').forEach(b => { b.classList.remove('active'); b.classList.add('jg-corriendo'); });
+    tituloBoton();
     avisarVentanas(true);
     refreshBadge();
   }
@@ -11519,6 +11522,8 @@ document.addEventListener('pointerdown', (ev) => {
     const bar = byId('server-bar');
     if (!mobile() && bar) page.style.left = Math.round(bar.getBoundingClientRect().right) + 'px';
     document.querySelectorAll('.puente-jg-btn').forEach(b => { b.classList.add('active'); b.classList.remove('jg-corriendo'); });
+    document.querySelector('.jg-menu-rapido')?.remove();
+    tituloBoton();
     avisarVentanas(false);
     refreshBadge();
     return true;
@@ -11540,7 +11545,50 @@ document.addEventListener('pointerdown', (ev) => {
   };
   // (el juego que esta en la pantalla: su sala, ['inicio', id], o una vista suya, segun su ficha)
   const idActual = () => { const t = stack[stack.length - 1]; if (!t) return null; if (t[0] === 'inicio') return t[1] || null; const j = fichasYa.find((x) => x.vistas && x.vistas[t[0]]); return j ? j.id : null; };
-  window.puenteJuegos = { abierto: () => !!page && !oculto, enSegundoPlano: () => !!page && oculto, ocultar, mostrar, juego: juegoActual, atras: back, abrir: (id) => { if (!id && mostrar()) return; stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, abrirJuego: (id) => { if (!/^[a-z0-9-]{2,24}$/.test(String(id || ''))) return; if (oculto && idActual() === id && mostrar()) return; if (hayJuego()) stack = []; go('inicio', id); }, /* (las mesas de juego de CV Hotel: Atrás vuelve al hotel) */ desafiar: (p, texto) => desafioDM(p, texto) };
+  // Salir del juego abierto (en la pantalla o en segundo plano) sin tener que entrar: lo mismo que cerrar Juegos. Los
+  // juegos en ventana se sueltan (CV Hotel deja la sala, Capa 2 la ciudad); en los de mesa (Truco, Pool...) se deja
+  // de mirar la mesa, sin levantarse de una partida (para abandonarla esta el boton de adentro). Hay uno solo abierto
+  // a la vez (abrir otro cierra el anterior), asi que es salir de todos
+  function salirDelJuego() {
+    if (!page) return false;
+    const id = hayJuego() ? idActual() : null;
+    close();
+    toast(id ? 'Saliste de ' + nombreDe(id) + '.' : 'Cerraste Juegos.', 'info');
+    return true;
+  }
+  // El menu rapido del boton de Juegos, con un juego abierto (mantener apretado o clic derecho): volver o salir.
+  // Se ve como el de los atajos de la columna (su estilo, .puente-at-menu, lo pone ese bloque) y sale al costado del
+  // boton, no debajo del dedo
+  function menuJuego(boton) {
+    if (!page || !hayJuego()) return false;
+    document.querySelector('.puente-at-menu')?.remove();
+    const id = idActual(), nombre = id ? nombreDe(id) : 'el juego';
+    const m = el('div', 'puente-at-menu jg-menu-rapido'); m.setAttribute('role', 'menu');
+    const fuera = (e) => { if (!m.contains(e.target)) cerrarMenu(); };
+    const tecla = (e) => { if (e.key === 'Escape') cerrarMenu(); };
+    function cerrarMenu() { m.remove(); document.removeEventListener('pointerdown', fuera, true); document.removeEventListener('keydown', tecla, true); }
+    const op = (t, fn, rojo) => {
+      const b = el('button', rojo ? 'rojo' : '', t); b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.addEventListener('click', (e) => { e.stopPropagation(); cerrarMenu(); fn(); });
+      m.append(b);
+    };
+    if (oculto) op('Volver a ' + nombre, () => mostrar());
+    op('Salir de ' + nombre, () => salirDelJuego(), true);
+    document.body.append(m);
+    const r = boton.getBoundingClientRect(), mr = m.getBoundingClientRect();
+    m.style.left = Math.max(8, Math.min(r.right + 8, innerWidth - mr.width - 8)) + 'px';
+    m.style.top = Math.max(8, Math.min(r.top, innerHeight - mr.height - 8)) + 'px';
+    setTimeout(() => { document.addEventListener('pointerdown', fuera, true); document.addEventListener('keydown', tecla, true); }, 0);
+    return true;
+  }
+  // (el titulo del boton de Juegos: con un juego en segundo plano, cual es y como salir)
+  function tituloBoton() {
+    const id = page && oculto && hayJuego() ? idActual() : null;
+    const t = id ? 'Juegos · ' + nombreDe(id) + ' sigue abierto (clic derecho para salir)' : 'Juegos';
+    document.querySelectorAll('.puente-jg-btn').forEach(b => { b.title = t; });
+  }
+  window.puenteJuegos = { abierto: () => !!page && !oculto, enSegundoPlano: () => !!page && oculto, ocultar, mostrar, juego: juegoActual, atras: back,
+    salir: salirDelJuego, actual: () => (page && hayJuego() ? idActual() : null), abrir: (id) => { if (!id && mostrar()) return; stack = []; id ? go('mesa', id) : go('inicio'); }, abrirFunball: (id) => { stack = [['inicio']]; id ? go('fbMesa', id) : go('inicio', 'funball'); }, abrirJuego: (id) => { if (!/^[a-z0-9-]{2,24}$/.test(String(id || ''))) return; if (oculto && idActual() === id && mostrar()) return; if (hayJuego()) stack = []; go('inicio', id); }, /* (las mesas de juego de CV Hotel: Atrás vuelve al hotel) */ desafiar: (p, texto) => desafioDM(p, texto) };
   function frame() {
     if (page) { mostrar(); return page; }
     if (window.puenteMercado && window.puenteMercado.abierto()) { try { while (window.puenteMercado.abierto()) window.puenteMercado.atras(); } catch { /* sigue */ } }
@@ -12319,7 +12367,20 @@ document.addEventListener('pointerdown', (ev) => {
       b.innerHTML = svg(I.cartas, 24);
       { const im = el('img', 'puente-ico-img'); im.alt = ''; im.draggable = false; im.addEventListener('load', () => { b.querySelector('svg')?.remove(); b.classList.add('con-icono'); b.prepend(im); }); im.src = '/puente/icono-juegos.webp?v=1'; }
       const badge = el('span', 'puente-rail-badge'); badge.style.display = 'none'; b.appendChild(badge);
-      b.addEventListener('click', (e) => { e.stopPropagation(); if (page && !oculto) ocultar(); else if (page) mostrar(); else { stack = []; go('inicio'); } });
+      // (soltar el dedo despues de mantenerlo apretado no es un toque: cada toque nuevo empieza sin esa marca)
+      let largo = null, porLargo = false, tocando = false;
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (porLargo) { porLargo = false; return; } if (page && !oculto) ocultar(); else if (page) mostrar(); else { stack = []; go('inicio'); } });
+      // Con un juego abierto, mantener apretado (celular) o clic derecho (PC): volver a el o salir sin entrar. Sin
+      // juego no pasa nada (y no sale el menu del navegador para la imagen del icono)
+      b.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); if (tocando) porLargo = true; if (!document.querySelector('.jg-menu-rapido')) menuJuego(b); });
+      b.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') porLargo = false; });
+      b.addEventListener('touchstart', () => {
+        tocando = true; porLargo = false; clearTimeout(largo);
+        largo = setTimeout(() => { porLargo = true; if (!document.querySelector('.jg-menu-rapido')) menuJuego(b); }, 550);
+      }, { passive: true });
+      b.addEventListener('touchmove', () => clearTimeout(largo), { passive: true });
+      for (const ev of ['touchend', 'touchcancel']) b.addEventListener(ev, () => { clearTimeout(largo); setTimeout(() => { tocando = false; }, 0); }, { passive: true });
+      b.style.webkitTouchCallout = 'none'; b.style.webkitUserSelect = 'none'; b.style.userSelect = 'none';
       return b;
     };
     const after = (sel, fallback) => document.querySelector(sel) || document.querySelector(fallback);
@@ -16953,7 +17014,13 @@ var puenteSinUbicacion = (function () {
     const m = el('div', 'puente-at-menu');
     const i = atajos.findIndex((b) => claveDe(b) === claveDe(a));
     const op = (t, fn, rojo) => { const b = el('button', rojo ? 'rojo' : '', t); b.type = 'button'; b.addEventListener('click', () => { m.remove(); fn(); }); m.append(b); };
-    op('Abrir', () => abrir(a));
+    // el juego que esta abierto (en la pantalla o en segundo plano): volver a el o salir sin tener que entrar
+    const J = window.puenteJuegos, enJuego = a.tipo === 'juego' && !!J && !!J.actual && J.actual() === a.id;
+    if (!enJuego) op('Abrir', () => abrir(a));
+    else {
+      if (J.enSegundoPlano && J.enSegundoPlano()) op('Volver al juego', () => abrir(a));
+      op('Salir del juego', () => J.salir(), true);
+    }
     if (i > 0) op('Subir', () => { atajos.splice(i - 1, 0, atajos.splice(i, 1)[0]); guardar(); });
     if (i >= 0 && i < atajos.length - 1) op('Bajar', () => { atajos.splice(i + 1, 0, atajos.splice(i, 1)[0]); guardar(); });
     op('Sacar de la barra', () => { atajos = atajos.filter((b) => claveDe(b) !== claveDe(a)); guardar(); }, true);
@@ -17022,7 +17089,9 @@ var puenteSinUbicacion = (function () {
     n.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); menu(a, e.clientX, e.clientY); });
     // mantener apretado (celular): el menu
     let t = null;
-    n.addEventListener('touchstart', (e) => { const p = e.touches[0]; t = setTimeout(() => { n.dataset.largo = '1'; menu(a, p.clientX, p.clientY); }, 550); }, { passive: true });
+    // (la marca de "fue mantener apretado" dura hasta el toque siguiente: si al soltar no llega el clic, no se come
+    // el proximo toque)
+    n.addEventListener('touchstart', (e) => { delete n.dataset.largo; const p = e.touches[0]; t = setTimeout(() => { n.dataset.largo = '1'; menu(a, p.clientX, p.clientY); }, 550); }, { passive: true });
     for (const ev of ['touchend', 'touchmove', 'touchcancel']) n.addEventListener(ev, () => clearTimeout(t), { passive: true });
     // arrastrar (PC)
     if (cls === 'server-icon') {
