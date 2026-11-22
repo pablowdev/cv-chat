@@ -206,6 +206,14 @@ function hookHttp() {
         else if (ruta === '/api/auth/totp/validate') dospasos.alTotp(req, res);
         else if (ruta === '/api/auth/register') dospasos.alRegistrar(req, res);
       }
+      // Iniciar sesion: Haven compara el usuario letra por letra, y en el celular el teclado pone la primera en
+      // mayuscula ("Coso1947"); otros escriben su email. Se busca la cuenta sin importar mayusculas (si hay una
+      // sola) o por su email confirmado, y Haven recibe el usuario como esta guardado
+      if (req.method === 'POST' && url.split('?')[0] === '/api/auth/login') {
+        const server = this;
+        acomodarUsuario(req, () => origEmit.call(server, event, req, res, ...rest));
+        return true;
+      }
       // Registro con email obligatorio (email.js)
       if (req.method === 'POST' && (url === '/api/auth/register' || url.startsWith('/api/auth/register?')) && email.on() && req.headers['x-puente-interno'] !== INTERNAL) {
         const server = this;
@@ -1878,6 +1886,38 @@ async function registerThroughHaven(req, username) {
     warn('entrar con Discord:', err.message);
     return { ok: false, error: 'No se pudo crear la cuenta. Probá de nuevo en un momento.' };
   }
+}
+
+// El usuario con que se inicia sesion, como esta guardado: sin espacios de mas, sin importar mayusculas (si hay
+// una sola cuenta asi) o, si se escribio un email, la cuenta con ese email confirmado. Si no aparece, queda lo
+// escrito (Haven contesta lo de siempre: usuario o contraseña incorrectos). La contraseña no se toca
+function acomodarUsuario(req, next) {
+  const parts = []; let size = 0, over = false;
+  req.on('data', c => { size += c.length; if (size > 64 * 1024) over = true; else parts.push(c); });
+  req.on('error', () => {});
+  req.on('end', () => {
+    let body = null;
+    try { body = over ? null : JSON.parse(Buffer.concat(parts).toString('utf8') || '{}'); } catch { body = null; }
+    if (body && typeof body === 'object' && typeof body.username === 'string') {
+      try {
+        const dato = body.username.trim();
+        let usuario = dato;
+        if (dato && !db.prepare('SELECT 1 FROM users WHERE username = ?').get(dato)) {
+          const iguales = db.prepare('SELECT username FROM users WHERE username = ? COLLATE NOCASE AND IFNULL(is_guest, 0) = 0 LIMIT 2').all(dato);
+          if (iguales.length === 1) usuario = iguales[0].username;
+          else if (!iguales.length && dato.includes('@')) {
+            const porEmail = db.prepare(`SELECT u.username FROM puente_emails e JOIN users u ON u.id = e.haven_user_id
+              WHERE lower(e.email) = ? AND e.confirmado = 1 AND IFNULL(u.is_guest, 0) = 0 LIMIT 2`).all(dato.toLowerCase());
+            if (porEmail.length === 1) usuario = porEmail[0].username;
+          }
+        }
+        body.username = usuario;
+      } catch (err) { warn('iniciar sesion (usuario):', err.message); }
+    }
+    req.body = body && typeof body === 'object' ? body : {};
+    req._body = true; // express.json no lo vuelve a leer
+    next();
+  });
 }
 
 // Usuario y contraseña de una cuenta (el inicio de sesion de Haven, con sus limites de intentos)

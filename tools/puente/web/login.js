@@ -769,3 +769,16 @@
   // Haven vuelve a traducir la pagina al cambiar el idioma o al mostrar este paso
   new MutationObserver(textos).observe(form, { attributes: true, attributeFilter: ['style'] });
 })();
+
+// En el celular el teclado ponia la primera letra del usuario en mayuscula y lo corregia: el cuadro del usuario
+// queda sin mayuscula automatica ni correccion (igual el servidor ya no distingue mayusculas, vincular.js)
+(function () {
+  'use strict';
+  for (const id of ['login-username', 'reg-username']) {
+    const i = document.getElementById(id);
+    if (!i) continue;
+    i.setAttribute('autocapitalize', 'none');
+    i.setAttribute('autocorrect', 'off');
+    i.spellcheck = false;
+  }
+})();
