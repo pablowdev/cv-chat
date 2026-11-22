@@ -4278,7 +4278,67 @@ function leido(sc) {
       box.style.cssText = 'flex: 1 1 auto; min-height: 0; position: relative;';
       page.appendChild(box);
     }
-    verVista('miembros');
+    // Reordenar las pestañas: el boton ⇅, siempre al final, abre la lista con flechas para subir y bajar cada una.
+    // El orden se guarda en este dispositivo; las pestañas nuevas (o las de los juegos) van al final hasta que se
+    // las mueva. Al abrir Admin se ve la primera
+    const ORDEN = 'puente_pm_pestanas';
+    const leerOrden = () => { try { const o = JSON.parse(localStorage.getItem(ORDEN) || '[]'); return Array.isArray(o) ? o : []; } catch { return []; } };
+    const guardarOrden = (o) => { try { if (o) localStorage.setItem(ORDEN, JSON.stringify(o)); else localStorage.removeItem(ORDEN); } catch { /* sin almacenamiento */ } };
+    if (!document.getElementById('pm-orden-estilo')) {
+      const st = el('style'); st.id = 'pm-orden-estilo';
+      st.textContent = '.pm-reordenar{font-size:1.125rem;padding:0.375rem 0.625rem}'
+        + '.pm-orden-panel{position:absolute;z-index:5;top:3.5rem;right:0.75rem;width:min(20rem,calc(100% - 1.5rem));max-height:calc(100% - 4.5rem);overflow:auto;box-sizing:border-box;padding:0.75rem;border-radius:0.5rem;background:#232227;border:1px solid #3a3940;box-shadow:0 8px 24px rgba(0,0,0,.45);color:#dbdee1}'
+        + '.pm-orden-panel h3{margin:0 0 0.5rem;font-size:1rem;color:#fbfbfb}.pm-orden-panel p{margin:0 0 0.625rem;font-size:0.8125rem;color:#949ba4}'
+        + '.pm-orden-fila{display:flex;align-items:center;gap:0.5rem;padding:0.375rem 0.25rem;border-bottom:1px solid #2e2d32}.pm-orden-fila span{flex:1;font-weight:600}'
+        + '.pm-orden-fila button,.pm-orden-pie button{min-width:2.5rem;min-height:2.25rem;border:0;border-radius:0.375rem;background:#35343a;color:#fbfbfb;font:inherit;cursor:pointer}'
+        + '.pm-orden-fila button:disabled{opacity:.3;cursor:default}.pm-orden-pie{display:flex;gap:0.5rem;justify-content:space-between;margin-top:0.75rem}'
+        + '.pm-orden-pie .pm-orden-listo{background:#5865f2;padding:0 1rem}.pm-orden-pie .pm-orden-volver{background:transparent;color:#949ba4;padding:0 0.25rem}';
+      document.head.appendChild(st);
+    }
+    const reordenar = el('button', 'pm-pestana pm-reordenar', '⇅'); reordenar.type = 'button';
+    reordenar.title = 'Reordenar las pestañas'; reordenar.setAttribute('aria-label', reordenar.title);
+    const pestanas = () => [...tabs.querySelectorAll('.pm-pestana[data-v]')];
+    let nOrig = 0;
+    const ordenar = () => {
+      const orden = leerOrden(), bs = pestanas();
+      for (const b of bs) if (!b.dataset.orig) b.dataset.orig = String(nOrig++); // (el orden de siempre)
+      const lugar = (b) => { const i = orden.indexOf(b.dataset.v); return i < 0 ? 1000 + Number(b.dataset.orig) : i; };
+      bs.sort((a, b) => lugar(a) - lugar(b));
+      for (const b of bs) tabs.appendChild(b);
+      tabs.appendChild(reordenar);
+    };
+    let panelOrden = null;
+    const cerrarOrden = () => { if (panelOrden) { panelOrden.remove(); panelOrden = null; } };
+    const dibujarOrden = () => {
+      const bs = pestanas();
+      panelOrden.textContent = '';
+      panelOrden.append(el('h3', null, 'Reordenar las pestañas'), el('p', null, 'Subí o bajá cada una. Se guarda en este dispositivo.'));
+      bs.forEach((b, i) => {
+        const fila = el('div', 'pm-orden-fila');
+        const mover = (d) => { const o = bs.map(x => x.dataset.v); [o[i], o[i + d]] = [o[i + d], o[i]]; guardarOrden(o); ordenar(); dibujarOrden(); };
+        const sube = el('button', null, '↑'); sube.type = 'button'; sube.disabled = i === 0; sube.setAttribute('aria-label', 'Subir ' + b.textContent); sube.addEventListener('click', () => mover(-1));
+        const baja = el('button', null, '↓'); baja.type = 'button'; baja.disabled = i === bs.length - 1; baja.setAttribute('aria-label', 'Bajar ' + b.textContent); baja.addEventListener('click', () => mover(1));
+        fila.append(el('span', null, b.textContent), sube, baja);
+        panelOrden.appendChild(fila);
+      });
+      const pie = el('div', 'pm-orden-pie');
+      const volver = el('button', 'pm-orden-volver', 'Orden de siempre'); volver.type = 'button';
+      volver.addEventListener('click', () => { guardarOrden(null); ordenar(); dibujarOrden(); });
+      const listo = el('button', 'pm-orden-listo', 'Listo'); listo.type = 'button'; listo.addEventListener('click', cerrarOrden);
+      pie.append(volver, listo);
+      panelOrden.appendChild(pie);
+    };
+    reordenar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panelOrden) return cerrarOrden();
+      panelOrden = el('div', 'pm-orden-panel');
+      panelOrden.addEventListener('click', (ev) => ev.stopPropagation());
+      page.appendChild(panelOrden);
+      dibujarOrden();
+    });
+    page.addEventListener('click', cerrarOrden);
+    ordenar();
+    verVista((pestanas()[0] || {}).dataset ? pestanas()[0].dataset.v : 'miembros');
     // Las pestañas de los juegos que traen la suya (en su ficha, "admin": Admin → Hotel): una pagina del juego en un marco
     fetch('/puente/api/juegos/registro').then(r => (r.ok ? r.json() : null)).then(d => {
       if (!page || !d || !Array.isArray(d.juegos)) return;
@@ -4295,6 +4355,7 @@ function leido(sc) {
         box.style.cssText = 'flex: 1 1 auto; min-height: 0; position: relative;';
         page.appendChild(box);
       }
+      ordenar(); // (las de los juegos, en su lugar si ya se las habia movido; el boton sigue al final)
     }).catch(() => {});
     document.addEventListener('keydown', onKey, true);
     if (small) { try { history.pushState({ puenteMiembros: 1 }, ''); pushed = true; } catch { /* sin historial */ } }
