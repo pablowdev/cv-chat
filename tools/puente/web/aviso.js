@@ -4213,6 +4213,8 @@ function leido(sc) {
     const bar = el('div', 'pm-bar');
     const h = el('div', 'pm-sub'); h.append(el('span', '', 'Miembros recientes'), el('span', 'pm-total', ''));
     const search = el('input', 'pm-buscar'); search.type = 'text'; search.placeholder = 'Buscar por nombre, usuario o email';
+    // (al volver a abrir, la busqueda arranca vacia: antes quedaba la anterior aplicada con el cuadro vacio)
+    term = '';
     search.addEventListener('input', () => { term = search.value; renderRows(); });
     bar.append(h, search);
     if (small) {
