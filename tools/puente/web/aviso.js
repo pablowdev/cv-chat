@@ -1782,15 +1782,17 @@ function sheetDrag(sheet, opts) {
     // Lo que crecio la barra es lo que se achico la lista: se corre exactamente eso
     // Solo mientras se usa la barra (escribir, Enter, pegar, adjuntar, responder): al
     // cargar la pagina o cambiar de canal la barra tambien cambia y ahi manda Haven
-    let height = area.offsetHeight, used = 0;
-    const mark = () => { used = Date.now(); };
+    let height = area.offsetHeight, used = 0, sucio = false;
+    // (medir obliga al navegador a acomodar la pantalla: al desplazarse sin usar la barra, se mide recien al
+    // empezar a usarla, antes de que crezca)
+    const mark = () => { if (sucio || Date.now() - used >= 3000) { gap = gapNow(); sucio = false; } used = Date.now(); };
     for (const t of ['input', 'keydown', 'paste', 'drop', 'click']) area.addEventListener(t, mark, true);
     msgs.addEventListener('click', (e) => { if (e.target instanceof Element && e.target.closest('[data-action="reply"], [data-action="quote"], [data-action="edit"]')) mark(); }, true);
     // Al achicarse, el navegador ya corre la lista si estaba al final: ahi se vuelve a la
     // distancia al final que habia (al crecer, se corre lo que crecio)
     const gapNow = () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight;
     let gap = gapNow();
-    msgs.addEventListener('scroll', () => { gap = gapNow(); }, { passive: true });
+    msgs.addEventListener('scroll', () => { if (Date.now() - used < 3000) gap = gapNow(); else sucio = true; }, { passive: true });
     new ResizeObserver(() => {
       const h = area.offsetHeight;
       const d = h - height;
@@ -9616,7 +9618,45 @@ document.addEventListener('pointerdown', (ev) => {
     if (!app || typeof app._fmtDate !== 'function' || typeof app._dtOpts !== 'function') { if (++tries < 120) setTimeout(wait, 500); return; }
     app._fmtDate = function (value, opts = {}) { return tlds.call(comoFecha(value), 'es-AR', this._dtOpts(soloFecha(opts))); };
     app._fmtDateTime = function (value, opts = {}) { return tls.call(comoFecha(value), 'es-AR', this._dtOpts(fechaHora(opts))); };
+    rapidas(app);
   })();
+  // Cada fecha y hora de cada mensaje armaba un formateador nuevo (lo mas lento al abrir un canal en un celular
+  // lento): se guardan y se reusan. Se completan las opciones como lo hace el navegador, y antes de usarlos se
+  // comprueba que den exactamente lo mismo; si no, queda todo como estaba
+  function rapidas(app) {
+    const FECHA_K = ['weekday', 'year', 'month', 'day', 'dateStyle'], HORA_K = ['dayPeriod', 'hour', 'minute', 'second', 'fractionalSecondDigits', 'timeStyle'];
+    const tiene = (o, ks) => ks.some(k => o[k] !== undefined);
+    function completar(tipo, o) {
+      const r = { ...(o || {}) };
+      if (r.dateStyle || r.timeStyle) return r;
+      const f = tiene(r, FECHA_K), h = tiene(r, HORA_K);
+      if (tipo === 'fecha' && !f) Object.assign(r, { year: 'numeric', month: 'numeric', day: 'numeric' });
+      if (tipo === 'hora' && !h) Object.assign(r, { hour: 'numeric', minute: 'numeric', second: 'numeric' });
+      if (tipo === 'todo' && !f && !h) Object.assign(r, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+      return r;
+    }
+    const guardados = new Map();
+    function formato(tipo, loc, o) {
+      const k = tipo + '|' + (loc || '') + '|' + JSON.stringify(o || {});
+      let x = guardados.get(k);
+      if (!x) { if (guardados.size > 300) guardados.clear(); x = new Intl.DateTimeFormat(loc, completar(tipo, o)); guardados.set(k, x); }
+      return x;
+    }
+    const tlts = Date.prototype.toLocaleTimeString;
+    const viejo = { fecha: (d, l, o) => tlds.call(d, l, o), hora: (d, l, o) => tlts.call(d, l, o), todo: (d, l, o) => tls.call(d, l, o) };
+    const nuevo = (tipo) => (d, l, o) => (isNaN(d) ? viejo[tipo](d, l, o) : formato(tipo, l, o).format(d));
+    try {
+      const fechas = [new Date(), new Date('2024-02-29T03:04:05Z'), new Date('2026-12-31T23:59:59Z')];
+      const opciones = [{}, { hour: '2-digit', minute: '2-digit' }, app._dtOpts({ hour: '2-digit', minute: '2-digit' }), app._dtOpts(soloFecha({})), app._dtOpts(fechaHora({})), { weekday: 'long', day: 'numeric', month: 'long' }, { month: 'short', day: 'numeric' }, { hour: 'numeric' }];
+      for (const tipo of ['fecha', 'hora', 'todo']) for (const loc of [undefined, 'es-AR']) for (const o of opciones) for (const d of fechas) {
+        if (viejo[tipo](d, loc, o) !== nuevo(tipo)(d, loc, o)) throw new Error(tipo + ' ' + JSON.stringify(o));
+      }
+    } catch (err) { console.warn('[puente] fechas rapidas: quedan como estaban', err.message); return; }
+    const f = nuevo('fecha'), h = nuevo('hora'), t = nuevo('todo');
+    app._fmtDate = function (value, opts = {}) { return f(comoFecha(value), 'es-AR', this._dtOpts(soloFecha(opts))); };
+    app._fmtDateTime = function (value, opts = {}) { return t(comoFecha(value), 'es-AR', this._dtOpts(fechaHora(opts))); };
+    if (typeof app._fmtTime === 'function') app._fmtTime = function (value, opts = { hour: '2-digit', minute: '2-digit' }, locale) { return h(comoFecha(value), locale, this._dtOpts(opts)); };
+  }
 })();
 
 // Configuración → Miembros y moderación (solo administradores): "Descargar emails" baja una planilla
@@ -18098,11 +18138,11 @@ var puenteSinUbicacion = (function () {
 // Las fotos de perfil que se pueden mover (GIF, PNG, WebP) Haven las muestra quietas hasta pasar por encima:
 // para eso las copiaba a un lienzo del tamaño original y las pasaba a PNG, de a una y con el chat trabado
 // (en un celular lento, mas de 2 segundos al abrir). Las de las fotos de perfil, que se ven chiquitas, ahora se
-// copian al tamaño en que se ven (hasta 192 px); las demas imagenes, como siempre.
+// copian al tamaño en que se ven (hasta 160 px); las demas imagenes, como siempre.
 // (puente-fotos-livianas)
 (function () {
   'use strict';
-  const MAX = 256;
+  const MAX = 160;
   let tries = 0;
   (function esperar() {
     const app = window.app;
