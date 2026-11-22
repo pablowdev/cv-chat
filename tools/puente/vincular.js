@@ -155,6 +155,12 @@ function hookHttp() {
     if (event === 'request' && req && typeof req.url === 'string') {
       const url = req.url;
       if (appHaven(req.headers['user-agent'])) { json(res, 403, { error: mensajeAppHaven(), message: mensajeAppHaven() }); return true; }
+      // Los archivos de Haven con su version en la direccion (?v=): el celular los guarda un dia en vez de volver a
+      // preguntar por cada uno (mas de 120) cada vez que se abre la app. Cuando Haven los cambia, cambia la direccion
+      if (req.method === 'GET' && /^\/(?:js|css)\/[\w./-]+\.(?:js|css)\?v=[\w.-]+$/.test(url)) {
+        const poner = res.setHeader;
+        res.setHeader = function (name, value) { if (String(name).toLowerCase() === 'cache-control') value = 'public, max-age=86400'; return poner.call(this, name, value); };
+      }
       if (url.startsWith('/manifest.webmanifest') || url.startsWith('/puente/icono-') || url.startsWith('/icon-192.svg') || url.startsWith('/icon-512.svg') || url.startsWith('/locales/')) {
         try { if (instalable.handle(db, req, res)) return true; } catch (err) { warn('error en', url, err.message); }
       }

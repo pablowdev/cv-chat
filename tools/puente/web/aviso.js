@@ -18094,3 +18094,52 @@ var puenteSinUbicacion = (function () {
   document.addEventListener('focusin', acomodar, true);
   document.addEventListener('focusout', () => setTimeout(acomodar, 120), true);
 })();
+
+// Las fotos de perfil que se pueden mover (GIF, PNG, WebP) Haven las muestra quietas hasta pasar por encima:
+// para eso las copiaba a un lienzo del tamaño original y las pasaba a PNG, de a una y con el chat trabado
+// (en un celular lento, mas de 2 segundos al abrir). Las de las fotos de perfil, que se ven chiquitas, ahora se
+// copian al tamaño en que se ven (hasta 192 px); las demas imagenes, como siempre.
+// (puente-fotos-livianas)
+(function () {
+  'use strict';
+  const MAX = 256;
+  let tries = 0;
+  (function esperar() {
+    const app = window.app;
+    if (!app || typeof app._frozenFrame !== 'function' || typeof app._freezePfpImg !== 'function') { if (++tries < 120) setTimeout(esperar, 500); return; }
+    const avatares = new Set();
+    const origFreeze = app._freezePfpImg, origFrozen = app._frozenFrame;
+    app._freezePfpImg = function (img) {
+      try { if (img && !img.dataset.animDone) { const u = img.getAttribute('src') || ''; if (u && !u.startsWith('data:')) avatares.add(u); } } catch { /* sigue */ }
+      return origFreeze.apply(this, arguments);
+    };
+    app._frozenFrame = function (url) {
+      if (!avatares.has(url)) return origFrozen.apply(this, arguments);
+      if (!this._frozenFrames) this._frozenFrames = new Map();
+      const ya = this._frozenFrames.get(url);
+      if (ya) return ya;
+      const p = new Promise((resolve) => {
+        const im = new Image();
+        im.decoding = 'async';
+        im.onload = async () => {
+          try {
+            const w = im.naturalWidth || 1, h = im.naturalHeight || 1, k = Math.min(1, MAX / Math.max(w, h));
+            const cw = Math.max(1, Math.round(w * k)), chh = Math.max(1, Math.round(h * k));
+            const c = document.createElement('canvas'); c.width = cw; c.height = chh;
+            const ctx = c.getContext('2d');
+            // (achicada fuera del hilo principal cuando el navegador puede)
+            let fuente = im;
+            if (typeof createImageBitmap === 'function') { try { fuente = await createImageBitmap(im, { resizeWidth: cw, resizeHeight: chh, resizeQuality: 'high' }); } catch { fuente = im; } }
+            ctx.drawImage(fuente, 0, 0, cw, chh);
+            if (fuente !== im && fuente.close) fuente.close();
+            resolve(c.toDataURL('image/png'));
+          } catch { resolve(null); }
+        };
+        im.onerror = () => resolve(null);
+        im.src = url;
+      });
+      this._frozenFrames.set(url, p);
+      return p;
+    };
+  })();
+})();
