@@ -15,7 +15,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
 const NAV = [['inicio', 'Inicio', WEB + '/'], ['wiki', 'Wiki', WEB + '/wiki'], ['fullfat', 'Full Fat Search', WEB + '/full-fat-search'],
   ['marketplace', 'Marketplace', MK + '/'], ['juegos', 'Juegos', 'https://juegos.circulovicioso.club/'],
-  ['foro', 'Foro', FORO + '/'], ['chat', 'Chat', CHAT + '/app', true]];
+  ['foro', 'Foro', FORO + '/'], ['tester', 'App Android', WEB + '/tester?de=menu'], ['chat', 'Chat', CHAT + '/app', true]];
 
 function pagina({ titulo, descripcion, actual, css = [], js = [], cuerpo, canonica, sinIndice, imagen }) {
   const desc = descripcion || 'Círculo Vicioso: club de amigos, comunidad online, rejunto de gordos.';

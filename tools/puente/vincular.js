@@ -916,9 +916,11 @@ async function handle(req, res) {
     const dir = path.join(STATIC, 'descargas');
     let ver = {}; try { ver = JSON.parse(fs.readFileSync(path.join(dir, 'versiones.json'), 'utf8')); } catch { /* sin versiones */ }
     const out = {};
-    for (const [k, archivo] of Object.entries(DESCARGAS)) { try { out[k] = { tam: fs.statSync(path.join(dir, archivo)).size, version: ver[k] || null }; } catch { /* no esta */ } }
+    for (const [k, archivo] of Object.entries(DESCARGAS)) { if (k === 'android') continue; try { out[k] = { tam: fs.statSync(path.join(dir, archivo)).size, version: ver[k] || null }; } catch { /* no esta */ } }
     return json(res, 200, out);
   }
+  // La app de Android ya no se baja de aca (2026-11-22, el dueño): se baja de Google Play sumandose como tester
+  if (req.method === 'GET' && p === '/puente/descargas/' + DESCARGAS.android) { res.writeHead(302, { Location: 'https://circulovicioso.club/tester?de=apk', 'Cache-Control': 'no-store' }); return res.end(); }
   // (la app de Windows se actualiza sola con latest.yml y el .blockmap, de electron-builder)
   const bajar = req.method === 'GET' && /^\/puente\/descargas\/([A-Za-z0-9-]+\.(?:apk|exe|exe\.blockmap|yml))$/.exec(p);
   if (bajar && (Object.values(DESCARGAS).includes(bajar[1]) || bajar[1] === 'latest.yml' || bajar[1] === DESCARGAS.windows + '.blockmap')) {

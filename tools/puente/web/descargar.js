@@ -24,7 +24,7 @@
   boton.addEventListener('click', () => { todas.forEach(ver); boton.remove(); });
   const mb = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0).replace('.', ',') + ' MB';
   fetch('/puente/descargas.json', { cache: 'no-store' }).then(r => r.json()).then((d) => {
-    for (const k of ['android', 'windows']) {
+    for (const k of ['windows']) { // (la de Android se baja de Google Play, como tester)
       const t = document.getElementById(k + '-tam');
       // Windows: el boton lleva a Microsoft Store; abajo, el instalador de aca
       if (k === 'windows') {

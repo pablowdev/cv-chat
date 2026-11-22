@@ -15,7 +15,7 @@ module.exports = {
   'descargar.html': { fuente: 'descargar.html', titulo: 'Descargá la app - Círculo Vicioso Club', actual: null, canonica: '/descargar', css: ['/css/paginas.css'],
     descripcion: 'La app de CV Chat para Android, iPhone, Windows, Mac y Linux: el chat, el foro y los juegos del club.', imagen: `${CHAT}/puente/vista/web.jpg?p=descargar` },
   // Para los tuits y los mensajes que piden testers: solo los 3 pasos de la prueba de Google Play
-  'tester.html': { fuente: 'tester.html', titulo: 'Sé tester de CV Chat para Android', actual: null, canonica: '/tester', css: ['/css/paginas.css', '/css/tester.css'],
+  'tester.html': { fuente: 'tester.html', titulo: 'Sé tester de CV Chat para Android', actual: 'tester', canonica: '/tester', css: ['/css/paginas.css', '/css/tester.css'],
     descripcion: 'La app de CV Chat para Android está en prueba en Google Play: sumate en 3 pasos y llevate la medalla Tester de la app.' },
   'borrar-cuenta.html': { fuente: 'borrar-cuenta.html', titulo: 'Borrar tu cuenta - Círculo Vicioso Club', actual: null, canonica: '/borrar-cuenta', css: ['/css/paginas.css'],
     descripcion: 'Cómo borrar tu cuenta de CV Chat, o solo algunos datos, y qué se borra.', imagen: `${CHAT}/puente/vista/web.jpg?p=borrar-cuenta` },
