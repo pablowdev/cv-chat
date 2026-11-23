@@ -26,7 +26,7 @@
     "csJuego": "ventana"
   },
   "mesa": "csJuego",
-  "invitados": false,
+  "invitados": true,
   "version": 1,
   "eventos": {
     "inicio": "cs16:inicio"
