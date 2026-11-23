@@ -379,9 +379,13 @@ function injectScript(req, res, src) {
     if (n === 'x-frame-options') return this;
     if (n === 'content-security-policy' && typeof value === 'string') {
       value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
-      // Y el foro y la web adentro del chat (el boton del foro, aviso.js)
-      const propios = cuenta.origins();
-      if (propios.length) value = value.replace("frame-src 'self'", "frame-src 'self' " + propios.join(' '));
+      // Y el foro y la web adentro del chat (el boton del foro, aviso.js). Tambien los
+      // juegos que terminan en otro dominio (CS 1.6: cliente.origen en su ficha).
+      const fuentes = new Set(cuenta.origins());
+      try {
+        for (const j of require('./juegos-registro.js').lista()) if (j.cliente && j.cliente.origen) fuentes.add(j.cliente.origen);
+      } catch { /* sin fichas: quedan las de siempre */ }
+      if (fuentes.size) value = value.replace("frame-src 'self'", "frame-src 'self' " + [...fuentes].join(' '));
     }
     return origSetHeader.call(this, name, value);
   };

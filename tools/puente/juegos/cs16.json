@@ -1,0 +1,55 @@
+{
+  "id": "cs16",
+  "nombre": "Counter-Strike 1.6",
+  "sub": "de_dust2 · hasta 12 jugadores",
+  "orden": 60,
+  "tapa": "/puente/tapas/cs16.jpg?v=1",
+  "fondo": "#0e0f0c",
+  "web": "cs16",
+  "archivos": [
+    "entrar.html",
+    "entrar.js"
+  ],
+  "cliente": {
+    "tipo": "ventana",
+    "url": "/puente/cs16/entrar.html",
+    "origen": "https://155-181-138-60.sslip.io",
+    "permisos": [
+      "autoplay",
+      "fullscreen",
+      "gamepad"
+    ],
+    "foco": true,
+    "clase": "jg-gusanos"
+  },
+  "vistas": {
+    "csJuego": "ventana"
+  },
+  "mesa": "csJuego",
+  "invitados": true,
+  "version": 1,
+  "eventos": {
+    "inicio": "cs16:inicio"
+  },
+  "tarjeta": {
+    "aparte": true,
+    "vivo": {
+      "campo": "gente",
+      "uno": "1 en Dust2",
+      "varios": "{n} en Dust2"
+    }
+  },
+  "color": "#e8a33d",
+  "enlace": {
+    "param": "cs16",
+    "alias": [
+      "counter-strike",
+      "cs"
+    ],
+    "desc": "Counter-Strike 1.6 en el navegador: de_dust2, hasta 12 jugadores.",
+    "imagen": "/puente/tapas/cs16.jpg?v=1"
+  },
+  "servidor": [
+    "cs16.js"
+  ]
+}

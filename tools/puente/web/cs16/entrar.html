@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Counter-Strike 1.6</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; box-sizing: border-box; padding: 1.5rem;
+    background: #0e0f0c; color: #ececec;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { width: min(30rem, 100%); text-align: center; }
+  h1 { margin: 0 0 .4rem; font-size: 1.35rem; font-weight: 700; }
+  p { margin: 0; color: #a7a7a7; }
+  .estado { margin-top: 1.2rem; }
+  .error { color: #ff9b9b; }
+  .punto {
+    display: inline-block; width: .7rem; height: .7rem; margin-right: .45rem;
+    border-radius: 50%; background: #e8a33d; animation: latir 1s ease-in-out infinite;
+  }
+  @keyframes latir { 50% { opacity: .25; transform: scale(.8); } }
+  a { color: #e8a33d; }
+  button {
+    margin-top: 1rem; padding: .7rem 1rem; border: 0; border-radius: .55rem;
+    background: #e8a33d; color: #17130b; font: inherit; font-weight: 700; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Counter-Strike 1.6</h1>
+  <p>de_dust2 · hasta 12 jugadores</p>
+  <p id="estado" class="estado"><span class="punto"></span>Entrando con tu cuenta de CV Chat…</p>
+  <p id="detalle" class="estado" hidden></p>
+  <button id="volver" type="button" hidden>Volver a CV Chat</button>
+</main>
+<script src="/puente/cs16/entrar.js?v=1"></script>
+</body>
+</html>

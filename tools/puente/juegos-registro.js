@@ -14,6 +14,8 @@
 //     "web": "truco",                      su carpeta en tools/puente/web/ (y su direccion /puente/<web>/)
 //     "archivos": ["juego.js", "juego.css"],   lo que se sirve de esa carpeta
 //     "cliente": { "tipo": "pantalla" | "ventana", "global": "puenteTruco", "js": "juego.js", "css": "juego.css" },
+//                                            (en ventana: "url", "permisos", "foco", "clase" y, si termina en otro
+//                                             dominio, "origen": "https://juego.ejemplo.com" para el CSP)
 //     "vistas": { "mesa": "mesa", "crear": "crear" },   vista de la pila de Juegos -> funcion del juego que la abre
 //     "mesa": "mesa",                      la vista de una mesa (para entrar desde la lista de mesas)
 //     "antes": ["mapa.js"],                lo que se baja antes que cliente.js (de sus archivos)
@@ -37,14 +39,18 @@ let cache = { cuando: 0, juegos: [], firma: '' };
 const ID = /^[a-z0-9-]{2,24}$/, ARCHIVO = /^[\w-]+(\.[\w-]+)*\.[a-z0-9]{1,5}$/i, EVENTO = /^[a-z0-9-]{2,24}:[a-z0-9-]{2,24}$/i;
 const texto = (v, max) => (typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : null);
 
-// Un juego en ventana (WORGS, BACITY, Curveball): un iframe del mismo origen. url: su pagina (una ruta del sitio);
-// permisos: lo que el iframe puede pedir; foco: si toma el teclado al abrir; clase: el estilo del marco (jg-...)
-const PERMISOS = ['autoplay', 'fullscreen', 'microphone', 'gamepad', 'camera'];
+// Un juego en ventana (WORGS, BACITY, Curveball, CS 1.6): un iframe. url: su pagina (una ruta del sitio);
+// permisos: lo que el iframe puede pedir; foco: si toma el teclado al abrir; clase: el estilo del marco
+// (jg-...); origen: si la pagina termina en otro dominio (CS 1.6), el origen https que hay que permitir
+// en el CSP frame-src. El origen se valida aca: solo esquema, host y puerto, sin ruta.
+const PERMISOS = ['autoplay', 'fullscreen', 'microphone', 'gamepad', 'camera', 'pointer-lock'];
 function ventana(cli, mal) {
   const url = typeof cli.url === 'string' && /^\/[\w./-]{1,120}$/.test(cli.url) && !cli.url.includes('..') ? cli.url : null;
   const permisos = Array.isArray(cli.permisos) ? cli.permisos.filter((p) => PERMISOS.includes(p)) : [];
+  const origen = cli.origen == null ? null : (typeof cli.origen === 'string' && /^https?:\/\/(?:[a-z0-9.-]+|\[[0-9a-f:]+\])(?::\d{1,5})?$/i.test(cli.origen) ? cli.origen.replace(/\/+$/, '') : undefined);
   if (!url) { mal('cliente.url invalida (una ruta del sitio)'); return null; }
-  return { tipo: 'ventana', url, permisos, foco: cli.foco === true, clase: /^jg-[a-z-]{2,30}$/.test(cli.clase || '') ? cli.clase : 'jg-gusanos' };
+  if (origen === undefined) { mal('cliente.origen invalida (un origen http/https, sin ruta)'); return null; }
+  return { tipo: 'ventana', url, permisos, foco: cli.foco === true, clase: /^jg-[a-z-]{2,30}$/.test(cli.clase || '') ? cli.clase : 'jg-gusanos', origen };
 }
 
 // Revisa una ficha y devuelve la version limpia (o null con el motivo anotado)
