@@ -3,7 +3,7 @@
   "nombre": "Counter-Strike 1.6",
   "sub": "de_dust2 · hasta 12 jugadores",
   "orden": 60,
-  "tapa": "/puente/tapas/cs16.jpg?v=1",
+  "tapa": "/puente/tapas/cs16.jpg?v=2",
   "fondo": "#0e0f0c",
   "web": "cs16",
   "archivos": [
@@ -47,7 +47,7 @@
       "cs"
     ],
     "desc": "Counter-Strike 1.6 en el navegador: de_dust2, hasta 12 jugadores.",
-    "imagen": "/puente/tapas/cs16.jpg?v=1"
+    "imagen": "/puente/tapas/cs16.jpg?v=2"
   },
   "servidor": [
     "cs16.js"
