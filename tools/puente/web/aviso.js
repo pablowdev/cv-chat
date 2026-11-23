@@ -12292,6 +12292,14 @@ document.addEventListener('pointerdown', (ev) => {
   // evento "salir" (Curveball: que el servidor deje de mandar la partida al dejar la mesa). Los eventos de adentro no
   // llegan al chat, asi que se le avisa al tiempo de uso (uso.js) para que cuente mientras se juega.
   const ventanas = new Map(); // id del juego -> su iframe (el ultimo que se abrio)
+  // El juego en ventana puede pedir volver a CV Chat (su menú propio, "Salir del juego").
+  // Se comprueba que el mensaje venga del iframe del juego y no de cualquier página.
+  window.addEventListener('message', (e) => {
+    if (!e.data || e.data.cv !== 'salir-juego') return;
+    for (const f of ventanas.values()) {
+      if (f && f.isConnected && f.contentWindow === e.source) { salirDelJuego(); return; }
+    }
+  });
   let ventanaSalir = null;    // { evento, id }: lo que hay que avisarle al servidor al dejar la ventana
   function soltarVentana() {
     const v = ventanaSalir; ventanaSalir = null;
