@@ -14,7 +14,9 @@
 //   CS16_SECRETO   clave compartida con el juego (la misma CVCHAT_SECRETO del juego)
 //   CS16_URL       direccion publica del juego (https://cs.circulovicioso.club)
 //   CS16_INTERNO   direccion interna para leer el estado (http://cs16-web:27016)
-//   CS16_ABIERTO   1 (por defecto) entra todo el mundo; 0, solo administradores
+//   CS16_ABIERTO   1 (por defecto) también deja entrar a invitados; 0, solo
+//                  cuentas registradas. Los invitados siempre ven la tarjeta,
+//                  pero se les pide registrarse para jugar.
 const crypto = require('crypto');
 
 const SECRETO = () => String(process.env.CS16_SECRETO || '');
@@ -42,8 +44,9 @@ function cuenta(id) {
   }
 }
 
-// Quien puede entrar: con el juego configurado, todos; en modo cerrado, solo admins.
-const puede = (c) => !!c && SECRETO().length >= 24 && (ABIERTO() || !!c.is_admin);
+// Quien puede entrar: con ABIERTO=1 también los invitados; con 0, solo
+// cuentas registradas (los invitados ven la tarjeta y el aviso de registrarse).
+const puede = (c) => !!c && SECRETO().length >= 24 && (ABIERTO() || !c.is_guest);
 
 function urlJuego() {
   const u = URL_JUEGO();
@@ -76,7 +79,7 @@ function setup(ctx) {
       if (typeof data === 'function') reply = data;
       if (typeof reply !== 'function') return;
       const c = socket.user && cuenta(socket.user.id);
-      if (!puede(c)) return reply({ error: 'CS 1.6 todavía está en prueba.' });
+      if (!puede(c)) return reply({ error: 'Para jugar a CS 1.6 necesitás una cuenta de CV Chat.' });
       refrescar();
       reply({
         ok: true,
@@ -84,7 +87,7 @@ function setup(ctx) {
         max: estado.max,
         mapa: estado.mapa,
         online: estado.online,
-        prueba: !ABIERTO(),
+        prueba: false,
       });
     });
   });
@@ -99,7 +102,7 @@ function handle(req, res, p, u, { sessionUser, json }) {
   const user = sessionUser(req);
   if (!user) return json(res, 401, { error: 'sin sesión' });
   const c = cuenta(user.id);
-  if (!puede(c)) return json(res, 403, { error: 'CS 1.6 todavía está en prueba.' });
+  if (!puede(c)) return json(res, 403, { error: 'Para jugar a CS 1.6 necesitás una cuenta de CV Chat.' });
   const url = urlJuego();
   if (!url) return json(res, 503, { error: 'CS 1.6 todavía no está configurado.' });
 

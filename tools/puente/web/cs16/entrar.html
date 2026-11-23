@@ -5,37 +5,129 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Counter-Strike 1.6</title>
 <style>
+  :root {
+    color-scheme: dark;
+    --fondo: #111214;
+    --panel: #1e1f22;
+    --linea: #2e2f35;
+    --texto: #f2f3f5;
+    --muted: #b5bac1;
+    --acento: #5865f2;
+    --err: #ff7a6b;
+  }
   html, body { height: 100%; margin: 0; }
   body {
-    display: grid; place-items: center; box-sizing: border-box; padding: 1.5rem;
-    background: #0e0f0c; color: #ececec;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: 1.25rem;
+    background: radial-gradient(ellipse at top, #26243a 0%, var(--fondo) 65%) no-repeat, var(--fondo);
+    color: var(--texto);
     font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  main { width: min(30rem, 100%); text-align: center; }
-  h1 { margin: 0 0 .4rem; font-size: 1.35rem; font-weight: 700; }
-  p { margin: 0; color: #a7a7a7; }
-  .estado { margin-top: 1.2rem; }
-  .error { color: #ff9b9b; }
+  main { width: min(34rem, 100%); }
+  .cab { text-align: center; margin-bottom: 1.1rem; }
+  h1 { margin: 0 0 .35rem; font-size: 1.45rem; font-weight: 800; letter-spacing: .01em; }
+  .sub { margin: 0; color: var(--muted); font-size: .92rem; }
+  .estado { margin: 1.2rem 0 0; color: var(--muted); text-align: center; }
+  .estado[hidden] { display: none; }
+  .error { color: var(--err); }
   .punto {
-    display: inline-block; width: .7rem; height: .7rem; margin-right: .45rem;
-    border-radius: 50%; background: #e8a33d; animation: latir 1s ease-in-out infinite;
+    display: inline-block;
+    width: .65rem;
+    height: .65rem;
+    margin-right: .45rem;
+    border-radius: 50%;
+    background: #e8a33d;
+    animation: latir 1s ease-in-out infinite;
   }
   @keyframes latir { 50% { opacity: .25; transform: scale(.8); } }
-  a { color: #e8a33d; }
-  button {
-    margin-top: 1rem; padding: .7rem 1rem; border: 0; border-radius: .55rem;
-    background: #e8a33d; color: #17130b; font: inherit; font-weight: 700; cursor: pointer;
+  .ranking {
+    margin-top: 1rem;
+    padding: 14px 16px 10px;
+    border: 1px solid var(--linea);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 12px 32px #0005;
   }
+  .ranking[hidden] { display: none; }
+  .ranking h2 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: .95rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .ranking ol { margin: 0; padding: 0; list-style: none; }
+  .ranking li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #ffffff0d;
+  }
+  .ranking li:last-child { border-bottom: 0; }
+  .pos {
+    flex: none;
+    width: 1.6rem;
+    color: #80848e;
+    font-weight: 800;
+    text-align: right;
+  }
+  .ranking li:nth-child(1) .pos { color: #f0b232; }
+  .ranking li:nth-child(2) .pos { color: #c7c9ce; }
+  .ranking li:nth-child(3) .pos { color: #cd7f32; }
+  .nombre {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kills { flex: none; color: var(--muted); font-size: .85rem; }
+  .kills b { color: var(--texto); font-size: 1rem; }
+  .vacio { margin: 4px 0 6px; color: var(--muted); font-size: .88rem; }
+  .vacio[hidden] { display: none; }
+  .acciones { display: flex; gap: 10px; margin-top: 14px; }
+  .acciones[hidden] { display: none; }
+  button {
+    flex: 1 1 auto;
+    padding: .8rem 1rem;
+    border: 0;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #entrar { background: var(--acento); color: #fff; }
+  #entrar:hover { background: #4752c4; }
+  #volver { flex: 0 0 auto; background: #2b2d31; color: var(--texto); }
+  #volver:hover { background: #3a3c42; }
+  button[hidden] { display: none; }
+  .nota { margin: .8rem 0 0; color: #80848e; font-size: .78rem; text-align: center; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Counter-Strike 1.6</h1>
-  <p>de_dust2 · hasta 12 jugadores</p>
+  <div class="cab">
+    <h1>Counter-Strike 1.6</h1>
+    <p class="sub">de_dust2 · hasta 12 jugadores</p>
+  </div>
   <p id="estado" class="estado"><span class="punto"></span>Entrando con tu cuenta de CV Chat…</p>
-  <p id="detalle" class="estado" hidden></p>
-  <button id="volver" type="button" hidden>Volver a CV Chat</button>
+  <section id="ranking" class="ranking" hidden>
+    <h2>Top 10 · más kills</h2>
+    <ol id="ranking-lista"></ol>
+    <p id="ranking-vacio" class="vacio" hidden>Todavía no hay kills registradas. ¡Jugá y aparecé acá!</p>
+  </section>
+  <p id="detalle" class="estado error" hidden></p>
+  <div class="acciones" id="acciones" hidden>
+    <button id="entrar" type="button">Entrar a la partida</button>
+    <button id="volver" type="button" hidden>Volver</button>
+  </div>
+  <p class="nota">El ranking cuenta las kills de las cuentas de CV Chat.</p>
 </main>
-<script src="/puente/cs16/entrar.js?v=1"></script>
+<script src="/puente/cs16/entrar.js?v=2"></script>
 </body>
 </html>
