@@ -13,7 +13,7 @@
   "cliente": {
     "tipo": "ventana",
     "url": "/puente/cs16/entrar.html",
-    "origen": "https://155-181-138-60.sslip.io",
+    "origen": "https://cs.circulovicioso.club",
     "permisos": [
       "autoplay",
       "fullscreen",
@@ -32,7 +32,7 @@
     "inicio": "cs16:inicio"
   },
   "tarjeta": {
-    "aparte": true,
+    "aparte": false,
     "vivo": {
       "campo": "gente",
       "uno": "1 en Dust2",

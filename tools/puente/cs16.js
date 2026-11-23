@@ -79,7 +79,9 @@ function setup(ctx) {
       if (typeof data === 'function') reply = data;
       if (typeof reply !== 'function') return;
       const c = socket.user && cuenta(socket.user.id);
-      if (!puede(c)) return reply({ error: 'Para jugar a CS 1.6 necesitás una cuenta de CV Chat.' });
+      // Al invitado se le muestra igual la tarjeta, con el cartel y el aviso
+      // para crear la cuenta (soloUsuarios); los demás errores son de config.
+      if (!puede(c)) return reply({ error: 'Para jugar a CS 1.6 necesitás una cuenta de CV Chat.', soloUsuarios: !!(c && c.is_guest) });
       refrescar();
       reply({
         ok: true,
@@ -126,5 +128,8 @@ module.exports = {
   handle,
   firmar,
   rutas: ['/puente/api/cs16/entrada'],
-  abierto: () => ABIERTO(),
+  // «abierto» es para la pagina publica de juegos: si esta configurado, se
+  // muestra siempre (con el cartel "Solo usuarios" si no es para invitados).
+  // No confundir con ABIERTO(), que decide quien puede entrar.
+  abierto: () => !!(urlJuego() && SECRETO().length >= 24),
 };

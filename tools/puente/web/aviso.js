@@ -12210,7 +12210,9 @@ document.addEventListener('pointerdown', (ev) => {
     // "inicio" dice que esta cuenta puede entrar (si el juego no esta instalado, o esta en prueba, no se ve nada)
     for (const j of JUEGOS.filter(x => x.tarjeta.aparte && x.eventos.inicio)) emit(j.eventos.inicio).then((d) => {
       // (a quien entro como invitado, el que es solo con cuenta se le muestra igual: al tocarlo se le dice)
-      const solo = !!(d && d.error && d.soloUsuarios && esInvitado());
+      // (no depende de esInvitado(): la biblioteca puede dibujarse antes de que
+      // llegue el usuario; el servidor solo manda soloUsuarios a los invitados)
+      const solo = !!(d && d.error && d.soloUsuarios);
       if (!page || !b.isConnected || !d || (d.error && !solo) || (d.tableros && !d.tableros.length)) return;
       tarjetas[j.id].t.style.display = ''; contar();
       if (solo) { soloEnTapa(tarjetas[j.id].vivo); return; }
