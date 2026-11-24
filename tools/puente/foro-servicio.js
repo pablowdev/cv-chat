@@ -18,13 +18,12 @@ const crypto = require('crypto');
 
 const CADA_MS = 90 * 1000;
 const UPLOADS = path.dirname(process.env.PUENTE_ADJUNTOS_DIR || '/data/uploads/discord');
-let db, log, warn, h, url = '', clave = '', foroUrl = '', andando = false;
+let db, log, warn, h, url = '', clave = '', andando = false;
 
 function setup(ctx) {
   ({ db, log, warn, helpers: h } = ctx);
   url = String(process.env.FORO_SERVICIO_URL || '').replace(/\/+$/, '');
   clave = String(process.env.FORO_SERVICIO_CLAVE || '');
-  foroUrl = String(process.env.FORO_URL || '').replace(/\/+$/, '');
   if (!on()) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS puente_foro_sync (
@@ -207,9 +206,7 @@ async function privadosNuevos() {
     const uid = porForo.get(m.para);
     if (!uid) continue;
     cachePm.delete(m.para);
-    // La lista de mensajes ya no muestra las conversaciones viejas del foro, asi que el aviso abre
-    // los privados del foro (ahi esta la conversacion); si no hay FORO_URL, queda la pantalla de mensajes.
-    h.avisarUsuario(uid, { title: `${m.de_nombre} te escribió en el foro`.slice(0, 120), body: plano(m.texto).slice(0, 160) || 'Mensaje privado', url: foroUrl ? `${foroUrl}/privatemessage/index` : '/app?mensajes=1', tag: 'puente-foro-pm-' + m.nodo });
+    h.avisarUsuario(uid, { title: `${m.de_nombre} te escribió en el foro`.slice(0, 120), body: plano(m.texto).slice(0, 160) || 'Mensaje privado', url: '/app?mensajes=1', tag: 'puente-foro-pm-' + m.nodo });
   }
   if (Number(d.hasta) > Number(desde)) estado('privados_desde', d.hasta);
 }

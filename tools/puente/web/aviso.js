@@ -7202,16 +7202,25 @@ document.addEventListener('pointerdown', (ev) => {
     for (const item of list.querySelectorAll('.dm-item')) {
       const ch = app.channels.find(c => c && c.code === item.dataset.code);
       if (!ch) continue;
-      const target = ch.dm_target;
+      const huerfano = !!(window.__puenteDmHuerfanos && window.__puenteDmHuerfanos.has(ch.code));
+      const target = huerfano ? null : ch.dm_target;
       if (target && target.id) ids.push(target.id);
       let av = item.querySelector('.puente-dm-avatar');
       if (!av) {
         av = el('span', 'puente-dm-avatar');
         item.insertBefore(av, item.firstChild);
       }
-      const info = target && avatars.get(target.id);
-      if (info && info.avatar && !av.querySelector('img')) { av.textContent = ''; const i = el('img'); i.src = info.avatar; i.alt = ''; av.appendChild(i); }
-      else if (!av.querySelector('img')) av.textContent = ch.is_group ? '👥' : ((item.querySelector('.channel-name') || {}).textContent || '?').trim().charAt(0).toUpperCase();
+      if (huerfano) {
+        // Cuenta eliminada: no hay foto que mostrar (la del propio usuario confunde).
+        const foto = av.querySelector('img'); if (foto) foto.remove();
+        av.classList.add('puente-dm-avatar-huerfano');
+        av.textContent = '?';
+      } else {
+        av.classList.remove('puente-dm-avatar-huerfano');
+        const info = target && avatars.get(target.id);
+        if (info && info.avatar && !av.querySelector('img')) { av.textContent = ''; const i = el('img'); i.src = info.avatar; i.alt = ''; av.appendChild(i); }
+        else if (!av.querySelector('img')) av.textContent = ch.is_group ? '👥' : ((item.querySelector('.channel-name') || {}).textContent || '?').trim().charAt(0).toUpperCase();
+      }
       let time = item.querySelector('.puente-dm-time');
       const when = ch.last_activity ? ago(ch.last_activity) : '';
       if (when) {
@@ -7246,6 +7255,8 @@ document.addEventListener('pointerdown', (ev) => {
     if (!app || !list) { if (++tries < 120) setTimeout(wait, 500); return; }
     header(app);
     new MutationObserver(() => decorate()).observe(list, { childList: true });
+    // Cuando llega la lista de DMs huerfanos (mas abajo en este archivo), se saca la foto propia.
+    document.addEventListener('puente-dm-huerfanos', () => decorate());
     decorate();
     setInterval(decorate, 60000); // "hace cuanto" al dia
     // Tocar una conversacion en el celular: pantalla completa, como Discord.
@@ -15163,6 +15174,10 @@ var puenteSinUbicacion = (function () {
       const d = await r.json();
       huerfanos.clear();
       for (const x of (d && d.huerfanos) || []) if (x && x.code) huerfanos.set(x.code, String(x.nombre || ''));
+      // La lista de DMs (mas arriba en este archivo) tambien necesita saber cuales son huerfanos
+      // para no ponerles la foto del propio usuario.
+      window.__puenteDmHuerfanos = huerfanos;
+      try { document.dispatchEvent(new Event('puente-dm-huerfanos')); } catch { /* sin DOM */ }
       aplicar();
     } catch { /* sin red */ }
   }
@@ -15199,10 +15214,10 @@ var puenteSinUbicacion = (function () {
   const color = (s) => COLORES[[...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % COLORES.length];
   const AVISO = '⚠️ Estos mensajes son del foro: no están cifrados (el foro los guardaba como texto común).';
   const CIFRADO = '🔒 Desde acá, los mensajes son de CV Chat y están cifrados de punta a punta: solo los pueden leer ustedes dos.';
-  // La lista de mensajes directos ya no muestra las conversaciones viejas del foro (pedido del dueño,
-  // 24/11/2026): eran decenas y tapaban los DMs. El historial con una cuenta unida sigue arriba de su
-  // DM (enConversacion); las de solo foro se leen en el foro. Para volver a mostrarlas, poner true.
-  const MOSTRAR_FORO = false;
+  // Las conversaciones del foro se muestran al final de la lista, como siempre. El historial del foro
+  // dentro de un DM se muestra solo con la cuenta unida de esa persona; nunca en el DM de una cuenta
+  // eliminada (Haven lo marca como "con vos mismo") ni en el de uno mismo.
+  const MOSTRAR_FORO = true;
   // DMs que quedaron con una sola persona porque la otra elimino su cuenta. Haven los muestra como
   // "con vos mismo"; aca se guarda el nombre que tenian para marcarlos como cuenta eliminada.
   const huerfanos = new Map();
@@ -15211,6 +15226,8 @@ var puenteSinUbicacion = (function () {
   st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
     + '#dm-list .dm-item.puente-dm-huerfano .channel-name{color:#96969e;font-style:italic}'
     + '#dm-list .dm-item.puente-dm-huerfano .channel-hash{opacity:.55}'
+    + '#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{display:flex;align-items:center;justify-content:center;background:#2b2d31;color:#96969e;font-weight:700;border-radius:50%;width:2rem;height:2rem;font-size:.95rem;flex:0 0 auto}'
+    + '@media (max-width:768px){#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{width:2.5rem;height:2.5rem;font-size:1.0625rem}}'
     // (las mismas medidas que las conversaciones del chat, discord-plus.theme.css)
     + '#dm-list .puente-dm-foro{display:flex;align-items:center;cursor:pointer;min-height:2.75rem;gap:.75rem;margin:1px .5rem;padding:.25rem .5rem;border-radius:.375rem}'
     + '#dm-list .puente-dm-foro:hover{background:#29292e}'
@@ -15300,6 +15317,15 @@ var puenteSinUbicacion = (function () {
     const app = window.app;
     const ch = app ? chans().find(c => c && c.code === app.currentChannel) : null;
     if (actual && (!ch || actual.code !== ch.code)) { actual.box.remove(); actual = null; }
+    // Un DM de una cuenta eliminada (Haven le pone el propio usuario como dm_target) o el DM de uno
+    // mismo no llevan historial del foro: `?con=<yo>` traeria los privados con cualquier persona.
+    if (ch && ch.is_dm && !ch.is_group && ch.dm_target && (huerfanos.has(ch.code) || (app.user && ch.dm_target.id === app.user.id))) {
+      pedido++;
+      const h = byId('puente-foro-historial');
+      if (h) h.remove();
+      if (actual && actual.code === ch.code) { actual.box.remove(); actual = null; }
+      return;
+    }
     if (!ch || !ch.is_dm || ch.is_group || !ch.dm_target || (actual && actual.code === ch.code)) return;
     const yo = ++pedido;
     const d = await api('?con=' + encodeURIComponent(ch.dm_target.id));
