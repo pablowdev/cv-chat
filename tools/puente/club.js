@@ -70,6 +70,37 @@ function armar(db, io, warn) {
   return d;
 }
 
+// CS 1.6 (stack aparte, cs16.js): quiénes están en la partida ahora. Se le
+// pregunta como mucho cada 15 segundos y solo cuando alguien mira la tarjeta.
+let cs16 = { at: 0, d: null, pidiendo: null };
+function enCs16(db) {
+  const clave = String(process.env.CS16_SECRETO || '');
+  if (clave.length < 24) return Promise.resolve(null);
+  if (Date.now() - cs16.at < 15e3) return Promise.resolve(cs16.d);
+  if (!cs16.pidiendo) {
+    const interno = String(process.env.CS16_INTERNO || 'http://cs16-web:27016').replace(/\/+$/, '');
+    cs16.pidiendo = fetch(interno + '/api/estado', { headers: { 'x-cvchat-clave': clave }, signal: AbortSignal.timeout(3000) })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((e) => {
+        let d = null;
+        const conectados = e && Array.isArray(e.conectados) ? e.conectados : [];
+        const gente = Math.max(Number(e && e.webPlayers) || 0, conectados.length);
+        if (gente > 0) {
+          const q = db.prepare('SELECT avatar FROM users WHERE id = ?');
+          const quienes = conectados.slice(0, 30).map((c) => {
+            let f = null;
+            try { f = (q.get(Number(c.uid)) || {}).avatar || null; } catch { /* sin foto */ }
+            return { nombre: String(c.nombre || 'Jugador'), foto: f };
+          });
+          d = { gente, invitados: Math.max(0, gente - quienes.length), quienes };
+        }
+        cs16 = { at: Date.now(), d, pidiendo: null };
+        return d;
+      });
+  }
+  return cs16.pidiendo;
+}
+
 // BACITY (corre en su propio servidor, puente/bacity.js en su repositorio): quienes andan por la ciudad ahora. Se le
 // pregunta como mucho cada 15 segundos y solo cuando alguien mira la tarjeta. Sin la clave del juego, nada.
 let ciudad = { at: 0, d: null, pidiendo: null };
@@ -109,6 +140,12 @@ function veCiudad(db, id) {
   if (process.env.BACITY_ABIERTO === '1') return true;
   try { return !!(db.prepare('SELECT is_admin FROM users WHERE id = ?').get(id) || {}).is_admin; } catch { return false; }
 }
+// CS 1.6: con CS16_ABIERTO=0 (solo registrados), los invitados no ven la fila
+// en vivo; en Juegos igual les aparece la tarjeta con el aviso para registrarse.
+function veCs16(db, id) {
+  if (process.env.CS16_ABIERTO !== '0') return true;
+  try { return !(db.prepare('SELECT COALESCE(is_guest, 0) g FROM users WHERE id = ?').get(id) || {}).g; } catch { return false; }
+}
 
 async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
   if (p !== '/puente/api/club') return false;
@@ -139,7 +176,15 @@ async function handle(req, res, p, u, { sessionUser, json, db, io, warn }) {
       hotel = { juego: 'hotel', nombre: 'CV Hotel', enlace: '/app?juegos=cvhotel', gente: a.gente, invitados: 0, quienes };
     }
   } catch (err) { warn('club: hotel:', err.message); }
-  return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity, hotel });
+  // CS 1.6 (su stack): quiénes están en Dust2 ahora, si esta cuenta puede entrar
+  let cs16Ahora = null;
+  try {
+    if (veCs16(db, user.id)) {
+      const c = await enCs16(db);
+      if (c) cs16Ahora = { juego: 'cs16', nombre: nombreDeJuego('cs16', 'Counter-Strike 1.6'), enlace: '/app?juegos=' + paramDeJuego('cs16'), ...c };
+    }
+  } catch (err) { warn('club: cs16:', err.message); }
+  return json(res, 200, { ...(m ? { ...hecho.datos, abiertas: ajenas(m.abiertas), enJuego: ajenas(m.enJuego), mias: [...propias(m.enJuego), ...propias(m.abiertas)].slice(0, 4) } : hecho.datos), bacity, hotel, cs16: cs16Ahora });
 }
 
 module.exports = { handle, enDiscord, cuentas, enLaCiudad, veCiudad };

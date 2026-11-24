@@ -150,7 +150,11 @@ const absolute = p => (!p ? null : /^https?:\/\//.test(p) ? p : `${publicUrl}${p
 // La sesion del chat no sale sola a otras paginas (/token es solo del chat): la persona lo confirma en una pagina del
 // chat (que no se puede meter adentro de otra: frame-ancestors 'none'), y la otra pagina recibe un codigo de un solo uso
 // que cambia por la sesion (canje), solo desde su propio origen.
-const APPS = { hotel: { nombre: 'CV Hotel', sub: 'hotel' }, capa2: { nombre: 'Capa 2', sub: 'capa2' } };
+const APPS = {
+  hotel: { nombre: 'CV Hotel', sub: 'hotel' },
+  capa2: { nombre: 'Capa 2', sub: 'capa2' },
+  cs16: { nombre: 'Counter-Strike 1.6', sub: 'cs' },
+};
 const origenApp = (a) => `https://${APPS[a].sub}.${dominio}`;
 const permisos = new Map(), codigos = new Map(); // nonce del boton -> { uid, app, volver, vence }; codigo -> { uid, app, vence }
 function podar(m) { const t = Date.now(); for (const [k, v] of m) if (v.vence < t) m.delete(k); while (m.size > 5000) m.delete(m.keys().next().value); }

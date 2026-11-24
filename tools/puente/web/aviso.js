@@ -2182,9 +2182,10 @@ function leido(sc) {
   const LUGAR = {
     bacity: { fila: ['anda', 'andan', 'por la ciudad'], ventana: 'en la ciudad ahora', sub: ['Anda', 'Andan'], link: 'Entrar a la ciudad ›', ico: '🏙️' },
     hotel: { fila: ['está', 'están', 'en el hotel'], ventana: 'en el hotel ahora', sub: ['Está', 'Están'], link: 'Entrar al hotel ›', ico: '🏨' },
+    cs16: { fila: ['está', 'están', 'en Dust2'], ventana: 'en Dust2 ahora', sub: ['Juega', 'Juegan'], link: 'Entrar a la partida ›', ico: '🎯' },
   };
   const lugar = (b) => LUGAR[b.juego] || LUGAR.bacity;
-  const lugares = () => [datos && datos.bacity, datos && datos.hotel].filter(b => b && b.gente > 0 && b.enlace);
+  const lugares = () => [datos && datos.bacity, datos && datos.hotel, datos && datos.cs16].filter(b => b && b.gente > 0 && b.enlace);
   function filaCiudad(b) {
     if (!b || !(b.gente > 0) || !b.enlace) return null;
     const L = lugar(b);

@@ -40,6 +40,7 @@
     }
   },
   "color": "#e8a33d",
+  "icono": "🎯",
   "enlace": {
     "param": "cs16",
     "alias": [
