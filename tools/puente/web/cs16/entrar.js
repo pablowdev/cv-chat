@@ -14,12 +14,18 @@
   const tabs = document.getElementById('ranking-tabs');
   const premiosEl = document.getElementById('ranking-premios');
   const semanaEl = document.getElementById('ranking-semana');
+  const conectados = document.getElementById('conectados');
+  const conectadosLista = document.getElementById('conectados-lista');
+  const conectadosVacio = document.getElementById('conectados-vacio');
+  const conectadosN = document.getElementById('conectados-n');
   const acciones = document.getElementById('acciones');
   const entrarBtn = document.getElementById('entrar');
   const volver = document.getElementById('volver');
   let destino = '';
   let pase = '';
   let rankingDatos = null;
+  let conectadosDatos = null;
+  let relojes = 0;
   let tab = 'semana';
   let premios = [150, 100, 50];
   let minimo = 10;
@@ -28,6 +34,7 @@
   function mostrar(texto, esError) {
     if (estado) estado.hidden = true;
     if (ranking) ranking.hidden = true;
+    if (conectados) conectados.hidden = true;
     if (detalle) {
       detalle.hidden = false;
       detalle.textContent = texto;
@@ -119,6 +126,57 @@
     pintarTab();
   }
 
+  function pintarConectados(d) {
+    if (d) conectadosDatos = d;
+    if (!conectados) return;
+    conectados.hidden = false;
+    const datos = d || conectadosDatos;
+    const listaJ = datos && Array.isArray(datos.jugadores) ? datos.jugadores : null;
+    if (conectadosN) {
+      conectadosN.textContent = listaJ ? `${listaJ.length} conectado${listaJ.length === 1 ? '' : 's'}` : '';
+    }
+    if (conectadosLista) {
+      conectadosLista.textContent = '';
+      for (const j of (listaJ || [])) {
+        const li = document.createElement('li');
+        const punto = document.createElement('span');
+        punto.className = 'conectados-punto';
+        const nombre = document.createElement('span');
+        nombre.className = 'nombre';
+        nombre.textContent = String(j.name || 'Jugador');
+        const datosJ = document.createElement('span');
+        datosJ.className = 'kills';
+        const kills = document.createElement('b');
+        kills.textContent = String(Math.max(0, Number(j.frag) || 0));
+        datosJ.append(kills, ' kills · ', String(j.time || '—'));
+        li.append(punto, nombre, datosJ);
+        conectadosLista.appendChild(li);
+      }
+    }
+    if (conectadosVacio) {
+      const vacioAhora = !!(listaJ && !listaJ.length);
+      conectadosVacio.hidden = !!(listaJ && listaJ.length);
+      if (!listaJ) conectadosVacio.textContent = 'No se pudo leer la lista.';
+      else if (vacioAhora) conectadosVacio.textContent = 'No hay nadie jugando en este momento.';
+    }
+  }
+
+  async function cargarJugadores() {
+    if (!destino || !pase) { pintarConectados(null); return; }
+    try {
+      const api = new URL('/api/jugadores', destino);
+      api.searchParams.set('cvchat', pase);
+      const control = new AbortController();
+      const corte = setTimeout(() => control.abort(), 5000);
+      const r = await fetch(api, { cache: 'no-store', signal: control.signal });
+      clearTimeout(corte);
+      const d = r.ok ? await r.json().catch(() => null) : null;
+      pintarConectados(d);
+    } catch {
+      pintarConectados(null);
+    }
+  }
+
   async function cargarRanking(url) {
     if (!url || !pase) { pintarRanking(null); return; }
     try {
@@ -181,7 +239,12 @@
       entrarBtn.hidden = false;
       entrarBtn.addEventListener('click', entrarAlJuego, { once: true });
     }
-    await cargarRanking(destino);
+    await Promise.all([cargarRanking(destino), cargarJugadores()]);
+    if (!relojes) {
+      relojes = 1;
+      setInterval(() => { if (!document.hidden) cargarJugadores(); }, 10000);
+      setInterval(() => { if (!document.hidden) cargarRanking(destino); }, 30000);
+    }
   }
 
   if (tabs) {

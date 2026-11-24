@@ -31,6 +31,7 @@ const b64 = (x) => Buffer.from(x).toString('base64url');
 let db = null, io = null, warn = () => {};
 let estado = { gente: 0, max: 12, mapa: 'de_dust2', online: false, cuando: 0 };
 let pidiendo = false;
+let ultimaPartida = null;
 const pedidos = new Map(); // cuenta -> [momentos de los ultimos pases]
 
 function firmar(datos, clave = SECRETO(), duraMs = TTL_MS) {
@@ -55,20 +56,55 @@ function urlJuego() {
   return /^https?:\/\/[^\s]+$/i.test(u) ? u : '';
 }
 
-// Cuantos hay en Dust2: se le pregunta al servidor del juego, como mucho cada 15 s.
+// Avisa a los que tienen el juego abierto pero en otra ventana que empezó una
+// ronda. El servidor del juego marca «sinFoco» con lo que reporta el cliente.
+function avisarRonda(d) {
+  const gente = Array.isArray(d && d.conectados) ? d.conectados : [];
+  if (!gente.length) return;
+  let avisos;
+  try { avisos = require('./avisos.js'); } catch { return; }
+  const mapa = String((d && d.map) || 'de_dust2');
+  for (const c of gente) {
+    if (!c || !c.sinFoco) continue;
+    const uid = Number(c.uid);
+    if (!Number.isInteger(uid) || uid <= 0) continue;
+    try {
+      avisos.avisarUsuario(uid, {
+        title: 'CS 1.6: empezó una ronda nueva',
+        body: `Hay una ronda nueva en ${mapa}. Volvé a la partida.`,
+        url: '/app?juegos=cs16',
+        tag: 'cs16-ronda',
+      });
+    } catch { /* sin avisos */ }
+  }
+}
+
+// Cuantos hay en Dust2 y quiénes están: se le pregunta al servidor del juego,
+// como mucho cada 15 s. Con el secreto usa /api/estado (trae los conectados y
+// el número de ronda); sin secreto, el /api/status público de siempre.
 function refrescar() {
   if (pidiendo || Date.now() - estado.cuando < 15000 || SECRETO().length < 24) return;
   pidiendo = true;
-  fetch(INTERNO() + '/api/status', { signal: AbortSignal.timeout(4000) })
+  const conSecreto = SECRETO().length >= 24;
+  const headers = conSecreto ? { 'x-cvchat-clave': SECRETO() } : {};
+  fetch(INTERNO() + (conSecreto ? '/api/estado' : '/api/status'), { headers, signal: AbortSignal.timeout(4000) })
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
       estado = d ? {
         gente: Math.max(Number(d.webPlayers) || 0, 0),
         max: Math.max(Number(d.maxPlayers) || 12, 1),
         mapa: String(d.map || 'de_dust2').slice(0, 32),
-        online: d.serverOnline === true,
+        online: d.online === true || d.serverOnline === true,
         cuando: Date.now(),
       } : { gente: 0, max: 12, mapa: 'de_dust2', online: false, cuando: Date.now() };
+      if (d && d.partida) {
+        const n = Number(d.partida.numero) || 0;
+        if (ultimaPartida === null) ultimaPartida = n;
+        else if (n !== ultimaPartida) {
+          ultimaPartida = n;
+          avisarRonda(d);
+        }
+      }
     })
     .catch(() => { estado = { gente: 0, max: 12, mapa: 'de_dust2', online: false, cuando: Date.now() }; })
     .finally(() => { pidiendo = false; });
@@ -95,6 +131,9 @@ function setup(ctx) {
       });
     });
   });
+  // La tarjeta y el aviso de ronda se actualizan aunque nadie abra la vista.
+  setTimeout(() => refrescar(), 5000).unref?.();
+  setInterval(() => refrescar(), 15000).unref?.();
   if (SECRETO() && SECRETO().length < 24) warn('cs16: CS16_SECRETO es muy corta (hacen falta 24 caracteres o más): el juego queda apagado');
   if (!urlJuego()) warn('cs16: falta CS16_URL (la dirección pública del juego)');
 }
@@ -140,4 +179,5 @@ module.exports = {
   // muestra siempre (con el cartel "Solo usuarios" si no es para invitados).
   // No confundir con ABIERTO(), que decide quien puede entrar.
   abierto: () => !!(urlJuego() && SECRETO().length >= 24),
+  _avisarRonda: avisarRonda,
 };
