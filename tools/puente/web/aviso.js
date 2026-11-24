@@ -15181,15 +15181,47 @@ var puenteSinUbicacion = (function () {
       if (!r.ok) return;
       const d = await r.json();
       huerfanos.clear();
-      for (const x of (d && d.huerfanos) || []) if (x && x.code) huerfanos.set(x.code, String(x.nombre || ''));
+      huerfanosPeer.clear();
+      for (const x of (d && d.huerfanos) || []) {
+        if (!x || !x.code) continue;
+        huerfanos.set(x.code, String(x.nombre || ''));
+        let jwk = null;
+        try { jwk = x.peer_public_key ? JSON.parse(x.peer_public_key) : null; } catch { /* clave invalida */ }
+        if (x.peer_id && jwk && jwk.x && jwk.y) huerfanosPeer.set(x.code, { id: Number(x.peer_id), jwk });
+      }
       // La lista de DMs (mas arriba en este archivo) tambien necesita saber cuales son huerfanos
       // para no ponerles la foto del propio usuario.
       window.__puenteDmHuerfanos = huerfanos;
+      repararE2E();
       try { document.dispatchEvent(new Event('puente-dm-huerfanos')); } catch { /* sin DOM */ }
       aplicar();
     } catch { /* sin red */ }
   }
+  // Haven marca el DM huerfano como "con vos mismo" (dm_target = tu usuario) y usa tu clave
+  // publica. Con la clave publica de la persona que se fue, el cliente deriva el mismo secreto
+  // ECDH que se uso al escribir y puede leer los mensajes propios que quedaron cifrados.
+  function repararE2E() {
+    const app = window.app;
+    if (!app || !Array.isArray(app.channels) || !huerfanosPeer.size) return;
+    if (!app._dmPublicKeys) app._dmPublicKeys = {};
+    for (const [code, p] of huerfanosPeer) {
+      const ch = app.channels.find(c => c && c.code === code);
+      if (!ch) continue;
+      if (!ch.dm_target || ch.dm_target.id !== p.id) ch.dm_target = { id: p.id, username: huerfanos.get(code) || 'Cuenta eliminada' };
+      ch.is_self_dm = 0;
+      app._dmPublicKeys[p.id] = p.jwk;
+    }
+    // Si la conversacion huerfana ya esta abierta, volver a cargarla una vez para que Haven
+    // descifre con la clave corregida (si el dispositivo tiene la clave privada de la cuenta).
+    const actual = app.currentChannel;
+    if (actual && huerfanosPeer.has(actual) && !redecifrado.has(actual)) {
+      redecifrado.add(actual);
+      setTimeout(() => { try { if (window.app && window.app.currentChannel === actual) window.app.switchChannel(actual); } catch { /* nada */ } }, 120);
+    }
+  }
+
   function marcarHuerfanos() {
+    repararE2E();
     const list = byId('dm-list'), app = window.app;
     if (!list || !app) return;
     for (const it of list.querySelectorAll('.dm-item[data-code]')) {
@@ -15229,6 +15261,10 @@ var puenteSinUbicacion = (function () {
   // DMs que quedaron con una sola persona porque la otra elimino su cuenta. Haven los muestra como
   // "con vos mismo"; aca se guarda el nombre que tenian para marcarlos como cuenta eliminada.
   const huerfanos = new Map();
+  // Y la clave publica ECDH de esa persona, para que el cliente pueda derivar el mismo secreto y
+  // leer los mensajes propios que quedaron cifrados (la privada se fue con la cuenta).
+  const huerfanosPeer = new Map(); // code -> { id, jwk }
+  const redecifrado = new Set();
 
   const st = el('style');
   st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
@@ -15459,6 +15495,11 @@ var puenteSinUbicacion = (function () {
     setTimeout(pedirHuerfanos, 1300);
     const cambiar = app.switchChannel;
     app.switchChannel = function () {
+      // Antes de cargar los mensajes: si es un DM huerfano, dejar la clave publica de la otra
+      // persona para que Haven lo descifre (la clave privada de la cuenta sigue en el dispositivo).
+      repararE2E();
+      const code = arguments[0];
+      if (typeof code === 'string' && huerfanosPeer.has(code)) redecifrado.add(code);
       cerrarVista();
       const r = cambiar.apply(this, arguments);
       setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); }, 50);

@@ -91,9 +91,17 @@ function setup(ctx) {
     CREATE TABLE IF NOT EXISTS puente_dm_huerfanos (
       code TEXT PRIMARY KEY,
       nombre TEXT,
+      peer_id INTEGER,
+      peer_public_key TEXT,
       anotado TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  // Columnas para recuperar la lectura de los mensajes propios: la clave publica ECDH de la
+  // persona que elimino su cuenta (la privada se fue con la cuenta, pero la publica alcanza
+  // para que el otro lado derive el mismo secreto).
+  for (const [col, tipo] of [['peer_id', 'INTEGER'], ['peer_public_key', 'TEXT']]) {
+    try { db.exec(`ALTER TABLE puente_dm_huerfanos ADD COLUMN ${col} ${tipo}`); } catch { /* ya existe */ }
+  }
   // las vinculaciones de antes: ya probaron que son suyas
   db.prepare('INSERT OR IGNORE INTO puente_historial (discord_user_id, haven_user_id, desde) SELECT discord_user_id, haven_user_id, ? FROM puente_vinculos').run(Date.now());
 
@@ -703,7 +711,7 @@ async function handle(req, res) {
     const yo = sessionUser(req);
     if (!yo) return json(res, 401, { error: 'sin sesion' });
     const huerfanos = db.prepare(`
-      SELECT c.code, h.nombre
+      SELECT c.code, h.nombre, h.peer_id, h.peer_public_key
       FROM channels c
       LEFT JOIN puente_dm_huerfanos h ON h.code = c.code
       WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0 AND COALESCE(c.is_self_dm, 0) = 0
