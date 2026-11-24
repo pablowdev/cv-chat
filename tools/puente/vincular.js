@@ -711,13 +711,32 @@ async function handle(req, res) {
     const yo = sessionUser(req);
     if (!yo) return json(res, 401, { error: 'sin sesion' });
     const huerfanos = db.prepare(`
-      SELECT c.code, h.nombre, h.peer_id, h.peer_public_key
+      SELECT c.id, c.code, h.nombre, h.peer_id, h.peer_public_key
       FROM channels c
       LEFT JOIN puente_dm_huerfanos h ON h.code = c.code
       WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0 AND COALESCE(c.is_self_dm, 0) = 0
         AND (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = c.id) = 1
         AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = c.id AND m.user_id = ?)
     `).all(yo.id);
+    // Huecos en la numeracion de mensajes: los mensajes que se borraron con la cuenta eliminada
+    // dejan IDs sin fila. Se cuentan solo los IDs que no existen (los de otros canales no cuentan).
+    const cuentaEntre = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE id > ? AND id < ?');
+    const hueco = (a, b) => (b - a - 1) - cuentaEntre.get(a, b).n;
+    for (const h of huerfanos) {
+      const ids = db.prepare('SELECT id FROM messages WHERE channel_id = ? ORDER BY id').all(h.id).map(r => r.id);
+      const huecos = [];
+      if (ids.length) {
+        const previo = db.prepare('SELECT MAX(id) AS id FROM messages WHERE id < ?').get(ids[0]).id;
+        if (previo != null) { const faltan = hueco(previo, ids[0]); if (faltan > 0) huecos.push({ antes: null, despues: ids[0], faltan }); }
+        for (let i = 0; i < ids.length - 1; i++) {
+          const faltan = hueco(ids[i], ids[i + 1]);
+          if (faltan > 0) huecos.push({ antes: ids[i], despues: ids[i + 1], faltan });
+        }
+        const siguiente = db.prepare('SELECT MIN(id) AS id FROM messages WHERE id > ?').get(ids[ids.length - 1]).id;
+        if (siguiente != null) { const faltan = hueco(ids[ids.length - 1], siguiente); if (faltan > 0) huecos.push({ antes: ids[ids.length - 1], despues: null, faltan }); }
+      }
+      h.huecos = huecos;
+    }
     return json(res, 200, { huerfanos });
   }
 

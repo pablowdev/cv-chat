@@ -15182,12 +15182,14 @@ var puenteSinUbicacion = (function () {
       const d = await r.json();
       huerfanos.clear();
       huerfanosPeer.clear();
+      huerfanosHuecos.clear();
       for (const x of (d && d.huerfanos) || []) {
         if (!x || !x.code) continue;
         huerfanos.set(x.code, String(x.nombre || ''));
         let jwk = null;
         try { jwk = x.peer_public_key ? JSON.parse(x.peer_public_key) : null; } catch { /* clave invalida */ }
         if (x.peer_id && jwk && jwk.x && jwk.y) huerfanosPeer.set(x.code, { id: Number(x.peer_id), jwk });
+        if (Array.isArray(x.huecos)) huerfanosHuecos.set(x.code, x.huecos.filter(g => g && Number(g.faltan) > 0));
       }
       // La lista de DMs (mas arriba en este archivo) tambien necesita saber cuales son huerfanos
       // para no ponerles la foto del propio usuario.
@@ -15195,6 +15197,7 @@ var puenteSinUbicacion = (function () {
       repararE2E();
       try { document.dispatchEvent(new Event('puente-dm-huerfanos')); } catch { /* sin DOM */ }
       aplicar();
+      ponerHuecos();
     } catch { /* sin red */ }
   }
   // Haven marca el DM huerfano como "con vos mismo" (dm_target = tu usuario) y usa tu clave
@@ -15250,6 +15253,48 @@ var puenteSinUbicacion = (function () {
       }
     }
   }
+
+  // Mensajes que tenian que estar entre los que quedan (se borraron con la cuenta): se marcan
+  // como huecos, en la posicion que dejaron en la numeracion de mensajes.
+  let huecosFirma = '', huecosPoniendo = false;
+  function ponerHuecos() {
+    if (huecosPoniendo) return;
+    const app = window.app, msgs = byId('messages');
+    if (!msgs) return;
+    const code = app && app.currentChannel;
+    const huecos = (code && huerfanosHuecos.get(code)) || [];
+    const viejos = msgs.querySelectorAll('.puente-msg-eliminado');
+    if (!huecos.length) {
+      viejos.forEach(n => n.remove());
+      huecosFirma = '';
+      return;
+    }
+    const els = [...msgs.querySelectorAll('[data-msg-id]')];
+    if (!els.length) { viejos.forEach(n => n.remove()); return; }
+    const porId = new Map(els.map(el => [String(el.dataset.msgId), el]));
+    const firma = code + ':' + els.map(el => el.dataset.msgId).join(',') + ':' + huecos.map(g => `${g.antes || ''}-${g.despues || ''}-${g.faltan}`).join(',');
+    if (firma === huecosFirma && viejos.length === huecos.length) return;
+    huecosPoniendo = true;
+    try {
+      viejos.forEach(n => n.remove());
+      const nombre = huerfanos.get(code) || '';
+      for (const g of huecos) {
+        const caja = el('div', 'puente-msg-eliminado');
+        const n = Math.max(0, Number(g.faltan) || 0);
+        caja.textContent = n === 1
+          ? `Mensaje eliminado${nombre ? ' de ' + nombre : ''}`
+          : `${n} mensajes eliminados${nombre ? ' de ' + nombre : ''}`;
+        caja.title = 'Los mensajes se borraron con la cuenta. La cantidad y la posición son aproximadas: se calculan por los huecos en la numeración de mensajes.';
+        const antes = g.antes != null ? porId.get(String(g.antes)) : null;
+        const despues = g.despues != null ? porId.get(String(g.despues)) : null;
+        if (despues) msgs.insertBefore(caja, despues);
+        else if (antes && antes.nextSibling) msgs.insertBefore(caja, antes.nextSibling);
+        else msgs.appendChild(caja);
+      }
+      huecosFirma = firma;
+    } finally { huecosPoniendo = false; }
+  }
+
   const COLORES = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c'];
   const color = (s) => COLORES[[...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % COLORES.length];
   const AVISO = '⚠️ Estos mensajes son del foro: no están cifrados (el foro los guardaba como texto común).';
@@ -15264,6 +15309,7 @@ var puenteSinUbicacion = (function () {
   // Y la clave publica ECDH de esa persona, para que el cliente pueda derivar el mismo secreto y
   // leer los mensajes propios que quedaron cifrados (la privada se fue con la cuenta).
   const huerfanosPeer = new Map(); // code -> { id, jwk }
+  const huerfanosHuecos = new Map(); // code -> [{ antes, despues, faltan }]
   const redecifrado = new Set();
 
   const st = el('style');
@@ -15272,6 +15318,8 @@ var puenteSinUbicacion = (function () {
     + '#dm-list .dm-item.puente-dm-huerfano .channel-hash{opacity:.55}'
     + '#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{display:flex;align-items:center;justify-content:center;background:#2b2d31;color:#96969e;font-weight:700;border-radius:50%;width:2rem;height:2rem;font-size:.95rem;flex:0 0 auto}'
     + '@media (max-width:768px){#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{width:2.5rem;height:2.5rem;font-size:1.0625rem}}'
+    + '.puente-msg-eliminado{display:flex;align-items:center;gap:8px;margin:7px 16px;padding:4px 10px;border-left:3px solid #4e5058;background:#232428;color:#96969e;font-size:12.5px;font-style:italic;border-radius:4px}'
+    + '.puente-msg-eliminado::before{content:"🗑️";font-style:normal}'
     // (las mismas medidas que las conversaciones del chat, discord-plus.theme.css)
     + '#dm-list .puente-dm-foro{display:flex;align-items:center;cursor:pointer;min-height:2.75rem;gap:.75rem;margin:1px .5rem;padding:.25rem .5rem;border-radius:.375rem}'
     + '#dm-list .puente-dm-foro:hover{background:#29292e}'
@@ -15486,7 +15534,7 @@ var puenteSinUbicacion = (function () {
     // Cada vez que Haven vuelve a dibujar la lista o los mensajes
     obs = new MutationObserver(() => aplicar());
     obs.observe(list, { childList: true });
-    new MutationObserver(poner).observe(msgs, { childList: true });
+    new MutationObserver(() => { poner(); ponerHuecos(); }).observe(msgs, { childList: true });
     so.on('new-message', (d) => { if (d && vacios.delete(d.channelCode)) aplicar(); });
     so.on('dm-opened', (d) => { if (d && d.code) { recien.add(d.code); aplicar(); } });
     so.on('puente-aviso', (a) => { if (a && / en el foro$/.test(a.title || '')) setTimeout(pedir, 500); });
@@ -15502,7 +15550,7 @@ var puenteSinUbicacion = (function () {
       if (typeof code === 'string' && huerfanosPeer.has(code)) redecifrado.add(code);
       cerrarVista();
       const r = cambiar.apply(this, arguments);
-      setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); }, 50);
+      setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); ponerHuecos(); }, 50);
       return r;
     };
     // Abrir otra cosa (un mensaje directo en la ventanita, los canales, la pantalla de mensajes): se cierra la del foro
