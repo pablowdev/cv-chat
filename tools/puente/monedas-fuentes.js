@@ -18,6 +18,9 @@
 //    mensajes (5 cada una, hasta 10 personas; solo cuentas de 7 dias o mas); el podio de la semana 150, 100 y 50.
 //  - Curveball: quien sale primero en el ranking de puntajes (supera el record del primero) cobra 100, como mucho una
 //    vez por mes (pedido del dueño, 20/11/2026: es bastante dificil).
+//  - CS 1.6: podio semanal de kills (150, 100 y 50). Se paga el lunes como el podio del chat, con mínimo 10 kills del
+//    primero y 3 cuentas registradas con kills. El ranking del juego se pide por la red interna con el secreto
+//    compartido (cs16-premios.js tiene los montos).
 //  - Invitaciones: 50 cuando la persona invitada confirma su cuenta, 150 cuando usa CV Chat 3 dias en sus primeras 2
 //    semanas y 100 si sigue (2 dias entre la semana 3 y la 5).
 // Un mensaje vale si tiene 8 letras o 2 palabras (o un link o una imagen), no repite uno de los ultimos 5 de esa
@@ -26,6 +29,7 @@
 // MONEDAS_FUENTES=0 lo apaga.
 
 const M = require('./monedas.js');
+const CS16 = require('./cs16-premios.js'); // podio semanal de CS 1.6
 
 let db = null, log = () => {}, warn = () => {};
 const AR = 3 * 3600e3, DIA = 864e5;
@@ -45,6 +49,7 @@ const REG = {
   podio: [150, 100, 50], podioMinimo: 30,
   inv1: 50, inv2: 150, inv3: 100,
   curveballPrimero: 100,
+  cs16: CS16,
 };
 const JUEGOS_DESAFIO = ['truco', 'pool', 'curveball', 'ajedrez', 'globalsiege', 'funball'];
 const TABLAS = [
@@ -282,13 +287,70 @@ function liquidarCurveball(ahora) {
   pagar(top.u, REG.curveballPrimero, 'ranking-primero', 'juegos', `curveball-primero:${top.u}:${diaAR(ahora).slice(0, 7)}`, 'Primero en el ranking de Curveball');
 }
 
+// ── Podio semanal de CS 1.6 ──
+// El ranking del juego es el que sabe quién mató más cada semana. Se le pide
+// por la red interna de Docker, con el secreto compartido, y se paga el podio.
+// La función de reparto es pura para poder probarla: empates se llevan la suma
+// de los puestos que ocupan (dos primeros: (150+100)/2 = 125 cada uno).
+function repartirCS16(top, reg = CS16) {
+  const gente = (Array.isArray(top) ? top : [])
+    .map((j) => ({ uid: Number(j && j.uid), nombre: String((j && j.nombre) || 'Jugador'), kills: Math.max(0, Number(j && j.kills) || 0) }))
+    .filter((j) => Number.isInteger(j.uid) && j.uid > 0 && j.kills > 0)
+    .sort((a, b) => b.kills - a.kills || a.nombre.localeCompare(b.nombre, 'es'));
+  if (gente.length < reg.participantes || !gente.length || gente[0].kills < reg.minimo) return [];
+  const out = [];
+  let i = 0;
+  while (i < gente.length && i < reg.premios.length) {
+    // Todos los que empatan con este puesto comparten la suma de los premios
+    // de los puestos que ocupan (aunque el empate pase del tercero).
+    let j = i + 1;
+    while (j < gente.length && gente[j].kills === gente[i].kills) j++;
+    const puestos = reg.premios.slice(i, Math.min(j, reg.premios.length));
+    if (!puestos.length) break;
+    const suma = puestos.reduce((a, b) => a + b, 0);
+    const cuantos = j - i;
+    const base = Math.floor(suma / cuantos);
+    let resto = suma - base * cuantos;
+    for (let k = i; k < j; k++) {
+      const monedas = base + (resto > 0 ? 1 : 0);
+      if (resto > 0) resto--;
+      out.push({ uid: gente[k].uid, nombre: gente[k].nombre, kills: gente[k].kills, puesto: i + 1, monedas });
+    }
+    i = j;
+  }
+  return out;
+}
+
+async function liquidarCS16(lunes) {
+  const base = String(process.env.CS16_INTERNO || '').replace(/\/+$/, '');
+  const clave = String(process.env.CS16_SECRETO || '');
+  if (!base || clave.length < 24) return true; // sin juego configurado: nada que pagar
+  let d = null;
+  try {
+    const r = await fetch(`${base}/api/ranking/semana?semana=${encodeURIComponent(lunes)}`, {
+      headers: { 'x-cvchat-clave': clave },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) { warn('monedas fuentes: cs16: HTTP ' + r.status); return false; }
+    d = await r.json();
+  } catch (err) {
+    warn('monedas fuentes: cs16:', err.message);
+    return false;
+  }
+  if (!d || d.semana !== lunes) { warn('monedas fuentes: cs16: respuesta inesperada para ' + lunes); return false; }
+  for (const p of repartirCS16(d.top)) {
+    pagar(p.uid, p.monedas, 'cs16-semana', 'juegos', `cs16:semana:${lunes}:${p.uid}`, `Puesto ${p.puesto} de la semana en CS 1.6 (${p.kills} kills)`);
+  }
+  return true;
+}
+
 // ── El ciclo ──
 let corriendo = false;
-function ciclo(ahora = Date.now()) {
+async function ciclo(ahora = Date.now()) {
   if (corriendo) return; corriendo = true;
   const paso = (nombre, fn) => { try { fn(); } catch (err) { warn(`monedas fuentes: ${nombre}:`, err.message); } };
   try {
-    if (!leer('inicio', null)) { poner('inicio', ahora); poner('dia', diaAR(ahora)); poner('semana', lunesDe(ahora)); log('monedas fuentes: arrancan (modo ' + M.modo() + ')'); }
+    if (!leer('inicio', null)) { poner('inicio', ahora); poner('dia', diaAR(ahora)); poner('semana', lunesDe(ahora)); poner('cs16_semana', lunesDe(ahora)); log('monedas fuentes: arrancan (modo ' + M.modo() + ')'); }
     paso('bienvenidas', liquidarBienvenidas);
     paso('partidas', liquidarPartidas);
     // los dias que ya terminaron (desde el primero sin liquidar)
@@ -296,8 +358,19 @@ function ciclo(ahora = Date.now()) {
     while (dia < diaAR(ahora)) { const d = dia; paso('dia ' + d, () => liquidarDia(d)); dia = sumarDias(dia, 1); poner('dia', dia); }
     let sem = leer('semana', lunesDe(ahora));
     while (sem < lunesDe(ahora)) { const s = sem; paso('semana ' + s, () => liquidarSemana(s)); sem = sumarDias(sem, 7); poner('semana', sem); }
+    // CS 1.6 va aparte: si el juego no contesta, se reintenta sin frenar lo del chat
+    let cs = leer('cs16_semana', null);
+    if (!cs) { poner('cs16_semana', lunesDe(ahora)); cs = lunesDe(ahora); }
+    while (cs < lunesDe(ahora)) {
+      let ok = false;
+      try { ok = await liquidarCS16(cs); } catch (err) { warn('monedas fuentes: cs16:', err.message); }
+      if (!ok) break;
+      cs = sumarDias(cs, 7); poner('cs16_semana', cs);
+    }
     paso('invitaciones', liquidarInvitaciones);
     paso('curveball', () => liquidarCurveball(ahora));
+  } catch (err) {
+    warn('monedas fuentes:', err.message);
   } finally { corriendo = false; }
 }
 
@@ -315,4 +388,4 @@ function setup(ctx) {
   setInterval(() => ciclo(), 10 * 60e3).unref?.();
 }
 
-module.exports = { setup, ciclo, REG, _pagoSuave: pagoSuave };
+module.exports = { setup, ciclo, REG, _pagoSuave: pagoSuave, _repartirCS16: repartirCS16 };

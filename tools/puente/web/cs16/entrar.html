@@ -51,14 +51,53 @@
     box-shadow: 0 12px 32px #0005;
   }
   .ranking[hidden] { display: none; }
+  .ranking-cab {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
   .ranking h2 {
-    margin: 0 0 8px;
+    margin: 0;
     color: var(--muted);
     font-size: .95rem;
     font-weight: 800;
     letter-spacing: .06em;
     text-transform: uppercase;
   }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 8px;
+    background: #17181b;
+  }
+  .tabs[hidden] { display: none; }
+  .tab {
+    flex: 0 0 auto;
+    padding: .35rem .7rem;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: .8rem;
+    font-weight: 700;
+  }
+  .tab:hover { background: #232428; color: var(--texto); }
+  .tab.activo { background: #2b2d31; color: var(--texto); }
+  .premios {
+    margin: 0 0 4px;
+    color: #e8c26a;
+    font-size: .84rem;
+    font-weight: 700;
+  }
+  .semana {
+    margin: 0 0 8px;
+    color: #80848e;
+    font-size: .76rem;
+  }
+  .premios[hidden], .semana[hidden] { display: none; }
   .ranking ol { margin: 0; padding: 0; list-style: none; }
   .ranking li {
     display: flex;
@@ -117,17 +156,25 @@
   </div>
   <p id="estado" class="estado"><span class="punto"></span>Entrando con tu cuenta de CV Chat…</p>
   <section id="ranking" class="ranking" hidden>
-    <h2>Top 10 · más kills</h2>
+    <div class="ranking-cab">
+      <h2>Top 10 · kills</h2>
+      <div class="tabs" id="ranking-tabs" hidden>
+        <button class="tab activo" type="button" data-tab="semana">Esta semana</button>
+        <button class="tab" type="button" data-tab="historico">Histórico</button>
+      </div>
+    </div>
+    <p id="ranking-premios" class="premios" hidden></p>
+    <p id="ranking-semana" class="semana" hidden></p>
     <ol id="ranking-lista"></ol>
-    <p id="ranking-vacio" class="vacio" hidden>Todavía no hay kills registradas. ¡Jugá y aparecé acá!</p>
+    <p id="ranking-vacio" class="vacio" hidden></p>
   </section>
   <p id="detalle" class="estado error" hidden></p>
   <div class="acciones" id="acciones" hidden>
     <button id="entrar" type="button">Entrar a la partida</button>
     <button id="volver" type="button" hidden>Volver</button>
   </div>
-  <p class="nota">El ranking cuenta las kills de las cuentas de CV Chat.</p>
+  <p class="nota">El ranking cuenta las kills de las cuentas de CV Chat (hace falta otra cuenta registrada en la sala). El podio semanal se paga solo, los lunes.</p>
 </main>
-<script src="/puente/cs16/entrar.js?v=2"></script>
+<script src="/puente/cs16/entrar.js?v=3"></script>
 </body>
 </html>

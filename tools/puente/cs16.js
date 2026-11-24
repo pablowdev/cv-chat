@@ -2,11 +2,12 @@
 // El juego corre en su propio stack (Docker, otra pagina de este VPS) y aca vive
 // solo el puente de identidad:
 //
-//  - POST /puente/api/cs16/entrada (sesion) -> { entrada, url }: un pase firmado
-//    con el nombre de la cuenta y si es invitado. Vale 12 horas; el servidor del
-//    juego lo revisa con el mismo secreto (CS16_SECRETO / CVCHAT_SECRETO). La
-//    contraseña de la sala no viaja: la web del juego la inyecta despues de
-//    verificar el pase.
+//  - POST /puente/api/cs16/entrada (sesion) -> { entrada, url, premios, minimo,
+//    participantes }: un pase firmado con el nombre de la cuenta y si es
+//    invitado. Vale 12 horas; el servidor del juego lo revisa con el mismo
+//    secreto (CS16_SECRETO / CVCHAT_SECRETO). La contraseña de la sala no viaja:
+//    la web del juego la inyecta despues de verificar el pase. Los premios son
+//    el podio semanal de kills (ver cs16-premios.js).
 //  - cs16:inicio (socket, con respuesta) -> lo que muestra la tarjeta: cuanta
 //    gente hay en de_dust2.
 //
@@ -18,6 +19,7 @@
 //                  cuentas registradas. Los invitados siempre ven la tarjeta,
 //                  pero se les pide registrarse para jugar.
 const crypto = require('crypto');
+const PREMIOS = require('./cs16-premios.js');
 
 const SECRETO = () => String(process.env.CS16_SECRETO || '');
 const URL_JUEGO = () => String(process.env.CS16_URL || '').replace(/\/+$/, '');
@@ -120,7 +122,13 @@ function handle(req, res, p, u, { sessionUser, json }) {
     ad: c.is_admin ? 1 : 0,
     e: '5',
   });
-  return json(res, 200, { entrada, url });
+  return json(res, 200, {
+    entrada,
+    url,
+    premios: PREMIOS.premios,
+    minimo: PREMIOS.minimo,
+    participantes: PREMIOS.participantes,
+  });
 }
 
 module.exports = {
