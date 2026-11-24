@@ -15153,13 +15153,64 @@ var puenteSinUbicacion = (function () {
   const chans = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels : []);
   const dmCon = (id) => chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id);
   const unico = (c) => (c.cuentas.length === 1 && c.cuentas[0]) || null;
+
+  // El servidor (vincular.js, /puente/api/dm/huerfanos) dice cuales DMs quedaron con una sola
+  // persona y el nombre que tenia la otra cuenta antes de eliminarse.
+  async function pedirHuerfanos() {
+    try {
+      const r = await fetch('/puente/api/dm/huerfanos', { headers: { Authorization: 'Bearer ' + token() }, cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      huerfanos.clear();
+      for (const x of (d && d.huerfanos) || []) if (x && x.code) huerfanos.set(x.code, String(x.nombre || ''));
+      aplicar();
+    } catch { /* sin red */ }
+  }
+  function marcarHuerfanos() {
+    const list = byId('dm-list'), app = window.app;
+    if (!list || !app) return;
+    for (const it of list.querySelectorAll('.dm-item[data-code]')) {
+      const code = it.dataset.code;
+      if (!huerfanos.has(code)) {
+        it.classList.remove('puente-dm-huerfano');
+        continue;
+      }
+      const nombre = huerfanos.get(code);
+      const texto = nombre ? `${nombre} (cuenta eliminada)` : 'Cuenta eliminada';
+      const name = it.querySelector('.channel-name');
+      if (name && name.textContent !== texto) name.textContent = texto;
+      it.classList.add('puente-dm-huerfano');
+      it.title = nombre
+        ? `La cuenta de ${nombre} fue eliminada. Los mensajes que quedan son tuyos.`
+        : 'La otra persona eliminó su cuenta. Los mensajes que quedan son tuyos.';
+    }
+    // La cabecera del DM abierto también dice el nombre viejo, no el tuyo.
+    if (huerfanos.has(app.currentChannel)) {
+      const cab = byId('channel-header-name');
+      if (cab) {
+        const nombre = huerfanos.get(app.currentChannel);
+        const texto = nombre ? `@ ${nombre} (cuenta eliminada)` : '@ Cuenta eliminada';
+        if (cab.textContent !== texto) cab.textContent = texto;
+        cab.title = 'La otra persona eliminó su cuenta. Los mensajes que quedan son tuyos.';
+      }
+    }
+  }
   const COLORES = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c'];
   const color = (s) => COLORES[[...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % COLORES.length];
   const AVISO = '⚠️ Estos mensajes son del foro: no están cifrados (el foro los guardaba como texto común).';
   const CIFRADO = '🔒 Desde acá, los mensajes son de CV Chat y están cifrados de punta a punta: solo los pueden leer ustedes dos.';
+  // La lista de mensajes directos ya no muestra las conversaciones viejas del foro (pedido del dueño,
+  // 24/11/2026): eran decenas y tapaban los DMs. El historial con una cuenta unida sigue arriba de su
+  // DM (enConversacion); las de solo foro se leen en el foro. Para volver a mostrarlas, poner true.
+  const MOSTRAR_FORO = false;
+  // DMs que quedaron con una sola persona porque la otra elimino su cuenta. Haven los muestra como
+  // "con vos mismo"; aca se guarda el nombre que tenian para marcarlos como cuenta eliminada.
+  const huerfanos = new Map();
 
   const st = el('style');
   st.textContent = '#dm-list .puente-dm-vacio{display:none!important}'
+    + '#dm-list .dm-item.puente-dm-huerfano .channel-name{color:#96969e;font-style:italic}'
+    + '#dm-list .dm-item.puente-dm-huerfano .channel-hash{opacity:.55}'
     // (las mismas medidas que las conversaciones del chat, discord-plus.theme.css)
     + '#dm-list .puente-dm-foro{display:flex;align-items:center;cursor:pointer;min-height:2.75rem;gap:.75rem;margin:1px .5rem;padding:.25rem .5rem;border-radius:.375rem}'
     + '#dm-list .puente-dm-foro:hover{background:#29292e}'
@@ -15312,24 +15363,28 @@ var puenteSinUbicacion = (function () {
         const ocultar = vacios.has(code) && !recien.has(code) && code !== app.currentChannel && !(ch && ch.dm_target && conForo.has(ch.dm_target.id));
         it.classList.toggle('puente-dm-vacio', ocultar);
       }
-      // Las del foro que no tienen conversacion en CV Chat, al final de la lista
-      const abierta = byId('puente-foro-vista') && (list.querySelector('.puente-dm-foro.active') || {}).dataset;
+      // Las del foro: ocultas por pedido del dueño (ver MOSTRAR_FORO, arriba). Se sacan las que
+      // hubiera dejado una version anterior. Con MOSTRAR_FORO = true vuelven al final de la lista.
       list.querySelectorAll('.puente-dm-foro').forEach(n => n.remove());
-      for (const c of foro) {
-        const id = unico(c);
-        if (id && dmCon(id)) continue;
-        const nombre = c.con.join(', ') || 'Vos';
-        const it = el('div', 'channel-item puente-dm-foro' + (abierta && abierta.foro === c.clave ? ' active' : '')); it.dataset.foro = c.clave;
-        it.title = 'Mensajes del foro con ' + nombre;
-        const av = el('span', 'puente-dm-avatar');
-        const f = c.fotos && c.fotos.length === 1 && c.fotos[0];
-        if (f) { const i = el('img'); i.src = f; i.alt = ''; i.loading = 'lazy'; i.addEventListener('error', () => { i.remove(); av.textContent = nombre.charAt(0).toUpperCase(); }); av.appendChild(i); }
-        else { av.textContent = c.con.length > 1 ? '👥' : (nombre.trim().charAt(0).toUpperCase() || '?'); av.style.backgroundColor = color(nombre); }
-        it.append(av, el('span', 'channel-name', nombre), el('span', 'puente-dm-foro-tag', 'foro'));
-        if (visto.nuevo(c)) it.appendChild(el('span', 'channel-badge', '1'));
-        it.addEventListener('click', () => abrir(c));
-        list.appendChild(it);
+      if (MOSTRAR_FORO) {
+        const abierta = byId('puente-foro-vista') && (list.querySelector('.puente-dm-foro.active') || {}).dataset;
+        for (const c of foro) {
+          const id = unico(c);
+          if (id && dmCon(id)) continue;
+          const nombre = c.con.join(', ') || 'Vos';
+          const it = el('div', 'channel-item puente-dm-foro' + (abierta && abierta.foro === c.clave ? ' active' : '')); it.dataset.foro = c.clave;
+          it.title = 'Mensajes del foro con ' + nombre;
+          const av = el('span', 'puente-dm-avatar');
+          const f = c.fotos && c.fotos.length === 1 && c.fotos[0];
+          if (f) { const i = el('img'); i.src = f; i.alt = ''; i.loading = 'lazy'; i.addEventListener('error', () => { i.remove(); av.textContent = nombre.charAt(0).toUpperCase(); }); av.appendChild(i); }
+          else { av.textContent = c.con.length > 1 ? '👥' : (nombre.trim().charAt(0).toUpperCase() || '?'); av.style.backgroundColor = color(nombre); }
+          it.append(av, el('span', 'channel-name', nombre), el('span', 'puente-dm-foro-tag', 'foro'));
+          if (visto.nuevo(c)) it.appendChild(el('span', 'channel-badge', '1'));
+          it.addEventListener('click', () => abrir(c));
+          list.appendChild(it);
+        }
       }
+      marcarHuerfanos();
     } finally { if (obs) obs.observe(list, { childList: true }); }
   }
   function abrir(c) {
@@ -15362,13 +15417,14 @@ var puenteSinUbicacion = (function () {
     so.on('new-message', (d) => { if (d && vacios.delete(d.channelCode)) aplicar(); });
     so.on('dm-opened', (d) => { if (d && d.code) { recien.add(d.code); aplicar(); } });
     so.on('puente-aviso', (a) => { if (a && / en el foro$/.test(a.title || '')) setTimeout(pedir, 500); });
-    so.on('connect', () => setTimeout(pedir, 1500));
+    so.on('connect', () => { setTimeout(pedir, 1500); setTimeout(pedirHuerfanos, 1600); });
     setTimeout(pedir, 1200);
+    setTimeout(pedirHuerfanos, 1300);
     const cambiar = app.switchChannel;
     app.switchChannel = function () {
       cerrarVista();
       const r = cambiar.apply(this, arguments);
-      setTimeout(() => { aplicar(); enConversacion(); }, 50);
+      setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); }, 50);
       return r;
     };
     // Abrir otra cosa (un mensaje directo en la ventanita, los canales, la pantalla de mensajes): se cierra la del foro

@@ -85,6 +85,14 @@ function setup(ctx) {
       haven_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       desde INTEGER NOT NULL
     );
+    -- Conversaciones directas que quedaron con una sola persona porque la otra elimino su cuenta
+    -- (Haven las muestra como "con vos mismo"). Aca se guarda el nombre que tenia esa persona para
+    -- poder marcarlas como "cuenta eliminada" en la lista, sin tocar los mensajes ni el canal.
+    CREATE TABLE IF NOT EXISTS puente_dm_huerfanos (
+      code TEXT PRIMARY KEY,
+      nombre TEXT,
+      anotado TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   // las vinculaciones de antes: ya probaron que son suyas
   db.prepare('INSERT OR IGNORE INTO puente_historial (discord_user_id, haven_user_id, desde) SELECT discord_user_id, haven_user_id, ? FROM puente_vinculos').run(Date.now());
@@ -685,6 +693,24 @@ async function handle(req, res) {
   if (p === '/puente/resumen/baja') {
     const r = await require('./resumen-semanal.js').handle(req, res, p, u, { json });
     if (r !== false) return;
+  }
+
+  // Mensajes directos que quedaron con una sola persona porque la otra cuenta se elimino. Haven los
+  // muestra como "con vos mismo" (usa al propio usuario cuando no hay otro miembro); aviso.js los
+  // marca con el nombre anotado en puente_dm_huerfanos o, si no hay, como "Cuenta eliminada".
+  // Solo las conversaciones del que pregunta: no se expone ninguna ajena.
+  if (p === '/puente/api/dm/huerfanos' && req.method === 'GET') {
+    const yo = sessionUser(req);
+    if (!yo) return json(res, 401, { error: 'sin sesion' });
+    const huerfanos = db.prepare(`
+      SELECT c.code, h.nombre
+      FROM channels c
+      LEFT JOIN puente_dm_huerfanos h ON h.code = c.code
+      WHERE c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0 AND COALESCE(c.is_self_dm, 0) = 0
+        AND (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = c.id) = 1
+        AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = c.id AND m.user_id = ?)
+    `).all(yo.id);
+    return json(res, 200, { huerfanos });
   }
 
   if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css' || p === '/puente/capa2-admin' || p === '/puente/capa2-admin.js' || p === '/puente/capa2-admin.css' || p === '/puente/economia-admin' || p === '/puente/economia-admin.js' || p === '/puente/economia-admin.css')) {
