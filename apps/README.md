@@ -10,6 +10,8 @@ Las imágenes (íconos) y la clave de firma son propias de cada servidor y no es
 ## Windows (`windows/`)
 
 Electron con instalador NSIS (`CV-Chat-Windows.exe`). Cerrar la ventana la deja junto al reloj.
+En el juego CS 1.6 (que va en un iframe), **Ctrl+W no cierra la app**: se intercepta y se reenvía al juego
+para agacharse y caminar. Con pantalla completa, además, el propio juego bloquea el atajo.
 Desde la 1.0.4 se abre con Windows, como Discord: prendido de entrada la primera vez, arranca escondida
 junto al reloj (`--oculto`) y se apaga con "Abrir al iniciar Windows" en el menú del ícono. Al desinstalar,
 `instalador.nsh` borra esa entrada. En la de la Microsoft Store (también desde la 1.0.4) es una tarea de inicio del

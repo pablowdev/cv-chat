@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 const ORIGEN = 'https://chat.circulovicioso.club';
+const JUEGO = 'https://cs.circulovicioso.club';
 const INICIO = ORIGEN + '/app';
 // Paginas de afuera que se abren dentro de la app (para entrar con Discord y volver)
 const ADENTRO = [ORIGEN, 'https://discord.com', 'https://www.discord.com'];
@@ -39,6 +40,21 @@ if (!unica) app.exit(0);
 app.commandLine.appendSwitch('lang', 'es-419'); // la pagina en castellano, aunque Windows este en ingles
 app.setAppUserModelId('club.circulovicioso.chat');
 
+// El juego CS 1.6 va en un iframe adentro del chat. Mientras ese iframe este abierto,
+// Ctrl+W tiene que llegar al juego (agacharse y caminar) y no cerrar la ventana.
+function enJuego() {
+  if (!win || win.isDestroyed()) return false;
+  const esJuego = (url) => typeof url === 'string' && (url.startsWith(JUEGO) || url.startsWith(ORIGEN + '/puente/cs16/'));
+  const revisar = (frame) => {
+    try {
+      if (!frame) return false;
+      if (esJuego(frame.url)) return true;
+      return (frame.frames || []).some(revisar);
+    } catch { return false; }
+  };
+  try { return revisar(win.webContents.mainFrame); } catch { return false; }
+}
+
 function crear() {
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 420, minHeight: 500,
@@ -52,6 +68,20 @@ function crear() {
   });
   win.removeMenu();
   win.loadURL(INICIO);
+  // Ctrl+W en el juego: no cierra/oculta la app y se reenvía la W al juego.
+  let reenviandoW = false;
+  win.webContents.on('before-input-event', (event, input) => {
+    if (reenviandoW || !enJuego()) return;
+    if (input.type !== 'keyDown' || !input.control || input.alt || input.meta) return;
+    if (String(input.key || '').toLowerCase() !== 'w') return;
+    event.preventDefault();
+    reenviandoW = true;
+    try {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'W', modifiers: ['control'] });
+    } finally {
+      setTimeout(() => { reenviandoW = false; }, 80);
+    }
+  });
   // Al abrirse con Windows queda junto al reloj (carga igual, para que lleguen los avisos)
   win.once('ready-to-show', () => { if (!oculta) win.show(); });
 
@@ -146,7 +176,8 @@ app.whenReady().then(() => {
   // Microfono (llamadas de voz) y portapapeles solo para CV Chat. Notificaciones de Windows, nunca:
   // alcanza con los avisos y sonidos de CV Chat
   session.defaultSession.setPermissionRequestHandler((wc, permiso, cb) => {
-    const ok = wc.getURL().startsWith(ORIGEN) && ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture', 'pointerLock'].includes(permiso);   // (pointerLock: mirar con el mouse en BACITY)
+    const deCasa = wc.getURL().startsWith(ORIGEN) || wc.getURL().startsWith(JUEGO);
+    const ok = deCasa && ['media', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen', 'display-capture', 'pointerLock'].includes(permiso);   // (pointerLock: mirar con el mouse en BACITY)
     cb(ok);
   });
   session.defaultSession.setPermissionCheckHandler((wc, permiso) => permiso !== 'notifications');
