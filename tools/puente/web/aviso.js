@@ -6960,6 +6960,14 @@ document.addEventListener('pointerdown', (ev) => {
     }
   }
 
+  // La pantalla "Mensajes directos" es una copia de la lista de la izquierda: cuando esa lista
+  // cambia (se ocultan las conversaciones vacias, se agregan las del foro), se vuelve a armar.
+  let dmHomeCuando = 0;
+  document.addEventListener('puente-dm-lista', () => {
+    clearTimeout(dmHomeCuando);
+    dmHomeCuando = setTimeout(() => { if (document.getElementById('puente-dm-home')) dmHome(true); }, 80);
+  });
+
   function goTo(dms) {
     const app = window.app;
     if (!app || typeof app.switchChannel !== 'function') return;
@@ -15411,6 +15419,9 @@ var puenteSinUbicacion = (function () {
         }
       }
       marcarHuerfanos();
+      // La pantalla "Mensajes directos" (dmHome, mas arriba) es una copia de esta lista: se vuelve
+      // a armar para que no muestre las conversaciones vacias ni se pierda lo del foro.
+      try { document.dispatchEvent(new Event('puente-dm-lista')); } catch { /* sin DOM */ }
     } finally { if (obs) obs.observe(list, { childList: true }); }
   }
   function abrir(c) {
