@@ -15170,7 +15170,16 @@ var puenteSinUbicacion = (function () {
   const fecha = (t) => new Date(t).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const api = (q) => fetch('/puente/api/foro/privados' + q, { headers: { Authorization: 'Bearer ' + token() } }).then(r => r.json()).catch(() => null);
   const chans = () => (window.app && Array.isArray(window.app.channels) ? window.app.channels : []);
-  const dmCon = (id) => chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id);
+  // Las conversaciones sin ningun mensaje (se abrieron y nunca se escribio) no cuentan como
+  // "conversacion en CV Chat": la fila del foro sigue siendo del foro.
+  const vacios = new Set(), recien = new Set();
+  let vaciosListo = false;
+  const dmCon = (id) => {
+    // Hasta que el servidor diga cuales conversaciones estan vacias, la fila del foro manda:
+    // no se abre un DM que capaz se creo vacio al tocarla antes.
+    if (!vaciosListo) return null;
+    return chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === id && !vacios.has(c.code));
+  };
   const unico = (c) => (c.cuentas.length === 1 && c.cuentas[0]) || null;
 
   // El servidor (vincular.js, /puente/api/dm/huerfanos) dice cuales DMs quedaron con una sola
@@ -15468,17 +15477,15 @@ var puenteSinUbicacion = (function () {
   };
 
   // ── La lista de mensajes directos ──
-  const vacios = new Set(), recien = new Set();
   let foro = [], obs = null;
   function aplicar() {
     const list = byId('dm-list'), app = window.app;
     if (!list || !app) return;
     if (obs) obs.disconnect();
     try {
-      const conForo = new Set(foro.map(unico).filter(Boolean));
       for (const it of list.querySelectorAll('.dm-item[data-code]')) {
-        const code = it.dataset.code, ch = chans().find(c => c && c.code === code);
-        const ocultar = vacios.has(code) && !recien.has(code) && code !== app.currentChannel && !(ch && ch.dm_target && conForo.has(ch.dm_target.id));
+        const code = it.dataset.code;
+        const ocultar = vacios.has(code) && !recien.has(code) && code !== app.currentChannel;
         it.classList.toggle('puente-dm-vacio', ocultar);
       }
       // Las del foro: ocultas por pedido del dueño (ver MOSTRAR_FORO, arriba). Se sacan las que
@@ -15510,8 +15517,15 @@ var puenteSinUbicacion = (function () {
   }
   function abrir(c) {
     const id = unico(c);
-    // Con cuenta en CV Chat: su mensaje directo (ahi arriba esta lo del foro)
-    if (id && window.app && window.app.socket) { cerrarVista(); window.app.socket.emit('start-dm', { targetUserId: id }); return; }
+    // Con una conversacion real en CV Chat (con mensajes): abrir ese DM; el historial del foro
+    // aparece arriba. Si solo hay cuenta del foro (o un DM vacio que se abrio antes), se lee el
+    // foro aca mismo y la fila sigue marcada "foro": no se crea una conversacion vacia.
+    const dm = id && dmCon(id);
+    if (dm && window.app && typeof window.app.switchChannel === 'function') {
+      cerrarVista();
+      window.app.switchChannel(dm.code);
+      return;
+    }
     vista(c);
   }
 
@@ -15521,6 +15535,7 @@ var puenteSinUbicacion = (function () {
       so.emit('puente-dm-recientes', {}, (r) => {
         if (!r || !Array.isArray(r.vacios)) return;
         vacios.clear(); r.vacios.forEach(c => vacios.add(c));
+        vaciosListo = true;
         aplicar();
       });
     }
