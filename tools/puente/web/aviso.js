@@ -12231,9 +12231,12 @@ document.addEventListener('pointerdown', (ev) => {
       const mias = (d.mias || []).filter(m => m.estado !== 'terminada');
       const n = mias.filter(m => m.teToca).length + (d.abiertas || []).filter(a => a.paraVos).length;
       if (n) { tarjetas[j.id].badge.textContent = n === 1 ? 'Te toca' : `${n} pendientes`; tarjetas[j.id].badge.style.display = ''; }
-      // lo que se esta jugando ahora (alguien jugo en la ultima media hora) o, si no, las mesas que esperan
+      // lo que se esta jugando ahora (alguien jugo en la ultima media hora) o, si no, las mesas que esperan;
+      // y para los juegos con "tarjeta.vivo" (CS 1.6: la gente en la sala), esa cuenta manda
+      const vt = j.tarjeta && j.tarjeta.vivo, nv = vt && d[vt.campo];
       const act = d.activas || 0, esp = (d.abiertas || []).length;
-      const vv = act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
+      const vv = nv > 0 ? (nv === 1 ? vt.uno : vt.varios.replace('{n}', nv))
+        : act ? `${act} ${act === 1 ? 'partida' : 'partidas'} ahora` : esp ? `${esp} ${esp === 1 ? 'mesa esperando' : 'mesas esperando'}` : '';
       if (vv) { tarjetas[j.id].vivo.textContent = vv; tarjetas[j.id].vivo.style.display = ''; }
       for (const m of mias) curso.push({ j, m });
     });
