@@ -6946,7 +6946,7 @@ document.addEventListener('pointerdown', (ev) => {
     if (!box) { box = el('div', 'puente-dm-home'); box.id = 'puente-dm-home'; main.appendChild(box); }
     box.textContent = '';
     box.appendChild(el('div', 'puente-dm-home-title', 'Mensajes directos'));
-    const items = [...document.querySelectorAll('#dm-list .dm-item:not(.puente-dm-vacio), #dm-list .puente-dm-foro')];
+    const items = [...document.querySelectorAll('#dm-list .dm-item:not(.puente-dm-vacio):not(.puente-dm-oculto), #dm-list .puente-dm-foro')];
     if (!items.length) { box.appendChild(el('div', 'puente-dm-home-empty', 'Todavía no tenés mensajes directos. Para empezar uno, tocá el nombre de una persona y elegí "Mensaje".')); return; }
     for (const item of items) {
       const row = el('button', 'puente-dm-home-row');
@@ -15191,14 +15191,16 @@ var puenteSinUbicacion = (function () {
       const d = await r.json();
       huerfanos.clear();
       huerfanosPeer.clear();
-      huerfanosHuecos.clear();
+      huerfanosSuyos.clear();
+      huerfanosOcultos.clear();
       for (const x of (d && d.huerfanos) || []) {
         if (!x || !x.code) continue;
         huerfanos.set(x.code, String(x.nombre || ''));
         let jwk = null;
         try { jwk = x.peer_public_key ? JSON.parse(x.peer_public_key) : null; } catch { /* clave invalida */ }
         if (x.peer_id && jwk && jwk.x && jwk.y) huerfanosPeer.set(x.code, { id: Number(x.peer_id), jwk });
-        if (Array.isArray(x.huecos)) huerfanosHuecos.set(x.code, x.huecos.filter(g => g && Number(g.faltan) > 0));
+        if (x.quedanSuyos) huerfanosSuyos.add(x.code);
+        if (x.oculto) huerfanosOcultos.add(x.code);
       }
       // La lista de DMs (mas arriba en este archivo) tambien necesita saber cuales son huerfanos
       // para no ponerles la foto del propio usuario.
@@ -15206,8 +15208,25 @@ var puenteSinUbicacion = (function () {
       repararE2E();
       try { document.dispatchEvent(new Event('puente-dm-huerfanos')); } catch { /* sin DOM */ }
       aplicar();
-      ponerHuecos();
+      ponerAvisoHuerfano();
     } catch { /* sin red */ }
+  }
+  // "Ocultar de mi lista" / "Volver a mostrar": se guarda en el servidor (vale en todos los
+  // dispositivos) y se puede deshacer con "Mostrar" al final de la lista.
+  async function ocultarHuerfano(code, oculto) {
+    try {
+      const r = await fetch('/puente/api/dm/huerfanos/ocultar', {
+        method: 'POST', cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, oculto }),
+      });
+      if (!r.ok) return;
+      if (oculto) huerfanosOcultos.add(code); else huerfanosOcultos.delete(code);
+      if (oculto) verOcultos = false;
+      // (la conversacion abierta sigue a la vista; sale de la lista al cambiar a otra)
+      aplicar();
+      ponerAvisoHuerfano();
+    } catch { /* sin red: queda como estaba */ }
   }
   // Haven marca el DM huerfano como "con vos mismo" (dm_target = tu usuario) y usa tu clave
   // publica. Con la clave publica de la persona que se fue, el cliente deriva el mismo secreto
@@ -15239,17 +15258,37 @@ var puenteSinUbicacion = (function () {
     for (const it of list.querySelectorAll('.dm-item[data-code]')) {
       const code = it.dataset.code;
       if (!huerfanos.has(code)) {
-        it.classList.remove('puente-dm-huerfano');
+        it.classList.remove('puente-dm-huerfano', 'puente-dm-oculto');
         continue;
       }
+      it.classList.toggle('puente-dm-oculto', huerfanosOcultos.has(code) && !verOcultos && code !== app.currentChannel);
       const nombre = huerfanos.get(code);
       const texto = nombre ? `${nombre} (cuenta eliminada)` : 'Cuenta eliminada';
       const name = it.querySelector('.channel-name');
       if (name && name.textContent !== texto) name.textContent = texto;
       it.classList.add('puente-dm-huerfano');
       it.title = nombre
-        ? `La cuenta de ${nombre} fue eliminada. Los mensajes que quedan son tuyos.`
-        : 'La otra persona eliminó su cuenta. Los mensajes que quedan son tuyos.';
+        ? `La cuenta de ${nombre} fue eliminada.`
+        : 'La otra persona eliminó su cuenta.';
+    }
+    // Al final de la lista: cuantas hay ocultas, con "Mostrar" (o "Ocultar" si se estan viendo)
+    const ocultas = [...list.querySelectorAll('.dm-item[data-code]')].filter(it => huerfanosOcultos.has(it.dataset.code)).length;
+    let pie = list.querySelector('.puente-dm-ocultas');
+    if (!ocultas) { if (pie) pie.remove(); }
+    else {
+      const texto = verOcultos
+        ? 'Ocultar las conversaciones de cuentas eliminadas'
+        : (ocultas === 1 ? '1 conversación oculta (cuenta eliminada) · Mostrar' : `${ocultas} conversaciones ocultas (cuentas eliminadas) · Mostrar`);
+      if (!pie) {
+        pie = el('div', 'puente-dm-ocultas');
+        pie.setAttribute('role', 'button');
+        pie.tabIndex = 0;
+        const alternar = () => { verOcultos = !verOcultos; aplicar(); };
+        pie.addEventListener('click', alternar);
+        pie.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alternar(); } });
+      }
+      if (pie.textContent !== texto) pie.textContent = texto;
+      if (pie !== list.lastElementChild) list.appendChild(pie);
     }
     // La cabecera del DM abierto también dice el nombre viejo, no el tuyo.
     if (huerfanos.has(app.currentChannel)) {
@@ -15258,50 +15297,42 @@ var puenteSinUbicacion = (function () {
         const nombre = huerfanos.get(app.currentChannel);
         const texto = nombre ? `@ ${nombre} (cuenta eliminada)` : '@ Cuenta eliminada';
         if (cab.textContent !== texto) cab.textContent = texto;
-        cab.title = 'La otra persona eliminó su cuenta. Los mensajes que quedan son tuyos.';
+        cab.title = 'La otra persona eliminó su cuenta.';
       }
     }
   }
 
-  // Mensajes que tenian que estar entre los que quedan (se borraron con la cuenta): se marcan
-  // como huecos, en la posicion que dejaron en la numeracion de mensajes.
-  let huecosFirma = '', huecosPoniendo = false;
-  function ponerHuecos() {
-    if (huecosPoniendo) return;
+  // Arriba de la conversacion con una cuenta eliminada, un solo aviso (sin contar mensajes: no hay
+  // forma segura de saber cuantos se borraron), con "Ocultar de mi lista" / "Volver a mostrar".
+  let avisoPoniendo = false;
+  function ponerAvisoHuerfano() {
+    if (avisoPoniendo) return;
     const app = window.app, msgs = byId('messages');
     if (!msgs) return;
     const code = app && app.currentChannel;
-    const huecos = (code && huerfanosHuecos.get(code)) || [];
-    const viejos = msgs.querySelectorAll('.puente-msg-eliminado');
-    if (!huecos.length) {
-      viejos.forEach(n => n.remove());
-      huecosFirma = '';
-      return;
-    }
-    const els = [...msgs.querySelectorAll('[data-msg-id]')];
-    if (!els.length) { viejos.forEach(n => n.remove()); return; }
-    const porId = new Map(els.map(el => [String(el.dataset.msgId), el]));
-    const firma = code + ':' + els.map(el => el.dataset.msgId).join(',') + ':' + huecos.map(g => `${g.antes || ''}-${g.despues || ''}-${g.faltan}`).join(',');
-    if (firma === huecosFirma && viejos.length === huecos.length) return;
-    huecosPoniendo = true;
+    let caja = msgs.querySelector('.puente-dm-aviso-huerfano');
+    if (!code || !huerfanos.has(code)) { if (caja) caja.remove(); return; }
+    const nombre = huerfanos.get(code) || '';
+    const quien = nombre || 'La otra persona';
+    const texto = huerfanosSuyos.has(code)
+      ? `${quien} eliminó su cuenta. Sus mensajes quedaron sin nombre ("Usuario eliminado").`
+      : `${quien} eliminó su cuenta y sus mensajes se borraron con ella. Lo que escribiste vos sigue acá.`;
+    const oculto = huerfanosOcultos.has(code);
+    const firma = code + '|' + texto + '|' + oculto;
+    avisoPoniendo = true;
     try {
-      viejos.forEach(n => n.remove());
-      const nombre = huerfanos.get(code) || '';
-      for (const g of huecos) {
-        const caja = el('div', 'puente-msg-eliminado');
-        const n = Math.max(0, Number(g.faltan) || 0);
-        caja.textContent = n === 1
-          ? `Mensaje eliminado${nombre ? ' de ' + nombre : ''}`
-          : `${n} mensajes eliminados${nombre ? ' de ' + nombre : ''}`;
-        caja.title = 'Los mensajes se borraron con la cuenta. La cantidad y la posición son aproximadas: se calculan por los huecos en la numeración de mensajes.';
-        const antes = g.antes != null ? porId.get(String(g.antes)) : null;
-        const despues = g.despues != null ? porId.get(String(g.despues)) : null;
-        if (despues) msgs.insertBefore(caja, despues);
-        else if (antes && antes.nextSibling) msgs.insertBefore(caja, antes.nextSibling);
-        else msgs.appendChild(caja);
+      if (!caja || caja.dataset.firma !== firma) {
+        if (caja) caja.remove();
+        caja = el('div', 'puente-dm-aviso-huerfano');
+        caja.dataset.firma = firma;
+        caja.appendChild(el('span', 'puente-dm-aviso-texto', texto));
+        const b = el('button', 'puente-dm-aviso-btn', oculto ? 'Volver a mostrar en mi lista' : 'Ocultar de mi lista');
+        b.type = 'button';
+        b.addEventListener('click', () => { b.disabled = true; ocultarHuerfano(code, !oculto); });
+        caja.appendChild(b);
       }
-      huecosFirma = firma;
-    } finally { huecosPoniendo = false; }
+      if (msgs.firstElementChild !== caja) msgs.insertBefore(caja, msgs.firstChild);
+    } finally { avisoPoniendo = false; }
   }
 
   const COLORES = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c'];
@@ -15318,7 +15349,9 @@ var puenteSinUbicacion = (function () {
   // Y la clave publica ECDH de esa persona, para que el cliente pueda derivar el mismo secreto y
   // leer los mensajes propios que quedaron cifrados (la privada se fue con la cuenta).
   const huerfanosPeer = new Map(); // code -> { id, jwk }
-  const huerfanosHuecos = new Map(); // code -> [{ antes, despues, faltan }]
+  const huerfanosSuyos = new Set(); // los que conservan mensajes de la persona que se fue
+  const huerfanosOcultos = new Set(); // los que este usuario saco de su lista
+  let verOcultos = false; // "Mostrar" al final de la lista (hasta recargar)
   const redecifrado = new Set();
 
   const st = el('style');
@@ -15327,8 +15360,13 @@ var puenteSinUbicacion = (function () {
     + '#dm-list .dm-item.puente-dm-huerfano .channel-hash{opacity:.55}'
     + '#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{display:flex;align-items:center;justify-content:center;background:#2b2d31;color:#96969e;font-weight:700;border-radius:50%;width:2rem;height:2rem;font-size:.95rem;flex:0 0 auto}'
     + '@media (max-width:768px){#dm-list .puente-dm-avatar.puente-dm-avatar-huerfano{width:2.5rem;height:2.5rem;font-size:1.0625rem}}'
-    + '.puente-msg-eliminado{display:flex;align-items:center;gap:8px;margin:7px 16px;padding:4px 10px;border-left:3px solid #4e5058;background:#232428;color:#96969e;font-size:12.5px;font-style:italic;border-radius:4px}'
-    + '.puente-msg-eliminado::before{content:"🗑️";font-style:normal}'
+    + '#dm-list .dm-item.puente-dm-oculto{display:none!important}'
+    + '#dm-list .puente-dm-ocultas{margin:6px .5rem 10px;padding:6px .5rem;border-radius:.375rem;color:#80848e;font-size:.8125rem;cursor:pointer;text-align:center}'
+    + '#dm-list .puente-dm-ocultas:hover{background:#29292e;color:#dbdee1}'
+    + '.puente-dm-aviso-huerfano{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 16px;padding:8px 12px;border-left:3px solid #4e5058;background:#232428;color:#b5bac1;font-size:13px;border-radius:4px}'
+    + '.puente-dm-aviso-huerfano .puente-dm-aviso-texto{flex:1 1 220px}'
+    + '.puente-dm-aviso-huerfano .puente-dm-aviso-btn{flex:0 0 auto;background:#2b2d31;color:#dbdee1;border:1px solid #3f4147;border-radius:4px;padding:5px 10px;font-size:12.5px;cursor:pointer;min-height:2rem}'
+    + '.puente-dm-aviso-huerfano .puente-dm-aviso-btn:hover{background:#35373c}'
     // (las mismas medidas que las conversaciones del chat, discord-plus.theme.css)
     + '#dm-list .puente-dm-foro{display:flex;align-items:center;cursor:pointer;min-height:2.75rem;gap:.75rem;margin:1px .5rem;padding:.25rem .5rem;border-radius:.375rem}'
     + '#dm-list .puente-dm-foro:hover{background:#29292e}'
@@ -15549,7 +15587,7 @@ var puenteSinUbicacion = (function () {
     // Cada vez que Haven vuelve a dibujar la lista o los mensajes
     obs = new MutationObserver(() => aplicar());
     obs.observe(list, { childList: true });
-    new MutationObserver(() => { poner(); ponerHuecos(); }).observe(msgs, { childList: true });
+    new MutationObserver(() => { poner(); ponerAvisoHuerfano(); }).observe(msgs, { childList: true });
     so.on('new-message', (d) => { if (d && vacios.delete(d.channelCode)) aplicar(); });
     so.on('dm-opened', (d) => { if (d && d.code) { recien.add(d.code); aplicar(); } });
     so.on('puente-aviso', (a) => { if (a && / en el foro$/.test(a.title || '')) setTimeout(pedir, 500); });
@@ -15565,7 +15603,7 @@ var puenteSinUbicacion = (function () {
       if (typeof code === 'string' && huerfanosPeer.has(code)) redecifrado.add(code);
       cerrarVista();
       const r = cambiar.apply(this, arguments);
-      setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); ponerHuecos(); }, 50);
+      setTimeout(() => { aplicar(); enConversacion(); marcarHuerfanos(); ponerAvisoHuerfano(); }, 50);
       return r;
     };
     // Abrir otra cosa (un mensaje directo en la ventanita, los canales, la pantalla de mensajes): se cierra la del foro
@@ -18393,4 +18431,37 @@ var puenteSinUbicacion = (function () {
       return p;
     };
   })();
+})();
+// (puente-aviso-eliminar-cuenta) En la ventana de Haven para eliminar la cuenta, que quede claro
+// que pasa con los mensajes privados: con "Eliminar todos mis mensajes" se borran tambien de las
+// conversaciones de los demas; sin tildarlo, quedan con el nombre "Usuario eliminado".
+(function () {
+  'use strict';
+  const SIN = 'Tus mensajes se quedan donde están, también en las conversaciones privadas, pero sin tu nombre: van a aparecer como "Usuario eliminado".';
+  const CON = 'Se borran todos tus mensajes, también los de las conversaciones privadas: a la otra persona le queda solo lo que escribió ella, con el aviso de que eliminaste tu cuenta.';
+  function poner(ov) {
+    const tilde = ov.querySelector('#self-delete-scrub');
+    if (!tilde) return;
+    let nota = ov.querySelector('.puente-eliminar-nota');
+    if (!nota) {
+      nota = document.createElement('small');
+      nota.className = 'settings-hint puente-eliminar-nota';
+      nota.style.cssText = 'display:block;margin:0 0 8px;color:#f0b232';
+      const pista = ov.querySelector('.self-delete-status');
+      if (pista && pista.parentNode) pista.parentNode.insertBefore(nota, pista); else return;
+      tilde.addEventListener('change', () => { nota.textContent = tilde.checked ? CON : SIN; });
+      // La pista de Haven ("[Usuario eliminado]") queda tapada por esta, que es mas completa
+      const vieja = tilde.closest('label') && tilde.closest('label').nextElementSibling;
+      if (vieja && vieja.classList.contains('settings-hint') && vieja !== nota) vieja.style.display = 'none';
+    }
+    nota.textContent = tilde.checked ? CON : SIN;
+  }
+  function mirar() {
+    new MutationObserver((cambios) => {
+      for (const c of cambios) for (const n of c.addedNodes) {
+        if (n.nodeType === 1 && n.classList && n.classList.contains('self-delete-overlay')) poner(n);
+      }
+    }).observe(document.body, { childList: true });
+  }
+  if (document.body) mirar(); else document.addEventListener('DOMContentLoaded', mirar);
 })();

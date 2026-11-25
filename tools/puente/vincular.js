@@ -102,6 +102,27 @@ function setup(ctx) {
   for (const [col, tipo] of [['peer_id', 'INTEGER'], ['peer_public_key', 'TEXT']]) {
     try { db.exec(`ALTER TABLE puente_dm_huerfanos ADD COLUMN ${col} ${tipo}`); } catch { /* ya existe */ }
   }
+  // Se anota solo, en el momento en que se elimina una cuenta: Haven saca a esa persona de sus
+  // conversaciones (channel_members) antes de borrar la fila de users, asi que este disparador
+  // todavia ve su nombre y su clave publica. Solo DMs de a dos con la otra persona adentro. Si
+  // se borra un DM entero (delete-dm), queda una fila de un canal que ya no existe: no se usa.
+  // El disparador solo escribe en una tabla del puente y no puede fallar por datos de Haven.
+  try {
+    db.exec(`CREATE TRIGGER IF NOT EXISTS puente_dm_huerfano_anotar
+      BEFORE DELETE ON channel_members
+      WHEN EXISTS (SELECT 1 FROM channels c WHERE c.id = OLD.channel_id AND c.is_dm = 1
+                     AND COALESCE(c.is_group, 0) = 0 AND COALESCE(c.is_self_dm, 0) = 0)
+        AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = OLD.channel_id AND m.user_id != OLD.user_id)
+        AND EXISTS (SELECT 1 FROM users u WHERE u.id = OLD.user_id)
+      BEGIN
+        INSERT OR REPLACE INTO puente_dm_huerfanos (code, nombre, peer_id, peer_public_key, anotado)
+          SELECT c.code, COALESCE(NULLIF(u.display_name, ''), u.username), u.id, u.public_key, CURRENT_TIMESTAMP
+          FROM channels c, users u WHERE c.id = OLD.channel_id AND u.id = OLD.user_id;
+      END;`);
+  } catch (e) { warn('puente: disparador de DMs huerfanos:', e.message); }
+  // Los DMs de una cuenta eliminada que cada uno saco de su lista ("Ocultar de mi lista")
+  db.exec(`CREATE TABLE IF NOT EXISTS puente_dm_ocultos (
+    user_id INTEGER NOT NULL, code TEXT NOT NULL, desde INTEGER NOT NULL, PRIMARY KEY (user_id, code))`);
   // las vinculaciones de antes: ya probaron que son suyas
   db.prepare('INSERT OR IGNORE INTO puente_historial (discord_user_id, haven_user_id, desde) SELECT discord_user_id, haven_user_id, ? FROM puente_vinculos').run(Date.now());
 
@@ -718,26 +739,35 @@ async function handle(req, res) {
         AND (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = c.id) = 1
         AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = c.id AND m.user_id = ?)
     `).all(yo.id);
-    // Huecos en la numeracion de mensajes: los mensajes que se borraron con la cuenta eliminada
-    // dejan IDs sin fila. Se cuentan solo los IDs que no existen (los de otros canales no cuentan).
-    const cuentaEntre = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE id > ? AND id < ?');
-    const hueco = (a, b) => (b - a - 1) - cuentaEntre.get(a, b).n;
+    // Si quedaron mensajes de la persona que se fue (Haven los deja sin autor si no pidio borrarlos)
+    // y si este usuario saco la conversacion de su lista. No se cuentan huecos: no hay forma de
+    // saber cuantos mensajes de esa persona se borraron sin confundirlos con los de otros canales.
+    const suyos = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE channel_id = ? AND user_id IS NULL');
+    const oculto = db.prepare('SELECT 1 FROM puente_dm_ocultos WHERE user_id = ? AND code = ?');
     for (const h of huerfanos) {
-      const ids = db.prepare('SELECT id FROM messages WHERE channel_id = ? ORDER BY id').all(h.id).map(r => r.id);
-      const huecos = [];
-      if (ids.length) {
-        const previo = db.prepare('SELECT MAX(id) AS id FROM messages WHERE id < ?').get(ids[0]).id;
-        if (previo != null) { const faltan = hueco(previo, ids[0]); if (faltan > 0) huecos.push({ antes: null, despues: ids[0], faltan }); }
-        for (let i = 0; i < ids.length - 1; i++) {
-          const faltan = hueco(ids[i], ids[i + 1]);
-          if (faltan > 0) huecos.push({ antes: ids[i], despues: ids[i + 1], faltan });
-        }
-        const siguiente = db.prepare('SELECT MIN(id) AS id FROM messages WHERE id > ?').get(ids[ids.length - 1]).id;
-        if (siguiente != null) { const faltan = hueco(ids[ids.length - 1], siguiente); if (faltan > 0) huecos.push({ antes: ids[ids.length - 1], despues: null, faltan }); }
-      }
-      h.huecos = huecos;
+      h.quedanSuyos = suyos.get(h.id).n > 0;
+      h.oculto = !!oculto.get(yo.id, h.code);
+      delete h.id;
     }
     return json(res, 200, { huerfanos });
+  }
+  // "Ocultar de mi lista" / "Mostrar" una conversacion con una cuenta eliminada. Solo las propias.
+  if (p === '/puente/api/dm/huerfanos/ocultar' && req.method === 'POST') {
+    const yo = sessionUser(req);
+    if (!yo) return json(res, 401, { error: 'sin sesion' });
+    const body = await readJson(req).catch(() => null);
+    const code = body && typeof body.code === 'string' ? body.code : '';
+    if (!/^[a-f0-9]{8}$/i.test(code)) return json(res, 400, { error: 'conversacion' });
+    const es = db.prepare(`
+      SELECT 1 FROM channels c
+      WHERE c.code = ? AND c.is_dm = 1 AND COALESCE(c.is_group, 0) = 0
+        AND (SELECT COUNT(*) FROM channel_members m WHERE m.channel_id = c.id) = 1
+        AND EXISTS (SELECT 1 FROM channel_members m WHERE m.channel_id = c.id AND m.user_id = ?)
+    `).get(code, yo.id);
+    if (!es) return json(res, 404, { error: 'conversacion' });
+    if (body.oculto === false) db.prepare('DELETE FROM puente_dm_ocultos WHERE user_id = ? AND code = ?').run(yo.id, code);
+    else db.prepare('INSERT OR IGNORE INTO puente_dm_ocultos (user_id, code, desde) VALUES (?, ?, ?)').run(yo.id, code, Date.now());
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && (p === '/puente/vincular' || p === '/puente/vincular.js' || p === '/puente/aviso.js' || p === '/puente/login.js' || p === '/puente/instalar.js' || p === '/puente/vincular.css' || p === '/puente/login.css' || p === '/puente/email.js' || p === '/puente/olvide.js' || p === '/puente/olvide' || p === '/puente/entrar' || p === '/puente/entrar.js' || p === '/puente/historia' || p === '/puente/historia.js' || p === '/puente/historia.css' || p === '/puente/descargar' || p === '/puente/descargar.js' || p === '/puente/descargar.css' || p === '/puente/barra.js' || p === '/puente/barra.css' || p === '/puente/foro-vivo.js' || p === '/puente/wiki.js' || p === '/puente/wiki.css' || p === '/puente/codigo.js' || p === '/puente/origen.js' || p === '/puente/afuera.js' || p === '/puente/juegos' || p === '/puente/juegos.js' || p === '/puente/juegos.css' || p === '/puente/capa2-admin' || p === '/puente/capa2-admin.js' || p === '/puente/capa2-admin.css' || p === '/puente/economia-admin' || p === '/puente/economia-admin.js' || p === '/puente/economia-admin.css')) {
