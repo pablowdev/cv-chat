@@ -69,3 +69,8 @@ tools/puente/web/curveball/
 tools/puente/web/hotel/
 tools/puente/pruebas/hotel/
 tools/puente/juegos/
+# CS 1.6: su repositorio (pablowdev/cv-chat-cs16, carpeta cvchat/) instala el modulo, la ficha, la entrada y la tapa.
+# cs16-premios.js queda aca porque lo usa monedas-fuentes.js.
+tools/puente/cs16.js
+tools/puente/web/cs16/
+tools/puente/web/tapas/cs16.jpg
