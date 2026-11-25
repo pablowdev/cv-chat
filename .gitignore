@@ -74,3 +74,7 @@ tools/puente/juegos/
 tools/puente/cs16.js
 tools/puente/web/cs16/
 tools/puente/web/tapas/cs16.jpg
+# Hanzi Quest: su repositorio (pablowdev/hanzi-quest) instala el modulo, la ficha, la pantalla, el audio y la tapa
+tools/puente/hanzi*.js
+tools/puente/web/hanzi/
+tools/puente/web/tapas/hanzi.jpg
