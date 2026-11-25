@@ -78,3 +78,8 @@ tools/puente/web/tapas/cs16.jpg
 tools/puente/hanzi*.js
 tools/puente/web/hanzi/
 tools/puente/web/tapas/hanzi.jpg
+# The Incredible Machine (en prueba, solo administradores): instalado a mano, sin repositorio
+tools/puente/tim.js
+tools/puente/tim-web/
+tools/puente/tim-datos/
+tools/puente/web/tapas/tim.jpg
