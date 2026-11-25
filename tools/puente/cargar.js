@@ -21,8 +21,11 @@ const path = require('path');
 
 const FERRY_PATH = path.resolve('/app/src/ferry.js');
 const HELPERS_PATH = path.resolve('/app/src/socketHandlers/helpers.js');
+// Las notificaciones al telefono: a quien tiene una solicitud de mensaje sin aceptar no le llega nada
+// por esa conversacion (solicitudes.js agrega esas personas a las que Haven deja afuera del aviso).
+const PUSH_MUTES_PATH = path.resolve('/app/src/pushMutes.js');
 const origLoad = Module._load;
-let ferryHooked = false, namesHooked = false;
+let ferryHooked = false, namesHooked = false, pushHooked = false;
 
 const NAME_ERROR = 'El nombre tiene que tener entre 1 y 32 caracteres';
 function discordLikeName(raw) {
@@ -35,7 +38,7 @@ function discordLikeName(raw) {
 
 Module._load = function (request, parent, isMain) {
   const exported = origLoad.apply(this, arguments);
-  if (!exported || (typeof exported.initFerry !== 'function' && typeof exported.normalizeDisplayName !== 'function')) return exported;
+  if (!exported || (typeof exported.initFerry !== 'function' && typeof exported.normalizeDisplayName !== 'function' && typeof exported.quietRecipients !== 'function')) return exported;
   let resolved = null;
   try { resolved = Module._resolveFilename(request, parent, isMain); } catch { /* no es un archivo */ }
   if (!namesHooked && resolved === HELPERS_PATH && typeof exported.normalizeDisplayName === 'function') {
@@ -55,7 +58,16 @@ Module._load = function (request, parent, isMain) {
       return result;
     };
   }
-  if (ferryHooked && namesHooked) Module._load = origLoad; // ya no hace falta mirar mas requires
+  if (!pushHooked && resolved === PUSH_MUTES_PATH && typeof exported.quietRecipients === 'function') {
+    pushHooked = true;
+    const quietRecipients = exported.quietRecipients;
+    exported.quietRecipients = function (db, opts) {
+      const quiet = quietRecipients.apply(this, arguments);
+      try { require('./solicitudes.js').sinAviso(db, opts && opts.channelId, opts && opts.senderUserId).forEach(id => quiet.add(id)); } catch { /* sin solicitudes: como siempre */ }
+      return quiet;
+    };
+  }
+  if (ferryHooked && namesHooked && pushHooked) Module._load = origLoad; // ya no hace falta mirar mas requires
   return exported;
 };
 

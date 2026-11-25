@@ -751,6 +751,11 @@ async function handle(req, res) {
     }
     return json(res, 200, { huerfanos });
   }
+  // Solicitudes de mensajes y bloqueos (solicitudes.js)
+  if (p.startsWith('/puente/api/dm/solicitudes') || p === '/puente/api/dm/bloquear') {
+    const r = await require('./solicitudes.js').handle(req, res, p, { json, readJson, sessionUser });
+    if (r !== false) return;
+  }
   // "Ocultar de mi lista" / "Mostrar" una conversacion con una cuenta eliminada. Solo las propias.
   if (p === '/puente/api/dm/huerfanos/ocultar' && req.method === 'POST') {
     const yo = sessionUser(req);

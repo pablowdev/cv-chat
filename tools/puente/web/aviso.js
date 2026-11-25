@@ -6946,7 +6946,10 @@ document.addEventListener('pointerdown', (ev) => {
     if (!box) { box = el('div', 'puente-dm-home'); box.id = 'puente-dm-home'; main.appendChild(box); }
     box.textContent = '';
     box.appendChild(el('div', 'puente-dm-home-title', 'Mensajes directos'));
-    const items = [...document.querySelectorAll('#dm-list .dm-item:not(.puente-dm-vacio):not(.puente-dm-oculto), #dm-list .puente-dm-foro')];
+    // Las solicitudes de mensajes (solicitudes, mas abajo en este archivo): la misma fila de la lista
+    const sol = document.querySelector('#dm-list .puente-sol-fila-lista');
+    if (sol) { const f = sol.cloneNode(true); f.addEventListener('click', () => sol.click()); box.appendChild(f); }
+    const items = [...document.querySelectorAll('#dm-list .dm-item:not(.puente-dm-vacio):not(.puente-dm-oculto):not(.puente-dm-solicitud), #dm-list .puente-dm-foro')];
     if (!items.length) { box.appendChild(el('div', 'puente-dm-home-empty', 'Todavía no tenés mensajes directos. Para empezar uno, tocá el nombre de una persona y elegí "Mensaje".')); return; }
     for (const item of items) {
       const row = el('button', 'puente-dm-home-row');
@@ -11231,7 +11234,12 @@ document.addEventListener('pointerdown', (ev) => {
     app.socket.once('dm-opened', fill);
     setTimeout(() => { if (!done) app.socket.off('dm-opened', fill); }, 8000);
     close();
-    app.socket.emit('start-dm', { targetUserId: it.vendedor.id });
+    // Por una publicacion, el mensaje le llega directo a quien publico (no como solicitud: solicitudes.js)
+    let abierto = false;
+    const abrir = () => { if (abierto) return; abierto = true; app.socket.emit('start-dm', { targetUserId: it.vendedor.id }); };
+    const hasta = setTimeout(abrir, 2500);
+    fetch('/puente/api/dm/solicitudes/mercado', { method: 'POST', headers: { Authorization: 'Bearer ' + (localStorage.getItem('haven_token') || ''), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: it.id }) })
+      .catch(() => {}).finally(() => { clearTimeout(hasta); abrir(); });
   }
 
   // ── Publicar o editar ──
@@ -18464,4 +18472,311 @@ var puenteSinUbicacion = (function () {
     }).observe(document.body, { childList: true });
   }
   if (document.body) mirar(); else document.addEventListener('DOMContentLoaded', mirar);
+})();
+// (puente-solicitudes) Solicitudes de mensajes y bloqueos (servidor: solicitudes.js).
+//  - Lo que es solicitud recibida no aparece en la lista de mensajes directos: arriba se ve
+//    "Solicitudes de mensajes (N)", que abre la lista con quien escribe y lo que ayuda a decidir.
+//  - Una solicitud no suena ni cuenta como no leida: para Haven esa conversacion esta silenciada
+//    (se agrega a haven_muted_channels solo al leerla, nunca se guarda).
+//  - Adentro de una solicitud: los mensajes tapados hasta "Mostrar los mensajes", los links sin tocar y
+//    las fotos sin cargar hasta aceptar; Aceptar, Rechazar o Bloquear. Contestar tambien acepta.
+//  - Quien escribe ve "Solicitud enviada" y cuantos mensajes puede mandar hasta que la acepten.
+//  - Bloquear y desbloquear desde la tarjeta de perfil, y la lista de bloqueados en Mi cuenta.
+(function () {
+  'use strict';
+  const byId = (id) => document.getElementById(id);
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const token = () => { try { return localStorage.getItem('haven_token') || ''; } catch { return ''; } };
+
+  let datos = { recibidas: [], enviadas: [], mercado: [], bloqueados: [], max: 3 };
+  const silenciadas = new Set();   // las solicitudes recibidas (pendientes, rechazadas o vencidas)
+  const vistas = new Set();        // solicitudes cuyos mensajes ya se destaparon (hasta recargar)
+
+  // ── Silencio solo de lectura: Haven lee la lista de silenciadas en cada mensaje ──
+  const CLAVE = 'haven_muted_channels';
+  try {
+    const leer = Storage.prototype.getItem, guardar = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (k) {
+      const v = leer.apply(this, arguments);
+      if (k !== CLAVE || !silenciadas.size || this !== window.localStorage) return v;
+      try { const l = JSON.parse(v || '[]'); if (!Array.isArray(l)) return v; return JSON.stringify([...new Set([...l, ...silenciadas])]); } catch { return v; }
+    };
+    Storage.prototype.setItem = function (k, v) {
+      if (k === CLAVE && silenciadas.size && this === window.localStorage) {
+        try { const l = JSON.parse(v); if (Array.isArray(l)) v = JSON.stringify(l.filter(c => !silenciadas.has(c))); } catch { /* como vino */ }
+      }
+      return guardar.call(this, k, v);
+    };
+  } catch { /* sin almacenamiento */ }
+
+  async function pedir() {
+    try {
+      const r = await fetch('/puente/api/dm/solicitudes', { headers: { Authorization: 'Bearer ' + token() }, cache: 'no-store' });
+      if (!r.ok) return;
+      const d = await r.json();
+      datos = Object.assign({ recibidas: [], enviadas: [], mercado: [], bloqueados: [], max: 3 }, d || {});
+      silenciadas.clear();
+      for (const s of datos.recibidas) silenciadas.add(s.code);
+      pintar();
+    } catch { /* sin red */ }
+  }
+  async function post(ruta, cuerpo) {
+    try {
+      const r = await fetch(ruta, { method: 'POST', cache: 'no-store', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { if (d && d.error && d.error.length > 12) alerta(d.error); return false; }
+      return true;
+    } catch { return false; }
+  }
+  function alerta(t) { try { (window.app && window.app._showToast) ? window.app._showToast(t, 'error') : alert(t); } catch { /* nada */ } }
+
+  const recibida = (code) => datos.recibidas.find(s => s.code === code) || null;
+  const pendientes = () => datos.recibidas.filter(s => s.estado === 'pendiente' && !s.vencida);
+  const enviada = (code) => datos.enviadas.find(s => s.code === code) || null;
+  const deMercado = (code) => datos.mercado.find(s => s.code === code) || null;
+  const bloqueado = (id) => datos.bloqueados.some(b => b.id === Number(id));
+
+  async function responder(code, accion) {
+    if (!(await post('/puente/api/dm/solicitudes/responder', { code, accion }))) return;
+    await pedir();
+    const caja = byId('puente-solicitudes-caja');
+    if (caja) abrirLista();
+    if (accion !== 'aceptar' && window.app && window.app.currentChannel === code) irAMensajes();
+  }
+  async function bloquear(id, si) {
+    if (!(await post('/puente/api/dm/bloquear', { userId: Number(id), bloquear: si }))) return;
+    await pedir();
+  }
+  function irAMensajes() {
+    // A la pantalla de mensajes directos (como tocar el boton de mensajes de la izquierda)
+    const b = document.querySelector('#dm-section-header, .dm-section-header, [data-puente-dms]');
+    if (b) b.click();
+  }
+
+  // ── Señales para decidir ──
+  function senales(s) {
+    const x = s.senales || {};
+    const partes = [];
+    if (x.dias != null) partes.push(x.dias < 1 ? 'Cuenta creada hoy' : x.dias === 1 ? 'Cuenta de 1 día' : x.dias < 60 ? `Cuenta de ${x.dias} días` : `Cuenta de ${Math.round(x.dias / 30)} meses`);
+    if (x.discord) partes.push('Discord unido');
+    if (x.foro) partes.push('Foro unido');
+    partes.push(x.activo ? `Activo ${x.activo} ${x.activo === 1 ? 'día' : 'días'} en el club` : 'Todavía no participó en el club');
+    return partes.join(' · ');
+  }
+
+  // ── La lista de solicitudes ──
+  function cerrarLista() { const c = byId('puente-solicitudes-caja'); if (c) c.remove(); }
+  function abrirLista() {
+    cerrarLista();
+    const fondo = el('div', 'puente-sol-fondo'); fondo.id = 'puente-solicitudes-caja';
+    const caja = el('div', 'puente-sol-caja');
+    fondo.appendChild(caja);
+    fondo.addEventListener('click', (e) => { if (e.target === fondo) cerrarLista(); });
+    const cab = el('div', 'puente-sol-cab');
+    cab.appendChild(el('div', 'puente-sol-titulo', 'Solicitudes de mensajes'));
+    const x = el('button', 'puente-sol-x', '×'); x.type = 'button'; x.title = 'Cerrar'; x.addEventListener('click', cerrarLista);
+    cab.appendChild(x);
+    caja.appendChild(cab);
+    caja.appendChild(el('div', 'puente-sol-nota', 'Gente con la que todavía no hablaste. No te avisan ni suenan hasta que las aceptes, y quien escribe no sabe si las viste.'));
+    const lista = pendientes();
+    if (!lista.length) caja.appendChild(el('div', 'puente-sol-vacio', 'No tenés solicitudes nuevas.'));
+    for (const s of lista) {
+      const f = el('div', 'puente-sol-fila');
+      const av = el('div', 'puente-sol-av');
+      const nombre = (s.de && s.de.nombre) || 'Alguien';
+      if (s.de && s.de.avatar) { const i = el('img'); i.src = s.de.avatar; i.alt = ''; av.appendChild(i); } else av.textContent = nombre.charAt(0).toUpperCase();
+      const txt = el('div', 'puente-sol-txt');
+      txt.appendChild(el('div', 'puente-sol-nombre', nombre));
+      txt.appendChild(el('div', 'puente-sol-senales', senales(s)));
+      txt.appendChild(el('div', 'puente-sol-cuantos', s.enviados === 1 ? '1 mensaje' : `${s.enviados} mensajes`));
+      const ver = el('button', 'puente-sol-btn', 'Ver'); ver.type = 'button';
+      ver.addEventListener('click', () => { cerrarLista(); if (window.app) window.app.switchChannel(s.code); });
+      f.append(av, txt, ver);
+      caja.appendChild(f);
+    }
+    if (datos.recibidas.some(s => s.estado !== 'pendiente' || s.vencida)) {
+      caja.appendChild(el('div', 'puente-sol-pie', 'Las que rechazaste o tienen más de 30 días no se muestran.'));
+    }
+    document.body.appendChild(fondo);
+  }
+
+  // ── En la lista de la izquierda ──
+  let pintando = false;
+  function pintarLista() {
+    const list = byId('dm-list'), app = window.app;
+    if (!list || !app) return;
+    for (const it of list.querySelectorAll('.dm-item[data-code]')) {
+      const esSol = silenciadas.has(it.dataset.code) && it.dataset.code !== app.currentChannel;
+      it.classList.toggle('puente-dm-solicitud', esSol);
+    }
+    const n = pendientes().length;
+    let fila = list.querySelector('.puente-sol-fila-lista');
+    if (!n) { if (fila) fila.remove(); return; }
+    if (!fila) {
+      fila = el('div', 'puente-sol-fila-lista');
+      fila.setAttribute('role', 'button'); fila.tabIndex = 0;
+      fila.addEventListener('click', abrirLista);
+      fila.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirLista(); } });
+    }
+    const texto = `📨 Solicitudes de mensajes`;
+    if (fila.dataset.n !== String(n)) {
+      fila.textContent = '';
+      fila.appendChild(el('span', 'puente-sol-fila-txt', texto));
+      fila.appendChild(el('span', 'puente-sol-fila-n', String(n)));
+      fila.dataset.n = String(n);
+    }
+    if (list.firstElementChild !== fila) list.insertBefore(fila, list.firstChild);
+  }
+
+  // ── Adentro de la conversacion ──
+  function pintarConversacion() {
+    const msgs = byId('messages'), app = window.app;
+    if (!msgs || !app) return;
+    const code = app.currentChannel;
+    const s = code && recibida(code), e = code && enviada(code), m = code && deMercado(code);
+    msgs.classList.toggle('puente-sol-activa', !!s);
+    msgs.classList.toggle('puente-sol-tapada', !!s && !vistas.has(code));
+    let caja = msgs.querySelector('.puente-sol-aviso');
+    let firma = '';
+    if (s) firma = 'r|' + code + '|' + s.estado + '|' + vistas.has(code) + '|' + bloqueado(s.de && s.de.id);
+    else if (e) firma = 'e|' + code;
+    else if (m) firma = 'm|' + code + '|' + m.detalle;
+    if (!firma) { if (caja) caja.remove(); return; }
+    if (!caja || caja.dataset.firma !== firma) {
+      if (caja) caja.remove();
+      caja = el('div', 'puente-sol-aviso'); caja.dataset.firma = firma;
+      if (s) {
+        const nombre = (s.de && s.de.nombre) || 'Alguien';
+        caja.appendChild(el('div', 'puente-sol-aviso-titulo', s.estado === 'rechazada' ? `Rechazaste la solicitud de ${nombre}` : `${nombre} quiere mandarte un mensaje`));
+        caja.appendChild(el('div', 'puente-sol-aviso-txt', senales(s)));
+        caja.appendChild(el('div', 'puente-sol-aviso-txt', 'No sabe si lo viste. Los links y las fotos se activan cuando aceptes; contestarle también acepta.'));
+        const bts = el('div', 'puente-sol-aviso-bts');
+        const b = (t, cls, fn) => { const x = el('button', 'puente-sol-btn ' + cls, t); x.type = 'button'; x.addEventListener('click', () => { x.disabled = true; fn(); }); bts.appendChild(x); };
+        if (!vistas.has(code)) b('Mostrar los mensajes', '', () => { vistas.add(code); pintarConversacion(); });
+        b('Aceptar', 'puente-sol-si', () => responder(code, 'aceptar'));
+        if (s.estado !== 'rechazada') b('Rechazar', '', () => responder(code, 'rechazar'));
+        if (s.de && !bloqueado(s.de.id)) b('Bloquear', 'puente-sol-no', () => responder(code, 'bloquear'));
+        caja.appendChild(bts);
+      } else if (e) {
+        caja.classList.add('puente-sol-aviso-chico');
+        caja.appendChild(el('div', 'puente-sol-aviso-txt', `Solicitud enviada: ${e.nombre || 'esta persona'} la ve en sus solicitudes, sin aviso. Hasta que la acepte podés mandar ${e.max || datos.max} mensajes en total.`));
+      } else if (m) {
+        caja.classList.add('puente-sol-aviso-chico');
+        caja.appendChild(el('div', 'puente-sol-aviso-txt', `🛒 Por tu publicación: ${m.detalle || 'en el Marketplace'}`));
+      }
+    }
+    if (msgs.firstElementChild !== caja) msgs.insertBefore(caja, msgs.firstChild);
+  }
+
+  // ── Bloquear desde la tarjeta de perfil ──
+  function pintarPerfil() {
+    const p = byId('profile-popup');
+    if (!p || p.classList.contains('profile-popup-hover')) return;
+    const acc = p.querySelector('.profile-popup-actions');
+    const dm = acc && acc.querySelector('.profile-dm-btn[data-dm-uid]');
+    const yo = window.app && window.app.user && window.app.user.id;
+    const id = dm && Number(dm.dataset.dmUid);
+    let btn = acc && acc.querySelector('.puente-bloquear-btn');
+    if (!dm || !id || id === yo) { if (btn) btn.remove(); return; }
+    const si = bloqueado(id);
+    const texto = si ? '✅ Desbloquear' : '🚫 Bloquear';
+    if (!btn) {
+      btn = el('button', 'profile-popup-action-btn puente-bloquear-btn'); btn.type = 'button';
+      btn.addEventListener('click', async () => {
+        const ya = bloqueado(btn.dataset.uid);
+        if (!ya && !confirm('¿Bloquear a esta persona? No te va a poder mandar mensajes privados. Lo podés deshacer cuando quieras.')) return;
+        btn.disabled = true;
+        await bloquear(btn.dataset.uid, !ya);
+        btn.disabled = false;
+        pintarPerfil();
+      });
+      acc.appendChild(btn);
+    }
+    btn.dataset.uid = String(id);
+    if (btn.textContent !== texto) btn.textContent = texto;
+  }
+
+  // ── Mi cuenta: las personas bloqueadas ──
+  function pintarCuenta() {
+    const borrar = document.querySelector('#settings-modal #section-delete-account');
+    if (!borrar) return;
+    let sec = document.querySelector('#settings-modal #puente-bloqueados');
+    if (!sec) {
+      sec = el('div', 'settings-section'); sec.id = 'puente-bloqueados';
+      borrar.parentNode.insertBefore(sec, borrar);
+    }
+    const firma = JSON.stringify(datos.bloqueados);
+    if (sec.dataset.firma === firma) return;
+    sec.dataset.firma = firma;
+    sec.textContent = '';
+    const t = el('h5', 'settings-section-title'); t.appendChild(el('span', '', 'Personas bloqueadas')); sec.appendChild(t);
+    sec.appendChild(el('p', 'settings-hint', datos.bloqueados.length ? 'No te pueden mandar mensajes privados ni te llegan avisos por lo que escriben.' : 'No bloqueaste a nadie. Se bloquea desde la tarjeta de perfil o desde una solicitud de mensaje.'));
+    for (const b of datos.bloqueados) {
+      const f = el('div', 'puente-bloq-fila');
+      f.appendChild(el('span', 'puente-bloq-nombre', b.nombre));
+      const x = el('button', 'btn-sm', 'Desbloquear'); x.type = 'button';
+      x.addEventListener('click', async () => { x.disabled = true; await bloquear(b.id, false); });
+      f.appendChild(x);
+      sec.appendChild(f);
+    }
+  }
+
+  function pintar() {
+    if (pintando) return;
+    pintando = true;
+    try { pintarLista(); pintarConversacion(); pintarPerfil(); pintarCuenta(); } catch { /* lo intenta en el proximo cambio */ } finally { pintando = false; }
+    try { document.dispatchEvent(new Event('puente-dm-lista')); } catch { /* sin DOM */ }
+  }
+
+  const st = el('style');
+  st.textContent = '#dm-list .dm-item.puente-dm-solicitud{display:none!important}'
+    + '.puente-sol-fila-lista{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:4px .5rem 6px;padding:.5rem .625rem;border-radius:.375rem;background:#232428;color:#dbdee1;font-size:.875rem;font-weight:600;cursor:pointer}'
+    + '.puente-sol-fila-lista:hover{background:#2e3035}'
+    + '.puente-sol-fila-n{background:#da373c;color:#fff;border-radius:10px;padding:0 7px;font-size:.75rem;line-height:1.25rem;min-width:1.25rem;text-align:center}'
+    + '.puente-sol-fondo{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}'
+    + '.puente-sol-caja{background:#1e1f22;color:#dbdee1;border-radius:10px;width:min(440px,100%);max-height:85vh;overflow:auto;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.5)}'
+    + '.puente-sol-cab{display:flex;align-items:center;justify-content:space-between}'
+    + '.puente-sol-titulo{font-size:1.05rem;font-weight:700}'
+    + '.puente-sol-x{background:none;border:0;color:#b5bac1;font-size:1.5rem;cursor:pointer;min-width:2.5rem;min-height:2.5rem}'
+    + '.puente-sol-nota,.puente-sol-pie{color:#949ba4;font-size:.8125rem;margin:6px 0 12px}'
+    + '.puente-sol-pie{margin:12px 0 0}'
+    + '.puente-sol-vacio{color:#949ba4;padding:16px 0;text-align:center}'
+    + '.puente-sol-fila{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #2b2d31}'
+    + '.puente-sol-av{flex:0 0 40px;width:40px;height:40px;border-radius:50%;background:#5865f2;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden}'
+    + '.puente-sol-av img{width:100%;height:100%;object-fit:cover}'
+    + '.puente-sol-txt{flex:1 1 auto;min-width:0}'
+    + '.puente-sol-nombre{font-weight:600}'
+    + '.puente-sol-senales,.puente-sol-cuantos{color:#949ba4;font-size:.8125rem}'
+    + '.puente-sol-btn{background:#2b2d31;color:#dbdee1;border:1px solid #3f4147;border-radius:4px;padding:6px 12px;font-size:.8125rem;cursor:pointer;min-height:2.25rem}'
+    + '.puente-sol-btn:hover{background:#35373c}.puente-sol-btn:disabled{opacity:.6}'
+    + '.puente-sol-btn.puente-sol-si{background:#248046;border-color:#248046;color:#fff}'
+    + '.puente-sol-btn.puente-sol-no{color:#f23f43}'
+    + '.puente-sol-aviso{margin:12px 16px;padding:12px 14px;border-radius:8px;background:#232428;border:1px solid #3f4147;color:#dbdee1}'
+    + '.puente-sol-aviso.puente-sol-aviso-chico{padding:8px 12px;border-left:3px solid #5865f2}'
+    + '.puente-sol-aviso-titulo{font-weight:700;margin-bottom:4px}'
+    + '.puente-sol-aviso-txt{color:#b5bac1;font-size:.8125rem;margin-top:2px}'
+    + '.puente-sol-aviso-bts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}'
+    + '#messages.puente-sol-tapada [data-msg-id] .message-content,#messages.puente-sol-tapada [data-msg-id] .message-attachments{filter:blur(7px);user-select:none;pointer-events:none}'
+    + '#messages.puente-sol-activa [data-msg-id] .message-content a{pointer-events:none;color:inherit;text-decoration:none}'
+    + '#messages.puente-sol-activa [data-msg-id] .message-content img:not(.emoji):not(.custom-emoji),#messages.puente-sol-activa [data-msg-id] video,#messages.puente-sol-activa [data-msg-id] .link-preview,#messages.puente-sol-activa [data-msg-id] .message-image{display:none!important}'
+    + '#profile-popup .profile-popup-actions .puente-bloquear-btn{flex:0 0 auto!important;width:auto!important;padding-left:14px;padding-right:14px;white-space:nowrap;background:#2b2d31!important;color:#f23f43!important}'
+    + '.puente-bloq-fila{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #2b2d31}';
+  (document.head || document.documentElement).appendChild(st);
+
+  // ── Enganchar ──
+  let intentos = 0;
+  (function enganchar() {
+    const app = window.app, so = app && app.socket, list = byId('dm-list'), msgs = byId('messages');
+    if (!so || !list || !msgs || typeof app.switchChannel !== 'function') { if (++intentos < 120) setTimeout(enganchar, 1000); return; }
+    new MutationObserver(() => pintarLista()).observe(list, { childList: true });
+    new MutationObserver(() => pintarConversacion()).observe(msgs, { childList: true });
+    new MutationObserver(() => { pintarPerfil(); pintarCuenta(); }).observe(document.body, { childList: true, subtree: false });
+    so.on('puente-solicitud', () => setTimeout(pedir, 200));
+    so.on('connect', () => setTimeout(pedir, 1500));
+    so.on('channel-deleted', () => setTimeout(pedir, 500));
+    const cambiar = app.switchChannel;
+    app.switchChannel = function () { const r = cambiar.apply(this, arguments); setTimeout(pintar, 60); return r; };
+    document.addEventListener('click', (e) => { if (e.target && e.target.closest && (e.target.closest('.profile-popup') || e.target.closest('#settings-modal') || e.target.closest('[data-action],[data-dm-uid]'))) setTimeout(() => { pintarPerfil(); pintarCuenta(); }, 120); }, true);
+    pedir();
+  })();
 })();

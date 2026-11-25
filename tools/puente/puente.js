@@ -209,6 +209,8 @@ function start(deps) {
   // los invitados que cerraron la app, afuera de las mesas (y de las partidas, si no vuelven en 3 minutos)
   require('./invitados-fuera.js').setup({ db, io, log, warn });
   require('./leidos.js').setup({ db, io, log, warn });
+  // Las solicitudes de mensajes: la primera conversacion con alguien desconocido no llega directo a la bandeja
+  try { require('./solicitudes.js').setup({ db, io, log, warn }); } catch (err) { warn('solicitudes:', err.message); }
   escribiendo.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, isBridged: id => isBridged(id), getBotUserId: () => botUserId });
   reacciones.setup({ db, io, api: (m, e, b) => api(m, e, b), log, warn, adjuntos, getBotUserId: () => botUserId });
   vigia.setup({ db, api: (m, e, b) => api(m, e, b), log, warn, getGuildId: () => guildId, getBotUserId: () => botUserId });
