@@ -15660,6 +15660,19 @@ var puenteSinUbicacion = (function () {
       + 'html.puente-ventana .sidebar{padding-left:0!important;width:100%!important;max-width:none!important}'
       + 'html.puente-ventana:not(.pv-conv) [data-haven-region="main"]{visibility:hidden}';
     document.head.appendChild(v);
+    // ?tema=oscuro (la consola de CV Hotel, un telefono con pantalla oscura): gris oscuro y letras claras
+    if (/[?&]tema=oscuro(&|$)/.test(location.search)) {
+      document.documentElement.classList.add('puente-ventana-oscuro');
+      const o = el('style');
+      o.textContent = 'html.puente-ventana-oscuro,html.puente-ventana-oscuro body{background:#3a3a3a!important;color-scheme:dark}'
+        + 'html.puente-ventana-oscuro{--bg-primary:#3a3a3a!important;--bg-secondary:#333333!important;--bg-tertiary:#444444!important;--bg-hover:#474747!important;--bg-active:#505050!important;--bg-input:#2c2c2c!important;--bg-card:#333333!important;'
+        + '--text-primary:#f2f2f2!important;--text-secondary:#c8c8c8!important;--text-muted:#8e8e8e!important;--border:#4a4a4a!important;--border-light:#575757!important}'
+        // (el tema del club pinta los paneles con colores fijos)
+        + 'html.puente-ventana-oscuro :is(.sidebar,.sidebar-mod-container,.dm-section-pane,.main,.message-area,[data-haven-region=main],[data-haven-region=message-area],[data-haven-region=channel-header],[data-haven-region=composer],[data-haven-region=context-sidebar]){background:#3a3a3a!important}'
+        + 'html.puente-ventana-oscuro .message-input-area{background:#333333!important}'
+        + 'html.puente-ventana-oscuro [data-haven-region=channel-header]{border-bottom-color:#4a4a4a!important}';
+      document.head.appendChild(o);
+    }
     const enDm = () => { const a = window.app, ch = a && chans().find(c => c && c.code === a.currentChannel); return !!(ch && ch.is_dm) || !!byId('puente-foro-vista'); };
     // Sin un mensaje directo abierto, la lista queda a la vista
     const mantener = () => {

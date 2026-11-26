@@ -415,7 +415,8 @@ function injectScript(req, res, src) {
     // adentro de esas paginas propias, y de ninguna otra
     if (n === 'x-frame-options') return this;
     if (n === 'content-security-policy' && typeof value === 'string') {
-      value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + cuenta.origins().join(' '));
+      // (y la consola de CV Hotel en su dominio propio: la ventanita de mensajes; solo enmarcar, no es una pagina que pregunte quien es)
+      value = value.replace("frame-ancestors 'self'", "frame-ancestors 'self' " + [...cuenta.origins(), ...(cuenta.dominio() ? ['https://hotel.' + cuenta.dominio()] : [])].join(' '));
       // Y el foro y la web adentro del chat (el boton del foro, aviso.js). Tambien los
       // juegos que terminan en otro dominio (CS 1.6: cliente.origen en su ficha).
       const fuentes = new Set(cuenta.origins());
@@ -449,7 +450,7 @@ function injectScript(req, res, src) {
         if (src === '/puente/aviso.js' && new RegExp('^/app/?\\?(?:.*&)?(?:' + ['mercado', 'juegos', 'hola', ...registro().lista().filter((j) => j.mesa).map((j) => j.id)].join('|') + ')(?:[=&]|$)').test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<script src="/puente/origen.js"></script><script src="/puente/afuera.js"></script></head>');
         // La ventanita de mensajes de la web y del foro (/app?ventana=1): no se ve el chat entero mientras
         // carga, solo cuando ya esta la lista de mensajes (aviso.js pone puente-ventana-lista); si no, a los 4 s
-        if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:#313338}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
+        if (src === '/puente/aviso.js' && /[?&]ventana=1(&|$)/.test(req.url || '') && html.includes('</head>')) html = html.replace('</head>', '<style>html{background:' + (/[?&]tema=oscuro(&|$)/.test(req.url || '') ? '#3a3a3a' : '#313338') + '}@keyframes puente-ventana-ver{to{visibility:visible}}html:not(.puente-ventana-lista) body{visibility:hidden;animation:puente-ventana-ver 0s 4s forwards}' +
           // mientras tanto, una ruedita en el medio
           '@keyframes puente-ventana-gira{to{transform:rotate(360deg)}}@keyframes puente-ventana-fin{to{visibility:hidden}}' +
           'html:not(.puente-ventana-lista)::after{content:"";position:fixed;left:50%;top:45%;width:1.75rem;height:1.75rem;margin:-0.875rem;box-sizing:border-box;border:3px solid #4e5058;border-top-color:#5865f2;border-radius:50%;animation:puente-ventana-gira .8s linear infinite,puente-ventana-fin 0s 4s forwards}</style></head>');
