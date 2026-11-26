@@ -154,6 +154,7 @@ const APPS = {
   hotel: { nombre: 'CV Hotel', sub: 'hotel' },
   capa2: { nombre: 'Capa 2', sub: 'capa2' },
   cs16: { nombre: 'Counter-Strike 1.6', sub: 'cs' },
+  hanzi: { nombre: 'Hanzi Quest', sub: 'hanzi' },
 };
 const origenApp = (a) => `https://${APPS[a].sub}.${dominio}`;
 const permisos = new Map(), codigos = new Map(); // nonce del boton -> { uid, app, volver, vence }; codigo -> { uid, app, vence }
