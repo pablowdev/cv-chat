@@ -11778,7 +11778,7 @@ document.addEventListener('pointerdown', (ev) => {
   }
   // Los juegos con dominio propio (hotel., capa2., cs., hanzi.): al lado de Copiar enlace, abrirlo en el navegador
   // predeterminado con su direccion. La ficha puede decirlo con "dominio" (el subdominio); si no, esta lista
-  const DOMINIOS = { hotel: 'hotel', bacity: 'capa2', cs16: 'cs' }; // (hanzi: cuando exista su registro DNS)
+  const DOMINIOS = { hotel: 'hotel', bacity: 'capa2', cs16: 'cs', hanzi: 'hanzi' };
   function botonDominio(j) {
     const sub = /^[a-z0-9-]{1,30}$/.test(String(j.dominio || '')) ? j.dominio : DOMINIOS[j.id];
     if (!sub) return null;
