@@ -11598,6 +11598,7 @@ document.addEventListener('pointerdown', (ev) => {
     msj: 'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z',
     puntos: 'M12 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z',
     enlace: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4a5 5 0 0 0 0-10Z',
+    abrir: 'M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h6v2H5v12h12v-6h2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
     biblio: 'M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z',
     campana: 'M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z',
   };
@@ -11772,6 +11773,24 @@ document.addEventListener('pointerdown', (ev) => {
       const url = /^https?:\/\//.test(ruta) ? ruta : location.origin + ruta;
       if (navigator.share && mobile()) { navigator.share({ title: titulo, url }).catch(() => {}); return; }
       copiarEnlace(url);
+    });
+    return b;
+  }
+  // Los juegos con dominio propio (hotel., capa2., cs., hanzi.): al lado de Copiar enlace, abrirlo en el navegador
+  // predeterminado con su direccion. La ficha puede decirlo con "dominio" (el subdominio); si no, esta lista
+  const DOMINIOS = { hotel: 'hotel', bacity: 'capa2', cs16: 'cs' }; // (hanzi: cuando exista su registro DNS)
+  function botonDominio(j) {
+    const sub = /^[a-z0-9-]{1,30}$/.test(String(j.dominio || '')) ? j.dominio : DOMINIOS[j.id];
+    if (!sub) return null;
+    const url = 'https://' + sub + '.' + location.hostname.replace(/^chat./, '') + '/';
+    const b = el('button', 'jg-icono'); b.type = 'button';
+    b.title = 'Abrir ' + j.nombre + ' en el navegador (' + sub + '.' + location.hostname.replace(/^chat./, '') + ')'; b.setAttribute('aria-label', b.title);
+    b.innerHTML = svg(I.abrir, 22);
+    b.addEventListener('click', () => {
+      // (en la app de Android, el intent lo abre en Chrome y no adentro de la app)
+      const enAndroid = /Android/i.test(navigator.userAgent) && (matchMedia('(display-mode: standalone)').matches || document.referrer.startsWith('android-app://'));
+      if (enAndroid) { const u = new URL(url); location.href = `intent://${u.host}${u.pathname}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`; return; }
+      window.open(url, '_blank', 'noopener');
     });
     return b;
   }
@@ -12343,7 +12362,10 @@ document.addEventListener('pointerdown', (ev) => {
   const usoWorgs = () => { try { const f = ventanas.get('shoppa'), w = f && f.isConnected && f.contentWindow; return w && w.worgsModo && w.worgsModo() === 'normal' ? 'worgsnormal' : 'shoppa'; } catch { return 'shoppa'; } };
   function ventana(j, mesa) {
     const c = j.cliente;
-    page.appendChild(head(j.nombre, botonEnlace('/app?juegos=' + ((j.enlace && j.enlace.param) || j.id), j.nombre + ' · __PUENTE_APP__')));
+    const enlaceJ = botonEnlace('/app?juegos=' + ((j.enlace && j.enlace.param) || j.id), j.nombre + ' · __PUENTE_APP__'), propio = botonDominio(j);
+    let derJ = enlaceJ;
+    if (propio) { derJ = el('span'); derJ.style.display = 'contents'; derJ.append(enlaceJ, propio); }
+    page.appendChild(head(j.nombre, derJ));
     const b = el('div', c.clase), marco = el('div', c.clase + '-marco'), ifr = el('iframe', c.clase + '-iframe');
     ifr.src = c.url + '?v=' + (j.version || 1) + (mesa ? '&mesa=' + encodeURIComponent(mesa) : '');
     ventanas.set(j.id, ifr);
