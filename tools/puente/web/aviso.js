@@ -2079,7 +2079,7 @@ function leido(sc) {
 //    "El club hoy" (mensajes de hoy, cuantos hay en Discord y en CV Chat, mesas, los que se sumaron).
 (function () {
   'use strict';
-  const GUIA = [{ canal: 'bienvenida', titulo: 'Bienvenida' }, { canal: 'das-deglas', titulo: 'Reglas' }];
+  const GUIA = [{ canal: 'bienvenida', titulo: 'Bienvenida' }, { canal: 'das-deglas', titulo: 'Reglas' }, { canal: 'monedas', titulo: 'Monedas y CV Club' }];
   const STATS = /server\s*stats/i;
   const BIENVENIDA_EN = 'cosas'; // a donde lleva "Darles la bienvenida"
   // los juegos, de sus fichas (registroJuegos): su dibujito, si sus mesas son de a dos y como sumarse
@@ -2135,7 +2135,7 @@ function leido(sc) {
     arriba = el('div', 'puente-club-arriba');
     fila = el('button', 'puente-guia-fila');
     fila.type = 'button';
-    fila.append(el('span', 'puente-guia-icono', '📖'), el('span', 'puente-guia-nombre', 'Guía del club'), el('span', 'puente-guia-sub', 'bienvenida y reglas'), el('span', 'puente-guia-punto'));
+    fila.append(el('span', 'puente-guia-icono', '📖'), el('span', 'puente-guia-nombre', 'Guía del club'), el('span', 'puente-guia-sub', 'bienvenida, reglas y monedas'), el('span', 'puente-guia-punto'));
     fila.addEventListener('click', abrirGuia);
     tarjeta = el('div', 'puente-club-tarjeta');
     tarjeta.setAttribute('role', 'button'); tarjeta.tabIndex = 0; tarjeta.hidden = true;
