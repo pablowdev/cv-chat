@@ -15669,7 +15669,7 @@ var puenteSinUbicacion = (function () {
         + '--text-primary:#f2f2f2!important;--text-secondary:#c8c8c8!important;--text-muted:#8e8e8e!important;--border:#4a4a4a!important;--border-light:#575757!important}'
         // (el tema del club pinta los paneles con colores fijos)
         + 'html.puente-ventana-oscuro :is(.sidebar,.sidebar-mod-container,.dm-section-pane,.main,.message-area,[data-haven-region=main],[data-haven-region=message-area],[data-haven-region=channel-header],[data-haven-region=composer],[data-haven-region=context-sidebar]){background:#3a3a3a!important}'
-        + 'html.puente-ventana-oscuro .message-input-area{background:#333333!important}'
+        + 'html.puente-ventana-oscuro body #message-input-area{background:#333333!important}'
         + 'html.puente-ventana-oscuro [data-haven-region=channel-header]{border-bottom-color:#4a4a4a!important}';
       document.head.appendChild(o);
     }
@@ -15718,6 +15718,19 @@ var puenteSinUbicacion = (function () {
       }
       if (++n < 40) setTimeout(mensajes, 700); else mostrar();
     })();
+    // ?con=<id de la cuenta>: directo a la conversacion con esa persona (si no se escribe nada, no queda en la lista)
+    const conId = Number(new URLSearchParams(location.search).get('con'));
+    if (Number.isInteger(conId) && conId > 0) {
+      let k = 0;
+      (function abrirCon() {
+        const a = window.app;
+        if (!a || !a.socket || !a.socket.connected || !a.user || !document.documentElement.classList.contains('puente-ventana-lista')) { if (++k < 60) setTimeout(abrirCon, 500); return; }
+        toco = true;
+        if (a.user.id === conId) return;
+        const ya = chans().find(c => c && c.is_dm && !c.is_group && c.dm_target && c.dm_target.id === conId);
+        if (ya) a.switchChannel(ya.code); else a.socket.emit('start-dm', { targetUserId: conId });
+      })();
+    }
   }
 })();
 // El cifrado de los mensajes directos para todos, sin que nadie tenga que hacer nada (cifrado.js):
@@ -18525,7 +18538,22 @@ var puenteSinUbicacion = (function () {
 
   let datos = { recibidas: [], enviadas: [], mercado: [], bloqueados: [], max: 3 };
   const silenciadas = new Set();   // las solicitudes recibidas (pendientes, rechazadas o vencidas)
-  window.puenteSolicitudes = { ocultas: () => new Set(silenciadas) }; // (la consola del hotel no las muestra)
+  // (para la consola del hotel, puente-privados)
+  window.puenteSolicitudes = {
+    ocultas: () => new Set(silenciadas),
+    recibida: (code) => datos.recibidas.find(s => s.code === code) || null,
+    enviada: (code) => datos.enviadas.find(s => s.code === code) || null,
+    bloqueados: () => datos.bloqueados.map(b => b.id),
+    async responder(code, accion) {
+      if (accion !== 'aceptar' && accion !== 'rechazar') return { error: 'No se puede.' };
+      try {
+        const r = await fetch('/puente/api/dm/solicitudes/responder', { method: 'POST', cache: 'no-store', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ code, accion }) });
+        if (!r.ok) return { error: r.status === 404 ? 'Esa solicitud ya no está.' : 'No se pudo.' };
+        await pedir();
+        return { ok: true };
+      } catch { return { error: 'Sin conexión.' }; }
+    },
+  };
   const vistas = new Set();        // solicitudes cuyos mensajes ya se destaparon (hasta recargar)
 
   // ── Silencio solo de lectura: Haven lee la lista de silenciadas en cada mensaje ──
@@ -18554,6 +18582,7 @@ var puenteSinUbicacion = (function () {
       silenciadas.clear();
       for (const s of datos.recibidas) silenciadas.add(s.code);
       pintar();
+      try { document.dispatchEvent(new Event('puente-solicitudes')); } catch { /* sin DOM */ }
     } catch { /* sin red */ }
   }
   async function post(ruta, cuerpo) {
@@ -18820,20 +18849,31 @@ var puenteSinUbicacion = (function () {
 // (puente-privados) Los mensajes privados de CV Chat para la consola de CV Hotel (cv-hotel web/src/app/consola.js).
 // Es el mismo sistema de privados: lee con get-messages y descifra con las claves de este dispositivo
 // (app._decryptMessages), cifra y manda con send-message como el panel flotante de Haven. Solo las conversaciones 1 a
-// 1, sin las solicitudes recibidas (esas se ven en el chat). Todo sale como texto: el hotel lo pone con textContent.
+// 1. Las solicitudes recibidas pendientes salen marcadas (solicitud: true) y se aceptan o rechazan desde aca; las
+// rechazadas o vencidas no salen. Las conversaciones sin ningun mensaje tampoco (como en la lista del chat): el
+// hotel escribe el primero con mandarA, que recien ahi abre la conversacion (y el servidor decide si es una
+// solicitud, solicitudes.js). Todo sale como texto: el hotel lo pone con textContent.
 // Si falta la clave de la otra persona o cambio, no manda en texto plano: pide hacerlo desde el chat.
 (function () {
   'use strict';
   let intentos = 0;
   const app = () => window.app;
   const yo = () => { const a = app(); return a && a.user ? a.user.id : null; };
-  const ocultas = () => { try { return window.puenteSolicitudes ? window.puenteSolicitudes.ocultas() : new Set(); } catch { return new Set(); } };
-  const dms = () => {
+  const sol = () => window.puenteSolicitudes || null;
+  const ocultas = () => { try { return sol() ? sol().ocultas() : new Set(); } catch { return new Set(); } };
+  // Una solicitud recibida que espera respuesta / una enviada que todavia no aceptaron
+  const solicitud = (code) => { try { const x = sol() && sol().recibida ? sol().recibida(code) : null; return !!(x && x.estado === 'pendiente' && !x.vencida); } catch { return false; } };
+  const pendiente = (code) => { try { return !!(sol() && sol().enviada && sol().enviada(code)); } catch { return false; } };
+  // Todas las conversaciones 1 a 1 (para buscar y escribir) y las que se muestran en la lista
+  const todas = () => {
     const a = app(); if (!a || !Array.isArray(a.channels)) return [];
-    const o = ocultas(), u = yo();
-    return a.channels.filter((c) => c && c.is_dm && !c.is_group && c.dm_target && !c.is_self_dm && c.dm_target.id !== u && !o.has(c.code));
+    const u = yo();
+    return a.channels.filter((c) => c && c.is_dm && !c.is_group && c.dm_target && !c.is_self_dm && c.dm_target.id !== u);
   };
-  const dm = (code) => dms().find((c) => c.code === code) || null;
+  const vacios = new Set();   // sin ningun mensaje (el servidor: puente-dm-recientes, leidos.js)
+  let vaciosT = 0;
+  const dms = () => { const o = ocultas(); return todas().filter((c) => (!o.has(c.code) || solicitud(c.code)) && !vacios.has(c.code)); };
+  const dm = (code) => todas().find((c) => c.code === code) || null;
   const nombre = (c) => String(c.dm_target.displayName || c.dm_target.display_name || c.dm_target.username || 'Alguien');
   const fecha = (v) => {
     if (typeof v === 'number') return v;
@@ -18881,9 +18921,22 @@ var puenteSinUbicacion = (function () {
     try { await a._decryptMessages(l, code); } catch { /* quedan como vinieron */ }
     return l;
   }
+  function pedirVacios() {
+    const a = app();
+    if (!a || !a.socket || !a.socket.connected) return Promise.resolve();
+    return new Promise((res) => {
+      const t = setTimeout(res, 5000);
+      a.socket.emit('puente-dm-recientes', {}, (r) => {
+        clearTimeout(t);
+        if (r && Array.isArray(r.vacios)) { vacios.clear(); r.vacios.forEach((c) => { if (!ultimos.has(c)) vacios.add(c); }); vaciosT = Date.now(); }
+        res();
+      });
+    });
+  }
   let previas = 0;
   async function conversaciones() {
     const a = app(); if (!a) return [];
+    if (Date.now() - vaciosT > 60000) await pedirVacios();
     const l = dms().slice().sort((x, y) => (y.last_activity || 0) - (x.last_activity || 0));
     // El ultimo mensaje de las mas nuevas, de a poco (despues se mantiene con lo que llega)
     if (Date.now() - previas > 60000) {
@@ -18895,7 +18948,10 @@ var puenteSinUbicacion = (function () {
     }
     return l.map((c) => {
       const u = ultimos.get(c.code);
-      return { id: c.code, u: c.dm_target.id, nombre: nombre(c), ultimo: u ? { texto: u.texto, t: u.t, mio: u.mio } : null, sinLeer: Number((a.unreadCounts || {})[c.code]) || 0 };
+      const x = { id: c.code, u: c.dm_target.id, nombre: nombre(c), ultimo: u ? { texto: u.texto, t: u.t, mio: u.mio } : null, sinLeer: Number((a.unreadCounts || {})[c.code]) || 0 };
+      if (solicitud(c.code)) x.solicitud = true;
+      else if (pendiente(c.code)) x.pendiente = true;
+      return x;
     });
   }
   async function mensajes(code) {
@@ -18924,30 +18980,65 @@ var puenteSinUbicacion = (function () {
     return new Promise((res) => {
       let t = null;
       const fin = (r) => { s.off('new-message', on); s.off('error-msg', mal); clearTimeout(t); res(r); };
-      const on = (d) => { if (d && d.channelCode === ch.code && d.message && d.message.user_id === yo()) fin({ ok: true }); };
+      const on = (d) => {
+        if (!d || d.channelCode !== ch.code || !d.message || d.message.user_id !== yo()) return;
+        const m = { id: d.message.id, mio: true, texto: texto({ content: contenido }), t: fecha(d.message.created_at) };
+        vacios.delete(ch.code);
+        anotar(ch.code, { id: m.id, user_id: yo(), content: contenido, created_at: d.message.created_at });
+        fin({ ok: true, mensaje: m });
+      };
       const mal = (e) => fin({ error: typeof e === 'string' && e.length < 200 ? e : 'No se pudo mandar.' });
       s.on('new-message', on); s.on('error-msg', mal);
       t = setTimeout(() => fin({ error: 'No hubo respuesta: fijate en el chat si salió.' }), 10000);
       s.emit('send-message', { code: ch.code, content: cifrado, encrypted: true });
     });
   }
-  async function con(u) {
+  // con(u): la conversacion con esa persona (la abre si no existe). con(u, { crear: false }): { id: null } si no existe
+  async function con(u, op) {
     const a = app(), id = Number(u);
     if (!a || !Number.isInteger(id) || id <= 0 || id === yo()) return { error: 'No se puede.' };
-    const ya = dms().find((c) => c.dm_target.id === id);
+    const ya = todas().find((c) => c.dm_target.id === id);
     if (ya) return { id: ya.code };
+    if (op && op.crear === false) return { id: null };
     if (!(await conectado())) return { error: 'Sin conexión.' };
     return new Promise((res) => {
       const s = a.socket; let t = null, vuelta = null;
-      const fin = (r) => { s.off('dm-opened', on); clearTimeout(t); clearInterval(vuelta); res(r); };
-      const buscar = () => { const c = dms().find((x) => x.dm_target.id === id); if (c) fin({ id: c.code }); };
+      // (el chat, al abrirse una conversacion, la pone en pantalla: esta no, se escribe desde el hotel)
+      const antes = a._openDMPiP;
+      const callada = function (code) { const c = (this.channels || []).find((x) => x && x.code === code); if (c && c.dm_target && c.dm_target.id === id) return; return antes.apply(this, arguments); };
+      if (typeof antes === 'function') a._openDMPiP = callada;
+      const fin = (r) => { s.off('dm-opened', on); clearTimeout(t); clearInterval(vuelta); setTimeout(() => { if (a._openDMPiP === callada) a._openDMPiP = antes; }, 1500); res(r); };
+      const buscar = () => { const c = todas().find((x) => x.dm_target.id === id); if (c) fin({ id: c.code }); };
       const on = () => setTimeout(buscar, 300);
       s.on('dm-opened', on);
       vuelta = setInterval(buscar, 500);
-      t = setTimeout(() => { const c = dms().find((x) => x.dm_target.id === id); fin(c ? { id: c.code } : { error: 'No se pudo abrir la conversación.' }); }, 8000);
+      t = setTimeout(() => { const c = todas().find((x) => x.dm_target.id === id); fin(c ? { id: c.code } : { error: 'No se pudo abrir la conversación.' }); }, 8000);
       s.emit('start-dm', { targetUserId: id });
     });
   }
+  // El primer mensaje a alguien: recien ahi se abre la conversacion (si no sale, queda fuera de la lista)
+  async function mandarA(u, txt) {
+    const id = Number(u), contenido = String(txt == null ? '' : txt).trim();
+    if (!Number.isInteger(id) || id <= 0 || id === yo()) return { error: 'No se puede.' };
+    if (!contenido) return { error: 'Escribí algo.' };
+    if (contenido.length > 1000) return { error: 'Es muy largo (hasta 1000 letras).' };
+    try { if (sol() && sol().bloqueados && sol().bloqueados().includes(id)) return { error: 'Bloqueaste a esta persona. Para escribirle, desbloqueala desde su perfil en el chat.' }; } catch { /* sigue */ }
+    const ya = todas().find((c) => c.dm_target.id === id);
+    const c = ya ? { id: ya.code } : await con(id);
+    if (!c || !c.id) return { error: (c && c.error) || 'No se pudo abrir la conversación.' };
+    const r = await mandar(c.id, contenido);
+    if (r.error) { if (!ya || vacios.has(c.id)) { vacios.add(c.id); avisar({ tipo: 'lista' }); } return r; }
+    return { ok: true, id: c.id, mensaje: r.mensaje };
+  }
+  async function responder(code, accion) {
+    if (!solicitud(String(code))) return { error: 'Esa solicitud ya no está.' };
+    if (!sol() || typeof sol().responder !== 'function') return { error: 'No se pudo.' };
+    const r = await sol().responder(String(code), accion);
+    avisar({ tipo: 'lista' });
+    return r;
+  }
+  const aceptar = (code) => responder(code, 'aceptar');
+  const rechazar = (code) => responder(code, 'rechazar');
   function leido(code) {
     const a = app(), ch = dm(String(code));
     if (!a || !ch) return;
@@ -18963,7 +19054,7 @@ var puenteSinUbicacion = (function () {
   function avisar(ev) { for (const f of oyentes) { try { f(ev); } catch (err) { console.warn('[puente] privados:', err); } } }
   function escuchar(fn) { if (typeof fn !== 'function') return () => {}; oyentes.add(fn); return () => { oyentes.delete(fn); }; }
 
-  const privados = { conversaciones, mensajes, mandar, con, leido, escuchar };
+  const privados = { conversaciones, mensajes, mandar, mandarA, con, leido, escuchar, aceptar, rechazar };
   (function enganchar() {
     const a = app();
     if (!a || !a.socket || !Array.isArray(a.channels) || !window.puenteJuegos || typeof a._decryptMessages !== 'function') { if (++intentos < 120) setTimeout(enganchar, 1000); return; }
@@ -18972,6 +19063,7 @@ var puenteSinUbicacion = (function () {
     s.on('new-message', (d) => {
       if (!d || !d.message || d.message.thread_id || !dm(d.channelCode)) return;
       const code = d.channelCode;
+      vacios.delete(code);
       if (!oyentes.size) { ultimos.delete(code); previas = 0; return; } // (se vuelve a pedir la proxima vez)
       // (una copia sin descifrar, antes de que Haven toque la suya)
       const m = JSON.parse(JSON.stringify(d.message));
@@ -18981,7 +19073,9 @@ var puenteSinUbicacion = (function () {
         setTimeout(() => avisar({ tipo: 'lista' }), 300);
       });
     });
-    for (const ev of ['dm-opened', 'channel-deleted', 'channels-list']) s.on(ev, () => setTimeout(() => avisar({ tipo: 'lista' }), 400));
+    document.addEventListener('puente-solicitudes', () => avisar({ tipo: 'lista' }));
+    // (una conversacion nueva todavia no esta en la lista de vacias: se vuelve a pedir)
+    for (const ev of ['dm-opened', 'channel-deleted', 'channels-list']) s.on(ev, () => { vaciosT = 0; setTimeout(() => avisar({ tipo: 'lista' }), 400); });
     // Si el hotel ya estaba abierto, que sepa que esta
     document.querySelectorAll('iframe').forEach((f) => { try { f.contentWindow.dispatchEvent(new Event('puente:privados')); } catch { /* otro origen */ } });
   })();
