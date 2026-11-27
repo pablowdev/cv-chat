@@ -250,4 +250,4 @@ async function recientes(n = 5) {
   return recientesHechos.temas;
 }
 
-module.exports = { setup, handle, vistaPrevia, nodoDe, on, datos, recientes };
+module.exports = { setup, handle, vistaPrevia, nodoDe, on, datos, recientes, lector };

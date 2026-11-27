@@ -14,6 +14,12 @@
 //  GET /canal?ruta=<forum/...>               un foro (o la portada, con ruta vacia): nombre, cuentas y el ultimo tema
 //  GET /miembro?id=<userid>                  nombre, foto, mensajes y desde cuando (lo que se ve al lado de cada mensaje)
 //  GET /vivo                                 el ultimo tema o respuesta publico (el foro se actualiza solo cuando cambia)
+//  GET /monedas?nodo=<id>&like=<id>          para las monedas del club (tools/puente/monedas-fuentes.js): los temas y
+//                                            respuestas publicos despues de ese nodeid y los "me gusta" despues de ese
+//                                            reputationid, con lo que hace falta para pagarlos (largo del texto sin citas,
+//                                            si tiene foto, si es del foro de archivo, alta de quien lo hizo)
+//  GET /existen?ids=<id,id,...>              cuales de esos temas o respuestas siguen publicos (se paga a las 24 h)
+//  GET /destacados?desde=<unix>              temas publicos fijados (sticky) por un moderador desde esa fecha
 //
 // Pide la cabecera X-Lector-Clave (LECTOR_CLAVE).
 
@@ -220,6 +226,78 @@ if ($ruta === '/miembro') {
 	if (!$m) { http_response_code(404); salir(['error' => 'no esta']); }
 	salir(['miembro' => ['id' => (int) $m['userid'], 'nombre' => $texto($m['username']), 'foto' => foto($m['userid']),
 		'mensajes' => (int) $m['posts'], 'desde' => (int) $m['joindate'] * 1000]]);
+}
+
+// ── Para las monedas del club ──
+// Los foros que no pagan (tejemanejes quedo de archivo: el Marketplace es el unico lugar para vender)
+const ARCHIVO = [3323];
+$alta = function ($userid) use ($db) {
+	static $q = null, $c = [];
+	if (!isset($c[$userid])) { if (!$q) $q = $db->prepare('SELECT joindate FROM user WHERE userid = ?'); $q->execute([(int) $userid]); $c[$userid] = (int) $q->fetchColumn() * 1000; }
+	return $c[$userid];
+};
+$enArchivo = function ($nodeid) use ($db) {
+	$q = $db->prepare('SELECT 1 FROM closure WHERE child = ? AND parent IN (' . implode(',', ARCHIVO) . ') LIMIT 1');
+	$q->execute([(int) $nodeid]);
+	return (bool) $q->fetchColumn();
+};
+
+if ($ruta === '/monedas') {
+	$nodo = max(0, (int) ($_GET['nodo'] ?? 0));
+	$like = max(0, (int) ($_GET['like'] ?? 0));
+	// sin cursores (la primera vez): donde esta todo ahora, para empezar desde aca sin pagar lo viejo
+	if (!isset($_GET['nodo'])) salir(['nodo' => (int) $db->query('SELECT MAX(nodeid) FROM node')->fetchColumn(), 'like' => (int) $db->query('SELECT COALESCE(MAX(reputationid), 0) FROM reputation')->fetchColumn()]);
+	$lim = 200;
+	$q = $db->prepare('SELECT n.nodeid, n.starter, n.userid, n.publishdate, s.userid AS autor_tema, s.parentid AS canal, t.rawtext
+		FROM node n JOIN closure f ON f.child = n.nodeid AND f.parent = ' . FORO . ' JOIN node s ON s.nodeid = n.starter LEFT JOIN text t ON t.nodeid = n.nodeid
+		WHERE n.nodeid > ? AND n.contenttypeid IN (' . TIPOS . ') AND n.protected = 0 AND n.showpublished = 1 AND n.showapproved = 1 AND n.approved = 1
+		  AND n.starter > 0 AND s.showpublished = 1 AND s.showapproved = 1 AND s.protected = 0 ORDER BY n.nodeid LIMIT ' . $lim);
+	$q->execute([$nodo]);
+	$posts = []; $hastaNodo = $nodo;
+	foreach ($q->fetchAll() as $r) {
+		$hastaNodo = max($hastaNodo, (int) $r['nodeid']);
+		if (!publico((int) $r['canal'])) continue;
+		$raw = (string) $r['rawtext'];
+		$posts[] = ['id' => (int) $r['nodeid'], 'tema' => (int) $r['starter'], 'es_tema' => (int) $r['nodeid'] === (int) $r['starter'],
+			'autor' => (int) $r['userid'], 'autor_tema' => (int) $r['autor_tema'], 'fecha' => (int) $r['publishdate'] * 1000,
+			'largo' => mb_strlen(resumen($raw, 1000000)), 'foto' => (bool) preg_match('#\[(img|attach|video)\b#i', $raw),
+			'archivo' => $enArchivo((int) $r['nodeid']), 'alta' => $alta((int) $r['userid'])];
+	}
+	// (si quedaron nodos sin mirar porque no eran temas ni respuestas, el cursor igual avanza hasta el ultimo que hay)
+	if (count($posts) === 0 && $hastaNodo === $nodo) $hastaNodo = max($nodo, (int) $db->query('SELECT MAX(nodeid) FROM node')->fetchColumn());
+	$l = $db->prepare('SELECT reputationid, nodeid, userid, whoadded, dateline FROM reputation WHERE reputationid > ? ORDER BY reputationid LIMIT ' . $lim);
+	$l->execute([$like]);
+	$filasL = $l->fetchAll(); $likes = []; $hastaLike = $like;
+	$nodoOk = $db->prepare($sql . ' AND n.nodeid = ?');
+	foreach ($filasL as $r) {
+		$hastaLike = max($hastaLike, (int) $r['reputationid']);
+		$nodoOk->execute([(int) $r['nodeid']]);
+		$x = $nodoOk->fetch();
+		if (!$x || !publico((int) $x['canal'])) continue;
+		$likes[] = ['id' => (int) $r['reputationid'], 'nodo' => (int) $r['nodeid'], 'tema' => (int) $x['starter'], 'receptor' => (int) $r['userid'],
+			'autor' => (int) $r['whoadded'], 'fecha' => (int) $r['dateline'] * 1000, 'archivo' => $enArchivo((int) $r['nodeid']), 'alta' => $alta((int) $r['whoadded'])];
+	}
+	salir(['posts' => $posts, 'likes' => $likes, 'nodo' => $hastaNodo, 'like' => $hastaLike, 'mas' => count($posts) >= $lim || count($filasL) >= $lim]);
+}
+
+if ($ruta === '/existen') {
+	$ids = array_slice(array_values(array_unique(array_filter(array_map('intval', explode(',', (string) ($_GET['ids'] ?? '')))))), 0, 200);
+	$out = [];
+	if ($ids) {
+		$q = $db->prepare($sql . ' AND n.nodeid IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+		$q->execute($ids);
+		foreach ($q->fetchAll() as $r) if (publico((int) $r['canal'])) $out[] = (int) $r['nodeid'];
+	}
+	salir(['existen' => $out]);
+}
+
+if ($ruta === '/destacados') {
+	$desde = max(0, (int) ($_GET['desde'] ?? 0));
+	$q = $db->prepare($sql . ' AND n.nodeid = n.starter AND n.sticky = 1 AND n.publishdate >= ? ORDER BY n.nodeid LIMIT 100');
+	$q->execute([$desde]);
+	$out = [];
+	foreach ($q->fetchAll() as $r) if (publico((int) $r['canal']) && !$enArchivo((int) $r['nodeid'])) $out[] = ['id' => (int) $r['nodeid'], 'autor' => (int) $r['userid']];
+	salir(['destacados' => $out]);
 }
 
 http_response_code(404);

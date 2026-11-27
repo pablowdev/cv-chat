@@ -23,6 +23,14 @@
 //    compartido (cs16-premios.js tiene los montos).
 //  - Invitaciones: 50 cuando la persona invitada confirma su cuenta, 150 cuando usa CV Chat 3 dias en sus primeras 2
 //    semanas y 100 si sigue (2 dias entre la semana 3 y la 5).
+//  - Foro (desde el 27/11/2026, aprobado por el dueño; solo cuentas del foro unidas a CV Chat, con el lector del foro):
+//    unir la cuenta del foro 15 (primer paso); tema nuevo 10 (200 letras sin las citas, o una foto; hasta 2 por dia);
+//    respuesta 3 (80 letras; hasta 5 por dia); cada persona distinta que responde tu tema 5 (hasta 10 por tema);
+//    cada persona distinta a la que le gusta algo tuyo 5 (hasta 10 por semana); las dos ultimas, solo de cuentas del
+//    foro de 7 dias o mas y nunca de uno mismo. Tema fijado por un moderador: 50, una vez. Se paga a las 24 h y solo si
+//    sigue publicado (si un moderador lo borra antes, no cobra). No paga el foro de archivo (tejemanejes). Entra en el
+//    tope suave del dia. Un tema o respuesta valido cuenta como dia activo (enseguida), y lo que recibis en el foro
+//    (respuestas y me gusta de otros) suma al podio de la semana.
 // Un mensaje vale si tiene 8 letras o 2 palabras (o un link o una imagen), no repite uno de los ultimos 5 de esa
 // persona y no llega a menos de 3 segundos del anterior. Los mensajes directos no cuentan.
 //
@@ -50,6 +58,8 @@ const REG = {
   inv1: 50, inv2: 150, inv3: 100,
   curveballPrimero: 100,
   cs16: CS16,
+  foro: { paso: 15, tema: 10, temaLargo: 200, temaDia: 2, resp: 3, respLargo: 80, respDia: 5, respondido: 5, respondidoTope: 10,
+    megusta: 5, megustaTope: 10, edad: 7 * DIA, destacado: 50, espera: DIA },
 };
 const JUEGOS_DESAFIO = ['truco', 'pool', 'curveball', 'ajedrez', 'globalsiege', 'funball'];
 const TABLAS = [
@@ -255,11 +265,18 @@ function liquidarSemana(lunes) {
     if (msDeTexto(r.created_at) - msDeTexto(r.alta) < REG.reaccionEdad) continue;
     if (!reac.has(a.u)) reac.set(a.u, new Set()); reac.get(a.u).add(r.user_id);
   }
-  const gente = new Set([...dias.keys(), ...reac.keys(), ...resp.keys()]), puntaje = [];
+  const delForo = new Map();
+  try {
+    for (const r of db.prepare("SELECT tipo, autor, receptor FROM puente_monedas_foro WHERE pagado >= 0 AND archivo = 0 AND t >= ? AND t < ? AND autor != receptor AND (tipo = 'like' OR es_tema = 0)").all(ini, fin)) {
+      const h = havenDeForo(r.receptor); if (!h) continue;
+      if (!delForo.has(h)) delForo.set(h, new Set()); delForo.get(h).add(r.tipo + ':' + r.autor);
+    }
+  } catch (err) { warn('monedas fuentes: podio del foro:', err.message); }
+  const gente = new Set([...dias.keys(), ...reac.keys(), ...resp.keys(), ...delForo.keys()]), puntaje = [];
   for (const u of gente) {
     const nr = reac.has(u) ? reac.get(u).size : 0;
     pagar(u, Math.min(nr, REG.reaccionTope) * REG.reaccion, 'reacciones', 'chat', `reacciones:${u}:${lunes}`, `${nr} personas reaccionaron a tus mensajes`);
-    puntaje.push([u, (dias.get(u) || 0) * 10 + nr * 5 + (resp.has(u) ? resp.get(u).size : 0) * 5]);
+    puntaje.push([u, (dias.get(u) || 0) * 10 + nr * 5 + (resp.has(u) ? resp.get(u).size : 0) * 5 + (delForo.has(u) ? delForo.get(u).size : 0) * 5]);
   }
   puntaje.sort((a, b) => b[1] - a[1]);
   puntaje.slice(0, 3).forEach(([u, p], i) => { if (p >= REG.podioMinimo) pagar(u, REG.podio[i], 'podio', 'chat', `podio:${lunes}:${i + 1}`, `Puesto ${i + 1} de la semana`); });
@@ -344,6 +361,96 @@ async function liquidarCS16(lunes) {
   return true;
 }
 
+// ── El foro (con el lector del foro, deploy/foro/lector: solo lee lo publico) ──
+// Cada vuelta: 1) trae los temas, respuestas y "me gusta" nuevos y los anota en puente_monedas_foro (y los temas y
+// respuestas validos marcan el dia activo enseguida); 2) paga lo que ya tiene 24 h, si sigue publicado; 3) los temas
+// fijados; 4) el primer paso de unir la cuenta. Lo de alguien sin la cuenta del foro unida se anota igual (cuenta para
+// las respuestas que recibe otro), pero no cobra.
+const havenDeForo = (fid) => { const r = db.prepare('SELECT haven_user_id u FROM puente_foro WHERE foro_user_id = ?').get(Number(fid)); return r ? r.u : null; };
+const temaValido = (p) => !p.archivo && p.es_tema && (p.largo >= REG.foro.temaLargo || p.foto);
+const respValida = (p) => !p.archivo && !p.es_tema && p.largo >= REG.foro.respLargo;
+let lectorForo = null;
+function foroLector() { if (!lectorForo) lectorForo = require('./foro-lector.js'); return lectorForo; }
+
+async function liquidarForo(ahora) {
+  const F = foroLector(), RF = REG.foro;
+  if (!F.on()) return;
+  // 1. lo nuevo (la primera vez, solo se anota desde donde empezar: no se paga lo viejo)
+  if (leer('foro_nodo', null) == null) {
+    const d = await F.lector('/monedas');
+    if (!d || d.nodo == null) return;
+    poner('foro_nodo', d.nodo); poner('foro_like', d.like); poner('foro_inicio', ahora);
+    log(`monedas fuentes: el foro paga desde el tema ${d.nodo} y el me gusta ${d.like}`);
+    return;
+  }
+  const anotar = db.prepare(`INSERT OR IGNORE INTO puente_monedas_foro (id, tipo, nodo, tema, autor, receptor, es_tema, largo, foto, archivo, alta, t)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (let vuelta = 0; vuelta < 5; vuelta++) {
+    const d = await F.lector(`/monedas?nodo=${Number(leer('foro_nodo', 0))}&like=${Number(leer('foro_like', 0))}`);
+    if (!d) break;
+    db.transaction(() => {
+      for (const p of d.posts || []) {
+        anotar.run('p:' + p.id, 'post', p.id, p.tema, p.autor, p.autor_tema, p.es_tema ? 1 : 0, p.largo, p.foto ? 1 : 0, p.archivo ? 1 : 0, p.alta, p.fecha);
+        const h = havenDeForo(p.autor);
+        if (h && esCuenta(h) && (temaValido(p) || respValida(p))) db.prepare('INSERT OR IGNORE INTO puente_monedas_activos (user_id, dia) VALUES (?, ?)').run(h, diaAR(p.fecha));
+      }
+      for (const l of d.likes || []) anotar.run('l:' + l.id, 'like', l.nodo, l.tema, l.autor, l.receptor, 0, 0, 0, l.archivo ? 1 : 0, l.alta, l.fecha);
+      poner('foro_nodo', d.nodo); poner('foro_like', d.like);
+    })();
+    if (!d.mas) break;
+  }
+  // 2. lo que ya tiene 24 h: si sigue publicado, se paga
+  const listos = db.prepare('SELECT * FROM puente_monedas_foro WHERE pagado = 0 AND t <= ? ORDER BY t LIMIT 400').all(ahora - RF.espera);
+  if (listos.length) {
+    const vivos = new Set();
+    const nodos = [...new Set(listos.map((r) => r.nodo))];
+    for (let i = 0; i < nodos.length; i += 100) {
+      const d = await F.lector('/existen?ids=' + nodos.slice(i, i + 100).join(','));
+      if (!d || !Array.isArray(d.existen)) return; // (sin respuesta: se reintenta la proxima vuelta)
+      for (const x of d.existen) vivos.add(Number(x));
+    }
+    const marcar = db.prepare('UPDATE puente_monedas_foro SET pagado = ? WHERE id = ?');
+    // cuantos temas o respuestas se le pagaron por el dia en que los publico (no el dia del pago, que es despues)
+    const pagados = (u, tipo, dia) => Number(leer(`foro-cuenta:${tipo}:${u}:${dia}`, 0));
+    const sumado = (u, tipo, dia) => poner(`foro-cuenta:${tipo}:${u}:${dia}`, pagados(u, tipo, dia) + 1);
+    const claves = (prefijo) => db.prepare("SELECT COUNT(*) n FROM puente_monedas_mov WHERE clave >= ? AND clave < ?").get(prefijo, prefijo + '￿').n;
+    for (const r of listos) {
+      if (!vivos.has(r.nodo) || r.archivo) { marcar.run(-1, r.id); continue; }
+      const dia = diaAR(r.t);
+      if (r.tipo === 'post') {
+        const h = havenDeForo(r.autor), p = { es_tema: !!r.es_tema, largo: r.largo, foto: !!r.foto, archivo: !!r.archivo };
+        if (h && temaValido(p) && pagados(h, 'foro-tema', dia) < RF.temaDia) sumado(h, 'foro-tema', dia), pagarConTope(h, dia, RF.tema, 'foro-tema', 'foro', 'foro-tema:' + r.nodo, 'Tema nuevo en el foro');
+        if (h && respValida(p) && pagados(h, 'foro-respuesta', dia) < RF.respDia) sumado(h, 'foro-respuesta', dia), pagarConTope(h, dia, RF.resp, 'foro-respuesta', 'foro', 'foro-respuesta:' + r.nodo, 'Respuesta en el foro');
+        // a quien abrio el tema: una persona distinta (con cuenta del foro de 7 dias o mas) que le respondio
+        const abrio = havenDeForo(r.receptor);
+        if (!r.es_tema && abrio && r.receptor !== r.autor && r.largo > 0 && r.t - r.alta >= RF.edad
+            && claves(`foro-respondido:${r.tema}:`) < RF.respondidoTope) {
+          pagarConTope(abrio, dia, RF.respondido, 'foro-respondido', 'foro', `foro-respondido:${r.tema}:${r.autor}`, 'Te respondieron en el foro');
+        }
+      } else if (r.tipo === 'like') {
+        const h = havenDeForo(r.receptor), lunes = lunesDe(r.t);
+        if (h && r.receptor !== r.autor && r.t - r.alta >= RF.edad && claves(`foro-megusta:${h}:${lunes}:`) < RF.megustaTope) {
+          pagarConTope(h, dia, RF.megusta, 'foro-megusta', 'foro', `foro-megusta:${h}:${lunes}:${r.autor}`, 'Le gustó a alguien lo que escribiste en el foro');
+        }
+      }
+      marcar.run(1, r.id);
+    }
+  }
+  // 3. temas fijados por un moderador (desde que el foro paga)
+  const ini = Number(leer('foro_inicio', ahora));
+  const des = await F.lector('/destacados?desde=' + Math.floor(ini / 1000));
+  for (const x of (des && des.destacados) || []) {
+    const h = havenDeForo(x.autor);
+    if (h) pagar(h, RF.destacado, 'foro-destacado', 'foro', 'foro-destacado:' + x.id, 'Tu tema quedó destacado en el foro');
+  }
+}
+// El primer paso de unir la cuenta del foro (no depende del lector)
+function liquidarPasoForo() {
+  for (const r of db.prepare(`SELECT haven_user_id u FROM puente_foro f WHERE NOT EXISTS (SELECT 1 FROM puente_monedas_mov v WHERE v.clave = 'paso:foro:' || f.haven_user_id)`).all()) {
+    pagar(r.u, REG.foro.paso, 'primer-paso', 'sistema', 'paso:foro:' + r.u, 'Uniste tu cuenta del foro');
+  }
+}
+
 // ── El ciclo ──
 let corriendo = false;
 async function ciclo(ahora = Date.now()) {
@@ -353,6 +460,9 @@ async function ciclo(ahora = Date.now()) {
     if (!leer('inicio', null)) { poner('inicio', ahora); poner('dia', diaAR(ahora)); poner('semana', lunesDe(ahora)); poner('cs16_semana', lunesDe(ahora)); log('monedas fuentes: arrancan (modo ' + M.modo() + ')'); }
     paso('bienvenidas', liquidarBienvenidas);
     paso('partidas', liquidarPartidas);
+    paso('paso foro', liquidarPasoForo);
+    // el foro va aparte (si el lector no contesta, sigue lo demas) y antes de cerrar los dias
+    try { await liquidarForo(ahora); } catch (err) { warn('monedas fuentes: foro:', err.message); }
     // los dias que ya terminaron (desde el primero sin liquidar)
     let dia = leer('dia', diaAR(ahora));
     while (dia < diaAR(ahora)) { const d = dia; paso('dia ' + d, () => liquidarDia(d)); dia = sumarDias(dia, 1); poner('dia', dia); }
@@ -382,10 +492,14 @@ function setup(ctx) {
     CREATE TABLE IF NOT EXISTS puente_monedas_bruto (user_id INTEGER NOT NULL, dia TEXT NOT NULL, bruto REAL NOT NULL, PRIMARY KEY (user_id, dia));
     CREATE TABLE IF NOT EXISTS puente_monedas_chat (user_id INTEGER NOT NULL, dia TEXT NOT NULL, validos INTEGER NOT NULL, PRIMARY KEY (user_id, dia));
     CREATE TABLE IF NOT EXISTS puente_monedas_activos (user_id INTEGER NOT NULL, dia TEXT NOT NULL, PRIMARY KEY (user_id, dia));
-    CREATE TABLE IF NOT EXISTS puente_monedas_racha (user_id INTEGER PRIMARY KEY, ultimo TEXT NOT NULL, racha INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS puente_monedas_racha (user_id INTEGER PRIMARY KEY, ultimo TEXT NOT NULL, racha INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS puente_monedas_foro (id TEXT PRIMARY KEY, tipo TEXT NOT NULL, nodo INTEGER NOT NULL, tema INTEGER NOT NULL, autor INTEGER NOT NULL,
+      receptor INTEGER NOT NULL, es_tema INTEGER NOT NULL, largo INTEGER NOT NULL, foto INTEGER NOT NULL, archivo INTEGER NOT NULL, alta INTEGER NOT NULL,
+      t INTEGER NOT NULL, pagado INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX IF NOT EXISTS puente_monedas_foro_pend ON puente_monedas_foro (pagado, t);`);
   if (process.env.MONEDAS_FUENTES === '0' || ctx.sinReloj) return;
   setTimeout(() => ciclo(), 60e3).unref?.();
   setInterval(() => ciclo(), 10 * 60e3).unref?.();
 }
 
-module.exports = { setup, ciclo, REG, _pagoSuave: pagoSuave, _repartirCS16: repartirCS16 };
+module.exports = { setup, ciclo, REG, _pagoSuave: pagoSuave, _repartirCS16: repartirCS16, _liquidarForo: liquidarForo, _liquidarPasoForo: liquidarPasoForo };

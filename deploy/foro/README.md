@@ -63,6 +63,8 @@ GRANT SELECT ON foro.node TO lector; GRANT SELECT ON foro.closure TO lector; GRA
 GRANT SELECT ON foro.permission TO lector; GRANT SELECT (visible, userid, dateline) ON foro.customavatar TO lector;
 GRANT SELECT (routeid, prefix, contentid, class, redirect301) ON foro.routenew TO lector;
 GRANT SELECT (userid, username, posts, joindate) ON foro.user TO lector;
+-- los "me gusta", para las monedas del club (desde el 27/11/2026; /monedas del lector)
+GRANT SELECT (reputationid, nodeid, userid, whoadded, dateline) ON foro.reputation TO lector;
 ```
 
 El sitio principal (`../sitio`) son páginas fijas servidas por un Caddy chico de solo lectura en la misma

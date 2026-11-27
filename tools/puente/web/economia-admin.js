@@ -37,9 +37,10 @@
     'dia-activo': 'Día activo', 'racha': 'Racha de 7 días', 'semanal': 'Días charlando (semana)', 'reacciones': 'Reacciones (semana)',
     'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Conversión del hotel', 'conversion-capa2': 'Conversión de Capa 2',
     'correccion': 'Corrección', 'hotel-compra': 'CV Hotel: compra', 'hotel-pintura': 'CV Hotel: pintura', 'hotel-regalia': 'CV Hotel: regalía',
-    'hotel-aprobacion': 'CV Hotel: mueble aprobado', 'capa2-armeria': 'Capa 2: armería', 'capa2-encontrada': 'Capa 2: plata encontrada'
+    'hotel-aprobacion': 'CV Hotel: mueble aprobado', 'capa2-armeria': 'Capa 2: armería', 'capa2-encontrada': 'Capa 2: plata encontrada',
+    'foro-tema': 'Tema en el foro', 'foro-respuesta': 'Respuesta en el foro', 'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro'
   };
-  var ORIGENES = { chat: 'Chat', juegos: 'Juegos', hotel: 'CV Hotel', capa2: 'Capa 2', admin: 'Admin', sistema: 'Sistema' };
+  var ORIGENES = { chat: 'Chat', juegos: 'Juegos', hotel: 'CV Hotel', capa2: 'Capa 2', foro: 'Foro', admin: 'Admin', sistema: 'Sistema' };
   function tipoLindo(t) { return TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2: ' + t.slice(6) : /^hotel-/.test(t) ? 'CV Hotel: ' + t.slice(6) : t); }
   function lugar(o) { return ORIGENES[o] || o; }
 

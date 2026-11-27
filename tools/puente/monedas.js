@@ -25,7 +25,7 @@
 //  GET /puente/api/admin/monedas/origen?periodo=1|7|30|todo              de donde salen y en que se gastan
 
 let db = null, log = () => {}, warn = () => {};
-const ORIGENES = new Set(['chat', 'juegos', 'hotel', 'capa2', 'admin', 'sistema']);
+const ORIGENES = new Set(['chat', 'juegos', 'hotel', 'capa2', 'foro', 'admin', 'sistema']);
 const MAXIMO = 100000; // (un movimiento mas grande que esto es un error de quien llama)
 
 function setup(ctx) {
