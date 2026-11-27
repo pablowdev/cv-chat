@@ -90,6 +90,35 @@ const valid = e => e.length <= 200 && EMAIL_RE.test(e);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Otra cuenta ya tiene ese email confirmado
+// ── El idioma del mail de confirmacion (pedido del dueño, 27/11/2026: la gente de paises donde no se habla
+// español no confirmaba). Español si el navegador esta en español, o si se conecta desde un pais de habla hispana;
+// si no, ingles. Sin ningun dato, español. Queda guardado (puente_emails.idioma) para los reenvios.
+const HISPANOS = new Set(['AR', 'UY', 'CL', 'PY', 'BO', 'PE', 'EC', 'CO', 'VE', 'MX', 'ES', 'CR', 'PA', 'GT', 'HN', 'SV', 'NI', 'DO', 'CU', 'PR', 'GQ']);
+let conIdioma = null;
+function columnaIdioma() {
+  if (conIdioma === null) {
+    try {
+      if (!db.prepare('PRAGMA table_info(puente_emails)').all().some((c) => c.name === 'idioma')) db.exec('ALTER TABLE puente_emails ADD COLUMN idioma TEXT');
+      conIdioma = true;
+    } catch (err) { warn('email: idioma:', err.message); conIdioma = false; }
+  }
+  return conIdioma;
+}
+// pista: { ip, lang } de quien se esta registrando (sin pista: su ultima IP conocida)
+function idiomaPara(userId, pista) {
+  const lang = String((pista && pista.lang) || '').trim().toLowerCase();
+  if (/^es\b/.test(lang)) return 'es';
+  let ip = pista && pista.ip;
+  if (!ip) { try { const r = db.prepare('SELECT ip FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1').get(userId); ip = r && r.ip; } catch { /* sin user_ips */ } }
+  let pais = null;
+  if (ip) { try { const l = require('./geo.js').buscar([ip]).get(ip); pais = l ? l[0] : null; } catch { /* sin la base de ubicaciones */ } }
+  if (pais) return HISPANOS.has(pais) ? 'es' : 'en';
+  if (lang) return 'en'; // (un navegador que no esta en español y ningun pais)
+  return 'es';
+}
+const ipDe = (req) => String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',').pop().trim() || (req && req.socket && req.socket.remoteAddress) || '';
+const pistaDe = (req) => (req ? { ip: ipDe(req), lang: String((req.headers && req.headers['accept-language']) || '') } : null);
+
 function takenByOther(email, userId) {
   return !!db.prepare('SELECT 1 FROM puente_emails WHERE email = ? AND confirmado = 1 AND haven_user_id != ?').get(email, userId);
 }
@@ -163,7 +192,7 @@ async function sendMail(to, subject, title, paragraphs, button, footer, opts = {
   }
   const name = appName();
   const logo = publicUrl ? `${publicUrl}/puente/logo-carga.png` : '';
-  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#f2f3f5">
+  const html = `<!doctype html><html lang="${opts.en ? 'en' : 'es'}"><body style="margin:0;padding:0;background:#f2f3f5">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f3f5;padding:32px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px 28px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2e3035">
 ${logo ? `<tr><td align="center" style="padding-bottom:16px"><img src="${esc(logo)}" width="88" height="88" alt="" style="display:block;border:0"></td></tr>` : ''}
@@ -172,7 +201,7 @@ ${paragraphs.map(p => typeof p === 'string' ? `<tr><td style="font-size:15px;lin
   : p && p.titulo ? `<tr><td style="font-size:17px;font-weight:700;padding:12px 0 8px">${esc(p.titulo)}</td></tr>`
   : p && p.url ? `<tr><td style="font-size:15px;line-height:1.45;padding-bottom:10px"><a href="${esc(p.url)}" style="color:#4752c4;text-decoration:none">${esc(p.texto)}</a></td></tr>` : '').join('')}
 <tr><td align="center" style="padding:12px 0 20px"><a href="${esc(button[1])}" style="display:inline-block;background:#5865f2;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">${esc(button[0])}</a></td></tr>
-<tr><td style="font-size:12px;line-height:1.5;color:#80848e">${esc(footer)}${opts.baja ? ` <a href="${esc(opts.baja)}" style="color:#80848e">Dejar de recibir este mail</a>` : ''}<br><br>Si el botón no funciona, copiá este enlace en el navegador:<br><span style="word-break:break-all">${esc(button[1])}</span></td></tr>
+<tr><td style="font-size:12px;line-height:1.5;color:#80848e">${esc(footer)}${opts.baja ? ` <a href="${esc(opts.baja)}" style="color:#80848e">${opts.en ? 'Unsubscribe' : 'Dejar de recibir este mail'}</a>` : ''}<br><br>${opts.en ? 'If the button doesn\'t work, copy this link into your browser:' : 'Si el botón no funciona, copiá este enlace en el navegador:'}<br><span style="word-break:break-all">${esc(button[1])}</span></td></tr>
 </table>
 <div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#80848e;padding-top:12px">${esc(name)}</div>
 </td></tr></table></body></html>`;
@@ -190,7 +219,7 @@ ${paragraphs.map(p => typeof p === 'string' ? `<tr><td style="font-size:15px;lin
 }
 
 // Guarda el email (sin confirmar) y manda el enlace para confirmarlo
-async function saveAndVerify(userId, rawEmail) {
+async function saveAndVerify(userId, rawEmail, pista) {
   const email = norm(rawEmail);
   if (!valid(email)) return { error: 'Ese email no parece válido.' };
   if (takenByOther(email, userId)) return { error: 'Ese email ya está en uso en otra cuenta.' };
@@ -205,11 +234,24 @@ async function saveAndVerify(userId, rawEmail) {
     .run(userId, email, hash(token), Date.now() + VERIFY_TTL_MS);
   note('confirmar', String(userId));
   const u = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-  const ok = await sendMail(email, `Confirmá tu email en ${appName()}`, 'Confirmá tu email',
-    [`¡Hola${u ? ' ' + u.username : ''}!`, `Tocá el botón para confirmar que este es tu email en ${appName()}. Lo vas a poder usar para recuperar tu contraseña si alguna vez la olvidás.`],
-    ['Confirmar mi email', `${publicUrl}/puente/email/confirmar?t=${token}`],
-    'Si no fuiste vos, ignorá este mail: sin confirmarlo no pasa nada.');
-  if (ok) log(`email: mail de confirmacion para Haven #${userId}`);
+  // el idioma: el de esta vez (con la pista de quien se registra), o el guardado, o por su ultima IP
+  let idioma = null;
+  if (columnaIdioma()) {
+    const guardado = (db.prepare('SELECT idioma FROM puente_emails WHERE haven_user_id = ?').get(userId) || {}).idioma;
+    idioma = pista ? idiomaPara(userId, pista) : guardado || idiomaPara(userId, null);
+    db.prepare('UPDATE puente_emails SET idioma = ? WHERE haven_user_id = ?').run(idioma, userId);
+  }
+  const enlace = `${publicUrl}/puente/email/confirmar?t=${token}`;
+  const ok = idioma === 'en'
+    ? await sendMail(email, `Confirm your email on ${appName()}`, 'Confirm your email',
+      [`Hi${u ? ' ' + u.username : ''}!`, `Tap the button to confirm this is your email on ${appName()}. You'll be able to use it to recover your password if you ever forget it.`],
+      ['Confirm my email', enlace],
+      "If this wasn't you, just ignore this email: nothing happens unless you confirm it.", { en: true })
+    : await sendMail(email, `Confirmá tu email en ${appName()}`, 'Confirmá tu email',
+      [`¡Hola${u ? ' ' + u.username : ''}!`, `Tocá el botón para confirmar que este es tu email en ${appName()}. Lo vas a poder usar para recuperar tu contraseña si alguna vez la olvidás.`],
+      ['Confirmar mi email', enlace],
+      'Si no fuiste vos, ignorá este mail: sin confirmarlo no pasa nada.');
+  if (ok) log(`email: mail de confirmacion para Haven #${userId}${idioma === 'en' ? ' (en ingles)' : ''}`);
   return ok ? { ok: true, confirmado: false } : { error: 'No pudimos mandar el mail. Probá de nuevo en un rato.' };
 }
 
@@ -334,7 +376,7 @@ function hookRegister(req, res, next, validate) {
         if (res.statusCode === 200 && chunk) {
           const data = JSON.parse(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk));
           const id = data && data.user && data.user.id;
-          if (id) setImmediate(() => saveAndVerify(id, email).catch(err => warn('email al registrarse:', err.message)));
+          if (id) { const pista = pistaDe(req); setImmediate(() => saveAndVerify(id, email, pista).catch(err => warn('email al registrarse:', err.message))); }
         }
       } catch { /* la cuenta igual se creo */ }
       return origEnd.call(this, chunk, ...rest);
@@ -343,4 +385,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, norm, valid, status, sendMail, hayLugarMasivo, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, norm, valid, status, sendMail, pistaDe, idiomaPara, hayLugarMasivo, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };

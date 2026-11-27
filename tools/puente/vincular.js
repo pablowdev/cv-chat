@@ -1358,7 +1358,7 @@ async function handle(req, res) {
     }
     if (p === '/puente/api/email/guardar' && req.method === 'POST') {
       const body = await readJson(req);
-      const r = await email.saveAndVerify(user.id, body && body.email);
+      const r = await email.saveAndVerify(user.id, body && body.email, email.pistaDe(req));
       return json(res, r.ok ? 200 : 400, r);
     }
     if (p === '/puente/api/email/reenviar' && req.method === 'POST') {
