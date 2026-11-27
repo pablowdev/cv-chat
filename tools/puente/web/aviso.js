@@ -3450,8 +3450,9 @@ function leido(sc) {
     page.querySelectorAll('.pe-rango').forEach(b => b.classList.toggle('actual', b.dataset.r === rangoEst));
     box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
     const pedir = u => fetch(u, { headers: { Authorization: 'Bearer ' + token() } }).then(r => (r.ok ? r.json() : Promise.reject(r.status)));
-    Promise.all([pedir('/puente/api/estadisticas?rango=' + rangoEst), pedir('/puente/api/origen/admin?rango=' + rangoEst).catch(() => null)])
-      .then(([d, o]) => { if (page) { pintarEstadisticas(box, d, o); if (o) pintarOrigen(box, o); } })
+    Promise.all([pedir('/puente/api/estadisticas?rango=' + rangoEst), pedir('/puente/api/origen/admin?rango=' + rangoEst).catch(() => null),
+      pedir('/puente/api/estadisticas/paises').catch(() => null)])
+      .then(([d, o, g]) => { if (page) { pintarEstadisticas(box, d, o); if (o) pintarOrigen(box, o); if (g) pintarPaises(box, g); } })
       .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar las estadísticas.')); } });
   }
   function verVista(v) {
@@ -3464,8 +3465,6 @@ function leido(sc) {
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     const jg = page.querySelector('.pj-vista'); if (jg) jg.hidden = v !== 'juegos';
     if (v === 'juegos' && !page.querySelector('.pj-cuerpo').childNodes.length) cargarJuegosEst();
-    const pg = page.querySelector('.pg-vista'); if (pg) pg.hidden = v !== 'paises';
-    if (v === 'paises' && pg && !pg.querySelector('.pg-cuerpo').childNodes.length) cargarPaises();
     // La app de Android en Google Play (tester-play.js): en vivo mientras se mira
     const ap = page.querySelector('.pa2-vista'); if (ap) ap.hidden = v !== 'app';
     if (v === 'app') cargarApp(); else clearTimeout(appT);
@@ -3957,65 +3956,45 @@ function leido(sc) {
     box.appendChild(tarjeta('Publicaciones (' + fmt(d.publicaciones.length) + ')', pb, 'pe-ancha'));
   }
 
-  // ── Pestaña "Países" (geo.js): de donde es cada cuenta, por la IP de su ultima conexion (aproximado) ──
+  // ── En "Estadisticas": de donde es cada cuenta (geo.js), por la IP de su ultima conexion (aproximado). No depende
+  // del periodo elegido: es la ultima ubicacion conocida de cada una ──
   let nombrePais = (cc) => cc;
   try { const dn = new Intl.DisplayNames(['es'], { type: 'region' }); nombrePais = (cc) => { try { return dn.of(cc) || cc; } catch { return cc; } }; } catch { /* sin Intl */ }
   let filtroPais = '';
-  function armarVistaPaises() {
-    const v = el('div', 'pj-vista pg-vista'); v.hidden = true; // (el mismo estilo que la de Juegos)
-    const barra = el('div', 'pe-barra');
-    barra.appendChild(el('div', 'pm-sub', 'Países'));
-    v.append(barra, el('div', 'pe-cuerpo pg-cuerpo'));
-    return v;
-  }
-  function cargarPaises() {
-    const box = page && page.querySelector('.pg-cuerpo');
-    if (!box) return;
-    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
-    fetch('/puente/api/estadisticas/paises', { headers: { Authorization: 'Bearer ' + token() } })
-      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(d => { if (page) pintarPaises(box, d); })
-      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar los países.')); } });
-  }
   function pintarPaises(box, d) {
-    box.textContent = '';
-    if (d.sinBase) { box.appendChild(el('div', 'pm-sin', 'Todavía se está preparando la base de ubicaciones. Probá de nuevo en unos minutos.')); return; }
+    if (d.sinBase) { box.appendChild(tarjeta('De dónde son', el('div', 'pe-nota', 'Todavía se está preparando la base de ubicaciones. Probá de nuevo en unos minutos.'))); return; }
     const N = d.conLugar, ar = d.paises.find(p => p.pais === 'AR');
     const afuera = d.paises.filter(p => p.pais !== 'AR');
     const nAfuera = afuera.reduce((s, p) => s + p.personas, 0);
-    // 1. Lo principal
-    const ul = el('ul', 'pe-resumen');
-    ul.appendChild(frase(['De las ', ['b', fmt(d.total)], ' cuentas, se sabe de dónde se conectan ', ['b', fmt(N)], ' (' + pct(N, d.total) + '%), de ', ['b', fmt(d.paises.length)], d.paises.length === 1 ? ' país.' : ' países.']));
-    if (ar) ul.appendChild(frase([['b', pct(ar.personas, N) + '%'], ' son de Argentina (' + fmt(ar.personas) + ').']));
-    if (nAfuera) ul.appendChild(frase(['Fuera de Argentina: ', ['b', fmt(nAfuera)], nAfuera === 1 ? ' persona' : ' personas', ', sobre todo de ', afuera.slice(0, 3).map(p => nombrePais(p.pais) + ' (' + fmt(p.personas) + ')').join(', ') + '.']));
-    if (d.provincias.length) { const p = d.provincias[0]; ul.appendChild(frase(['En Argentina, la mayoría se conecta desde ', ['b', p.nombre], ' (' + pct(p.personas, ar ? ar.personas : 0) + '%).'])); }
-    const act = d.paises.reduce((s, p) => s + p.activas, 0);
-    ul.appendChild(frase([['b', fmt(act)], act === 1 ? ' se conectó' : ' se conectaron', ' en los últimos 30 días.']));
-    box.appendChild(tarjeta('En pocas palabras', ul, 'pe-ancha pe-resumen-caja'));
-    // 2. Por pais (tocar uno filtra la lista de abajo)
+    // 1. Por pais, con lo principal arriba (tocar uno abre la lista de su gente)
     const cp = el('div');
+    const ul = el('ul', 'pe-resumen');
+    ul.appendChild(frase(['Se sabe de dónde se conectan ', ['b', fmt(N)], ' de ' + fmt(d.total) + ' cuentas, de ', ['b', fmt(d.paises.length)], d.paises.length === 1 ? ' país.' : ' países.']));
+    if (ar && nAfuera) ul.appendChild(frase([['b', pct(ar.personas, N) + '%'], ' en Argentina; afuera, sobre todo ', afuera.slice(0, 3).map(p => nombrePais(p.pais) + ' (' + fmt(p.personas) + ')').join(', ') + '.']));
+    cp.appendChild(ul);
     for (const p of d.paises) {
       const f = filaBarra(nombrePais(p.pais), p.personas, d.paises[0].personas, fmt(p.personas) + ' · ' + fmt(p.activas) + ' en 30 días');
       f.style.cursor = 'pointer'; f.title = 'Ver solo a los de ' + nombrePais(p.pais);
-      f.addEventListener('click', () => { filtroPais = filtroPais === p.pais ? '' : p.pais; pintarLista(); const l = box.querySelector('.pg-lista'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      f.addEventListener('click', () => { filtroPais = filtroPais === p.pais ? '' : p.pais; abrirLista(); });
       cp.appendChild(f);
     }
-    box.appendChild(tarjeta('Por país', cp));
-    // 3. Argentina por provincia
+    box.appendChild(tarjeta('De dónde son (por país)', cp));
+    // 2. Argentina por provincia
     if (d.provincias.length) {
       const cv = el('div');
       for (const p of d.provincias) cv.appendChild(filaBarra(p.nombre, p.personas, d.provincias[0].personas, fmt(p.personas) + ' · ' + fmt(p.activas) + ' en 30 días'));
       box.appendChild(tarjeta('Argentina, por provincia', cv));
     }
-    // 4. Cada persona
+    // 3. Cada persona: plegada (son cientos); se abre con el boton o tocando un pais
     const cab = ['Persona', 'País', 'Provincia', 'Ciudad', 'Última conexión', 'También desde'];
     const cl = el('div', 'pg-lista');
-    const elegir = el('select', 'pm-orden pg-elegir');
+    const ver = el('button', 'pm-orden', 'Ver la lista (' + fmt(N) + ')'); ver.type = 'button';
+    const elegir = el('select', 'pm-orden pg-elegir'); elegir.hidden = true;
     const op = (v, t) => { const o = el('option', '', t); o.value = v; return o; };
     elegir.appendChild(op('', 'Todos los países (' + fmt(N) + ')'));
     for (const p of d.paises) elegir.appendChild(op(p.pais, nombrePais(p.pais) + ' (' + fmt(p.personas) + ')'));
     elegir.addEventListener('change', () => { filtroPais = elegir.value; pintarLista(); });
-    const tp = el('div', 'pe-tabla pj-personas');
+    const tp = el('div', 'pe-tabla pj-personas'); tp.hidden = true;
     const fila = (celdas, cls) => { const f = el(cls === 'pe-tabla-cab' ? 'div' : 'button', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) repeat(' + (cab.length - 1) + ', minmax(6rem, 1fr))'; f.style.minWidth = '46rem'; celdas.forEach(c => f.appendChild(c instanceof Node ? c : el('span', '', c))); return f; };
     function pintarLista() {
       if (!page) return;
@@ -4033,11 +4012,15 @@ function leido(sc) {
         tp.appendChild(f);
       }
     }
-    pintarLista();
-    cl.append(elegir, tp);
+    function abrirLista() {
+      ver.hidden = true; elegir.hidden = false; tp.hidden = false; pintarLista();
+      cl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    ver.addEventListener('click', abrirLista);
+    cl.append(ver, elegir, tp);
     const sin = [d.sinIp ? fmt(d.sinIp) + (d.sinIp === 1 ? ' cuenta nunca se conectó' : ' cuentas nunca se conectaron') + ' (o se conectaron antes de que se anotara)' : '', d.sinDato ? fmt(d.sinDato) + ' sin ubicación conocida' : ''].filter(Boolean).join('; ');
-    cl.appendChild(el('div', 'pe-nota', 'Es aproximado: sale de la IP de la última conexión, buscada adentro del servidor (no se manda a ningún lado). Con VPN o con los datos del celular puede marcar otra ciudad, o hasta otro país. "También desde": otros países desde los que se conectó.' + (sin ? ' No están: ' + sin + '.' : '') + ' Ubicaciones: IP Geolocation by DB-IP (db-ip.com, CC BY 4.0), base de ' + d.base.mes + '.'));
-    box.appendChild(tarjeta('Cada persona', cl, 'pe-ancha'));
+    cl.appendChild(el('div', 'pe-nota', 'No depende del período elegido: es la última ubicación de cada cuenta. Es aproximado: sale de la IP de la última conexión, buscada adentro del servidor (no se manda a ningún lado). Con VPN o con los datos del celular puede marcar otra ciudad, o hasta otro país. "También desde": otros países desde los que se conectó.' + (sin ? ' No están: ' + sin + '.' : '') + ' Ubicaciones: IP Geolocation by DB-IP (db-ip.com, CC BY 4.0), base de ' + d.base.mes + '.'));
+    box.appendChild(tarjeta('Cada persona, con su país', cl, 'pe-ancha'));
   }
 
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
@@ -4277,7 +4260,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['paises', 'Países'], ['app', 'App'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['app', 'App'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -4354,7 +4337,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaPaises(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
     // Economía (monedas.js): las monedas del club, en un marco como las pestañas de los juegos (economia-admin.html)
     {
