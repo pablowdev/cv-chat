@@ -182,3 +182,18 @@ html.cv-foro-en-chat nav.js-top-menu-user { display: none !important; }
   html:is(.cv-en-foro, .cv-foro-en-chat) .selectBox-dropdown-menu li a { color: #dbdee1 !important; }
 }
 html:is(.cv-en-foro, .cv-foro-en-chat) select { background-color: #1e1e22 !important; color: #dbdee1 !important; border: 1px solid #3a3940 !important; border-radius: 6px !important; padding: 4px 8px !important; color-scheme: dark; }
+/* Las monedas del club (barra.js): la pastilla con el saldo y su panel (con el estilo del de los avisos) */
+.cv-barra__monedas { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 5px; border: 1px solid #4a4436; border-radius: 999px; background: rgba(240, 178, 50, .08); color: #f0c35a; font-weight: 700; font-size: 12px; line-height: 1; cursor: pointer; font-variant-numeric: tabular-nums; }
+.cv-barra__monedas:hover { background: rgba(240, 178, 50, .16); color: #ffd47a; }
+.cv-barra__monedas svg { flex: none; }
+.cv-barra__monedas-panel { right: -120px; }
+.cv-barra__monedas-saldo { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-bottom: 1px solid #333534; }
+.cv-barra__monedas-saldo b { display: inline-flex; align-items: center; gap: 6px; color: #f0c35a; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cv-barra__monedas-saldo small { color: #9a9999; font-size: 12px; }
+.cv-barra__monedas-mov { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #333534; }
+.cv-barra__monedas-delta { flex: none; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cv-barra__monedas-delta.es-mas { color: #5ec27a; }
+.cv-barra__monedas-delta.es-menos { color: #e87a7a; }
+.cv-barra__monedas-ir { display: block; padding: 10px 14px; border-top: 1px solid #3a3c3b; color: #f0c35a !important; font-size: 13px; font-weight: 700; text-decoration: none !important; }
+.cv-barra__monedas-ir:hover { background: #333534; }
+@media (max-width: 560px) { .cv-barra__monedas-panel { position: fixed; left: 8px; right: 8px; top: 44px; width: auto; } }

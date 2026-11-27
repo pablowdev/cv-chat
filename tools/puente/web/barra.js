@@ -189,9 +189,66 @@
     m.addEventListener('click', (e) => { if (e.button || e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); e.stopPropagation(); abrirVentana(desde()); });
     // Al cerrar la ventanita, cuantas quedaron sin leer
     alCerrar = () => fetch(CHAT + '/puente/api/cuenta/yo', { credentials: 'include', cache: 'no-store' }).then(r => r.json()).then(d => contar(d && d.mensajes)).catch(() => {});
+    if (yo.monedas != null) box.append(monedas(yo));
     box.append(m, campanita(yo));
     precargar();
     return box;
+  }
+
+  // Las monedas del club (monedas.js), como la pastilla del chat: el saldo, y al tocarla los ultimos
+  // movimientos y el enlace al panel del chat (con los primeros pasos y como ganar mas)
+  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada',
+    'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel',
+    'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana',
+    'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Tus monedas del hotel',
+    'conversion-capa2': 'Tu plata de Capa 2', 'foro-tema': 'Tema en el foro', 'foro-respuesta': 'Respuesta en el foro',
+    'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro' };
+  const JUEGOS = { truco: 'Truco', pool: 'Pool', ajedrez: 'Ajedrez', funball: 'Funball', curveball: 'Curveball', globalsiege: 'GlobalSiege' };
+  const tipoDe = (t) => TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2' : /^hotel-/.test(t) ? 'CV Hotel' : t);
+  const num = (n) => Number(n || 0).toLocaleString('es-AR');
+  const moneda = (px) => '<svg viewBox="0 0 24 24" width="' + px + '" height="' + px + '" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#f0b232"/><circle cx="12" cy="12" r="7" fill="none" stroke="#c98a0b" stroke-width="1.6"/><path d="M12 8.2v7.6" stroke="#c98a0b" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  function monedas(yo) {
+    const wrap = el('div', 'cv-barra__campana cv-barra__monedas-caja');
+    const b = el('button', 'cv-barra__monedas'); b.type = 'button'; b.title = 'Tus monedas'; b.setAttribute('aria-haspopup', 'true');
+    b.innerHTML = moneda(16);
+    const cuanto = el('span', null, num(yo.monedas)); b.appendChild(cuanto);
+    b.setAttribute('aria-label', 'Tus monedas: ' + num(yo.monedas));
+    const panel = el('div', 'cv-barra__avisos cv-barra__monedas-panel'); panel.hidden = true;
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    async function abrir() {
+      panel.textContent = '';
+      panel.appendChild(el('div', 'cv-barra__avisos-cab', 'Tus monedas'));
+      const lista = el('div', 'cv-barra__avisos-lista'); panel.appendChild(lista);
+      lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'Cargando…'));
+      try {
+        const d = await fetch(CHAT + '/puente/api/cuenta/monedas', { credentials: 'include', cache: 'no-store' }).then(r => r.json());
+        lista.textContent = '';
+        if (!d || !d.visible) { lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'No se pudieron cargar.')); return; }
+        cuanto.textContent = num(d.saldo); b.setAttribute('aria-label', 'Tus monedas: ' + num(d.saldo));
+        const top = el('div', 'cv-barra__monedas-saldo');
+        const g = el('b'); g.innerHTML = moneda(22); g.appendChild(document.createTextNode(num(d.saldo)));
+        top.append(g, el('small', null, 'Ganaste ' + num(d.ganado) + ' · gastaste ' + num(d.gastado)));
+        lista.appendChild(top);
+        if (!d.movimientos || !d.movimientos.length) lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'Todavía no hay movimientos.'));
+        for (const m of d.movimientos || []) {
+          const it = el('div', 'cv-barra__monedas-mov');
+          const tx = el('span', 'cv-barra__aviso-texto');
+          const nombre = tipoDe(m.tipo), det = m.detalle ? (JUEGOS[m.detalle] || m.detalle) : '';
+          tx.appendChild(el('b', null, nombre));
+          if (det && det !== nombre) tx.appendChild(el('span', null, det));
+          tx.appendChild(el('small', null, hace(m.t)));
+          it.append(tx, el('span', 'cv-barra__monedas-delta ' + (m.delta >= 0 ? 'es-mas' : 'es-menos'), (m.delta >= 0 ? '+' : '−') + num(Math.abs(m.delta))));
+          lista.appendChild(it);
+        }
+        const ir = el('a', 'cv-barra__monedas-ir', 'Cómo ganar más y todos tus movimientos, en el chat ↗');
+        ir.href = CHAT + '/app?monedas=1'; ir.target = '_blank'; ir.rel = 'noopener';
+        panel.appendChild(ir);
+      } catch { lista.textContent = ''; lista.appendChild(el('div', 'cv-barra__avisos-vacio', 'No se pudieron cargar.')); }
+    }
+    b.addEventListener('click', (e) => { e.stopPropagation(); panel.hidden = !panel.hidden; if (!panel.hidden) abrir(); });
+    document.addEventListener('click', () => { panel.hidden = true; });
+    wrap.append(b, panel);
+    return wrap;
   }
 
   // La campanita: respuestas, citas y menciones del foro y de CV Chat (campana.js)

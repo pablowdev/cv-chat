@@ -18,6 +18,7 @@
 //  POST /puente/api/cuenta/conectar { con: 'discord' | 'foro', volver } -> { url } (y despues vuelve a "volver")
 //  POST /puente/api/cuenta/desconectar { con }
 //  GET  /puente/api/cuenta/avisos   la campanita (campana.js); POST .../avisos/leer las marca vistas
+//  GET  /puente/api/cuenta/monedas  las monedas del club en la barra de la web y del foro (monedas.js mias: saldo y movimientos)
 //  GET  /puente/cuenta/autorizar?app=hotel|capa2//  GET  /puente/cuenta/autorizar?app=hotel&volver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel envolver=/...   "Entrar con CV Chat" desde otra pagina propia (CV Hotel en
 //       hotel.<dominio>, Capa 2 en capa2.<dominio>): en el chat, "¿Entrar a CV Hotel como X?". Con "Sí, entrar" (POST, solo desde el chat) vuelve
 //       a esa pagina con #cvcodigo=<codigo> (sirve una vez, un minuto); sin la sesion de la cuenta, vuelve con #cvsin=1
@@ -94,6 +95,11 @@ const pwvOf = id => { const u = db.prepare('SELECT password_version FROM users W
 const banned = id => !!db.prepare('SELECT 1 FROM bans WHERE user_id = ?').get(id);
 
 // Quien es, segun la cookie (null si no hay sesion valida). Renueva el vencimiento.
+// El saldo para la barra (null si no se muestra: invitados, o antes del lanzamiento a quien no es admin)
+function saldoVisible(uid) {
+  try { const m = require('./monedas.js').mias(uid); return m.visible ? m.saldo : null; } catch { return null; }
+}
+
 function userFromCookie(req) {
   if (!on()) return null;
   const c = readCookie(req);
@@ -245,7 +251,7 @@ async function handle(req, res, p, u) {
   if (p === '/puente/cuenta/autorizar') return autorizar(req, res, u);
   if (p === '/puente/api/cuenta/canje') return canje(req, res);
 
-  if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar', '/puente/api/cuenta/avisos', '/puente/api/cuenta/avisos/leer'].includes(p)) {
+  if (['/puente/api/cuenta/yo', '/puente/api/cuenta/salir', '/puente/api/cuenta/perfil', '/puente/api/cuenta/conectar', '/puente/api/cuenta/desconectar', '/puente/api/cuenta/avisos', '/puente/api/cuenta/avisos/leer', '/puente/api/cuenta/monedas'].includes(p)) {
     cors(req, res);
     if (req.method === 'OPTIONS') {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
@@ -265,6 +271,7 @@ async function handle(req, res, p, u) {
       wikiPendientes: user.is_admin ? wikiPendientes() : 0,
       mensajes: dmSinLeer(user.id),
       avisos: require('./campana.js').sinLeer(user.id),
+      monedas: saldoVisible(user.id),
     });
   }
 
@@ -302,6 +309,16 @@ async function handle(req, res, p, u) {
     }
     if (!h.foro.on()) return json(res, 503, { error: 'La vinculación con el foro no está disponible ahora.' });
     return json(res, 200, { url: h.foro.start(res, 'vincular', user, volver) });
+  }
+
+  // ── Las monedas del club (la pastilla de la barra) ──
+  if (p === '/puente/api/cuenta/monedas' && req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const user = userFromCookie(req);
+    if (!user) return json(res, 401, { error: 'sin sesion' });
+    const m = require('./monedas.js').mias(user.id);
+    if (!m.visible) return json(res, 200, { visible: false });
+    return json(res, 200, { visible: true, saldo: m.saldo, ganado: m.ganado, gastado: m.gastado, movimientos: (m.movimientos || []).slice(0, 15) });
   }
 
   // ── La campanita ──
