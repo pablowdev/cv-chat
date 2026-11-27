@@ -11779,10 +11779,13 @@ document.addEventListener('pointerdown', (ev) => {
   // Los juegos con dominio propio (hotel., capa2., cs., hanzi.): al lado de Copiar enlace, abrirlo en el navegador
   // predeterminado con su direccion. La ficha puede decirlo con "dominio" (el subdominio); si no, esta lista
   const DOMINIOS = { hotel: 'hotel', bacity: 'capa2', cs16: 'cs', hanzi: 'hanzi' };
+  const subDominio = (j) => (/^[a-z0-9-]{1,30}$/.test(String(j.dominio || '')) ? j.dominio : DOMINIOS[j.id]) || null;
+  // (la direccion propia del juego, o null; tambien la copia el menu de la tapa)
+  const urlDominio = (j) => { const sub = subDominio(j); return sub ? 'https://' + sub + '.' + location.hostname.replace(/^chat./, '') + '/' : null; };
   function botonDominio(j) {
-    const sub = /^[a-z0-9-]{1,30}$/.test(String(j.dominio || '')) ? j.dominio : DOMINIOS[j.id];
+    const sub = subDominio(j);
     if (!sub) return null;
-    const url = 'https://' + sub + '.' + location.hostname.replace(/^chat./, '') + '/';
+    const url = urlDominio(j);
     const b = el('button', 'jg-icono'); b.type = 'button';
     b.title = 'Abrir ' + j.nombre + ' en el navegador (' + sub + '.' + location.hostname.replace(/^chat./, '') + ')'; b.setAttribute('aria-label', b.title);
     b.innerHTML = svg(I.abrir, 22);
@@ -11866,7 +11869,8 @@ document.addEventListener('pointerdown', (ev) => {
   function escMenu(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cerrarMenuTapa(); } }
   function menuDeJuego(j, x, y, dedo) {
     cerrarMenuTapa();
-    const url = location.origin + '/app?juegos=' + ((j.enlace && j.enlace.param) || j.id);
+    // (los que tienen dominio propio pasan esa direccion: hotel., capa2., cs., hanzi.)
+    const url = urlDominio(j) || location.origin + '/app?juegos=' + ((j.enlace && j.enlace.param) || j.id);
     const m = el('div', 'jg-menu'); m.setAttribute('role', 'menu');
     const op = (txt, fn) => {
       const b = el('button', 'jg-menu-op', txt); b.type = 'button'; b.setAttribute('role', 'menuitem');
