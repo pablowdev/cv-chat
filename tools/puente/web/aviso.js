@@ -6064,8 +6064,8 @@ document.addEventListener('pointerdown', (ev) => {
       const solo = d.vista.some(m => m.marcado);
       if (solo) box.classList.add('puente-vista-solo');
       // Los emojis del club (:cv1:) como en el chat
-      const conEmojis = (t) => {
-        const e = el('div', 'puente-vista-texto'), lista = (window.app && Array.isArray(window.app.customEmojis)) ? window.app.customEmojis : [];
+      const conEmojis = (t, e = el('div', 'puente-vista-texto')) => {
+        const lista = (window.app && Array.isArray(window.app.customEmojis)) ? window.app.customEmojis : [];
         const re = /<a?:([a-zA-Z0-9_-]+):[0-9]+>|:([a-zA-Z0-9_-]+):/g;
         let k = 0, x;
         while ((x = re.exec(t))) {
@@ -6078,6 +6078,15 @@ document.addEventListener('pointerdown', (ev) => {
         if (k < t.length) e.append(document.createTextNode(t.slice(k)));
         return e;
       };
+      // El mensaje solo, si es de varios renglones: como en el chat, con sus renglones y sus **negritas**
+      const conFormato = (t) => {
+        const e = el('div', 'puente-vista-texto');
+        String(t).split('\n').forEach((renglon, i) => {
+          if (i) e.append(document.createElement('br'));
+          renglon.split(/\*\*(.+?)\*\*/g).forEach((pedazo, k) => { if (pedazo) conEmojis(pedazo, k % 2 ? e.appendChild(el('b')) : e); });
+        });
+        return e;
+      };
       for (const m of (solo ? d.vista.filter(m => m.marcado) : d.vista)) {
         const fila = el('div', 'puente-vista-fila' + (m.marcado ? ' marcado' : ''));
         if (m.foto) { const i = el('img', 'puente-vista-foto'); i.src = m.foto; i.alt = ''; i.loading = 'lazy'; fila.append(i); }
@@ -6086,7 +6095,8 @@ document.addEventListener('pointerdown', (ev) => {
         const cab = el('div', 'puente-vista-quien');
         cab.append(el('b', '', m.autor), el('span', '', ' ' + (m.hora || '')));
         der.append(cab);
-        if (m.texto) der.append(conEmojis(m.texto));
+        if (solo && m.renglones) der.append(conFormato(m.renglones));
+        else if (m.texto) der.append(conEmojis(m.texto));
         if (m.imagen) { const i = el('img', 'puente-vista-imagen'); i.src = m.imagen; i.alt = ''; i.loading = 'lazy'; der.append(i); }
         // Un video: su primer cuadro con el ▶ (tocarlo lleva al mensaje, donde se mira)
         else if (m.video && /^https?:\/\//.test(m.video)) {
