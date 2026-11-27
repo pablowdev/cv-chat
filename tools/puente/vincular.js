@@ -1328,6 +1328,10 @@ async function handle(req, res) {
     if (!email.on()) return json(res, 404, { error: 'apagado' });
     if (p === '/puente/email/confirmar' && req.method === 'GET') {
       const r = email.confirm(u.searchParams.get('t') || '');
+      // en ingles: el de la cuenta; si el enlace no sirve, el idioma del navegador
+      const en = r.ok ? r.idioma === 'en' : !/^es\b/i.test(String(req.headers['accept-language'] || 'es').trim());
+      if (en) return send(res, r.ok ? 200 : 400, 'text/html', resultPage(r.ok ? 'Email confirmed' : "Couldn't confirm",
+        r.ok ? `Done: ${r.email} is confirmed. If you ever forget your password, you can recover it with this email.` : email.traducir(r.error, true), true));
       return send(res, r.ok ? 200 : 400, 'text/html', resultPage(r.ok ? 'Email confirmado' : 'No se pudo confirmar',
         r.ok ? `Listo: ${r.email} quedó confirmado. Si alguna vez olvidás tu contraseña, la podés recuperar con él.` : r.error));
     }
@@ -1340,11 +1344,12 @@ async function handle(req, res) {
     }
     if (p === '/puente/api/email/restablecer' && req.method === 'GET') {
       const r = email.resetInfo(u.searchParams.get('t') || '');
-      return r ? json(res, 200, r) : json(res, 404, { error: 'El enlace caducó o ya se usó. Pedí uno nuevo.' });
+      return r ? json(res, 200, r) : json(res, 404, { error: email.traducir('El enlace caducó o ya se usó. Pedí uno nuevo.', u.searchParams.get('en') === '1') });
     }
     if (p === '/puente/api/email/restablecer' && req.method === 'POST') {
       const body = await readJson(req);
       const r = await email.reset(body && typeof body.t === 'string' ? body.t : '', body && typeof body.password === 'string' ? body.password : '');
+      if (!r.ok && body && body.en) r.error = email.traducir(r.error, true);
       return json(res, r.ok ? 200 : r.status, r);
     }
     const user = sessionUser(req);
@@ -1808,13 +1813,13 @@ async function setPassword(user, password, how) {
 }
 
 // Pagina chiquita de resultado (confirmar el email), con el aspecto del ingreso
-function resultPage(title, text) {
+function resultPage(title, text, en) {
   const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  return `<!doctype html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(appName())}</title><link rel="stylesheet" href="/puente/login.css"></head>
 <body class="auth-page"><div class="auth-container"><div class="auth-card"><div class="auth-header">
 <img class="puente-login-logo" src="/puente/logo-carga.png" alt=""><h1>${esc(title)}</h1><p class="puente-login-sub">${esc(text)}</p></div>
-<a class="btn-primary puente-boton" href="/app">Ir a ${esc(appName())}</a></div></div></body></html>`;
+<a class="btn-primary puente-boton" href="/app">${en ? 'Go to' : 'Ir a'} ${esc(appName())}</a></div></div></body></html>`;
 }
 
 // Todos los usuarios con lo que muestra la pagina "Miembros": desde cuando

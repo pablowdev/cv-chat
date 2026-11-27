@@ -72,7 +72,11 @@ function espera(user, code) {
   try { avisarUsuario(otro.id, { title: titulo, body: texto, url, tag: 'puente-pm-espera-' + user.id }); } catch (err) { warn('cifrado: aviso en el chat:', err.message); }
   try { campana.registrar(otro.id, { origen: 'chat', titulo, texto, url, clave: `pm-espera-${user.id}-${Math.floor(Date.now() / AVISO_CADA_MS)}` }); } catch (err) { warn('cifrado: campanita:', err.message); }
   const em = email.status(otro.id);
-  if (em.email && em.confirmado) {
+  if (em.email && em.confirmado && email.idiomaDe(otro.id) === 'en') {
+    email.sendMail(em.email, `${de} sent you a private message`, 'You have a private message', [`${de} wrote you a private message on CV Chat.`, 'To read it, open CV Chat: private messages are end-to-end encrypted and only open on your devices.'],
+      ['Open CV Chat', url], "You're getting this because someone sent you a private message.", { en: true })
+      .catch(err => warn('cifrado: email:', err.message));
+  } else if (em.email && em.confirmado) {
     email.sendMail(em.email, titulo, 'Tenés un mensaje privado', [`${de} te escribió un mensaje privado en CV Chat.`, 'Para leerlo, entrá a CV Chat: los mensajes privados están cifrados de punta a punta y se abren solo en tus dispositivos.'],
       ['Entrar a CV Chat', url], 'Te llega este aviso porque alguien te escribió por mensaje privado.')
       .catch(err => warn('cifrado: email:', err.message));

@@ -5,6 +5,9 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const token = new URLSearchParams(location.search).get('t') || '';
+  // (el enlace del mail en ingles trae &en=1)
+  const en = new URLSearchParams(location.search).get('en') === '1';
+  const T = (es, ing) => (en ? ing : es);
   const note = (text, bad) => { const n = $('nota'); n.textContent = text; n.hidden = !text; n.classList.toggle('mal', !!bad); };
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .then(r => r.json().catch(() => ({})).then(d => ({ ok: r.ok, d })));
@@ -29,30 +32,36 @@
     // Con el enlace del mail: sacarlo de la barra de direcciones y pedir la contraseña nueva
     history.replaceState(null, '', location.pathname);
     $('pedir').hidden = true;
-    $('titulo').textContent = 'Elegí una contraseña nueva';
+    if (en) {
+      document.documentElement.lang = 'en'; document.title = 'Choose a new password';
+      const txt = (sel, t) => { const n = document.querySelector(sel); if (n) n.textContent = t; };
+      txt('label[for=clave]', 'New password'); txt('#cambiar small', 'At least 8 characters.'); txt('label[for=clave2]', 'Repeat the password');
+      txt('#cambiar button', 'Save the new password'); txt('#ir', 'Sign in'); txt('#con-discord', 'Recover with Discord'); txt('#otras a[href="/"]', 'Back to sign in');
+    }
+    $('titulo').textContent = T('Elegí una contraseña nueva', 'Choose a new password');
     $('bajada').textContent = '';
-    fetch('/puente/api/email/restablecer?t=' + encodeURIComponent(token)).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
-      if (!ok) { note(d.error || 'El enlace caducó. Pedí uno nuevo.', true); $('ir').hidden = false; $('ir').href = '/puente/olvide'; $('ir').textContent = 'Pedir un enlace nuevo'; return; }
-      $('bajada').textContent = 'Para la cuenta ' + d.usuario + '.';
+    fetch('/puente/api/email/restablecer?t=' + encodeURIComponent(token) + (en ? '&en=1' : '')).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+      if (!ok) { note(d.error || T('El enlace caducó. Pedí uno nuevo.', 'The link expired. Ask for a new one.'), true); $('ir').hidden = false; $('ir').href = '/puente/olvide'; $('ir').textContent = T('Pedir un enlace nuevo', 'Ask for a new link'); return; }
+      $('bajada').textContent = T('Para la cuenta ', 'For the account ') + d.usuario + '.';
       $('cambiar').hidden = false;
       $('clave').focus();
-    }).catch(() => note('No hay conexión. Recargá la página.', true));
+    }).catch(() => note(T('No hay conexión. Recargá la página.', 'No connection. Reload the page.'), true));
     $('cambiar').addEventListener('submit', (e) => {
       e.preventDefault();
       const form = $('cambiar');
       const a = $('clave').value, b = $('clave2').value;
-      if (a !== b) return note('Las dos contraseñas no coinciden.', true);
+      if (a !== b) return note(T('Las dos contraseñas no coinciden.', "The two passwords don't match."), true);
       busy(form, true); note('');
-      post('/puente/api/email/restablecer', { t: token, password: a }).then(({ ok, d }) => {
+      post('/puente/api/email/restablecer', { t: token, password: a, en }).then(({ ok, d }) => {
         busy(form, false);
-        if (!ok) return note(d.error || 'No se pudo. Probá de nuevo.', true);
+        if (!ok) return note(d.error || T('No se pudo. Probá de nuevo.', "Couldn't do it. Try again."), true);
         form.hidden = true;
         $('otras').hidden = true;
-        $('titulo').textContent = '¡Listo!';
+        $('titulo').textContent = T('¡Listo!', 'Done!');
         $('bajada').textContent = '';
-        note('Tu contraseña nueva quedó guardada. Ya podés iniciar sesión con ' + d.usuario + '.');
+        note(T('Tu contraseña nueva quedó guardada. Ya podés iniciar sesión con ', 'Your new password is saved. You can now sign in as ') + d.usuario + '.');
         $('ir').hidden = false;
-      }).catch(() => { busy(form, false); note('No hay conexión. Probá de nuevo.', true); });
+      }).catch(() => { busy(form, false); note(T('No hay conexión. Probá de nuevo.', 'No connection. Try again.'), true); });
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);

@@ -76,6 +76,11 @@ async function mandarCodigo(t) {
   // Solo en la copia de prueba (prueba-todo.sh): el codigo va al registro, no por mail
   if (process.env.PUENTE_PRUEBA === '1') { log(`dos pasos (prueba): codigo para Haven #${t.userId}: ${codigo}`); return true; }
   const u = db.prepare('SELECT username FROM users WHERE id = ?').get(t.userId) || {};
+  if (email.idiomaDe(t.userId) === 'en') {
+    return email.sendMail(t.para, `${codigo} is your code to sign in to ${appName()}`, 'Your sign-in code',
+      [`Hi ${u.username || ''}: someone (probably you) is signing in to your Círculo Vicioso account from a new device.`, `Your code is: ${codigo}`, "It expires in 10 minutes. If this wasn't you, don't share it with anyone and change your password."],
+      ['Open CV Chat', 'https://chat.' + (dominio() || 'circulovicioso.club') + '/'], "You're getting this email because your account asks for a code when signing in from a new device.", { en: true });
+  }
   const ok = await email.sendMail(t.para, `${codigo} es tu código para entrar a ${appName()}`, 'Tu código para entrar',
     [`Hola ${u.username || ''}: alguien (seguramente vos) está entrando a tu cuenta de Círculo Vicioso desde un dispositivo nuevo.`, `Tu código es: ${codigo}`, 'Vence en 10 minutos. Si no fuiste vos, no lo compartas con nadie y cambiá tu contraseña.'],
     ['Abrir CV Chat', 'https://chat.' + (dominio() || 'circulovicioso.club') + '/'], 'Te llega este mail porque la cuenta pide un código al entrar desde un dispositivo nuevo.');

@@ -107,6 +107,10 @@ async function mandarCodigo(user, para) {
   codigos.set(user.id, { hash: sha(user.id + ':' + codigo), exp: Date.now() + CODIGO_MS, intentos: 0 });
   // Solo en la copia de prueba: el codigo va al registro, no por mail
   if (process.env.PUENTE_PRUEBA === '1') { log(`sin clave (prueba): codigo para Haven #${user.id}: ${codigo}`); return true; }
+  const abrir = 'https://chat.' + (dominio() || 'circulovicioso.club') + '/app';
+  if (email.idiomaDe(user.id) === 'en') return email.sendMail(para, `${codigo} is your code to set a password`, 'Your code to set a password',
+    [`Hi ${user.username}: you asked to set a password on your ${appName()} account.`, `Your code is: ${codigo}`, "It expires in 10 minutes. If this wasn't you, don't share it with anyone."],
+    ['Open CV Chat', abrir], "You're getting this email because someone with your session open asked to set a password.", { en: true });
   return email.sendMail(para, `${codigo} es tu código para poner tu contraseña`, 'Tu código para poner una contraseña',
     [`Hola ${user.username}: pediste poner una contraseña en tu cuenta de ${appName()}.`, `Tu código es: ${codigo}`, 'Vence en 10 minutos. Si no fuiste vos, no lo compartas con nadie.'],
     ['Abrir CV Chat', 'https://chat.' + (dominio() || 'circulovicioso.club') + '/app'], 'Te llega este mail porque alguien con tu sesión abierta pidió poner una contraseña.');

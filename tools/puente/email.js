@@ -117,6 +117,26 @@ function idiomaPara(userId, pista) {
   return 'es';
 }
 const ipDe = (req) => String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',').pop().trim() || (req && req.socket && req.socket.remoteAddress) || '';
+// El idioma de una cuenta para cualquier mail: el guardado, o se calcula (y se guarda) con su ultima IP
+function idiomaDe(userId) {
+  try {
+    if (!columnaIdioma()) return 'es';
+    const r = db.prepare('SELECT idioma FROM puente_emails WHERE haven_user_id = ?').get(userId);
+    if (r && r.idioma) return r.idioma;
+    const i = idiomaPara(userId, null);
+    if (r) db.prepare('UPDATE puente_emails SET idioma = ? WHERE haven_user_id = ?').run(i, userId);
+    return i;
+  } catch { return 'es'; }
+}
+// Los errores que llegan a las paginas de confirmar y de la contraseña nueva, en ingles
+const EN = {
+  'El enlace caducó o ya se usó. Pedí uno nuevo desde CV Chat.': 'The link expired or was already used. Ask for a new one from CV Chat.',
+  'Ese email ya está confirmado en otra cuenta.': 'That email is already confirmed on another account.',
+  'El enlace caducó o ya se usó. Pedí uno nuevo.': 'The link expired or was already used. Ask for a new one.',
+  'La contraseña tiene que tener entre 8 y 128 caracteres.': 'The password must be between 8 and 128 characters.',
+  'La contraseña no puede contener tu nombre de usuario.': "The password can't contain your username.",
+};
+const traducir = (m, en) => (en && EN[m]) || m;
 const pistaDe = (req) => (req ? { ip: ipDe(req), lang: String((req.headers && req.headers['accept-language']) || '') } : null);
 
 function takenByOther(email, userId) {
@@ -268,7 +288,7 @@ function confirm(token) {
   if (takenByOther(r.email, r.haven_user_id)) return { error: 'Ese email ya está confirmado en otra cuenta.' };
   db.prepare('UPDATE puente_emails SET confirmado = 1, token_hash = NULL, token_vence = NULL, actualizado = CURRENT_TIMESTAMP WHERE haven_user_id = ?').run(r.haven_user_id);
   log(`email: confirmado para Haven #${r.haven_user_id}`);
-  return { ok: true, email: r.email };
+  return { ok: true, email: r.email, idioma: idiomaDe(r.haven_user_id) };
 }
 
 // El email que Discord ya confirmo (al vincular, o con el boton del cartel)
@@ -313,6 +333,14 @@ async function forgot(rawEmail, ip) {
                         WHERE e.email = ? AND e.confirmado = 1`).get(email);
   if (!r) return { ok: true };
   note('olvide', email);
+  const en = idiomaDe(r.id) === 'en';
+  if ((r.is_admin || r.totp_enabled) && en) {
+    await sendMail(email, `Recover your password on ${appName()}`, 'Recover your password',
+      [`Hi ${r.username}!`, "You asked to recover your password, but this account can't be recovered by email because " +
+        (r.is_admin ? "it's an administrator account." : 'it has two-step verification turned on.') + ' Use one of your recovery codes.'],
+      ['Go to ' + appName(), publicUrl + '/'], "If this wasn't you, ignore this email: your password didn't change.", { en: true });
+    return { ok: true };
+  }
   if (r.is_admin || r.totp_enabled) {
     await sendMail(email, `Recuperar tu contraseña en ${appName()}`, 'Recuperar tu contraseña',
       [`¡Hola ${r.username}!`, 'Pediste recuperar tu contraseña, pero esta cuenta no se puede recuperar por email porque ' +
@@ -323,10 +351,15 @@ async function forgot(rawEmail, ip) {
   db.prepare('DELETE FROM puente_email_cambios WHERE vence < ?').run(Date.now());
   const token = crypto.randomBytes(24).toString('hex');
   db.prepare('INSERT INTO puente_email_cambios (token_hash, haven_user_id, vence) VALUES (?, ?, ?)').run(hash(token), r.id, Date.now() + RESET_TTL_MS);
-  const ok = await sendMail(email, `Recuperar tu contraseña en ${appName()}`, 'Recuperar tu contraseña',
-    [`¡Hola ${r.username}!`, 'Tocá el botón para elegir una contraseña nueva. El enlace vale por 1 hora y sirve una sola vez.'],
-    ['Elegir una contraseña nueva', `${publicUrl}/puente/olvide?t=${token}`],
-    'Si no fuiste vos, ignorá este mail: tu contraseña no cambia hasta que uses el enlace.');
+  const ok = en
+    ? await sendMail(email, `Recover your password on ${appName()}`, 'Recover your password',
+      [`Hi ${r.username}!`, 'Tap the button to choose a new password. The link is valid for 1 hour and works only once.'],
+      ['Choose a new password', `${publicUrl}/puente/olvide?t=${token}&en=1`],
+      "If this wasn't you, ignore this email: your password doesn't change until you use the link.", { en: true })
+    : await sendMail(email, `Recuperar tu contraseña en ${appName()}`, 'Recuperar tu contraseña',
+      [`¡Hola ${r.username}!`, 'Tocá el botón para elegir una contraseña nueva. El enlace vale por 1 hora y sirve una sola vez.'],
+      ['Elegir una contraseña nueva', `${publicUrl}/puente/olvide?t=${token}`],
+      'Si no fuiste vos, ignorá este mail: tu contraseña no cambia hasta que uses el enlace.');
   if (ok) log(`email: enlace para cambiar la contraseña de "${r.username}" (Haven #${r.id})`);
   return { ok: true };
 }
@@ -385,4 +418,4 @@ function hookRegister(req, res, next, validate) {
   });
 }
 
-module.exports = { setup, on, norm, valid, status, sendMail, pistaDe, idiomaPara, hayLugarMasivo, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
+module.exports = { setup, on, norm, valid, status, sendMail, pistaDe, idiomaPara, idiomaDe, traducir, hayLugarMasivo, takenByOther, confirmarDirecto, saveAndVerify, resend, confirm, fromDiscord, fromDiscordIfMissing, fromForoIfMissing, forgot, resetInfo, reset, hookRegister };
