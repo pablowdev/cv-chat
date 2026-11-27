@@ -125,6 +125,20 @@ function calcular() {
   };
 }
 
+// Para la lista de Miembros: id de la cuenta -> { pais, provincia, ciudad } de su ultima conexion con ubicacion
+function lugarDeCada() {
+  const out = new Map();
+  if (!base()) return out;
+  const filas = db.prepare('SELECT user_id, ip FROM user_ips ORDER BY last_seen DESC').all();
+  const donde = buscar(filas.map(r => r.ip));
+  for (const r of filas) {
+    if (out.has(r.user_id) || !donde.has(r.ip)) continue;
+    const [pais, prov, ciudad] = donde.get(r.ip);
+    out.set(r.user_id, { pais, provincia: PROVINCIA[prov] || prov, ciudad });
+  }
+  return out;
+}
+
 let cache = null;
 async function handle(req, res, p, u, h) {
   if (p !== '/puente/api/estadisticas/paises') return false;
@@ -140,4 +154,4 @@ async function handle(req, res, p, u, h) {
   return h.json(res, 200, datos);
 }
 
-module.exports = { setup, handle, calcular, buscar };
+module.exports = { setup, handle, calcular, buscar, lugarDeCada };

@@ -1059,7 +1059,10 @@ async function handle(req, res) {
     if (!user) return json(res, 401, { error: 'sin sesion' });
     const admin = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
     if (!admin || !admin.is_admin) return json(res, 403, { error: 'solo administradores' });
-    return json(res, 200, { miembros: members() });
+    const miembros = members();
+    // de donde se conecta cada uno (geo.js, aproximado por la IP)
+    try { const lu = require('./geo.js').lugarDeCada(); for (const m of miembros) { const l = lu.get(m.id); if (l) m.lugar = l; } } catch (err) { console.warn('[puente] geo miembros:', err.message); }
+    return json(res, 200, { miembros });
   }
   // Volver a mandarle a alguien el mail para confirmar su email (boton en "Miembros"), con los mismos
   // limites que cuando lo pide la persona

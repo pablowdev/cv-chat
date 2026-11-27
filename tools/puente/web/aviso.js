@@ -2926,6 +2926,8 @@ function leido(sc) {
     for (const [num, label] of datos) { const d = el('div', 'pm-dato'); d.append(el('div', 'pm-dato-n', String(num)), el('div', 'pm-dato-l', label)); box.appendChild(d); }
   }
 
+  // De donde se conecta (geo.js, aproximado por la IP): "Argentina · Rosario" (el pais primero: si no entra, se corta la ciudad)
+  const lugarTxt = (m) => (m.lugar ? [nombrePais(m.lugar.pais), String(m.lugar.ciudad || '').replace(/\s*\(.*\)\s*$/, '')].filter(Boolean).join(' · ') : '');
   function renderRows() {
     const body = page.querySelector('.pm-filas');
     body.textContent = '';
@@ -2964,6 +2966,7 @@ function leido(sc) {
       if (rb) mail.appendChild(rb);
       const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
       // y de donde llego (origenes.js)
+      if (m.lugar) { since.appendChild(el('div', 'pm-n2', '📍 ' + lugarTxt(m))); since.title += ' · ' + [m.lugar.ciudad, m.lugar.provincia, nombrePais(m.lugar.pais)].filter(Boolean).join(', ') + ' (aproximado)'; }
       if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente + (m.origen.estimado ? ' (estimado)' : ''))); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
       // Discord: el @usuario y la antiguedad de esa cuenta
       const dc = el('div', 'pm-c pm-dos');
@@ -3019,6 +3022,7 @@ function leido(sc) {
       if (m.minutos7) bits.push('usó ' + duracion(m.minutos7) + ' en 7 días');
       const bits2 = [m.enLinea ? 'En línea' : m.visto ? 'Conectado ' + ago(m.visto) : 'Sin conexiones registradas'];
       if (m.entraDesde) bits2.push(m.entraDesde);
+      if (m.lugar) bits2.push('📍 ' + lugarTxt(m));
       if (m.origen) bits2.push('llegó desde ' + m.origen.fuente);
       const meta = el('div', 'pm-item-meta', bits.join(' · '));
       const meta2 = el('div', 'pm-item-meta', bits2.join(' · '));
