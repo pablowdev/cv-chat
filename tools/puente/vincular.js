@@ -1624,6 +1624,10 @@ async function handle(req, res) {
     const r = await require('./capa2-admin.js').handle(req, res, p, u, { sessionUser, json });
     if (r !== false) return;
   }
+  if (p === '/puente/api/estadisticas/paises') {
+    const r = await require('./geo.js').handle(req, res, p, u, { sessionUser, json });
+    if (r !== false) return;
+  }
   if (p === '/puente/api/estadisticas/juegos') {
     const r = await require('./juegos-estadisticas.js').handle(req, res, p, u, { sessionUser, json });
     if (r !== false) return;

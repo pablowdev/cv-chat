@@ -3464,6 +3464,8 @@ function leido(sc) {
     const mk = page.querySelector('.pk-vista'); if (mk) mk.hidden = v !== 'marketplace';
     const jg = page.querySelector('.pj-vista'); if (jg) jg.hidden = v !== 'juegos';
     if (v === 'juegos' && !page.querySelector('.pj-cuerpo').childNodes.length) cargarJuegosEst();
+    const pg = page.querySelector('.pg-vista'); if (pg) pg.hidden = v !== 'paises';
+    if (v === 'paises' && pg && !pg.querySelector('.pg-cuerpo').childNodes.length) cargarPaises();
     // La app de Android en Google Play (tester-play.js): en vivo mientras se mira
     const ap = page.querySelector('.pa2-vista'); if (ap) ap.hidden = v !== 'app';
     if (v === 'app') cargarApp(); else clearTimeout(appT);
@@ -3955,6 +3957,89 @@ function leido(sc) {
     box.appendChild(tarjeta('Publicaciones (' + fmt(d.publicaciones.length) + ')', pb, 'pe-ancha'));
   }
 
+  // ── Pestaña "Países" (geo.js): de donde es cada cuenta, por la IP de su ultima conexion (aproximado) ──
+  let nombrePais = (cc) => cc;
+  try { const dn = new Intl.DisplayNames(['es'], { type: 'region' }); nombrePais = (cc) => { try { return dn.of(cc) || cc; } catch { return cc; } }; } catch { /* sin Intl */ }
+  let filtroPais = '';
+  function armarVistaPaises() {
+    const v = el('div', 'pj-vista pg-vista'); v.hidden = true; // (el mismo estilo que la de Juegos)
+    const barra = el('div', 'pe-barra');
+    barra.appendChild(el('div', 'pm-sub', 'Países'));
+    v.append(barra, el('div', 'pe-cuerpo pg-cuerpo'));
+    return v;
+  }
+  function cargarPaises() {
+    const box = page && page.querySelector('.pg-cuerpo');
+    if (!box) return;
+    box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'Calculando…'));
+    fetch('/puente/api/estadisticas/paises', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => { if (page) pintarPaises(box, d); })
+      .catch(() => { if (page) { box.textContent = ''; box.appendChild(el('div', 'pm-sin', 'No se pudieron cargar los países.')); } });
+  }
+  function pintarPaises(box, d) {
+    box.textContent = '';
+    if (d.sinBase) { box.appendChild(el('div', 'pm-sin', 'Todavía se está preparando la base de ubicaciones. Probá de nuevo en unos minutos.')); return; }
+    const N = d.conLugar, ar = d.paises.find(p => p.pais === 'AR');
+    const afuera = d.paises.filter(p => p.pais !== 'AR');
+    const nAfuera = afuera.reduce((s, p) => s + p.personas, 0);
+    // 1. Lo principal
+    const ul = el('ul', 'pe-resumen');
+    ul.appendChild(frase(['De las ', ['b', fmt(d.total)], ' cuentas, se sabe de dónde se conectan ', ['b', fmt(N)], ' (' + pct(N, d.total) + '%), de ', ['b', fmt(d.paises.length)], d.paises.length === 1 ? ' país.' : ' países.']));
+    if (ar) ul.appendChild(frase([['b', pct(ar.personas, N) + '%'], ' son de Argentina (' + fmt(ar.personas) + ').']));
+    if (nAfuera) ul.appendChild(frase(['Fuera de Argentina: ', ['b', fmt(nAfuera)], nAfuera === 1 ? ' persona' : ' personas', ', sobre todo de ', afuera.slice(0, 3).map(p => nombrePais(p.pais) + ' (' + fmt(p.personas) + ')').join(', ') + '.']));
+    if (d.provincias.length) { const p = d.provincias[0]; ul.appendChild(frase(['En Argentina, la mayoría se conecta desde ', ['b', p.nombre], ' (' + pct(p.personas, ar ? ar.personas : 0) + '%).'])); }
+    const act = d.paises.reduce((s, p) => s + p.activas, 0);
+    ul.appendChild(frase([['b', fmt(act)], act === 1 ? ' se conectó' : ' se conectaron', ' en los últimos 30 días.']));
+    box.appendChild(tarjeta('En pocas palabras', ul, 'pe-ancha pe-resumen-caja'));
+    // 2. Por pais (tocar uno filtra la lista de abajo)
+    const cp = el('div');
+    for (const p of d.paises) {
+      const f = filaBarra(nombrePais(p.pais), p.personas, d.paises[0].personas, fmt(p.personas) + ' · ' + fmt(p.activas) + ' en 30 días');
+      f.style.cursor = 'pointer'; f.title = 'Ver solo a los de ' + nombrePais(p.pais);
+      f.addEventListener('click', () => { filtroPais = filtroPais === p.pais ? '' : p.pais; pintarLista(); const l = box.querySelector('.pg-lista'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      cp.appendChild(f);
+    }
+    box.appendChild(tarjeta('Por país', cp));
+    // 3. Argentina por provincia
+    if (d.provincias.length) {
+      const cv = el('div');
+      for (const p of d.provincias) cv.appendChild(filaBarra(p.nombre, p.personas, d.provincias[0].personas, fmt(p.personas) + ' · ' + fmt(p.activas) + ' en 30 días'));
+      box.appendChild(tarjeta('Argentina, por provincia', cv));
+    }
+    // 4. Cada persona
+    const cab = ['Persona', 'País', 'Provincia', 'Ciudad', 'Última conexión', 'También desde'];
+    const cl = el('div', 'pg-lista');
+    const elegir = el('select', 'pm-orden pg-elegir');
+    const op = (v, t) => { const o = el('option', '', t); o.value = v; return o; };
+    elegir.appendChild(op('', 'Todos los países (' + fmt(N) + ')'));
+    for (const p of d.paises) elegir.appendChild(op(p.pais, nombrePais(p.pais) + ' (' + fmt(p.personas) + ')'));
+    elegir.addEventListener('change', () => { filtroPais = elegir.value; pintarLista(); });
+    const tp = el('div', 'pe-tabla pj-personas');
+    const fila = (celdas, cls) => { const f = el(cls === 'pe-tabla-cab' ? 'div' : 'button', 'pe-tabla-fila' + (cls ? ' ' + cls : '')); f.style.gridTemplateColumns = 'minmax(9rem, 1.6fr) repeat(' + (cab.length - 1) + ', minmax(6rem, 1fr))'; f.style.minWidth = '46rem'; celdas.forEach(c => f.appendChild(c instanceof Node ? c : el('span', '', c))); return f; };
+    function pintarLista() {
+      if (!page) return;
+      elegir.value = filtroPais;
+      tp.textContent = '';
+      tp.appendChild(fila(cab, 'pe-tabla-cab'));
+      for (const p of d.personas) {
+        if (filtroPais && p.pais !== filtroPais) continue;
+        const n = el('span', 'pj-persona');
+        if (p.avatar) { const i = el('img'); i.src = p.avatar; i.alt = ''; i.loading = 'lazy'; n.appendChild(i); }
+        n.appendChild(el('span', '', p.nombre));
+        const f = fila([n, nombrePais(p.pais), p.provincia || '—', p.ciudad || '—', p.visto ? cuandoJg(p.visto) : '—', p.otros.length ? p.otros.map(nombrePais).join(', ') : '—']);
+        f.type = 'button'; f.title = 'Ver el perfil de ' + p.nombre;
+        f.addEventListener('click', () => abrirPerfil(p.id));
+        tp.appendChild(f);
+      }
+    }
+    pintarLista();
+    cl.append(elegir, tp);
+    const sin = [d.sinIp ? fmt(d.sinIp) + (d.sinIp === 1 ? ' cuenta nunca se conectó' : ' cuentas nunca se conectaron') + ' (o se conectaron antes de que se anotara)' : '', d.sinDato ? fmt(d.sinDato) + ' sin ubicación conocida' : ''].filter(Boolean).join('; ');
+    cl.appendChild(el('div', 'pe-nota', 'Es aproximado: sale de la IP de la última conexión, buscada adentro del servidor (no se manda a ningún lado). Con VPN o con los datos del celular puede marcar otra ciudad, o hasta otro país. "También desde": otros países desde los que se conectó.' + (sin ? ' No están: ' + sin + '.' : '') + ' Ubicaciones: IP Geolocation by DB-IP (db-ip.com, CC BY 4.0), base de ' + d.base.mes + '.'));
+    box.appendChild(tarjeta('Cada persona', cl, 'pe-ancha'));
+  }
+
   // ── Pestaña "Juegos" (juegos-estadisticas.js): que juegos se juegan, quien, cuanto tiempo, contra quien y como
   // terminan, con las partidas terminadas y el tiempo de uso ──
   let rangoJg = '4s';
@@ -4192,7 +4277,7 @@ function leido(sc) {
     // Dos pestañas: la lista de miembros (lo primero que se ve) y las estadisticas
     const title = el('div', 'pm-titulo'); title.innerHTML = ICON;
     const tabs = el('div', 'pm-pestanas');
-    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['app', 'App'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
+    for (const [v, label] of [['miembros', 'Miembros'], ['estadisticas', 'Estadísticas'], ['juegos', 'Juegos'], ['paises', 'Países'], ['app', 'App'], ['marketplace', 'Marketplace'], ['propuestas', 'Propuestas'], ['mudanza', 'Mudanza']]) {
       const t = el('button', 'pm-pestana', label); t.type = 'button'; t.dataset.v = v;
       t.addEventListener('click', () => verVista(v));
       tabs.appendChild(t);
@@ -4269,7 +4354,7 @@ function leido(sc) {
     rows.appendChild(el('div', 'pm-sin', 'Cargando…'));
     table.append(thead, rows);
     card.append(bar, stats, filtros, table);
-    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
+    page.append(head, card, armarVistaEstadisticas(), armarVistaJuegos(), armarVistaPaises(), armarVistaApp(), armarVistaMarketplace(), (() => { const v = el('div', 'ppz-vista'); v.hidden = true; return v; })(), armarVistaMudanza());
     document.body.appendChild(page);
     // Economía (monedas.js): las monedas del club, en un marco como las pestañas de los juegos (economia-admin.html)
     {

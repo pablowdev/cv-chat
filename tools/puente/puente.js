@@ -156,6 +156,8 @@ function start(deps) {
   require('./presencia.js').setup({ db, io, log, warn });
   require('./panel-estadisticas.js').setup({ db, io, log, warn });
   require('./juegos-estadisticas.js').setup({ db, warn });
+  // De donde es cada cuenta, por la IP (geo.js; arma la base de DB-IP una vez por mes)
+  require('./geo.js').setup({ db, log, warn });
   // Capa 2 en Admin: anota cada minuto cuanta gente hay en la ciudad (capa2-admin.js)
   require('./capa2-admin.js').setup({ db, log, warn });
   // El desafio del dia, para la pantalla del invitado (desafio.js)
