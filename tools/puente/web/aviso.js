@@ -2966,7 +2966,7 @@ function leido(sc) {
       if (rb) mail.appendChild(rb);
       const since = el('div', 'pm-c pm-dos'); since.appendChild(el('div', 'pm-n1 pm-correo', ago(m.desde))); since.title = fecha(m.desde);
       // y de donde llego (origenes.js)
-      if (m.lugar) { since.appendChild(el('div', 'pm-n2', '📍 ' + lugarTxt(m))); since.title += ' · ' + [m.lugar.ciudad, m.lugar.provincia, nombrePais(m.lugar.pais)].filter(Boolean).join(', ') + ' (aproximado)'; }
+      if (m.lugar) { const lu = el('div', 'pm-n2', '📍 ' + lugarTxt(m)); lu.style.cssText = 'white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;'; since.appendChild(lu); since.title += ' · ' + [m.lugar.ciudad, m.lugar.provincia, nombrePais(m.lugar.pais)].filter(Boolean).join(', ') + ' (aproximado)'; }
       if (m.origen) { since.appendChild(el('div', 'pm-n2', 'llegó desde ' + m.origen.fuente + (m.origen.estimado ? ' (estimado)' : ''))); since.title += ' · llegó desde ' + m.origen.fuente + (m.origen.detalle ? ' (' + m.origen.detalle + ')' : ''); }
       // Discord: el @usuario y la antiguedad de esa cuenta
       const dc = el('div', 'pm-c pm-dos');
