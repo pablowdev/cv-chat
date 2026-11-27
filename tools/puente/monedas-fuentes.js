@@ -23,6 +23,7 @@
 //    compartido (cs16-premios.js tiene los montos).
 //  - Invitaciones: 50 cuando la persona invitada confirma su cuenta, 150 cuando usa CV Chat 3 dias en sus primeras 2
 //    semanas y 100 si sigue (2 dias entre la semana 3 y la 5).
+//  - Marketplace: monedas-mercado.js (publicaciones, ventas confirmadas y opiniones, con señales contra lo falso).
 //  - Foro (desde el 27/11/2026, aprobado por el dueño; solo cuentas del foro unidas a CV Chat, con el lector del foro):
 //    unir la cuenta del foro 15 (primer paso); tema nuevo 10 (200 letras sin las citas, o una foto; hasta 2 por dia);
 //    respuesta 3 (80 letras; hasta 5 por dia); cada persona distinta que responde tu tema 5 (hasta 10 por tema);
@@ -461,6 +462,8 @@ async function ciclo(ahora = Date.now()) {
     paso('bienvenidas', liquidarBienvenidas);
     paso('partidas', liquidarPartidas);
     paso('paso foro', liquidarPasoForo);
+    // el Marketplace (monedas-mercado.js), tambien antes de cerrar los dias: publicar cuenta como dia activo
+    paso('marketplace', () => require('./monedas-mercado.js').liquidar(ahora, (u, dia) => db.prepare('INSERT OR IGNORE INTO puente_monedas_activos (user_id, dia) VALUES (?, ?)').run(u, dia)));
     // el foro va aparte (si el lector no contesta, sigue lo demas) y antes de cerrar los dias
     try { await liquidarForo(ahora); } catch (err) { warn('monedas fuentes: foro:', err.message); }
     // los dias que ya terminaron (desde el primero sin liquidar)
@@ -497,6 +500,7 @@ function setup(ctx) {
       receptor INTEGER NOT NULL, es_tema INTEGER NOT NULL, largo INTEGER NOT NULL, foto INTEGER NOT NULL, archivo INTEGER NOT NULL, alta INTEGER NOT NULL,
       t INTEGER NOT NULL, pagado INTEGER NOT NULL DEFAULT 0);
     CREATE INDEX IF NOT EXISTS puente_monedas_foro_pend ON puente_monedas_foro (pagado, t);`);
+  require('./monedas-mercado.js').setup(ctx);
   if (process.env.MONEDAS_FUENTES === '0' || ctx.sinReloj) return;
   setTimeout(() => ciclo(), 60e3).unref?.();
   setInterval(() => ciclo(), 10 * 60e3).unref?.();

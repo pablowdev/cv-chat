@@ -25,7 +25,7 @@
 //  GET /puente/api/admin/monedas/origen?periodo=1|7|30|todo              de donde salen y en que se gastan
 
 let db = null, log = () => {}, warn = () => {};
-const ORIGENES = new Set(['chat', 'juegos', 'hotel', 'capa2', 'foro', 'admin', 'sistema']);
+const ORIGENES = new Set(['chat', 'juegos', 'hotel', 'capa2', 'foro', 'mercado', 'admin', 'sistema']);
 const MAXIMO = 100000; // (un movimiento mas grande que esto es un error de quien llama)
 
 function setup(ctx) {
@@ -221,6 +221,8 @@ const PASOS = [
   { id: 'mensaje', texto: 'Escribí tu primer mensaje en un canal (llega al otro día)', monedas: 15 },
   { id: 'partida', texto: 'Jugá una partida contra otra persona', monedas: 20 },
   { id: 'sala', texto: 'Poné 3 muebles en una sala de CV Hotel', monedas: 20 },
+  { id: 'foro', texto: 'Uní tu cuenta del foro', monedas: 15 },
+  { id: 'mercado', texto: 'Publicá algo en el Marketplace (con foto; se cobra al otro día)', monedas: 15 },
 ];
 
 async function handle(req, res, p, u, h) {

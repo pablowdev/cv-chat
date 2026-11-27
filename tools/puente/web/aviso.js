@@ -3878,10 +3878,55 @@ function leido(sc) {
       .then(d => { if (page) pintarMarketplace(cuerpo, d); })
       .catch(() => { if (page) { cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', 'No se pudo cargar la actividad del Marketplace.')); } });
   }
+  // Las monedas del Marketplace (monedas-mercado.js): las ventas que esperan sus 7 dias y las que tienen señales
+  // de ser falsas ("Para revisar": no se pagan solas). Lo pagado no se quita.
+  function monedasMk(box, abrir) {
+    const c = tarjeta('Monedas: ventas para revisar', el('div', 'pm-sin', 'Cargando…'), 'pe-ancha');
+    box.appendChild(c);
+    const cuerpo = c.lastChild;
+    const fecha = (ms) => new Date(ms).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric' });
+    const ESTADO = { revisar: 'Para revisar', espera: 'Se paga sola', aprobado: 'Pagar igual', pagado: 'Pagada', no: 'No se paga' };
+    const pintar = (d) => {
+      cuerpo.textContent = '';
+      const pend = d.ventas.filter(v => v.estado === 'revisar' || v.estado === 'espera' || v.estado === 'aprobado');
+      cuerpo.appendChild(el('div', 'pe-nota', 'Este mes el Marketplace pagó ' + fmt(d.mes.monedas) + ' monedas a ' + fmt(d.mes.personas) + (d.mes.personas === 1 ? ' persona' : ' personas') +
+        ' (tope: ' + d.tope + ' por persona). Las ventas se pagan a los 7 días; las que tienen señales esperan a que las revises.'));
+      if (!d.ventas.length) { cuerpo.appendChild(el('div', 'pe-nota', 'Todavía no hay ventas confirmadas desde que el Marketplace paga monedas.')); return; }
+      if (!pend.length) cuerpo.appendChild(el('div', 'pe-nota', 'No hay ventas esperando.'));
+      for (const v of d.ventas) {
+        const f = el('div', 'pmz-paso');
+        const top = el('div', 'pmz-paso-top');
+        const t = el('button', 'pk-link', v.titulo); t.type = 'button'; t.title = 'Abrir en el Marketplace'; t.addEventListener('click', () => abrir(v.item));
+        top.append(el('span', 'pmz-cuando', fecha(v.t)), t, el('span', 'pmz-chip', ESTADO[v.estado] || v.estado));
+        f.appendChild(top);
+        const det = [quienMk(v.vende) + ' le vendió a ' + quienMk(v.compra)];
+        if (v.estado === 'espera' || v.estado === 'aprobado') det.push('se paga el ' + fecha(v.pagarEn));
+        if (v.nota) det.push(v.nota + (v.resueltoPor ? ' · ' + v.resueltoPor : ''));
+        f.appendChild(el('div', 'pmz-detalle', det.join(' · ')));
+        if (v.senales.length) f.appendChild(el('div', 'pmz-detalle', '⚠️ ' + v.senales.join(' · ')));
+        const accion = v.estado === 'revisar' ? ['pagar', 'Pagar igual'] : (v.estado === 'espera' || v.estado === 'aprobado') ? ['no', 'No pagar'] : null;
+        if (accion) {
+          const b = el('button', 'pm-filtro', accion[1]); b.type = 'button';
+          b.addEventListener('click', () => {
+            b.disabled = true;
+            fetch('/puente/api/admin/mercado-monedas', { method: 'POST', headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }, body: JSON.stringify({ clave: v.clave, accion: accion[0] }) })
+              .then(r => r.json().catch(() => ({}))).then(x => { if (x && x.ok) pintar(x); else { b.disabled = false; b.textContent = (x && x.error) || 'No se pudo'; } })
+              .catch(() => { b.disabled = false; });
+          });
+          f.appendChild(b);
+        }
+        cuerpo.appendChild(f);
+      }
+    };
+    fetch('/puente/api/admin/mercado-monedas', { headers: { Authorization: 'Bearer ' + token() } })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => { if (c.isConnected) pintar(d); })
+      .catch(() => { cuerpo.textContent = ''; cuerpo.appendChild(el('div', 'pm-sin', 'No se pudieron cargar las monedas del Marketplace.')); });
+  }
   function pintarMarketplace(box, d) {
     box.textContent = '';
     const abrir = (id) => { close(); setTimeout(() => { const a = document.createElement('a'); a.href = location.origin + '/app?mercado=' + id; document.body.appendChild(a); a.click(); a.remove(); }, 50); };
     const enlace = (it) => { const a = el('button', 'pk-link', it.titulo); a.type = 'button'; a.title = 'Abrir en el Marketplace'; a.addEventListener('click', () => abrir(it.id)); return a; };
+    monedasMk(box, abrir);
     const R = d.resumen;
     const tot = el('div', 'pe-totales');
     for (const [n, label] of [[R.activas, 'Publicaciones activas'], [R.vendidas, 'Marcadas como vendidas'], [R.ventasConfirmadas, 'Ventas confirmadas'],
@@ -17825,7 +17870,7 @@ var puenteSinUbicacion = (function () {
   const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
   const num = (n) => (Number(n) || 0).toLocaleString('es-AR');
   const MONEDA = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#e0a83a"/><circle cx="12" cy="12" r="6.2" fill="none" stroke="#fff3c4" stroke-width="1.6" opacity=".8"/><path d="M10 9.2h3.2a1.6 1.6 0 0 1 0 3.2H10m0 0h3.6a1.6 1.6 0 0 1 0 3.2H10V9.2" fill="none" stroke="#5a3d06" stroke-width="1.5" stroke-linejoin="round"/></svg>';
-  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada', 'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel', 'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Tus monedas del hotel', 'conversion-capa2': 'Tu plata de Capa 2', 'foro-tema': 'Tema en el foro', 'foro-respuesta': 'Respuesta en el foro', 'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro' };
+  const TIPOS = { 'bienvenida': 'Bienvenida', 'primer-paso': 'Primeros pasos', 'partida': 'Partida', 'partida-ganada': 'Partida ganada', 'compu': 'Contra la compu', 'compu-ganada': 'Le ganaste a la compu', 'desafio': 'Juego del día', 'tiempo-hotel': 'Tiempo en CV Hotel', 'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana', 'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Tus monedas del hotel', 'conversion-capa2': 'Tu plata de Capa 2', 'foro-tema': 'Tema en el foro', 'foro-respuesta': 'Respuesta en el foro', 'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro', 'mercado-publicacion': 'Publicación en el Marketplace', 'mercado-venta': 'Venta en el Marketplace', 'mercado-compra': 'Compra en el Marketplace', 'mercado-opinion': 'Opinión en el Marketplace' };
   const tipoDe = (t) => TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2' : /^hotel-/.test(t) ? 'CV Hotel' : t);
   const JUEGOS = { truco: 'Truco', pool: 'Pool', ajedrez: 'Ajedrez', funball: 'Funball', curveball: 'Curveball', globalsiege: 'GlobalSiege' };
   let btn = null, panel = null, datos = null;
@@ -17901,6 +17946,7 @@ var puenteSinUbicacion = (function () {
       '💬 Charlando en los canales y entrando seguido: cada día activo suma, y cada 7 días seguidos, más.',
       '🏨 Estando en CV Hotel, y 🌆 trabajando en Capa 2 (taxi, delivery, colectivo, carreras).',
       '📝 Escribiendo en el foro (con tu cuenta del foro unida): temas y respuestas, y más cuando otros te responden o les gusta lo que escribiste.',
+      '🛍️ Usando el Marketplace: publicando (con foto), vendiendo y comprando (cuando se confirma la venta) y dejando tu opinión.',
       '🏆 Saliendo primero en el ranking de Curveball: 100 (una vez por mes).',
       '📨 Invitando amigos: 50 cuando confirman su cuenta, y más si se quedan.',
       '🛋️ Se gastan en muebles de CV Hotel y en todo lo de Capa 2.']) g.appendChild(el('p', 'pmo-ganar-p', t));

@@ -202,7 +202,8 @@
     'dia-activo': 'Día activo', 'racha': 'Racha', 'semanal': 'Días charlando', 'reacciones': 'Reacciones', 'podio': 'Podio de la semana',
     'invitacion': 'Invitaciones', 'ranking-primero': 'Primero en Curveball', 'cvclub': 'CV Club', 'conversion-hotel': 'Tus monedas del hotel',
     'conversion-capa2': 'Tu plata de Capa 2', 'foro-tema': 'Tema en el foro', 'foro-respuesta': 'Respuesta en el foro',
-    'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro' };
+    'foro-respondido': 'Te respondieron en el foro', 'foro-megusta': 'Me gusta en el foro', 'foro-destacado': 'Tema destacado en el foro',
+    'mercado-publicacion': 'Publicación en el Marketplace', 'mercado-venta': 'Venta en el Marketplace', 'mercado-compra': 'Compra en el Marketplace', 'mercado-opinion': 'Opinión en el Marketplace' };
   const JUEGOS = { truco: 'Truco', pool: 'Pool', ajedrez: 'Ajedrez', funball: 'Funball', curveball: 'Curveball', globalsiege: 'GlobalSiege' };
   const tipoDe = (t) => TIPOS[t] || (/^capa2-/.test(t) ? 'Capa 2' : /^hotel-/.test(t) ? 'CV Hotel' : t);
   const num = (n) => Number(n || 0).toLocaleString('es-AR');
